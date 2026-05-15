@@ -135,6 +135,76 @@ export interface TemplateModules {
   products_enabled: boolean
 }
 
+// TemplateBehavior carries runtime behavioral toggles persisted as
+// behavior.json in the agent workspace. The channel and agent layers enforce
+// these as hard filters (drops before the LLM), not prompt instructions.
+export interface TemplateBehavior {
+  // Activation + where to respond
+  master_enabled: boolean
+  business_hours_only: boolean
+  out_of_hours_reply: string
+  respond_in_dm: boolean
+  respond_in_groups: boolean
+  group_mention_only: boolean
+  keyword_trigger: string
+
+  // Outbound-only
+  outbound_only_mode: boolean
+  ignore_other_bots: boolean
+  ignore_forwarded_messages: boolean
+  ignore_self_messages: boolean
+
+  // Media gating
+  process_images: boolean
+  process_documents: boolean
+  process_audio: boolean
+  process_video: boolean
+  process_stickers: boolean
+  process_location: boolean
+  max_media_size_mb: number
+
+  // Scope / privacy / throttle / handoff
+  session_timeout_minutes: number
+  max_messages_per_session: number
+  mask_pii_in_replies: boolean
+  store_received_media: boolean
+  max_messages_per_minute_per_user: number
+  response_cooldown_seconds: number
+  handoff_keywords: string[]
+  handoff_after_failures: number
+}
+
+// DEFAULT_BEHAVIOR preserves the pre-feature runtime: everything enabled, no
+// throttles, no filters. Apply this when initializing a fresh template draft.
+export const DEFAULT_BEHAVIOR: TemplateBehavior = {
+  master_enabled: true,
+  business_hours_only: false,
+  out_of_hours_reply: "",
+  respond_in_dm: true,
+  respond_in_groups: true,
+  group_mention_only: false,
+  keyword_trigger: "",
+  outbound_only_mode: false,
+  ignore_other_bots: false,
+  ignore_forwarded_messages: false,
+  ignore_self_messages: true,
+  process_images: true,
+  process_documents: true,
+  process_audio: true,
+  process_video: true,
+  process_stickers: true,
+  process_location: true,
+  max_media_size_mb: 0,
+  session_timeout_minutes: 0,
+  max_messages_per_session: 0,
+  mask_pii_in_replies: false,
+  store_received_media: true,
+  max_messages_per_minute_per_user: 0,
+  response_cooldown_seconds: 0,
+  handoff_keywords: [],
+  handoff_after_failures: 0,
+}
+
 export interface AgentTemplate {
   id: string
   name: string
@@ -212,12 +282,15 @@ export interface TemplateApplyPayload {
   required_integrations: string[]
   permission_level: PermissionLevel
   approval_required_for: string[]
+
+  behavior: TemplateBehavior
 }
 
 export interface TemplateApplyResponse {
   status: string
   agent_path: string
   soul_path: string
+  behavior_path?: string
 }
 
 export type TemplateLayoutMode = "grouped" | "grid"

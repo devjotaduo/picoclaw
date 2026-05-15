@@ -52,6 +52,55 @@ type agentTemplateApplyRequest struct {
 	RequiredIntegrations []string `json:"required_integrations,omitempty"`
 	PermissionLevel      string   `json:"permission_level,omitempty"`
 	ApprovalRequiredFor  []string `json:"approval_required_for,omitempty"`
+
+	Behavior agentTemplateBehavior `json:"behavior"`
+}
+
+// agentTemplateBehavior carries the runtime behavioral toggles persisted as
+// behavior.json in the workspace. Filters here are enforced by the channel and
+// agent layers (hard drops, not prompt instructions), so the LLM never sees
+// content that a toggle rejected.
+type agentTemplateBehavior struct {
+	// Activation + where to respond
+	MasterEnabled     bool   `json:"master_enabled"`
+	BusinessHoursOnly bool   `json:"business_hours_only"`
+	OutOfHoursReply   string `json:"out_of_hours_reply,omitempty"`
+	RespondInDM       bool   `json:"respond_in_dm"`
+	RespondInGroups   bool   `json:"respond_in_groups"`
+	GroupMentionOnly  bool   `json:"group_mention_only"`
+	KeywordTrigger    string `json:"keyword_trigger,omitempty"`
+
+	// Outbound-only / who can talk to the agent
+	OutboundOnlyMode        bool `json:"outbound_only_mode"`
+	IgnoreOtherBots         bool `json:"ignore_other_bots"`
+	IgnoreForwardedMessages bool `json:"ignore_forwarded_messages"`
+	IgnoreSelfMessages      bool `json:"ignore_self_messages"`
+
+	// Media gating (hard filter — strip before LLM sees it)
+	ProcessImages    bool `json:"process_images"`
+	ProcessDocuments bool `json:"process_documents"`
+	ProcessAudio     bool `json:"process_audio"`
+	ProcessVideo     bool `json:"process_video"`
+	ProcessStickers  bool `json:"process_stickers"`
+	ProcessLocation  bool `json:"process_location"`
+	MaxMediaSizeMB   int  `json:"max_media_size_mb,omitempty"`
+
+	// Scope / privacy / throttle / handoff
+	SessionTimeoutMinutes       int      `json:"session_timeout_minutes,omitempty"`
+	MaxMessagesPerSession       int      `json:"max_messages_per_session,omitempty"`
+	MaskPIIInReplies            bool     `json:"mask_pii_in_replies"`
+	StoreReceivedMedia          bool     `json:"store_received_media"`
+	MaxMessagesPerMinutePerUser int      `json:"max_messages_per_minute_per_user,omitempty"`
+	ResponseCooldownSeconds     int      `json:"response_cooldown_seconds,omitempty"`
+	HandoffKeywords             []string `json:"handoff_keywords,omitempty"`
+	HandoffAfterFailures        int      `json:"handoff_after_failures,omitempty"`
+}
+
+// behaviorRuntimeSnapshot is what we marshal to behavior.json. It denormalizes
+// the company schedule so pkg/agent does not need to re-read the template.
+type behaviorRuntimeSnapshot struct {
+	agentTemplateBehavior
+	Schedule agentTemplateCompanySchedule `json:"schedule"`
 }
 
 type agentTemplateModules struct {
@@ -133,9 +182,10 @@ type agentTemplatePriorityRules struct {
 }
 
 type agentTemplateApplyResponse struct {
-	Status    string `json:"status"`
-	AgentPath string `json:"agent_path"`
-	SoulPath  string `json:"soul_path"`
+	Status       string `json:"status"`
+	AgentPath    string `json:"agent_path"`
+	SoulPath     string `json:"soul_path"`
+	BehaviorPath string `json:"behavior_path,omitempty"`
 }
 
 var agentTemplateWriteMu sync.Mutex
@@ -209,11 +259,31 @@ func (h *Handler) handleApplyAgentTemplate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	behaviorPath := filepath.Join(workspace, "behavior.json")
+	if err := backupIfExists(behaviorPath); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to back up behavior.json: %v", err))
+		return
+	}
+	snapshot := behaviorRuntimeSnapshot{
+		agentTemplateBehavior: req.Behavior,
+		Schedule:              req.CompanyInfo.Schedule,
+	}
+	behaviorJSON, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to encode behavior.json: %v", err))
+		return
+	}
+	if err := os.WriteFile(behaviorPath, behaviorJSON, 0o644); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to write behavior.json: %v", err))
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(agentTemplateApplyResponse{
-		Status:    "applied",
-		AgentPath: agentPath,
-		SoulPath:  soulPath,
+		Status:       "applied",
+		AgentPath:    agentPath,
+		SoulPath:     soulPath,
+		BehaviorPath: behaviorPath,
 	})
 }
 

@@ -732,6 +732,69 @@
               "sunday": "Domingo"
             }
           }
+        },
+        "behavior": {
+          "activation": {
+            "title": "Ativação e onde responder",
+            "description": "Controla quando e onde o agente responde mensagens. Filtros aplicados antes do LLM.",
+            "master_enabled": "Agente ativo",
+            "master_hint": "Desligue para pausar totalmente o agente sem deletar o template.",
+            "business_hours_only": "Responder apenas no horário comercial",
+            "business_hours_only_hint": "Usa o horário configurado em Empresa › Horário de atendimento.",
+            "out_of_hours_reply": "Resposta automática fora do horário",
+            "out_of_hours_reply_placeholder": "Ex.: Atendemos de segunda a sexta, das 8h às 18h. Retornaremos no próximo dia útil.",
+            "respond_in_dm": "Responder em conversas privadas (DM)",
+            "respond_in_dm_hint": "Mensagens diretas de um cliente individual.",
+            "respond_in_groups": "Responder em grupos",
+            "respond_in_groups_hint": "Conversas com mais de dois participantes.",
+            "group_mention_only": "Em grupos, responder apenas quando mencionado",
+            "group_mention_only_hint": "Exige @mention para o agente engajar em grupos.",
+            "keyword_trigger": "Gatilho por palavra-chave",
+            "keyword_trigger_hint": "Se preenchido, o agente só responde quando a mensagem contém essa palavra (ex.: /atendimento).",
+            "keyword_trigger_placeholder": "Ex.: /atendimento"
+          },
+          "outbound": {
+            "title": "Modo Outbound",
+            "description": "Restringe quem pode iniciar conversa com o agente. Útil para campanhas e follow-up.",
+            "outbound_only_mode": "Modo outbound (só responde se o bot iniciou)",
+            "outbound_only_mode_hint": "O agente só responde se a última mensagem da conversa foi dele. Conversas iniciadas pelo cliente do zero são ignoradas.",
+            "ignore_other_bots": "Ignorar mensagens de outros bots",
+            "ignore_forwarded": "Ignorar mensagens encaminhadas",
+            "ignore_self": "Ignorar as próprias mensagens",
+            "ignore_self_hint": "Recomendado deixar ativo para evitar loops em cenários multi-agente."
+          },
+          "media": {
+            "title": "Mídia",
+            "description": "Tipos de mídia que o agente processa. Tipos desativados são descartados antes do LLM (economiza tokens).",
+            "images": "Processar imagens",
+            "documents": "Processar documentos (PDF, docx)",
+            "audio": "Processar áudio e mensagens de voz",
+            "video": "Processar vídeo",
+            "stickers": "Processar stickers e GIFs",
+            "location": "Processar localização",
+            "max_size_mb": "Tamanho máximo de mídia (MB)",
+            "max_size_mb_hint": "Mídia acima desse limite é descartada. 0 = sem limite."
+          },
+          "scope": {
+            "title": "Escopo, privacidade, limites e handoff",
+            "description": "Limites de sessão, privacidade do cliente e encaminhamento para humano.",
+            "session_timeout": "Tempo de inatividade para resetar sessão (min)",
+            "session_timeout_hint": "0 = nunca resetar.",
+            "max_msgs_session": "Máximo de mensagens por sessão",
+            "max_msgs_session_hint": "0 = sem limite. Útil para limitar custo por cliente.",
+            "mask_pii": "Mascarar dados pessoais nas respostas",
+            "mask_pii_hint": "CPF, telefone e e-mail são substituídos por *** nas respostas que o agente envia.",
+            "store_media": "Armazenar mídia recebida",
+            "rate_per_min": "Máx. mensagens por minuto por usuário",
+            "rate_per_min_hint": "Anti-spam. 0 = sem limite.",
+            "cooldown_seconds": "Cooldown entre respostas (s)",
+            "cooldown_seconds_hint": "Tempo mínimo entre duas respostas para o mesmo cliente. 0 = desligado.",
+            "handoff_keywords": "Palavras-chave de escalação para humano",
+            "handoff_keywords_hint": "Quando o cliente digita uma dessas, a conversa é marcada para handoff.",
+            "handoff_keywords_placeholder": "Ex.: falar com humano",
+            "handoff_after_failures": "Escalar após N tentativas falhas",
+            "handoff_after_failures_hint": "0 = desligado. (em breve)"
+          }
         }
       },
       "tools": {

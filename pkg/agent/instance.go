@@ -58,6 +58,12 @@ type AgentInstance struct {
 	// instances. This allows each fallback model to use its own api_base and api_key
 	// from model_list, instead of inheriting the primary model's provider config.
 	CandidateProviders map[string]providers.LLMProvider
+
+	// Behavior holds the runtime behavioral toggles loaded from behavior.json
+	// in the workspace. NewAgentInstance always populates this (falls back to
+	// DefaultBehavior on missing file); callers constructing AgentInstance
+	// directly (tests) may leave it nil — filter sites must nil-check.
+	Behavior *Behavior
 }
 
 // NewAgentInstance creates an agent instance from config.
@@ -267,6 +273,7 @@ func NewAgentInstance(
 		LightCandidates:           lightCandidates,
 		LightProvider:             lightProvider,
 		CandidateProviders:        candidateProviders,
+		Behavior:                  LoadBehavior(workspace),
 	}
 }
 

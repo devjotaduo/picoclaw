@@ -1,8 +1,12 @@
 import {
+  IconBolt,
   IconCalendarStats,
   IconCheck,
   IconLoader2,
   IconPackage,
+  IconPhoto,
+  IconPower,
+  IconSend,
   IconShieldLock,
   IconSparkles,
 } from "@tabler/icons-react"
@@ -39,6 +43,7 @@ import type {
   AgentTemplate,
   CompanyScheduleStructured,
   TemplateApplyPayload,
+  TemplateBehavior,
   TemplateLanguage,
   TemplateModules,
   TemplateTone,
@@ -111,6 +116,17 @@ export function TemplateConfigSheet({
     onDraftChange({
       ...draft,
       modules: { ...draft.modules, [key]: value },
+    })
+  }
+
+  function updateBehavior<K extends keyof TemplateBehavior>(
+    key: K,
+    value: TemplateBehavior[K],
+  ) {
+    if (!draft) return
+    onDraftChange({
+      ...draft,
+      behavior: { ...draft.behavior, [key]: value },
     })
   }
 
@@ -240,6 +256,385 @@ export function TemplateConfigSheet({
                     updateModules("products_enabled", checked)
                   }
                 />
+              </ConfigSection>
+
+              <ConfigSection
+                title={t("pages.agent.templates.behavior.activation.title")}
+                description={t(
+                  "pages.agent.templates.behavior.activation.description",
+                )}
+                icon={<IconPower className="size-4" />}
+                accent={draft.behavior.master_enabled ? undefined : "warning"}
+              >
+                <ModuleToggle
+                  icon={<IconPower className="size-4" />}
+                  label={t(
+                    "pages.agent.templates.behavior.activation.master_enabled",
+                  )}
+                  hint={t(
+                    "pages.agent.templates.behavior.activation.master_hint",
+                  )}
+                  checked={draft.behavior.master_enabled}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("master_enabled", checked)
+                  }
+                />
+                <ModuleToggle
+                  icon={<IconCalendarStats className="size-4" />}
+                  label={t(
+                    "pages.agent.templates.behavior.activation.business_hours_only",
+                  )}
+                  hint={t(
+                    "pages.agent.templates.behavior.activation.business_hours_only_hint",
+                  )}
+                  checked={draft.behavior.business_hours_only}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("business_hours_only", checked)
+                  }
+                />
+                {draft.behavior.business_hours_only ? (
+                  <Field
+                    label={t(
+                      "pages.agent.templates.behavior.activation.out_of_hours_reply",
+                    )}
+                  >
+                    <Textarea
+                      value={draft.behavior.out_of_hours_reply}
+                      onChange={(e) =>
+                        updateBehavior("out_of_hours_reply", e.target.value)
+                      }
+                      rows={2}
+                      placeholder={t(
+                        "pages.agent.templates.behavior.activation.out_of_hours_reply_placeholder",
+                      )}
+                    />
+                  </Field>
+                ) : null}
+                <ModuleToggle
+                  icon={<IconSend className="size-4" />}
+                  label={t(
+                    "pages.agent.templates.behavior.activation.respond_in_dm",
+                  )}
+                  hint={t(
+                    "pages.agent.templates.behavior.activation.respond_in_dm_hint",
+                  )}
+                  checked={draft.behavior.respond_in_dm}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("respond_in_dm", checked)
+                  }
+                />
+                <ModuleToggle
+                  icon={<IconSend className="size-4" />}
+                  label={t(
+                    "pages.agent.templates.behavior.activation.respond_in_groups",
+                  )}
+                  hint={t(
+                    "pages.agent.templates.behavior.activation.respond_in_groups_hint",
+                  )}
+                  checked={draft.behavior.respond_in_groups}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("respond_in_groups", checked)
+                  }
+                />
+                {draft.behavior.respond_in_groups ? (
+                  <ModuleToggle
+                    icon={<IconBolt className="size-4" />}
+                    label={t(
+                      "pages.agent.templates.behavior.activation.group_mention_only",
+                    )}
+                    hint={t(
+                      "pages.agent.templates.behavior.activation.group_mention_only_hint",
+                    )}
+                    checked={draft.behavior.group_mention_only}
+                    onCheckedChange={(checked) =>
+                      updateBehavior("group_mention_only", checked)
+                    }
+                  />
+                ) : null}
+                <Field
+                  label={t(
+                    "pages.agent.templates.behavior.activation.keyword_trigger",
+                  )}
+                  description={t(
+                    "pages.agent.templates.behavior.activation.keyword_trigger_hint",
+                  )}
+                >
+                  <Input
+                    value={draft.behavior.keyword_trigger}
+                    onChange={(e) =>
+                      updateBehavior("keyword_trigger", e.target.value)
+                    }
+                    placeholder={t(
+                      "pages.agent.templates.behavior.activation.keyword_trigger_placeholder",
+                    )}
+                  />
+                </Field>
+              </ConfigSection>
+
+              <ConfigSection
+                title={t("pages.agent.templates.behavior.outbound.title")}
+                description={t(
+                  "pages.agent.templates.behavior.outbound.description",
+                )}
+                icon={<IconSend className="size-4" />}
+                accent={draft.behavior.outbound_only_mode ? "warning" : undefined}
+              >
+                <ModuleToggle
+                  icon={<IconSend className="size-4" />}
+                  label={t(
+                    "pages.agent.templates.behavior.outbound.outbound_only_mode",
+                  )}
+                  hint={t(
+                    "pages.agent.templates.behavior.outbound.outbound_only_mode_hint",
+                  )}
+                  checked={draft.behavior.outbound_only_mode}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("outbound_only_mode", checked)
+                  }
+                />
+                <ModuleToggle
+                  icon={<IconShieldLock className="size-4" />}
+                  label={t(
+                    "pages.agent.templates.behavior.outbound.ignore_other_bots",
+                  )}
+                  hint=""
+                  checked={draft.behavior.ignore_other_bots}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("ignore_other_bots", checked)
+                  }
+                />
+                <ModuleToggle
+                  icon={<IconShieldLock className="size-4" />}
+                  label={t(
+                    "pages.agent.templates.behavior.outbound.ignore_forwarded",
+                  )}
+                  hint=""
+                  checked={draft.behavior.ignore_forwarded_messages}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("ignore_forwarded_messages", checked)
+                  }
+                />
+                <ModuleToggle
+                  icon={<IconShieldLock className="size-4" />}
+                  label={t(
+                    "pages.agent.templates.behavior.outbound.ignore_self",
+                  )}
+                  hint={t(
+                    "pages.agent.templates.behavior.outbound.ignore_self_hint",
+                  )}
+                  checked={draft.behavior.ignore_self_messages}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("ignore_self_messages", checked)
+                  }
+                />
+              </ConfigSection>
+
+              <ConfigSection
+                title={t("pages.agent.templates.behavior.media.title")}
+                description={t(
+                  "pages.agent.templates.behavior.media.description",
+                )}
+                icon={<IconPhoto className="size-4" />}
+              >
+                <ModuleToggle
+                  icon={<IconPhoto className="size-4" />}
+                  label={t("pages.agent.templates.behavior.media.images")}
+                  hint=""
+                  checked={draft.behavior.process_images}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("process_images", checked)
+                  }
+                />
+                <ModuleToggle
+                  icon={<IconPackage className="size-4" />}
+                  label={t("pages.agent.templates.behavior.media.documents")}
+                  hint=""
+                  checked={draft.behavior.process_documents}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("process_documents", checked)
+                  }
+                />
+                <ModuleToggle
+                  icon={<IconBolt className="size-4" />}
+                  label={t("pages.agent.templates.behavior.media.audio")}
+                  hint=""
+                  checked={draft.behavior.process_audio}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("process_audio", checked)
+                  }
+                />
+                <ModuleToggle
+                  icon={<IconPhoto className="size-4" />}
+                  label={t("pages.agent.templates.behavior.media.video")}
+                  hint=""
+                  checked={draft.behavior.process_video}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("process_video", checked)
+                  }
+                />
+                <ModuleToggle
+                  icon={<IconSparkles className="size-4" />}
+                  label={t("pages.agent.templates.behavior.media.stickers")}
+                  hint=""
+                  checked={draft.behavior.process_stickers}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("process_stickers", checked)
+                  }
+                />
+                <ModuleToggle
+                  icon={<IconSparkles className="size-4" />}
+                  label={t("pages.agent.templates.behavior.media.location")}
+                  hint=""
+                  checked={draft.behavior.process_location}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("process_location", checked)
+                  }
+                />
+                <Field
+                  label={t("pages.agent.templates.behavior.media.max_size_mb")}
+                  description={t(
+                    "pages.agent.templates.behavior.media.max_size_mb_hint",
+                  )}
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    value={draft.behavior.max_media_size_mb}
+                    onChange={(e) =>
+                      updateBehavior(
+                        "max_media_size_mb",
+                        Math.max(0, Number(e.target.value) || 0),
+                      )
+                    }
+                  />
+                </Field>
+              </ConfigSection>
+
+              <ConfigSection
+                title={t("pages.agent.templates.behavior.scope.title")}
+                description={t(
+                  "pages.agent.templates.behavior.scope.description",
+                )}
+                icon={<IconShieldLock className="size-4" />}
+                accent="info"
+              >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field
+                    label={t(
+                      "pages.agent.templates.behavior.scope.session_timeout",
+                    )}
+                    description={t(
+                      "pages.agent.templates.behavior.scope.session_timeout_hint",
+                    )}
+                  >
+                    <Input
+                      type="number"
+                      min={0}
+                      value={draft.behavior.session_timeout_minutes}
+                      onChange={(e) =>
+                        updateBehavior(
+                          "session_timeout_minutes",
+                          Math.max(0, Number(e.target.value) || 0),
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field
+                    label={t(
+                      "pages.agent.templates.behavior.scope.max_msgs_session",
+                    )}
+                    description={t(
+                      "pages.agent.templates.behavior.scope.max_msgs_session_hint",
+                    )}
+                  >
+                    <Input
+                      type="number"
+                      min={0}
+                      value={draft.behavior.max_messages_per_session}
+                      onChange={(e) =>
+                        updateBehavior(
+                          "max_messages_per_session",
+                          Math.max(0, Number(e.target.value) || 0),
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field
+                    label={t(
+                      "pages.agent.templates.behavior.scope.rate_per_min",
+                    )}
+                    description={t(
+                      "pages.agent.templates.behavior.scope.rate_per_min_hint",
+                    )}
+                  >
+                    <Input
+                      type="number"
+                      min={0}
+                      value={draft.behavior.max_messages_per_minute_per_user}
+                      onChange={(e) =>
+                        updateBehavior(
+                          "max_messages_per_minute_per_user",
+                          Math.max(0, Number(e.target.value) || 0),
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field
+                    label={t(
+                      "pages.agent.templates.behavior.scope.cooldown_seconds",
+                    )}
+                    description={t(
+                      "pages.agent.templates.behavior.scope.cooldown_seconds_hint",
+                    )}
+                  >
+                    <Input
+                      type="number"
+                      min={0}
+                      value={draft.behavior.response_cooldown_seconds}
+                      onChange={(e) =>
+                        updateBehavior(
+                          "response_cooldown_seconds",
+                          Math.max(0, Number(e.target.value) || 0),
+                        )
+                      }
+                    />
+                  </Field>
+                </div>
+                <ModuleToggle
+                  icon={<IconShieldLock className="size-4" />}
+                  label={t("pages.agent.templates.behavior.scope.mask_pii")}
+                  hint={t(
+                    "pages.agent.templates.behavior.scope.mask_pii_hint",
+                  )}
+                  checked={draft.behavior.mask_pii_in_replies}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("mask_pii_in_replies", checked)
+                  }
+                />
+                <ModuleToggle
+                  icon={<IconPhoto className="size-4" />}
+                  label={t("pages.agent.templates.behavior.scope.store_media")}
+                  hint=""
+                  checked={draft.behavior.store_received_media}
+                  onCheckedChange={(checked) =>
+                    updateBehavior("store_received_media", checked)
+                  }
+                />
+                <Field
+                  label={t(
+                    "pages.agent.templates.behavior.scope.handoff_keywords",
+                  )}
+                  description={t(
+                    "pages.agent.templates.behavior.scope.handoff_keywords_hint",
+                  )}
+                >
+                  <EditableList
+                    items={draft.behavior.handoff_keywords}
+                    onChange={(items) =>
+                      updateBehavior("handoff_keywords", items)
+                    }
+                  />
+                </Field>
               </ConfigSection>
 
               <ConfigSection

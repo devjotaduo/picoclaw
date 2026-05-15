@@ -9,6 +9,7 @@ import { getSkills } from "@/api/skills"
 import { AGENT_TEMPLATES } from "./catalog"
 import { compareTemplates, sortCategories } from "./category-utils"
 import type { TemplateGroupSection } from "./templates-list"
+import { DEFAULT_BEHAVIOR } from "./types"
 import type {
   AgentTemplate,
   TemplateApplyPayload,
@@ -86,6 +87,10 @@ function templateToDraft(template: AgentTemplate): TemplateApplyPayload {
     required_integrations: [...template.required_integrations],
     permission_level: template.permission_level,
     approval_required_for: [...template.approval_required_for],
+    behavior: {
+      ...DEFAULT_BEHAVIOR,
+      handoff_keywords: [...DEFAULT_BEHAVIOR.handoff_keywords],
+    },
   }
 }
 

@@ -608,6 +608,122 @@ func TestApplyAgentTemplate_ApprovalRequired_OmittedWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestApplyAgentTemplate_WritesBehaviorJSON(t *testing.T) {
+	h, workspace := setupTemplateHandler(t)
+	req := buildSampleRequest()
+	req.Behavior = agentTemplateBehavior{
+		MasterEnabled:     true,
+		BusinessHoursOnly: true,
+		OutOfHoursReply:   "Voltamos amanhã às 8h.",
+		RespondInDM:       true,
+		RespondInGroups:   false,
+		GroupMentionOnly:  true,
+		KeywordTrigger:    "/atendimento",
+		OutboundOnlyMode:  true,
+		ProcessImages:     false,
+		ProcessDocuments:  false,
+		ProcessAudio:      true,
+		MaxMediaSizeMB:    5,
+		HandoffKeywords:   []string{"falar com humano", "atendente"},
+	}
+	req.CompanyInfo.Schedule = agentTemplateCompanySchedule{
+		Monday: agentTemplateDaySchedule{Open: true, From: "08:00", To: "18:00"},
+		Notes:  "feriados nacionais fechado",
+	}
+
+	rec := postApplyTemplate(t, h, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp agentTemplateApplyResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.BehaviorPath == "" {
+		t.Fatalf("response missing behavior_path: %+v", resp)
+	}
+
+	behaviorPath := filepath.Join(workspace, "behavior.json")
+	if resp.BehaviorPath != behaviorPath {
+		t.Errorf("behavior_path = %q, want %q", resp.BehaviorPath, behaviorPath)
+	}
+
+	data, err := os.ReadFile(behaviorPath)
+	if err != nil {
+		t.Fatalf("read behavior.json: %v", err)
+	}
+
+	var got behaviorRuntimeSnapshot
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal behavior.json: %v\n%s", err, string(data))
+	}
+
+	if !got.MasterEnabled {
+		t.Error("MasterEnabled should be true")
+	}
+	if !got.BusinessHoursOnly {
+		t.Error("BusinessHoursOnly should be true")
+	}
+	if got.OutOfHoursReply != "Voltamos amanhã às 8h." {
+		t.Errorf("OutOfHoursReply = %q", got.OutOfHoursReply)
+	}
+	if got.RespondInGroups {
+		t.Error("RespondInGroups should be false")
+	}
+	if !got.GroupMentionOnly {
+		t.Error("GroupMentionOnly should be true")
+	}
+	if got.KeywordTrigger != "/atendimento" {
+		t.Errorf("KeywordTrigger = %q", got.KeywordTrigger)
+	}
+	if !got.OutboundOnlyMode {
+		t.Error("OutboundOnlyMode should be true")
+	}
+	if got.ProcessImages || got.ProcessDocuments {
+		t.Error("ProcessImages/ProcessDocuments should be false")
+	}
+	if !got.ProcessAudio {
+		t.Error("ProcessAudio should be true")
+	}
+	if got.MaxMediaSizeMB != 5 {
+		t.Errorf("MaxMediaSizeMB = %d, want 5", got.MaxMediaSizeMB)
+	}
+	if len(got.HandoffKeywords) != 2 || got.HandoffKeywords[0] != "falar com humano" {
+		t.Errorf("HandoffKeywords = %v", got.HandoffKeywords)
+	}
+	if !got.Schedule.Monday.Open || got.Schedule.Monday.From != "08:00" {
+		t.Errorf("Schedule.Monday = %+v", got.Schedule.Monday)
+	}
+	if got.Schedule.Notes != "feriados nacionais fechado" {
+		t.Errorf("Schedule.Notes = %q", got.Schedule.Notes)
+	}
+}
+
+func TestApplyAgentTemplate_BehaviorJSON_BackupsExisting(t *testing.T) {
+	h, workspace := setupTemplateHandler(t)
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	prev := []byte(`{"master_enabled":false}`)
+	if err := os.WriteFile(filepath.Join(workspace, "behavior.json"), prev, 0o644); err != nil {
+		t.Fatalf("seed behavior.json: %v", err)
+	}
+
+	rec := postApplyTemplate(t, h, buildSampleRequest())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	bak, err := os.ReadFile(filepath.Join(workspace, "behavior.json.bak"))
+	if err != nil {
+		t.Fatalf("read behavior.json.bak: %v", err)
+	}
+	if string(bak) != string(prev) {
+		t.Errorf("behavior.json.bak content = %q, want %q", string(bak), string(prev))
+	}
+}
+
 func TestApplyAgentTemplate_ToolsAndIntegrations_OmittedWhenEmpty(t *testing.T) {
 	h, workspace := setupTemplateHandler(t)
 	req := buildSampleRequest()

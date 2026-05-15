@@ -835,6 +835,69 @@
               "sunday": "周日"
             }
           }
+        },
+        "behavior": {
+          "activation": {
+            "title": "激活与响应范围",
+            "description": "控制智能体何时何地响应消息。过滤器在 LLM 之前应用。",
+            "master_enabled": "智能体已激活",
+            "master_hint": "关闭以完全暂停智能体而不删除模板。",
+            "business_hours_only": "仅在营业时间响应",
+            "business_hours_only_hint": "使用「公司 › 营业时间」中配置的时间。",
+            "out_of_hours_reply": "营业时间外自动回复",
+            "out_of_hours_reply_placeholder": "例如：我们工作时间为周一至周五 8:00-18:00，将在下个工作日回复您。",
+            "respond_in_dm": "响应私聊消息（DM）",
+            "respond_in_dm_hint": "来自单个客户的直接消息。",
+            "respond_in_groups": "在群组中响应",
+            "respond_in_groups_hint": "两人以上的对话。",
+            "group_mention_only": "群组中仅在被@时响应",
+            "group_mention_only_hint": "在群组中需要@提及才会回复。",
+            "keyword_trigger": "关键词触发",
+            "keyword_trigger_hint": "如果填写，只有消息包含该关键词时智能体才会响应（例如：/客服）。",
+            "keyword_trigger_placeholder": "例如：/客服"
+          },
+          "outbound": {
+            "title": "外呼模式",
+            "description": "限制谁可以开启对话。适用于营销活动和后续跟进。",
+            "outbound_only_mode": "外呼模式（仅响应自己已发起的对话）",
+            "outbound_only_mode_hint": "智能体仅在对话中最后一条消息是自己发出时才会响应。客户主动发起的对话会被忽略。",
+            "ignore_other_bots": "忽略其他机器人的消息",
+            "ignore_forwarded": "忽略转发的消息",
+            "ignore_self": "忽略自己的消息",
+            "ignore_self_hint": "建议保持开启，以避免多智能体场景下的死循环。"
+          },
+          "media": {
+            "title": "媒体类型",
+            "description": "智能体处理的媒体类型。已关闭的类型会在 LLM 之前被丢弃（节省 token）。",
+            "images": "处理图片",
+            "documents": "处理文档（PDF、docx）",
+            "audio": "处理音频和语音消息",
+            "video": "处理视频",
+            "stickers": "处理表情和 GIF",
+            "location": "处理位置",
+            "max_size_mb": "媒体大小上限（MB）",
+            "max_size_mb_hint": "超过该限制的媒体将被丢弃。0 = 不限制。"
+          },
+          "scope": {
+            "title": "会话范围、隐私、限流和人工接管",
+            "description": "会话限制、客户隐私和人工接管设置。",
+            "session_timeout": "会话重置不活跃时间（分钟）",
+            "session_timeout_hint": "0 = 永不重置。",
+            "max_msgs_session": "每会话最大消息数",
+            "max_msgs_session_hint": "0 = 无限制。用于限制每个客户的成本。",
+            "mask_pii": "在回复中屏蔽个人信息",
+            "mask_pii_hint": "智能体发送的回复中，身份证号、电话和邮箱会被替换为 ***。",
+            "store_media": "保存接收到的媒体",
+            "rate_per_min": "每用户每分钟最大消息数",
+            "rate_per_min_hint": "防刷屏。0 = 无限制。",
+            "cooldown_seconds": "响应间隔冷却（秒）",
+            "cooldown_seconds_hint": "对同一客户两次响应之间的最短间隔。0 = 关闭。",
+            "handoff_keywords": "人工接管关键词",
+            "handoff_keywords_hint": "客户输入其中任一关键词时，会话被标记为人工接管。",
+            "handoff_keywords_placeholder": "例如：转人工",
+            "handoff_after_failures": "N 次失败后转人工",
+            "handoff_after_failures_hint": "0 = 关闭。（即将推出）"
+          }
         }
       },
       "tools": {
