@@ -1,6 +1,7 @@
 import {
   IconArrowRight,
   IconCalendarStats,
+  IconCheck,
   IconPackage,
 } from "@tabler/icons-react"
 import { useTranslation } from "react-i18next"
@@ -13,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
 
 import { getCategoryLabel } from "./category-utils"
 import { TemplateIcon } from "./template-icon"
@@ -20,15 +22,24 @@ import type { AgentTemplate } from "./types"
 
 interface TemplateCardProps {
   template: AgentTemplate
+  isActive?: boolean
   onUse: () => void
 }
 
-export function TemplateCard({ template, onUse }: TemplateCardProps) {
+export function TemplateCard({
+  template,
+  isActive = false,
+  onUse,
+}: TemplateCardProps) {
   const { t } = useTranslation()
 
   return (
     <Card
-      className="group border-border/40 bg-card/40 hover:bg-card hover:border-border/80 relative overflow-hidden transition-all hover:shadow-md"
+      className={cn(
+        "group border-border/40 bg-card/40 hover:bg-card hover:border-border/80 relative overflow-hidden transition-all hover:shadow-md",
+        isActive &&
+          "border-primary/60 ring-primary/30 bg-primary/5 ring-2 ring-inset hover:border-primary/60",
+      )}
       size="sm"
     >
       <div className="via-primary/10 absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
@@ -46,6 +57,12 @@ export function TemplateCard({ template, onUse }: TemplateCardProps) {
                 <span className="bg-muted/60 text-muted-foreground ring-border/50 inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase ring-1 ring-inset">
                   {getCategoryLabel(template.category, t)}
                 </span>
+                {isActive ? (
+                  <span className="text-primary inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase ring-1 ring-primary/30 ring-inset">
+                    <IconCheck className="size-3" />
+                    {t("pages.agent.templates.card_badges.active", "Active")}
+                  </span>
+                ) : null}
                 {template.modules.professionals_enabled ? (
                   <span className="inline-flex items-center gap-1 rounded-md bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold tracking-wider text-sky-700 uppercase ring-1 ring-sky-500/20 ring-inset dark:text-sky-400">
                     <IconCalendarStats className="size-3" />

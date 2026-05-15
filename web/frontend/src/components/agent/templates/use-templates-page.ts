@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
 import { applyAgentTemplate } from "@/api/agent-templates"
+import { getAppConfig } from "@/api/channels"
 import { getSkills } from "@/api/skills"
 
 import { AGENT_TEMPLATES } from "./catalog"
@@ -116,6 +117,26 @@ export function useTemplatesPage() {
     [skillsQuery.data?.skills],
   )
 
+  const configQuery = useQuery({
+    queryKey: ["config"],
+    queryFn: getAppConfig,
+  })
+
+  // Read agents.defaults.active_template_id from the config so the dashboard
+  // can show which template is currently applied across reloads. AppConfig is
+  // an open record on the FE side (the backend exposes the full struct), so
+  // we drill through with narrow casts and fall back to null on shape drift.
+  const activeTemplateId = useMemo<string | null>(() => {
+    const cfg = configQuery.data
+    if (!cfg || typeof cfg !== "object") return null
+    const agents = (cfg as Record<string, unknown>).agents
+    if (!agents || typeof agents !== "object") return null
+    const defaults = (agents as Record<string, unknown>).defaults
+    if (!defaults || typeof defaults !== "object") return null
+    const id = (defaults as Record<string, unknown>).active_template_id
+    return typeof id === "string" && id.trim() !== "" ? id : null
+  }, [configQuery.data])
+
   const applyMutation = useMutation({
     mutationFn: applyAgentTemplate,
     onSuccess: () => {
@@ -123,6 +144,7 @@ export function useTemplatesPage() {
       setSelectedTemplate(null)
       setDraft(null)
       void queryClient.invalidateQueries({ queryKey: ["config"] })
+      void configQuery.refetch()
     },
     onError: (err) => {
       toast.error(
@@ -196,6 +218,7 @@ export function useTemplatesPage() {
     selectedTemplate,
     draft,
     installedSkills,
+    activeTemplateId,
     availableCategories,
     sortedTemplates,
     groupedTemplates,

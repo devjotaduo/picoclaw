@@ -16,6 +16,7 @@ export function TemplatesPage() {
     selectedTemplate,
     draft,
     installedSkills,
+    activeTemplateId,
     availableCategories,
     sortedTemplates,
     groupedTemplates,
@@ -64,6 +65,7 @@ export function TemplatesPage() {
               layoutMode={layoutMode}
               categoryFilter={categoryFilter}
               hasActiveFilters={hasActiveFilters}
+              activeTemplateId={activeTemplateId}
               onUseTemplate={handleUseTemplate}
             />
           </section>
