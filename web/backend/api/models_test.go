@@ -2219,3 +2219,88 @@ func TestMaskAPIKey(t *testing.T) {
 		})
 	}
 }
+
+func newModelConfig(name, provider, model, key string) *config.ModelConfig {
+	mc := &config.ModelConfig{
+		ModelName: name,
+		Provider:  provider,
+		Model:     model,
+	}
+	if key != "" {
+		mc.SetAPIKey(key)
+	}
+	return mc
+}
+
+func TestPropagateAPIKeyToProviderSiblings_FillsBlankSiblings(t *testing.T) {
+	cfg := &config.Config{
+		ModelList: []*config.ModelConfig{
+			newModelConfig("openrouter-auto", "openrouter", "auto", "sk-or-v1-abc"),
+			newModelConfig("openrouter-gpt", "openrouter", "openai/gpt-4o", ""),
+			newModelConfig("openrouter-sonnet", "openrouter", "anthropic/claude-sonnet-4.5", ""),
+			newModelConfig("gpt-direct", "openai", "gpt-4o", "sk-zzz"),
+		},
+	}
+
+	propagated := propagateAPIKeyToProviderSiblings(cfg, 0)
+	if propagated != 2 {
+		t.Fatalf("propagated = %d, want 2", propagated)
+	}
+	if got := cfg.ModelList[1].APIKey(); got != "sk-or-v1-abc" {
+		t.Errorf("sibling[1] APIKey = %q, want sk-or-v1-abc", got)
+	}
+	if got := cfg.ModelList[2].APIKey(); got != "sk-or-v1-abc" {
+		t.Errorf("sibling[2] APIKey = %q, want sk-or-v1-abc", got)
+	}
+	if got := cfg.ModelList[3].APIKey(); got != "sk-zzz" {
+		t.Errorf("non-sibling[3] APIKey = %q, want sk-zzz (untouched)", got)
+	}
+}
+
+func TestPropagateAPIKeyToProviderSiblings_DoesNotOverwriteExistingKeys(t *testing.T) {
+	cfg := &config.Config{
+		ModelList: []*config.ModelConfig{
+			newModelConfig("openrouter-auto", "openrouter", "auto", "sk-or-v1-new"),
+			newModelConfig("openrouter-gpt", "openrouter", "openai/gpt-4o", "sk-or-v1-existing"),
+			newModelConfig("openrouter-sonnet", "openrouter", "anthropic/claude-sonnet-4.5", ""),
+		},
+	}
+
+	propagated := propagateAPIKeyToProviderSiblings(cfg, 0)
+	if propagated != 1 {
+		t.Fatalf("propagated = %d, want 1 (only the blank sibling)", propagated)
+	}
+	if got := cfg.ModelList[1].APIKey(); got != "sk-or-v1-existing" {
+		t.Errorf("sibling with existing key was overwritten: got %q, want sk-or-v1-existing", got)
+	}
+	if got := cfg.ModelList[2].APIKey(); got != "sk-or-v1-new" {
+		t.Errorf("blank sibling not filled: got %q, want sk-or-v1-new", got)
+	}
+}
+
+func TestPropagateAPIKeyToProviderSiblings_NoSourceKey(t *testing.T) {
+	cfg := &config.Config{
+		ModelList: []*config.ModelConfig{
+			newModelConfig("openrouter-auto", "openrouter", "auto", ""),
+			newModelConfig("openrouter-gpt", "openrouter", "openai/gpt-4o", ""),
+		},
+	}
+	if got := propagateAPIKeyToProviderSiblings(cfg, 0); got != 0 {
+		t.Fatalf("propagated = %d, want 0 (source has no key)", got)
+	}
+}
+
+func TestPropagateAPIKeyToProviderSiblings_NoProvider(t *testing.T) {
+	cfg := &config.Config{
+		ModelList: []*config.ModelConfig{
+			newModelConfig("legacy", "", "openai/gpt-4o", "sk-zzz"),
+			newModelConfig("openrouter-gpt", "openrouter", "openai/gpt-4o", ""),
+		},
+	}
+	if got := propagateAPIKeyToProviderSiblings(cfg, 0); got != 0 {
+		t.Fatalf("propagated = %d, want 0 (source has empty provider)", got)
+	}
+	if got := cfg.ModelList[1].APIKey(); got != "" {
+		t.Errorf("openrouter sibling got %q from a provider-less source; should not propagate across providers", got)
+	}
+}
