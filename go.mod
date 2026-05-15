@@ -25,7 +25,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/h2non/filetype v1.1.3
 	github.com/jackc/pgx/v5 v5.7.1
-	github.com/larksuite/oapi-sdk-go/v3 v3.6.1
+	github.com/larksuite/oapi-sdk-go/v3 v3.7.5
 	github.com/line/line-bot-sdk-go/v8 v8.19.0
 	github.com/mdp/qrterminal/v3 v3.2.1
 	github.com/minio/selfupdate v0.6.0
