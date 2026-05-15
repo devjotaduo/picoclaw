@@ -6,8 +6,11 @@
     "credentials": "Credenciais",
     "agent_group": "Agente",
     "hub": "Hub",
+    "whatsapp_inbox": "Caixa WhatsApp",
     "templates": "Templates",
+    "template_editor": "Editor de templates",
     "skills": "Skills",
+    "skill_editor": "Editor de skills",
     "tools": "Ferramentas",
     "services": "Serviços",
     "channels_group": "Canais",
@@ -586,6 +589,35 @@
           "cannotInstall": "Não é possível instalar: ferramenta relacionada não está habilitada"
         }
       },
+      "skill_editor": {
+        "search_placeholder": "Buscar skills",
+        "loading": "Carregando…",
+        "load_error": "Não foi possível carregar a skill.",
+        "save": "Salvar",
+        "save_success": "Skill salva.",
+        "save_error": "Não foi possível salvar a skill.",
+        "reload": "Recarregar",
+        "discard_changes": "Há alterações não salvas. Descartar?",
+        "empty_selection": "Selecione uma skill à esquerda para editar.",
+        "read_only_title": "Skill somente leitura",
+        "read_only_hint": "Skills builtin não podem ser editadas pelo dashboard; clone para o workspace antes de modificar.",
+        "char_count": "{{count}} caracteres",
+        "unsaved": "Alterações não salvas"
+      },
+      "template_editor": {
+        "search_placeholder": "Buscar templates",
+        "edited_badge": "editado",
+        "skills_title": "Skills padrão deste template",
+        "skills_description": "Defina quais skills serão pré-selecionadas quando alguém aplicar este template a um agente. Marque como visíveis as que devem aparecer como capacidades públicas.",
+        "loading": "Carregando…",
+        "save": "Salvar alterações",
+        "reset": "Restaurar padrão",
+        "save_success": "Alterações salvas neste template.",
+        "save_error": "Não foi possível salvar as alterações.",
+        "reset_success": "Configuração padrão deste template restaurada.",
+        "reset_error": "Não foi possível restaurar o padrão.",
+        "empty_selection": "Selecione um template à esquerda para editar."
+      },
       "templates": {
         "title": "Templates de Agente",
         "subtitle": "Escolha um perfil pronto de atendente, personalize nome, apresentação, personalidade, funções, proibições e proteções, e aplique no workspace.",
@@ -604,6 +636,11 @@
         "add_item": "Adicionar",
         "remove_item": "Remover",
         "skills_empty": "Nenhuma skill instalada. Instale skills no Hub para anexá-las a este agente.",
+        "skills_toggles": {
+          "enabled": "Ativa",
+          "visible_label": "Visível no template",
+          "visible_hint": "(mostrar como capacidade pública do agente)"
+        },
         "categories": {
           "all": "Todas",
           "customer_service": "Atendimento ao Cliente",

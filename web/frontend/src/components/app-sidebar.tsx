@@ -1,6 +1,7 @@
 import { IconChevronRight } from "@tabler/icons-react"
 import {
   IconAtom,
+  IconBrandWhatsapp,
   IconChevronsDown,
   IconChevronsUp,
   IconKey,
@@ -134,6 +135,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ...baseNavGroups[2],
         items: [
           {
+            title: "navigation.whatsapp_inbox",
+            url: "/agent/whatsapp",
+            icon: IconBrandWhatsapp,
+            translateTitle: true,
+          },
+          {
             title: "navigation.hub",
             url: "/agent/hub",
             icon: IconSearch,
@@ -146,9 +153,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             translateTitle: true,
           },
           {
+            title: "navigation.template_editor",
+            url: "/agent/template-editor",
+            icon: IconListDetails,
+            translateTitle: true,
+          },
+          {
             title: "navigation.skills",
             url: "/agent/skills",
             icon: IconSparkles,
+            translateTitle: true,
+          },
+          {
+            title: "navigation.skill_editor",
+            url: "/agent/skill-editor",
+            icon: IconListDetails,
             translateTitle: true,
           },
           {

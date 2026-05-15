@@ -113,6 +113,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// WhatsApp native pairing QR
 	h.registerWhatsAppNativeRoutes(mux)
+
+	// WhatsApp inbox dashboard (chats, messages, pause, manual send, SSE)
+	h.registerWhatsAppInboxRoutes(mux)
 }
 
 // Shutdown gracefully shuts down the handler, stopping the gateway if it was started by this handler.

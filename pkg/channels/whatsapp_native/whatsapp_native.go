@@ -34,6 +34,7 @@ import (
 
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/channels"
+	"github.com/sipeed/picoclaw/pkg/channels/whatsapp_native/inbox"
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/identity"
 	"github.com/sipeed/picoclaw/pkg/logger"
@@ -59,6 +60,48 @@ type qrSnapshot struct {
 	Error       string
 }
 
+// MessageObserver receives inbound and outbound WhatsApp messages so external
+// consumers (e.g. the launcher's dashboard inbox) can persist and surface them
+// in real time. Implementations must be safe for concurrent use and should not
+// block — the channel calls them inline with whatsmeow event handling and the
+// outbound Send path.
+type MessageObserver interface {
+	OnInbound(ctx context.Context, evt InboundObservation)
+	OnOutbound(ctx context.Context, evt OutboundObservation)
+}
+
+// InboundObservation describes a message received from a contact.
+// PausedForAgent reports whether the agent pipeline is being skipped for this
+// chat — observers may want to surface this in the UI to make clear that the
+// human operator is expected to reply.
+type InboundObservation struct {
+	ChatJID        string
+	SenderJID      string
+	PushName       string
+	MessageID      string
+	Content        string
+	Timestamp      time.Time
+	PausedForAgent bool
+}
+
+// OutboundObservation describes a message the channel just sent. Source is
+// either "agent" (driven by the LLM pipeline) or "human" (manual send issued
+// by an operator through the dashboard).
+type OutboundObservation struct {
+	ChatJID   string
+	Source    string
+	MessageID string
+	Content   string
+	Timestamp time.Time
+	Error     error
+}
+
+// PauseChecker is invoked for every inbound message before publishing to the
+// bus. Returning true causes the channel to skip the agent pipeline for that
+// chat (the observer still gets the message). Returning false (the default)
+// keeps the existing behavior.
+type PauseChecker func(chatJID string) bool
+
 // WhatsAppNativeChannel implements the WhatsApp channel using whatsmeow (in-process, no external bridge).
 type WhatsAppNativeChannel struct {
 	*channels.BaseChannel
@@ -76,6 +119,49 @@ type WhatsAppNativeChannel struct {
 
 	qrMu       sync.RWMutex
 	qrSnapshot qrSnapshot
+
+	observerMu sync.RWMutex
+	observers  []MessageObserver
+	pauseCheck PauseChecker
+
+	inboxHandler *inboxHTTPHandler // optional; nil when persistence is disabled
+}
+
+// AddObserver registers an observer that will receive every inbound and
+// outbound message the channel processes. Callers retain ownership of the
+// observer; the channel keeps it for the channel's lifetime.
+func (c *WhatsAppNativeChannel) AddObserver(o MessageObserver) {
+	if o == nil {
+		return
+	}
+	c.observerMu.Lock()
+	c.observers = append(c.observers, o)
+	c.observerMu.Unlock()
+}
+
+// SetPauseChecker installs the callback used to decide whether a given chat
+// should bypass the agent pipeline. Passing nil restores the default behavior
+// (never paused).
+func (c *WhatsAppNativeChannel) SetPauseChecker(fn PauseChecker) {
+	c.observerMu.Lock()
+	c.pauseCheck = fn
+	c.observerMu.Unlock()
+}
+
+// snapshotObservers returns the current observer list under a read lock.
+func (c *WhatsAppNativeChannel) snapshotObservers() []MessageObserver {
+	c.observerMu.RLock()
+	out := append([]MessageObserver(nil), c.observers...)
+	c.observerMu.RUnlock()
+	return out
+}
+
+// Client returns the underlying whatsmeow client so observers can query
+// profile pictures, contact info, etc. May be nil before pairing.
+func (c *WhatsAppNativeChannel) Client() *whatsmeow.Client {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.client
 }
 
 // NewWhatsAppNativeChannel creates a WhatsApp channel that uses whatsmeow for connection.
@@ -96,6 +182,33 @@ func NewWhatsAppNativeChannel(
 		config:      cfg,
 		storePath:   storePath,
 	}
+
+	// Inbox store: SQLite alongside the whatsmeow session store. Failing to
+	// open it shouldn't prevent the channel from starting — we just operate
+	// without dashboard persistence in that case.
+	if err := os.MkdirAll(storePath, 0o700); err != nil {
+		logger.WarnCF("whatsapp", "inbox: failed to ensure store dir", map[string]any{"path": storePath, "error": err.Error()})
+	} else if store, err := inbox.New(storePath); err != nil {
+		logger.WarnCF("whatsapp", "inbox: failed to open store; dashboard inbox disabled", map[string]any{"error": err.Error()})
+	} else {
+		pubsub := newInboxPubSub()
+		observer := newPersistingObserver(store, pubsub)
+		c.observers = append(c.observers, observer)
+		c.pauseCheck = func(chatJID string) bool {
+			paused, err := store.IsPaused(context.Background(), chatJID)
+			if err != nil {
+				logger.DebugCF("whatsapp", "inbox: pause lookup failed; defaulting to not paused", map[string]any{"jid": chatJID, "error": err.Error()})
+				return false
+			}
+			return paused
+		}
+		c.inboxHandler = &inboxHTTPHandler{
+			channel: c,
+			store:   store,
+			pubsub:  pubsub,
+		}
+	}
+
 	return c, nil
 }
 
@@ -436,6 +549,35 @@ func (c *WhatsAppNativeChannel) handleIncoming(evt *events.Message) {
 		map[string]any{"sender_id": senderID, "content_preview": utils.Truncate(content, 50)},
 	)
 
+	c.observerMu.RLock()
+	pauseCheck := c.pauseCheck
+	c.observerMu.RUnlock()
+	paused := false
+	if pauseCheck != nil {
+		paused = pauseCheck(chatID)
+	}
+
+	for _, obs := range c.snapshotObservers() {
+		obs.OnInbound(c.runCtx, InboundObservation{
+			ChatJID:        chatID,
+			SenderJID:      senderID,
+			PushName:       evt.Info.PushName,
+			MessageID:      messageID,
+			Content:        content,
+			Timestamp:      evt.Info.Timestamp,
+			PausedForAgent: paused,
+		})
+	}
+
+	if paused {
+		logger.DebugCF(
+			"whatsapp",
+			"WhatsApp agent paused for chat; not forwarding to agent",
+			map[string]any{"chat_id": chatID, "message_id": messageID},
+		)
+		return
+	}
+
 	inboundCtx := bus.InboundContext{
 		Channel:   "whatsapp",
 		ChatID:    chatID,
@@ -449,6 +591,18 @@ func (c *WhatsAppNativeChannel) handleIncoming(evt *events.Message) {
 }
 
 func (c *WhatsAppNativeChannel) Send(ctx context.Context, msg bus.OutboundMessage) ([]string, error) {
+	return c.sendWithSource(ctx, msg, "agent")
+}
+
+// SendManual sends a message tagged as authored by a human operator. Observers
+// are notified with Source = "human" so the dashboard can render the bubble
+// with the right styling and skip the agent attribution.
+func (c *WhatsAppNativeChannel) SendManual(ctx context.Context, chatID, content string) error {
+	_, err := c.sendWithSource(ctx, bus.OutboundMessage{ChatID: chatID, Content: content}, "human")
+	return err
+}
+
+func (c *WhatsAppNativeChannel) sendWithSource(ctx context.Context, msg bus.OutboundMessage, source string) ([]string, error) {
 	if !c.IsRunning() {
 		return nil, channels.ErrNotRunning
 	}
@@ -477,12 +631,34 @@ func (c *WhatsAppNativeChannel) Send(ctx context.Context, msg bus.OutboundMessag
 		return nil, fmt.Errorf("invalid chat id %q: %w", msg.ChatID, err)
 	}
 
+	messageID := client.GenerateMessageID()
 	waMsg := &waE2E.Message{
 		Conversation: proto.String(msg.Content),
 	}
 
-	if _, err = client.SendMessage(ctx, to, waMsg); err != nil {
+	_, sendErr := client.SendMessage(ctx, to, waMsg, whatsmeow.SendRequestExtra{ID: messageID})
+	if sendErr != nil {
+		for _, obs := range c.snapshotObservers() {
+			obs.OnOutbound(ctx, OutboundObservation{
+				ChatJID:   msg.ChatID,
+				Source:    source,
+				MessageID: messageID,
+				Content:   msg.Content,
+				Timestamp: time.Now(),
+				Error:     sendErr,
+			})
+		}
 		return nil, fmt.Errorf("whatsapp send: %w", channels.ErrTemporary)
+	}
+
+	for _, obs := range c.snapshotObservers() {
+		obs.OnOutbound(ctx, OutboundObservation{
+			ChatJID:   msg.ChatID,
+			Source:    source,
+			MessageID: messageID,
+			Content:   msg.Content,
+			Timestamp: time.Now(),
+		})
 	}
 	return nil, nil
 }
@@ -540,16 +716,45 @@ func encodeQRDataURI(content string) string {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(code.PNG())
 }
 
-// HealthPath implements channels.HealthChecker — the gateway's shared HTTP server
-// will mount HealthHandler at this path.
+// HealthPath implements channels.HealthChecker. We register a *prefix* so the
+// channel can expose both the pairing QR endpoint and the inbox sub-router on
+// the same shared HTTP server without needing a new manager-level extension.
+// HealthHandler dispatches internally based on the trailing path component.
 func (c *WhatsAppNativeChannel) HealthPath() string {
-	return "/whatsapp_native/qr"
+	return "/whatsapp_native/"
 }
 
-// HealthHandler returns the current pairing / QR state as JSON.
+// HealthHandler dispatches `/whatsapp_native/{sub}` requests to the right
+// internal handler. `qr` returns the pairing state; `inbox/...` is forwarded
+// to the inbox HTTP handler when the inbox store is available.
 //
-//	GET /whatsapp_native/qr
+//	GET  /whatsapp_native/qr                          → pairing/QR JSON
+//	GET  /whatsapp_native/inbox/chats                 → list chats
+//	GET  /whatsapp_native/inbox/chats/{jid}           → chat detail
+//	GET  /whatsapp_native/inbox/chats/{jid}/messages  → messages
+//	POST /whatsapp_native/inbox/chats/{jid}/pause     → toggle agent pause
+//	POST /whatsapp_native/inbox/chats/{jid}/send      → send manual reply
+//	POST /whatsapp_native/inbox/chats/{jid}/read      → reset unread
+//	GET  /whatsapp_native/inbox/chats/{jid}/avatar    → fetch/cache avatar
+//	GET  /whatsapp_native/inbox/events                → SSE stream
 func (c *WhatsAppNativeChannel) HealthHandler(w http.ResponseWriter, r *http.Request) {
+	sub := strings.TrimPrefix(r.URL.Path, "/whatsapp_native/")
+	switch {
+	case sub == "qr":
+		c.serveQR(w, r)
+	case strings.HasPrefix(sub, "inbox"):
+		if c.inboxHandler == nil {
+			http.Error(w, `{"error":"inbox not available"}`, http.StatusServiceUnavailable)
+			return
+		}
+		c.inboxHandler.ServeHTTP(w, r)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+// serveQR returns the current pairing / QR state as JSON.
+func (c *WhatsAppNativeChannel) serveQR(w http.ResponseWriter, r *http.Request) {
 	c.qrMu.RLock()
 	snap := c.qrSnapshot
 	c.qrMu.RUnlock()
