@@ -20,6 +20,7 @@ interface TemplatesListProps {
   layoutMode: TemplateLayoutMode
   categoryFilter: string
   hasActiveFilters: boolean
+  activeTemplateId: string | null
   onUseTemplate: (template: AgentTemplate) => void
 }
 
@@ -29,6 +30,7 @@ export function TemplatesList({
   layoutMode,
   categoryFilter,
   hasActiveFilters,
+  activeTemplateId,
   onUseTemplate,
 }: TemplatesListProps) {
   const { t } = useTranslation()
@@ -63,6 +65,7 @@ export function TemplatesList({
                 <TemplateCard
                   key={template.id}
                   template={template}
+                  isActive={template.id === activeTemplateId}
                   onUse={() => onUseTemplate(template)}
                 />
               ))}

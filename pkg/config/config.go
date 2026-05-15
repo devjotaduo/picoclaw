@@ -401,6 +401,7 @@ type AgentDefaults struct {
 	ContextManagerConfig      json.RawMessage    `json:"context_manager_config,omitempty" env:"PICOCLAW_AGENTS_DEFAULTS_CONTEXT_MANAGER_CONFIG"`
 	MaxLLMRetries             int                `json:"max_llm_retries,omitempty"        env:"PICOCLAW_AGENTS_DEFAULTS_MAX_LLM_RETRIES"`
 	LLMRetryBackoffSecs       int                `json:"llm_retry_backoff_secs,omitempty" env:"PICOCLAW_AGENTS_DEFAULTS_LLM_RETRY_BACKOFF_SECS"`
+	ActiveTemplateID          string             `json:"active_template_id,omitempty"     env:"PICOCLAW_AGENTS_DEFAULTS_ACTIVE_TEMPLATE_ID"`
 }
 
 const DefaultMaxMediaSize = 20 * 1024 * 1024 // 20 MB

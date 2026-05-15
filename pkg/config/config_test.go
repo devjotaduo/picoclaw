@@ -825,11 +825,23 @@ func TestDefaultConfig_Gateway(t *testing.T) {
 	}
 }
 
-// TestDefaultConfig_Channels verifies channels are disabled by default
+// TestDefaultConfig_Channels verifies channels are disabled by default.
+// The whatsapp channel ships enabled in native (whatsmeow) mode so fresh
+// installs can pair via QR without an external bridge process.
 func TestDefaultConfig_Channels(t *testing.T) {
 	cfg := DefaultConfig()
 
+	enabledByDefault := map[string]bool{
+		ChannelWhatsApp: true,
+	}
+
 	for name, bc := range cfg.Channels {
+		if enabledByDefault[name] {
+			if !bc.Enabled {
+				t.Errorf("Channel %q should be enabled by default", name)
+			}
+			continue
+		}
 		if bc.Enabled {
 			t.Errorf("Channel %q should be disabled by default", name)
 		}

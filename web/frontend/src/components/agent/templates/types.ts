@@ -291,6 +291,7 @@ export interface TemplateApplyResponse {
   agent_path: string
   soul_path: string
   behavior_path?: string
+  reload?: string
 }
 
 export type TemplateLayoutMode = "grouped" | "grid"

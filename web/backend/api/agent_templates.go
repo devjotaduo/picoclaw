@@ -1,17 +1,22 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
+	"time"
 
 	"github.com/sipeed/picoclaw/pkg/config"
+	ppid "github.com/sipeed/picoclaw/pkg/pid"
 )
 
 // agentTemplateApplyRequest is the payload sent by the frontend templates page.
@@ -186,6 +191,7 @@ type agentTemplateApplyResponse struct {
 	AgentPath    string `json:"agent_path"`
 	SoulPath     string `json:"soul_path"`
 	BehaviorPath string `json:"behavior_path,omitempty"`
+	Reload       string `json:"reload,omitempty"`
 }
 
 var agentTemplateWriteMu sync.Mutex
@@ -278,13 +284,68 @@ func (h *Handler) handleApplyAgentTemplate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Persist active template ID so the dashboard can show which template is
+	// currently applied across reloads. Saved best-effort: rendered files are
+	// already on disk, so a config write failure should not fail the request.
+	if cfg.Agents.Defaults.ActiveTemplateID != req.TemplateID {
+		cfg.Agents.Defaults.ActiveTemplateID = req.TemplateID
+		if err := config.SaveConfig(h.configPath, cfg); err != nil {
+			// Surface as a warning header but keep status applied; the rendered
+			// files are the source of truth for the runtime.
+			w.Header().Set("X-Picoclaw-Warning", fmt.Sprintf("failed to save active_template_id: %v", err))
+		}
+	}
+
+	// Trigger gateway reload so frontmatter-derived fields (model, skills,
+	// tool allowlist) are picked up without restarting the process. Without
+	// this, AGENT.md body changes apply on the next turn (mtime cache) but
+	// the agent instance keeps the previous model/skills selection.
+	reloadStatus := requestGatewayReload()
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(agentTemplateApplyResponse{
 		Status:       "applied",
 		AgentPath:    agentPath,
 		SoulPath:     soulPath,
 		BehaviorPath: behaviorPath,
+		Reload:       reloadStatus,
 	})
+}
+
+// requestGatewayReload posts to the local gateway's /reload endpoint so
+// AGENT.md / SOUL.md / behavior.json changes propagate to the running
+// agent without a restart. Best-effort: returns a short status string
+// the UI can show.
+func requestGatewayReload() string {
+	pidData := ppid.ReadPidFileWithCheck(globalConfigDir())
+	if pidData == nil {
+		return "skipped:no-pid-file"
+	}
+	host := pidData.Host
+	if host == "" {
+		host = "localhost"
+	}
+	if pidData.Port == 0 {
+		return "skipped:no-port"
+	}
+	url := "http://" + net.JoinHostPort(host, strconv.Itoa(pidData.Port)) + "/reload"
+	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(nil))
+	if err != nil {
+		return "error:" + err.Error()
+	}
+	if pidData.Token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+pidData.Token)
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return "error:" + err.Error()
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "error:status-" + strconv.Itoa(resp.StatusCode)
+	}
+	return "ok"
 }
 
 func validateAgentTemplateRequest(req *agentTemplateApplyRequest) error {
