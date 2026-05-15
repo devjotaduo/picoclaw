@@ -77,6 +77,40 @@ export async function getSkill(name: string): Promise<SkillDetailResponse> {
   return request<SkillDetailResponse>(`/api/skills/${encodeURIComponent(name)}`)
 }
 
+export interface SkillRawResponse {
+  name: string
+  path: string
+  source: string
+  editable: boolean
+  content: string
+}
+
+export async function getSkillRaw(name: string): Promise<SkillRawResponse> {
+  return request<SkillRawResponse>(
+    `/api/skills/${encodeURIComponent(name)}/raw`,
+  )
+}
+
+export interface UpdateSkillResponse {
+  status: string
+  name: string
+  path: string
+}
+
+export async function updateSkill(
+  name: string,
+  content: string,
+): Promise<UpdateSkillResponse> {
+  return request<UpdateSkillResponse>(
+    `/api/skills/${encodeURIComponent(name)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    },
+  )
+}
+
 export async function searchSkills(
   query: string,
   limit = 20,

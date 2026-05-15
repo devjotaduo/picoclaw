@@ -2,7 +2,23 @@ import { launcherFetch } from "@/api/http"
 import type {
   TemplateApplyPayload,
   TemplateApplyResponse,
+  TemplateSkillConfig,
 } from "@/components/agent/templates/types"
+
+export interface TemplateOverride {
+  skill_configs?: TemplateSkillConfig[]
+  draft?: TemplateApplyPayload
+}
+
+export interface TemplateOverridesResponse {
+  overrides: Record<string, TemplateOverride>
+}
+
+export interface TemplateOverrideSaveResponse {
+  status: string
+  template_id: string
+  override: TemplateOverride
+}
 
 async function extractErrorMessage(res: Response): Promise<string> {
   try {
@@ -39,4 +55,43 @@ export async function applyAgentTemplate(
     throw new Error(await extractErrorMessage(res))
   }
   return res.json() as Promise<TemplateApplyResponse>
+}
+
+export async function getTemplateOverrides(): Promise<TemplateOverridesResponse> {
+  const res = await launcherFetch("/api/agent/templates/overrides")
+  if (!res.ok) {
+    throw new Error(await extractErrorMessage(res))
+  }
+  return res.json() as Promise<TemplateOverridesResponse>
+}
+
+export async function saveTemplateOverride(
+  templateId: string,
+  override: TemplateOverride,
+): Promise<TemplateOverrideSaveResponse> {
+  const res = await launcherFetch(
+    `/api/agent/templates/overrides/${encodeURIComponent(templateId)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(override),
+    },
+  )
+  if (!res.ok) {
+    throw new Error(await extractErrorMessage(res))
+  }
+  return res.json() as Promise<TemplateOverrideSaveResponse>
+}
+
+export async function resetTemplateOverride(
+  templateId: string,
+): Promise<{ status: string; template_id: string }> {
+  const res = await launcherFetch(
+    `/api/agent/templates/overrides/${encodeURIComponent(templateId)}`,
+    { method: "DELETE" },
+  )
+  if (!res.ok) {
+    throw new Error(await extractErrorMessage(res))
+  }
+  return res.json() as Promise<{ status: string; template_id: string }>
 }

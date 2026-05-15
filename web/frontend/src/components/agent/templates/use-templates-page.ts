@@ -3,7 +3,13 @@ import { useDeferredValue, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
-import { applyAgentTemplate } from "@/api/agent-templates"
+import {
+  type TemplateOverride,
+  applyAgentTemplate,
+  getTemplateOverrides,
+  resetTemplateOverride,
+  saveTemplateOverride,
+} from "@/api/agent-templates"
 import { getAppConfig } from "@/api/channels"
 import { getSkills } from "@/api/skills"
 
@@ -16,12 +22,17 @@ import type {
   TemplateApplyPayload,
   TemplateCategory,
   TemplateLayoutMode,
+  TemplateSkillConfig,
 } from "./types"
 
-function templateToDraft(template: AgentTemplate): TemplateApplyPayload {
+function templateToDraft(
+  template: AgentTemplate,
+  defaultSkillConfigs: TemplateSkillConfig[] = [],
+): TemplateApplyPayload {
   return {
     template_id: template.id,
     name: template.name,
+    short_description: template.short_description,
     presentation: template.presentation,
     personality: [...template.personality],
     values: [...template.values],
@@ -43,7 +54,7 @@ function templateToDraft(template: AgentTemplate): TemplateApplyPayload {
     },
     language: template.language,
     tone: template.tone,
-    skills: [],
+    skill_configs: defaultSkillConfigs.map((c) => ({ ...c })),
     model: template.recommended_model,
     conversation_flow: [...template.conversation_flow],
     required_fields_by_intent: Object.fromEntries(
@@ -95,6 +106,84 @@ function templateToDraft(template: AgentTemplate): TemplateApplyPayload {
   }
 }
 
+function templateFromDraft(
+  base: AgentTemplate,
+  override?: TemplateOverride,
+): AgentTemplate {
+  const draft = override?.draft
+  if (!draft) return base
+  return {
+    ...base,
+    name: draft.name || base.name,
+    short_description: draft.short_description || base.short_description,
+    presentation: draft.presentation,
+    personality: [...draft.personality],
+    values: [...draft.values],
+    functions: [...draft.functions],
+    prohibitions: [...draft.prohibitions],
+    protections: [...draft.protections],
+    company_info: {
+      ...draft.company_info,
+      schedule: {
+        monday: { ...draft.company_info.schedule.monday },
+        tuesday: { ...draft.company_info.schedule.tuesday },
+        wednesday: { ...draft.company_info.schedule.wednesday },
+        thursday: { ...draft.company_info.schedule.thursday },
+        friday: { ...draft.company_info.schedule.friday },
+        saturday: { ...draft.company_info.schedule.saturday },
+        sunday: { ...draft.company_info.schedule.sunday },
+        notes: draft.company_info.schedule.notes,
+      },
+    },
+    language: draft.language,
+    tone: draft.tone,
+    recommended_model: draft.model,
+    conversation_flow: [...draft.conversation_flow],
+    required_fields_by_intent: Object.fromEntries(
+      Object.entries(draft.required_fields_by_intent).map(([k, v]) => [
+        k,
+        [...v],
+      ]),
+    ),
+    response_examples: { ...draft.response_examples },
+    style_guide: {
+      do: [...draft.style_guide.do],
+      dont: [...draft.style_guide.dont],
+    },
+    fallback_policy: {
+      ...draft.fallback_policy,
+      when_to_route: [...draft.fallback_policy.when_to_route],
+    },
+    handoff_summary_template: { ...draft.handoff_summary_template },
+    structured_output_template: {
+      ...draft.structured_output_template,
+      collected_fields: {
+        ...draft.structured_output_template.collected_fields,
+      },
+      missing_fields: [...draft.structured_output_template.missing_fields],
+    },
+    priority_rules: {
+      high: [...draft.priority_rules.high],
+      medium: [...draft.priority_rules.medium],
+      low: [...draft.priority_rules.low],
+    },
+    knowledge_policy: [...draft.knowledge_policy],
+    security_rules: [...draft.security_rules],
+    quality_metrics: [...draft.quality_metrics],
+    modules: { ...draft.modules },
+    professionals: draft.professionals.map((p) => ({
+      ...p,
+      services: p.services.map((s) => ({ ...s })),
+    })),
+    products: draft.products.map((p) => ({ ...p })),
+    recommended_tools: [...draft.recommended_tools],
+    tool_namespaces: [...draft.tool_namespaces],
+    required_integrations: [...draft.required_integrations],
+    permission_level: draft.permission_level,
+    approval_required_for: [...draft.approval_required_for],
+  }
+}
+
 export function useTemplatesPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -111,6 +200,16 @@ export function useTemplatesPage() {
     queryKey: ["skills"],
     queryFn: getSkills,
   })
+
+  const overridesQuery = useQuery({
+    queryKey: ["template-overrides"],
+    queryFn: getTemplateOverrides,
+  })
+
+  const overrides = useMemo(
+    () => overridesQuery.data?.overrides ?? {},
+    [overridesQuery.data?.overrides],
+  )
 
   const installedSkills = useMemo(
     () => skillsQuery.data?.skills ?? [],
@@ -155,16 +254,74 @@ export function useTemplatesPage() {
     },
   })
 
+  const saveMutation = useMutation({
+    mutationFn: (payload: TemplateApplyPayload) =>
+      saveTemplateOverride(payload.template_id, {
+        skill_configs: payload.skill_configs,
+        draft: payload,
+      }),
+    onSuccess: () => {
+      toast.success(
+        t("pages.agent.templates.save_template_success", "Template saved."),
+      )
+      void queryClient.invalidateQueries({ queryKey: ["template-overrides"] })
+    },
+    onError: (err) => {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t(
+              "pages.agent.templates.save_template_error",
+              "Could not save template.",
+            ),
+      )
+    },
+  })
+
+  const resetMutation = useMutation({
+    mutationFn: (templateId: string) => resetTemplateOverride(templateId),
+    onSuccess: (_result, templateId) => {
+      toast.success(
+        t(
+          "pages.agent.templates.reset_template_success",
+          "Template defaults restored.",
+        ),
+      )
+      const baseTemplate =
+        AGENT_TEMPLATES.find((tpl) => tpl.id === templateId) ?? null
+      setSelectedTemplate(baseTemplate)
+      setDraft(baseTemplate ? templateToDraft(baseTemplate) : null)
+      void queryClient.invalidateQueries({ queryKey: ["template-overrides"] })
+    },
+    onError: (err) => {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t(
+              "pages.agent.templates.reset_template_error",
+              "Could not restore template defaults.",
+            ),
+      )
+    },
+  })
+
   const normalizedSearchQuery = deferredSearchQuery.trim().toLowerCase()
 
-  const availableCategories = useMemo<TemplateCategory[]>(
+  const templates = useMemo(
     () =>
-      sortCategories([...new Set(AGENT_TEMPLATES.map((tpl) => tpl.category))]),
-    [],
+      AGENT_TEMPLATES.map((template) =>
+        templateFromDraft(template, overrides[template.id]),
+      ),
+    [overrides],
+  )
+
+  const availableCategories = useMemo<TemplateCategory[]>(
+    () => sortCategories([...new Set(templates.map((tpl) => tpl.category))]),
+    [templates],
   )
 
   const filteredTemplates = useMemo(() => {
-    return AGENT_TEMPLATES.filter((tpl) => {
+    return templates.filter((tpl) => {
       const matchesCategory =
         categoryFilter === "all" ? true : tpl.category === categoryFilter
       if (!matchesCategory) return false
@@ -173,7 +330,7 @@ export function useTemplatesPage() {
         `${tpl.name} ${tpl.short_description} ${tpl.functions.join(" ")}`.toLowerCase()
       return haystack.includes(normalizedSearchQuery)
     })
-  }, [normalizedSearchQuery, categoryFilter])
+  }, [templates, normalizedSearchQuery, categoryFilter])
 
   const sortedTemplates = useMemo(
     () => [...filteredTemplates].sort(compareTemplates),
@@ -196,7 +353,11 @@ export function useTemplatesPage() {
 
   function handleUseTemplate(template: AgentTemplate) {
     setSelectedTemplate(template)
-    setDraft(templateToDraft(template))
+    const override =
+      overrides[template.id]?.draft?.skill_configs ??
+      overrides[template.id]?.skill_configs ??
+      []
+    setDraft(templateToDraft(template, override))
   }
 
   function handleDrawerOpenChange(open: boolean) {
@@ -209,6 +370,16 @@ export function useTemplatesPage() {
   function handleApply() {
     if (!draft) return
     applyMutation.mutate(draft)
+  }
+
+  function handleSaveTemplate() {
+    if (!draft) return
+    saveMutation.mutate(draft)
+  }
+
+  function handleResetTemplate() {
+    if (!draft) return
+    resetMutation.mutate(draft.template_id)
   }
 
   return {
@@ -224,6 +395,9 @@ export function useTemplatesPage() {
     groupedTemplates,
     hasActiveFilters,
     isApplying: applyMutation.isPending,
+    isSavingTemplate: saveMutation.isPending,
+    isResettingTemplate: resetMutation.isPending,
+    hasSavedOverride: draft ? Boolean(overrides[draft.template_id]) : false,
     setSearchQuery,
     setCategoryFilter,
     setLayoutMode,
@@ -231,5 +405,7 @@ export function useTemplatesPage() {
     handleUseTemplate,
     handleDrawerOpenChange,
     handleApply,
+    handleSaveTemplate,
+    handleResetTemplate,
   }
 }

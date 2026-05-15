@@ -327,6 +327,174 @@ func TestApplyAgentTemplate_OmitsModelWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestApplyAgentTemplate_SkillConfigs_EnabledOnlyInFrontmatter(t *testing.T) {
+	h, workspace := setupTemplateHandler(t)
+	req := buildSampleRequest()
+	req.Skills = nil
+	req.SkillConfigs = []agentTemplateSkillConfig{
+		{Name: "agendamento", Enabled: true, Visible: true},
+		{Name: "faq-medico", Enabled: true, Visible: false},
+		{Name: "internal-debug", Enabled: false, Visible: true},
+	}
+	rec := postApplyTemplate(t, h, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	agentBytes, err := os.ReadFile(filepath.Join(workspace, "AGENT.md"))
+	if err != nil {
+		t.Fatalf("read AGENT.md: %v", err)
+	}
+	got := string(agentBytes)
+
+	// Frontmatter must contain all enabled skills (visible or not).
+	for _, needle := range []string{"  - agendamento", "  - faq-medico"} {
+		if !strings.Contains(got, needle) {
+			t.Errorf("AGENT.md missing enabled skill %q in frontmatter\n%s", needle, got)
+		}
+	}
+	// Disabled skill must never appear.
+	if strings.Contains(got, "internal-debug") {
+		t.Errorf("AGENT.md must not include disabled skill internal-debug\n%s", got)
+	}
+	// Available Skills section lists only enabled+visible entries.
+	if !strings.Contains(got, "## Available Skills") {
+		t.Errorf("AGENT.md missing Available Skills section\n%s", got)
+	}
+	if !strings.Contains(got, "- `agendamento`") {
+		t.Errorf("AGENT.md should advertise visible skill agendamento\n%s", got)
+	}
+	if strings.Contains(got, "- `faq-medico`") {
+		t.Errorf("AGENT.md must not advertise invisible skill faq-medico\n%s", got)
+	}
+}
+
+func TestApplyAgentTemplate_LegacySkillsAllVisible(t *testing.T) {
+	h, workspace := setupTemplateHandler(t)
+	rec := postApplyTemplate(t, h, buildSampleRequest())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	agentBytes, err := os.ReadFile(filepath.Join(workspace, "AGENT.md"))
+	if err != nil {
+		t.Fatalf("read AGENT.md: %v", err)
+	}
+	got := string(agentBytes)
+	// Legacy path (skills only, no skill_configs) keeps every skill visible.
+	if !strings.Contains(got, "## Available Skills") {
+		t.Errorf("legacy skills must populate Available Skills section\n%s", got)
+	}
+	if !strings.Contains(got, "- `agendamento`") || !strings.Contains(got, "- `faq-medico`") {
+		t.Errorf("legacy skills missing from Available Skills section\n%s", got)
+	}
+}
+
+func TestTemplateOverrides_RoundTrip(t *testing.T) {
+	h, workspace := setupTemplateHandler(t)
+
+	// GET when nothing saved yet returns empty map.
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/templates/overrides", nil)
+	rec := httptest.NewRecorder()
+	h.handleGetTemplateOverrides(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET empty: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var initial templateOverridesFile
+	if err := json.NewDecoder(rec.Body).Decode(&initial); err != nil {
+		t.Fatalf("decode initial: %v", err)
+	}
+	if len(initial.Overrides) != 0 {
+		t.Errorf("expected empty overrides, got %v", initial.Overrides)
+	}
+
+	// PUT saves an override.
+	override := templateOverride{
+		SkillConfigs: []agentTemplateSkillConfig{
+			{Name: "agendamento", Enabled: true, Visible: true},
+			{Name: "internal-debug", Enabled: true, Visible: false},
+		},
+		Draft: &agentTemplateApplyRequest{
+			TemplateID:       "atendente-clinica",
+			Name:             "Recepção Customizada",
+			ShortDescription: "Template ajustado pelo usuário",
+			Presentation:     "Olá, posso ajudar?",
+			Language:         "pt-br",
+			Tone:             "friendly",
+			SkillConfigs: []agentTemplateSkillConfig{
+				{Name: "agendamento", Enabled: true, Visible: true},
+			},
+		},
+	}
+	body, _ := json.Marshal(override)
+	req = httptest.NewRequest(http.MethodPut, "/api/agent/templates/overrides/atendente-clinica", bytes.NewReader(body))
+	req.SetPathValue("templateID", "atendente-clinica")
+	rec = httptest.NewRecorder()
+	h.handlePutTemplateOverride(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// File must exist on disk.
+	if _, err := os.Stat(filepath.Join(workspace, "template_overrides.json")); err != nil {
+		t.Fatalf("expected template_overrides.json on disk: %v", err)
+	}
+
+	// GET returns the saved override.
+	req = httptest.NewRequest(http.MethodGet, "/api/agent/templates/overrides", nil)
+	rec = httptest.NewRecorder()
+	h.handleGetTemplateOverrides(rec, req)
+	var got templateOverridesFile
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode GET: %v", err)
+	}
+	saved, ok := got.Overrides["atendente-clinica"]
+	if !ok {
+		t.Fatalf("override not present in GET response: %+v", got)
+	}
+	if len(saved.SkillConfigs) != 2 {
+		t.Errorf("expected 2 skill configs, got %d", len(saved.SkillConfigs))
+	}
+	if saved.Draft == nil {
+		t.Fatalf("expected draft to round-trip")
+	}
+	if saved.Draft.Name != "Recepção Customizada" {
+		t.Errorf("draft name did not round-trip: %q", saved.Draft.Name)
+	}
+	if saved.Draft.ShortDescription != "Template ajustado pelo usuário" {
+		t.Errorf("draft short description did not round-trip: %q", saved.Draft.ShortDescription)
+	}
+
+	// DELETE removes it.
+	req = httptest.NewRequest(http.MethodDelete, "/api/agent/templates/overrides/atendente-clinica", nil)
+	req.SetPathValue("templateID", "atendente-clinica")
+	rec = httptest.NewRecorder()
+	h.handleDeleteTemplateOverride(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("DELETE: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/agent/templates/overrides", nil)
+	rec = httptest.NewRecorder()
+	h.handleGetTemplateOverrides(rec, req)
+	var afterDelete templateOverridesFile
+	_ = json.NewDecoder(rec.Body).Decode(&afterDelete)
+	if _, present := afterDelete.Overrides["atendente-clinica"]; present {
+		t.Errorf("override should be gone after DELETE: %+v", afterDelete)
+	}
+}
+
+func TestTemplateOverrides_RejectsUnsafeTemplateID(t *testing.T) {
+	h, _ := setupTemplateHandler(t)
+	cases := []string{"../escape", "foo/bar", "with space", "slash\\here", ""}
+	for _, id := range cases {
+		req := httptest.NewRequest(http.MethodPut, "/api/agent/templates/overrides/placeholder", strings.NewReader("{}"))
+		req.SetPathValue("templateID", id)
+		rec := httptest.NewRecorder()
+		h.handlePutTemplateOverride(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for templateID=%q, got %d", id, rec.Code)
+		}
+	}
+}
+
 func TestApplyAgentTemplate_SlugifyNames(t *testing.T) {
 	cases := map[string]string{
 		"Padaria do João":  "padaria-do-joao",
@@ -754,4 +922,3 @@ func mustRead(t *testing.T, path string) []byte {
 	}
 	return data
 }
-
