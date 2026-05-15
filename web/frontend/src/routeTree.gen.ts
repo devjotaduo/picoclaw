@@ -20,9 +20,12 @@ import { Route as ChannelsRouteRouteImport } from './routes/channels/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConfigRawRouteImport } from './routes/config.raw'
 import { Route as ChannelsNameRouteImport } from './routes/channels/$name'
+import { Route as AgentWhatsappRouteImport } from './routes/agent/whatsapp'
 import { Route as AgentToolsRouteImport } from './routes/agent/tools'
 import { Route as AgentTemplatesRouteImport } from './routes/agent/templates'
+import { Route as AgentTemplateEditorRouteImport } from './routes/agent/template-editor'
 import { Route as AgentSkillsRouteImport } from './routes/agent/skills'
+import { Route as AgentSkillEditorRouteImport } from './routes/agent/skill-editor'
 import { Route as AgentHubRouteImport } from './routes/agent/hub'
 
 const ModelsRoute = ModelsRouteImport.update({
@@ -80,6 +83,11 @@ const ChannelsNameRoute = ChannelsNameRouteImport.update({
   path: '/$name',
   getParentRoute: () => ChannelsRouteRoute,
 } as any)
+const AgentWhatsappRoute = AgentWhatsappRouteImport.update({
+  id: '/whatsapp',
+  path: '/whatsapp',
+  getParentRoute: () => AgentRoute,
+} as any)
 const AgentToolsRoute = AgentToolsRouteImport.update({
   id: '/tools',
   path: '/tools',
@@ -90,9 +98,19 @@ const AgentTemplatesRoute = AgentTemplatesRouteImport.update({
   path: '/templates',
   getParentRoute: () => AgentRoute,
 } as any)
+const AgentTemplateEditorRoute = AgentTemplateEditorRouteImport.update({
+  id: '/template-editor',
+  path: '/template-editor',
+  getParentRoute: () => AgentRoute,
+} as any)
 const AgentSkillsRoute = AgentSkillsRouteImport.update({
   id: '/skills',
   path: '/skills',
+  getParentRoute: () => AgentRoute,
+} as any)
+const AgentSkillEditorRoute = AgentSkillEditorRouteImport.update({
+  id: '/skill-editor',
+  path: '/skill-editor',
   getParentRoute: () => AgentRoute,
 } as any)
 const AgentHubRoute = AgentHubRouteImport.update({
@@ -112,9 +130,12 @@ export interface FileRoutesByFullPath {
   '/logs': typeof LogsRoute
   '/models': typeof ModelsRoute
   '/agent/hub': typeof AgentHubRoute
+  '/agent/skill-editor': typeof AgentSkillEditorRoute
   '/agent/skills': typeof AgentSkillsRoute
+  '/agent/template-editor': typeof AgentTemplateEditorRoute
   '/agent/templates': typeof AgentTemplatesRoute
   '/agent/tools': typeof AgentToolsRoute
+  '/agent/whatsapp': typeof AgentWhatsappRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
 }
@@ -129,9 +150,12 @@ export interface FileRoutesByTo {
   '/logs': typeof LogsRoute
   '/models': typeof ModelsRoute
   '/agent/hub': typeof AgentHubRoute
+  '/agent/skill-editor': typeof AgentSkillEditorRoute
   '/agent/skills': typeof AgentSkillsRoute
+  '/agent/template-editor': typeof AgentTemplateEditorRoute
   '/agent/templates': typeof AgentTemplatesRoute
   '/agent/tools': typeof AgentToolsRoute
+  '/agent/whatsapp': typeof AgentWhatsappRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
 }
@@ -147,9 +171,12 @@ export interface FileRoutesById {
   '/logs': typeof LogsRoute
   '/models': typeof ModelsRoute
   '/agent/hub': typeof AgentHubRoute
+  '/agent/skill-editor': typeof AgentSkillEditorRoute
   '/agent/skills': typeof AgentSkillsRoute
+  '/agent/template-editor': typeof AgentTemplateEditorRoute
   '/agent/templates': typeof AgentTemplatesRoute
   '/agent/tools': typeof AgentToolsRoute
+  '/agent/whatsapp': typeof AgentWhatsappRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
 }
@@ -166,9 +193,12 @@ export interface FileRouteTypes {
     | '/logs'
     | '/models'
     | '/agent/hub'
+    | '/agent/skill-editor'
     | '/agent/skills'
+    | '/agent/template-editor'
     | '/agent/templates'
     | '/agent/tools'
+    | '/agent/whatsapp'
     | '/channels/$name'
     | '/config/raw'
   fileRoutesByTo: FileRoutesByTo
@@ -183,9 +213,12 @@ export interface FileRouteTypes {
     | '/logs'
     | '/models'
     | '/agent/hub'
+    | '/agent/skill-editor'
     | '/agent/skills'
+    | '/agent/template-editor'
     | '/agent/templates'
     | '/agent/tools'
+    | '/agent/whatsapp'
     | '/channels/$name'
     | '/config/raw'
   id:
@@ -200,9 +233,12 @@ export interface FileRouteTypes {
     | '/logs'
     | '/models'
     | '/agent/hub'
+    | '/agent/skill-editor'
     | '/agent/skills'
+    | '/agent/template-editor'
     | '/agent/templates'
     | '/agent/tools'
+    | '/agent/whatsapp'
     | '/channels/$name'
     | '/config/raw'
   fileRoutesById: FileRoutesById
@@ -298,6 +334,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChannelsNameRouteImport
       parentRoute: typeof ChannelsRouteRoute
     }
+    '/agent/whatsapp': {
+      id: '/agent/whatsapp'
+      path: '/whatsapp'
+      fullPath: '/agent/whatsapp'
+      preLoaderRoute: typeof AgentWhatsappRouteImport
+      parentRoute: typeof AgentRoute
+    }
     '/agent/tools': {
       id: '/agent/tools'
       path: '/tools'
@@ -312,11 +355,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentTemplatesRouteImport
       parentRoute: typeof AgentRoute
     }
+    '/agent/template-editor': {
+      id: '/agent/template-editor'
+      path: '/template-editor'
+      fullPath: '/agent/template-editor'
+      preLoaderRoute: typeof AgentTemplateEditorRouteImport
+      parentRoute: typeof AgentRoute
+    }
     '/agent/skills': {
       id: '/agent/skills'
       path: '/skills'
       fullPath: '/agent/skills'
       preLoaderRoute: typeof AgentSkillsRouteImport
+      parentRoute: typeof AgentRoute
+    }
+    '/agent/skill-editor': {
+      id: '/agent/skill-editor'
+      path: '/skill-editor'
+      fullPath: '/agent/skill-editor'
+      preLoaderRoute: typeof AgentSkillEditorRouteImport
       parentRoute: typeof AgentRoute
     }
     '/agent/hub': {
@@ -343,16 +400,22 @@ const ChannelsRouteRouteWithChildren = ChannelsRouteRoute._addFileChildren(
 
 interface AgentRouteChildren {
   AgentHubRoute: typeof AgentHubRoute
+  AgentSkillEditorRoute: typeof AgentSkillEditorRoute
   AgentSkillsRoute: typeof AgentSkillsRoute
+  AgentTemplateEditorRoute: typeof AgentTemplateEditorRoute
   AgentTemplatesRoute: typeof AgentTemplatesRoute
   AgentToolsRoute: typeof AgentToolsRoute
+  AgentWhatsappRoute: typeof AgentWhatsappRoute
 }
 
 const AgentRouteChildren: AgentRouteChildren = {
   AgentHubRoute: AgentHubRoute,
+  AgentSkillEditorRoute: AgentSkillEditorRoute,
   AgentSkillsRoute: AgentSkillsRoute,
+  AgentTemplateEditorRoute: AgentTemplateEditorRoute,
   AgentTemplatesRoute: AgentTemplatesRoute,
   AgentToolsRoute: AgentToolsRoute,
+  AgentWhatsappRoute: AgentWhatsappRoute,
 }
 
 const AgentRouteWithChildren = AgentRoute._addFileChildren(AgentRouteChildren)

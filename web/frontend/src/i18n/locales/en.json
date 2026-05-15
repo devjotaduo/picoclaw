@@ -6,8 +6,11 @@
     "credentials": "Credenciais",
     "agent_group": "Agente",
     "hub": "Hub",
+    "whatsapp_inbox": "WhatsApp inbox",
     "templates": "Templates",
+    "template_editor": "Template editor",
     "skills": "Skills",
+    "skill_editor": "Skill editor",
     "tools": "Ferramentas",
     "services": "Serviços",
     "channels_group": "Canais",
@@ -586,6 +589,35 @@
           "cannotInstall": "Não é possível instalar: ferramenta relacionada não está habilitada"
         }
       },
+      "skill_editor": {
+        "search_placeholder": "Search skills",
+        "loading": "Loading…",
+        "load_error": "Could not load the skill.",
+        "save": "Save",
+        "save_success": "Skill saved.",
+        "save_error": "Could not save the skill.",
+        "reload": "Reload",
+        "discard_changes": "You have unsaved changes. Discard them?",
+        "empty_selection": "Select a skill on the left to edit.",
+        "read_only_title": "Read-only skill",
+        "read_only_hint": "Builtin skills cannot be edited from the dashboard; clone into the workspace first.",
+        "char_count": "{{count}} characters",
+        "unsaved": "Unsaved changes"
+      },
+      "template_editor": {
+        "search_placeholder": "Search templates",
+        "edited_badge": "edited",
+        "skills_title": "Default skills for this template",
+        "skills_description": "Choose which skills are pre-selected whenever someone applies this template to an agent. Toggle visibility to control whether the skill is advertised as a public capability.",
+        "loading": "Loading…",
+        "save": "Save changes",
+        "reset": "Reset to default",
+        "save_success": "Template defaults saved.",
+        "save_error": "Could not save template defaults.",
+        "reset_success": "Template defaults reset.",
+        "reset_error": "Could not reset template defaults.",
+        "empty_selection": "Select a template on the left to edit."
+      },
       "templates": {
         "title": "Templates de Agente",
         "subtitle": "Escolha um perfil pronto de atendente, personalize nome, apresentação, personalidade, funções, proibições e proteções, e aplique no workspace.",
@@ -604,6 +636,11 @@
         "add_item": "Adicionar",
         "remove_item": "Remover",
         "skills_empty": "Nenhuma skill instalada. Instale skills no Hub para anexá-las a este agente.",
+        "skills_toggles": {
+          "enabled": "Enabled",
+          "visible_label": "Visible in template",
+          "visible_hint": "(show as a public agent capability)"
+        },
         "categories": {
           "all": "Todas",
           "customer_service": "Atendimento ao Cliente",
