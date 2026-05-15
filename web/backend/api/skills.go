@@ -109,10 +109,123 @@ const (
 func (h *Handler) registerSkillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/skills", h.handleListSkills)
 	mux.HandleFunc("GET /api/skills/{name}", h.handleGetSkill)
+	mux.HandleFunc("GET /api/skills/{name}/raw", h.handleGetSkillRaw)
+	mux.HandleFunc("PUT /api/skills/{name}", h.handleUpdateSkill)
 	mux.HandleFunc("GET /api/skills/search", h.handleSearchSkills)
 	mux.HandleFunc("POST /api/skills/install", h.handleInstallSkill)
 	mux.HandleFunc("POST /api/skills/import", h.handleImportSkill)
 	mux.HandleFunc("DELETE /api/skills/{name}", h.handleDeleteSkill)
+}
+
+// handleGetSkillRaw returns the unmodified SKILL.md content (including
+// frontmatter), so the in-app editor sees exactly what is on disk. The
+// trimmed version returned by GET /api/skills/{name} would silently drop
+// the frontmatter and corrupt the skill on save.
+func (h *Handler) handleGetSkillRaw(w http.ResponseWriter, r *http.Request) {
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to load config: %v", err), http.StatusInternalServerError)
+		return
+	}
+	items, err := buildSkillSupportItems(cfg)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to build skill list: %v", err), http.StatusInternalServerError)
+		return
+	}
+	name := r.PathValue("name")
+	for _, item := range items {
+		if item.Name != name {
+			continue
+		}
+		raw, err := os.ReadFile(item.Path)
+		if err != nil {
+			http.Error(w, "Skill content not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name":     item.Name,
+			"path":     item.Path,
+			"source":   item.Source,
+			"editable": isSkillEditableSource(item.Source),
+			"content":  string(raw),
+		})
+		return
+	}
+	http.Error(w, "Skill not found", http.StatusNotFound)
+}
+
+// handleUpdateSkill writes a new SKILL.md body for the skill. Only skills
+// under the workspace can be edited — builtins live in the binary's resource
+// tree and any change there would be reverted on the next deploy.
+func (h *Handler) handleUpdateSkill(w http.ResponseWriter, r *http.Request) {
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to load config: %v", err), http.StatusInternalServerError)
+		return
+	}
+	items, err := buildSkillSupportItems(cfg)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to build skill list: %v", err), http.StatusInternalServerError)
+		return
+	}
+	name := r.PathValue("name")
+	var target *skillSupportItem
+	for i := range items {
+		if items[i].Name == name {
+			target = &items[i]
+			break
+		}
+	}
+	if target == nil {
+		http.Error(w, "Skill not found", http.StatusNotFound)
+		return
+	}
+	if !isSkillEditableSource(target.Source) {
+		http.Error(w, "This skill source is read-only", http.StatusForbidden)
+		return
+	}
+
+	var body struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+	if len(body.Content) > 2<<20 { // 2 MiB cap — SKILL.md is meant to be a prompt fragment
+		http.Error(w, "content too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	workspaceSkillWriteMu.Lock()
+	defer workspaceSkillWriteMu.Unlock()
+
+	// Best-effort backup so a botched edit can be recovered manually.
+	if existing, err := os.ReadFile(target.Path); err == nil {
+		_ = os.WriteFile(target.Path+".bak", existing, 0o644)
+	}
+	if err := fileutil.WriteFileAtomic(target.Path, []byte(body.Content), 0o644); err != nil {
+		http.Error(w, fmt.Sprintf("failed to write SKILL.md: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status": "saved",
+		"name":   target.Name,
+		"path":   target.Path,
+	})
+}
+
+// isSkillEditableSource gates the PUT endpoint. "workspace" is the user-owned
+// installation directory and is safe to edit; "builtin" lives inside the
+// binary's embedded resource tree and would be reverted on every deploy.
+func isSkillEditableSource(source string) bool {
+	switch source {
+	case "workspace", "global", "manual":
+		return true
+	}
+	return false
 }
 
 func (h *Handler) handleListSkills(w http.ResponseWriter, r *http.Request) {

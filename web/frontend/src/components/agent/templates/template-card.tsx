@@ -38,7 +38,7 @@ export function TemplateCard({
       className={cn(
         "group border-border/40 bg-card/40 hover:bg-card hover:border-border/80 relative overflow-hidden transition-all hover:shadow-md",
         isActive &&
-          "border-primary/60 ring-primary/30 bg-primary/5 ring-2 ring-inset hover:border-primary/60",
+          "border-primary/60 ring-primary/30 bg-primary/5 hover:border-primary/60 ring-2 ring-inset",
       )}
       size="sm"
     >
@@ -58,7 +58,7 @@ export function TemplateCard({
                   {getCategoryLabel(template.category, t)}
                 </span>
                 {isActive ? (
-                  <span className="text-primary inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase ring-1 ring-primary/30 ring-inset">
+                  <span className="text-primary bg-primary/10 ring-primary/30 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase ring-1 ring-inset">
                     <IconCheck className="size-3" />
                     {t("pages.agent.templates.card_badges.active", "Active")}
                   </span>

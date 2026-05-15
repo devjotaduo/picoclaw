@@ -10,6 +10,7 @@ import {
   IconShieldLock,
   IconSparkles,
 } from "@tabler/icons-react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import type { SkillSupportItem } from "@/api/skills"
@@ -42,10 +43,16 @@ import { TemplateIcon } from "./template-icon"
 import type {
   AgentTemplate,
   CompanyScheduleStructured,
+  PermissionLevel,
   TemplateApplyPayload,
   TemplateBehavior,
+  TemplateFallbackPolicy,
   TemplateLanguage,
   TemplateModules,
+  TemplatePriorityRules,
+  TemplateResponseExamples,
+  TemplateSkillConfig,
+  TemplateStyleGuide,
   TemplateTone,
 } from "./types"
 
@@ -54,9 +61,14 @@ interface TemplateConfigSheetProps {
   template: AgentTemplate | null
   draft: TemplateApplyPayload | null
   isApplying: boolean
+  isSavingTemplate: boolean
+  isResettingTemplate: boolean
+  hasSavedOverride: boolean
   installedSkills: SkillSupportItem[]
   onDraftChange: (draft: TemplateApplyPayload) => void
   onApply: () => void
+  onSaveTemplate: () => void
+  onResetTemplate: () => void
   onOpenChange: (open: boolean) => void
 }
 
@@ -65,9 +77,14 @@ export function TemplateConfigSheet({
   template,
   draft,
   isApplying,
+  isSavingTemplate,
+  isResettingTemplate,
+  hasSavedOverride,
   installedSkills,
   onDraftChange,
   onApply,
+  onSaveTemplate,
+  onResetTemplate,
   onOpenChange,
 }: TemplateConfigSheetProps) {
   const { t } = useTranslation()
@@ -99,13 +116,38 @@ export function TemplateConfigSheet({
     })
   }
 
-  function toggleSkill(name: string) {
+  function getSkillConfig(name: string): TemplateSkillConfig | undefined {
+    return draft?.skill_configs.find((c) => c.name === name)
+  }
+
+  function setSkillConfig(
+    name: string,
+    patch: Partial<Omit<TemplateSkillConfig, "name">>,
+  ) {
     if (!draft) return
-    const has = draft.skills.includes(name)
-    const next = has
-      ? draft.skills.filter((s) => s !== name)
-      : [...draft.skills, name]
-    update("skills", next)
+    const existing = draft.skill_configs.find((c) => c.name === name)
+    const merged: TemplateSkillConfig = {
+      name,
+      enabled: existing?.enabled ?? false,
+      visible: existing?.visible ?? true,
+      ...patch,
+    }
+    const next = existing
+      ? draft.skill_configs.map((c) => (c.name === name ? merged : c))
+      : [...draft.skill_configs, merged]
+    update("skill_configs", next)
+  }
+
+  function toggleSkillEnabled(name: string, enabled: boolean) {
+    const current = getSkillConfig(name)
+    setSkillConfig(name, {
+      enabled,
+      visible: current?.visible ?? true,
+    })
+  }
+
+  function toggleSkillVisible(name: string, visible: boolean) {
+    setSkillConfig(name, { visible })
   }
 
   function updateModules<K extends keyof TemplateModules>(
@@ -127,6 +169,50 @@ export function TemplateConfigSheet({
     onDraftChange({
       ...draft,
       behavior: { ...draft.behavior, [key]: value },
+    })
+  }
+
+  function updateResponseExample<K extends keyof TemplateResponseExamples>(
+    key: K,
+    value: TemplateResponseExamples[K],
+  ) {
+    if (!draft) return
+    onDraftChange({
+      ...draft,
+      response_examples: { ...draft.response_examples, [key]: value },
+    })
+  }
+
+  function updateStyleGuide<K extends keyof TemplateStyleGuide>(
+    key: K,
+    value: TemplateStyleGuide[K],
+  ) {
+    if (!draft) return
+    onDraftChange({
+      ...draft,
+      style_guide: { ...draft.style_guide, [key]: value },
+    })
+  }
+
+  function updateFallback<K extends keyof TemplateFallbackPolicy>(
+    key: K,
+    value: TemplateFallbackPolicy[K],
+  ) {
+    if (!draft) return
+    onDraftChange({
+      ...draft,
+      fallback_policy: { ...draft.fallback_policy, [key]: value },
+    })
+  }
+
+  function updatePriority<K extends keyof TemplatePriorityRules>(
+    key: K,
+    value: TemplatePriorityRules[K],
+  ) {
+    if (!draft) return
+    onDraftChange({
+      ...draft,
+      priority_rules: { ...draft.priority_rules, [key]: value },
     })
   }
 
@@ -174,6 +260,26 @@ export function TemplateConfigSheet({
                     id="tpl-name"
                     value={draft.name}
                     onChange={(e) => update("name", e.target.value)}
+                  />
+                </Field>
+                <Field
+                  label={t(
+                    "pages.agent.templates.fields.short_description",
+                    "Resumo do template",
+                  )}
+                  htmlFor="tpl-short-description"
+                  description={t(
+                    "pages.agent.templates.fields.short_description_hint",
+                    "Texto que aparece no card da biblioteca de templates.",
+                  )}
+                >
+                  <Textarea
+                    id="tpl-short-description"
+                    value={draft.short_description}
+                    onChange={(e) =>
+                      update("short_description", e.target.value)
+                    }
+                    rows={2}
                   />
                 </Field>
                 <Field
@@ -232,6 +338,21 @@ export function TemplateConfigSheet({
                     </Select>
                   </Field>
                 </div>
+                <Field
+                  label={t("pages.agent.templates.fields.model", "Modelo")}
+                  description={t(
+                    "pages.agent.templates.fields.model_hint",
+                    "Opcional. Se preenchido, grava o modelo recomendado no frontmatter do AGENT.md.",
+                  )}
+                >
+                  <Input
+                    value={draft.model ?? ""}
+                    onChange={(e) =>
+                      update("model", e.target.value.trim() || undefined)
+                    }
+                    placeholder="gpt-4o-mini"
+                  />
+                </Field>
               </ConfigSection>
 
               <ConfigSection
@@ -377,7 +498,9 @@ export function TemplateConfigSheet({
                   "pages.agent.templates.behavior.outbound.description",
                 )}
                 icon={<IconSend className="size-4" />}
-                accent={draft.behavior.outbound_only_mode ? "warning" : undefined}
+                accent={
+                  draft.behavior.outbound_only_mode ? "warning" : undefined
+                }
               >
                 <ModuleToggle
                   icon={<IconSend className="size-4" />}
@@ -603,9 +726,7 @@ export function TemplateConfigSheet({
                 <ModuleToggle
                   icon={<IconShieldLock className="size-4" />}
                   label={t("pages.agent.templates.behavior.scope.mask_pii")}
-                  hint={t(
-                    "pages.agent.templates.behavior.scope.mask_pii_hint",
-                  )}
+                  hint={t("pages.agent.templates.behavior.scope.mask_pii_hint")}
                   checked={draft.behavior.mask_pii_in_replies}
                   onCheckedChange={(checked) =>
                     updateBehavior("mask_pii_in_replies", checked)
@@ -728,6 +849,19 @@ export function TemplateConfigSheet({
               </ConfigSection>
 
               <ConfigSection
+                title={t("pages.agent.templates.sections.values", "Valores")}
+                description={t(
+                  "pages.agent.templates.sections.values_description",
+                  "Princípios que orientam a identidade do agente e são gravados em SOUL.md.",
+                )}
+              >
+                <EditableList
+                  items={draft.values}
+                  onChange={(items) => update("values", items)}
+                />
+              </ConfigSection>
+
+              <ConfigSection
                 title={t("pages.agent.templates.sections.functions")}
                 description={t(
                   "pages.agent.templates.sections.functions_description",
@@ -767,6 +901,373 @@ export function TemplateConfigSheet({
               </ConfigSection>
 
               <ConfigSection
+                title={t(
+                  "pages.agent.templates.sections.conversation_flow",
+                  "Fluxo de conversa",
+                )}
+                description={t(
+                  "pages.agent.templates.sections.conversation_flow_description",
+                  "Passos que o agente deve seguir durante o atendimento.",
+                )}
+              >
+                <EditableList
+                  items={draft.conversation_flow}
+                  onChange={(items) => update("conversation_flow", items)}
+                />
+              </ConfigSection>
+
+              <ConfigSection
+                title={t(
+                  "pages.agent.templates.sections.response_examples",
+                  "Exemplos de resposta",
+                )}
+                description={t(
+                  "pages.agent.templates.sections.response_examples_description",
+                  "Frases base para saudação, esclarecimento, encaminhamento e encerramento.",
+                )}
+              >
+                {(
+                  [
+                    ["greeting", "Saudação"],
+                    ["clarification", "Esclarecimento"],
+                    ["unknown_answer", "Quando não souber"],
+                    ["routing", "Encaminhamento"],
+                    ["closing", "Encerramento"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <Field key={key} label={label}>
+                    <Textarea
+                      value={draft.response_examples[key]}
+                      onChange={(event) =>
+                        updateResponseExample(key, event.target.value)
+                      }
+                      rows={2}
+                    />
+                  </Field>
+                ))}
+              </ConfigSection>
+
+              <ConfigSection
+                title={t(
+                  "pages.agent.templates.sections.style_guide",
+                  "Guia de estilo",
+                )}
+                description={t(
+                  "pages.agent.templates.sections.style_guide_description",
+                  "Regras editoriais do que o agente deve e não deve fazer.",
+                )}
+              >
+                <Field label={t("pages.agent.templates.style.do", "Faça")}>
+                  <EditableList
+                    items={draft.style_guide.do}
+                    onChange={(items) => updateStyleGuide("do", items)}
+                  />
+                </Field>
+                <Field
+                  label={t("pages.agent.templates.style.dont", "Não faça")}
+                >
+                  <EditableList
+                    items={draft.style_guide.dont}
+                    onChange={(items) => updateStyleGuide("dont", items)}
+                  />
+                </Field>
+              </ConfigSection>
+
+              <ConfigSection
+                title={t(
+                  "pages.agent.templates.sections.fallback",
+                  "Fallback e escalação",
+                )}
+                description={t(
+                  "pages.agent.templates.sections.fallback_description",
+                  "Como agir quando faltar informação, confiança ou autorização.",
+                )}
+                accent="warning"
+              >
+                <Field
+                  label={t(
+                    "pages.agent.templates.fallback.max_clarifying_questions",
+                    "Máx. perguntas de esclarecimento",
+                  )}
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    value={draft.fallback_policy.max_clarifying_questions}
+                    onChange={(event) =>
+                      updateFallback(
+                        "max_clarifying_questions",
+                        Math.max(0, Number(event.target.value) || 0),
+                      )
+                    }
+                  />
+                </Field>
+                <Field
+                  label={t(
+                    "pages.agent.templates.fallback.when_unsure",
+                    "Quando estiver inseguro",
+                  )}
+                >
+                  <Textarea
+                    value={draft.fallback_policy.when_unsure}
+                    onChange={(event) =>
+                      updateFallback("when_unsure", event.target.value)
+                    }
+                    rows={2}
+                  />
+                </Field>
+                <Field
+                  label={t(
+                    "pages.agent.templates.fallback.when_to_route",
+                    "Quando encaminhar",
+                  )}
+                >
+                  <EditableList
+                    items={draft.fallback_policy.when_to_route}
+                    onChange={(items) => updateFallback("when_to_route", items)}
+                  />
+                </Field>
+                <Field
+                  label={t(
+                    "pages.agent.templates.fallback.route_message",
+                    "Mensagem de encaminhamento",
+                  )}
+                >
+                  <Textarea
+                    value={draft.fallback_policy.route_message}
+                    onChange={(event) =>
+                      updateFallback("route_message", event.target.value)
+                    }
+                    rows={2}
+                  />
+                </Field>
+              </ConfigSection>
+
+              <ConfigSection
+                title={t(
+                  "pages.agent.templates.sections.priority_rules",
+                  "Regras de prioridade",
+                )}
+                description={t(
+                  "pages.agent.templates.sections.priority_rules_description",
+                  "Critérios que classificam uma conversa como alta, média ou baixa prioridade.",
+                )}
+              >
+                <Field label={t("pages.agent.templates.priority.high", "Alta")}>
+                  <EditableList
+                    items={draft.priority_rules.high}
+                    onChange={(items) => updatePriority("high", items)}
+                  />
+                </Field>
+                <Field
+                  label={t("pages.agent.templates.priority.medium", "Média")}
+                >
+                  <EditableList
+                    items={draft.priority_rules.medium}
+                    onChange={(items) => updatePriority("medium", items)}
+                  />
+                </Field>
+                <Field label={t("pages.agent.templates.priority.low", "Baixa")}>
+                  <EditableList
+                    items={draft.priority_rules.low}
+                    onChange={(items) => updatePriority("low", items)}
+                  />
+                </Field>
+              </ConfigSection>
+
+              <ConfigSection
+                title={t(
+                  "pages.agent.templates.sections.knowledge_security",
+                  "Conhecimento, segurança e qualidade",
+                )}
+                description={t(
+                  "pages.agent.templates.sections.knowledge_security_description",
+                  "Políticas de fonte, proteção contra abuso e métricas esperadas.",
+                )}
+                accent="info"
+                icon={<IconShieldLock className="size-4" />}
+              >
+                <Field
+                  label={t(
+                    "pages.agent.templates.knowledge_policy",
+                    "Política de conhecimento",
+                  )}
+                >
+                  <EditableList
+                    items={draft.knowledge_policy}
+                    onChange={(items) => update("knowledge_policy", items)}
+                  />
+                </Field>
+                <Field
+                  label={t(
+                    "pages.agent.templates.security_rules",
+                    "Regras de segurança",
+                  )}
+                >
+                  <EditableList
+                    items={draft.security_rules}
+                    onChange={(items) => update("security_rules", items)}
+                  />
+                </Field>
+                <Field
+                  label={t(
+                    "pages.agent.templates.quality_metrics",
+                    "Métricas de qualidade",
+                  )}
+                >
+                  <EditableList
+                    items={draft.quality_metrics}
+                    onChange={(items) => update("quality_metrics", items)}
+                  />
+                </Field>
+              </ConfigSection>
+
+              <ConfigSection
+                title={t(
+                  "pages.agent.templates.sections.data_contracts",
+                  "Campos, handoff e saída estruturada",
+                )}
+                description={t(
+                  "pages.agent.templates.sections.data_contracts_description",
+                  "Contratos JSON usados pelo agente para coleta de campos, resumo para humano e saída estruturada.",
+                )}
+              >
+                <Field
+                  label={t(
+                    "pages.agent.templates.data.required_fields",
+                    "Campos obrigatórios por intenção",
+                  )}
+                >
+                  <JsonObjectEditor
+                    editorKey={`${draft.template_id}:required-fields`}
+                    value={draft.required_fields_by_intent}
+                    onChange={(value) =>
+                      update(
+                        "required_fields_by_intent",
+                        value as Record<string, string[]>,
+                      )
+                    }
+                  />
+                </Field>
+                <Field
+                  label={t(
+                    "pages.agent.templates.data.handoff_summary",
+                    "Resumo para humano",
+                  )}
+                >
+                  <JsonObjectEditor
+                    editorKey={`${draft.template_id}:handoff`}
+                    value={draft.handoff_summary_template}
+                    onChange={(value) =>
+                      update(
+                        "handoff_summary_template",
+                        value as unknown as TemplateApplyPayload["handoff_summary_template"],
+                      )
+                    }
+                  />
+                </Field>
+                <Field
+                  label={t(
+                    "pages.agent.templates.data.structured_output",
+                    "Saída estruturada",
+                  )}
+                >
+                  <JsonObjectEditor
+                    editorKey={`${draft.template_id}:structured-output`}
+                    value={draft.structured_output_template}
+                    onChange={(value) =>
+                      update(
+                        "structured_output_template",
+                        value as unknown as TemplateApplyPayload["structured_output_template"],
+                      )
+                    }
+                  />
+                </Field>
+              </ConfigSection>
+
+              <ConfigSection
+                title={t(
+                  "pages.agent.templates.sections.tools_permissions",
+                  "Ferramentas e permissões",
+                )}
+                description={t(
+                  "pages.agent.templates.sections.tools_permissions_description",
+                  "Ferramentas recomendadas, integrações necessárias e ações que exigem aprovação.",
+                )}
+              >
+                <Field
+                  label={t(
+                    "pages.agent.templates.fields.permission_level",
+                    "Nível de permissão",
+                  )}
+                >
+                  <Select
+                    value={draft.permission_level}
+                    onValueChange={(value) =>
+                      update("permission_level", value as PermissionLevel)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="read_only">Somente leitura</SelectItem>
+                      <SelectItem value="write_with_confirmation">
+                        Escrita com confirmação
+                      </SelectItem>
+                      <SelectItem value="write_allowed">
+                        Escrita permitida
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field
+                  label={t(
+                    "pages.agent.templates.fields.recommended_tools",
+                    "Ferramentas recomendadas",
+                  )}
+                >
+                  <EditableList
+                    items={draft.recommended_tools}
+                    onChange={(items) => update("recommended_tools", items)}
+                  />
+                </Field>
+                <Field
+                  label={t(
+                    "pages.agent.templates.fields.tool_namespaces",
+                    "Namespaces de ferramentas",
+                  )}
+                >
+                  <EditableList
+                    items={draft.tool_namespaces}
+                    onChange={(items) => update("tool_namespaces", items)}
+                  />
+                </Field>
+                <Field
+                  label={t(
+                    "pages.agent.templates.fields.required_integrations",
+                    "Integrações necessárias",
+                  )}
+                >
+                  <EditableList
+                    items={draft.required_integrations}
+                    onChange={(items) => update("required_integrations", items)}
+                  />
+                </Field>
+                <Field
+                  label={t(
+                    "pages.agent.templates.fields.approval_required_for",
+                    "Ações que exigem aprovação",
+                  )}
+                >
+                  <EditableList
+                    items={draft.approval_required_for}
+                    onChange={(items) => update("approval_required_for", items)}
+                  />
+                </Field>
+              </ConfigSection>
+
+              <ConfigSection
                 title={t("pages.agent.templates.sections.skills")}
                 description={t(
                   "pages.agent.templates.sections.skills_description",
@@ -779,30 +1280,67 @@ export function TemplateConfigSheet({
                 ) : (
                   <ul className="space-y-2">
                     {installedSkills.map((skill) => {
-                      const checked = draft.skills.includes(skill.name)
+                      const cfg = getSkillConfig(skill.name)
+                      const enabled = cfg?.enabled ?? false
+                      const visible = cfg?.visible ?? true
                       return (
                         <li
                           key={skill.name}
-                          className="border-border/50 bg-muted/10 flex items-start justify-between gap-3 rounded-lg border px-3 py-2"
+                          className="border-border/50 bg-muted/10 space-y-2 rounded-lg border px-3 py-2"
                         >
-                          <div className="min-w-0 flex-1">
-                            <Label
-                              htmlFor={`skill-${skill.name}`}
-                              className="cursor-pointer text-sm font-medium"
-                            >
-                              {skill.name}
-                            </Label>
-                            {skill.description ? (
-                              <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
-                                {skill.description}
-                              </p>
-                            ) : null}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <Label
+                                htmlFor={`skill-enabled-${skill.name}`}
+                                className="cursor-pointer text-sm font-medium"
+                              >
+                                {skill.name}
+                              </Label>
+                              {skill.description ? (
+                                <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
+                                  {skill.description}
+                                </p>
+                              ) : null}
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="text-muted-foreground text-[10px] tracking-wide uppercase">
+                                {t(
+                                  "pages.agent.templates.skills_toggles.enabled",
+                                )}
+                              </span>
+                              <Switch
+                                id={`skill-enabled-${skill.name}`}
+                                checked={enabled}
+                                onCheckedChange={(checked) =>
+                                  toggleSkillEnabled(skill.name, checked)
+                                }
+                              />
+                            </div>
                           </div>
-                          <Switch
-                            id={`skill-${skill.name}`}
-                            checked={checked}
-                            onCheckedChange={() => toggleSkill(skill.name)}
-                          />
+                          {enabled ? (
+                            <div className="border-border/40 flex items-center justify-between gap-3 border-t pt-2">
+                              <Label
+                                htmlFor={`skill-visible-${skill.name}`}
+                                className="text-muted-foreground cursor-pointer text-xs"
+                              >
+                                {t(
+                                  "pages.agent.templates.skills_toggles.visible_label",
+                                )}
+                                <span className="text-muted-foreground/70 ml-1 text-[11px]">
+                                  {t(
+                                    "pages.agent.templates.skills_toggles.visible_hint",
+                                  )}
+                                </span>
+                              </Label>
+                              <Switch
+                                id={`skill-visible-${skill.name}`}
+                                checked={visible}
+                                onCheckedChange={(checked) =>
+                                  toggleSkillVisible(skill.name, checked)
+                                }
+                              />
+                            </div>
+                          ) : null}
                         </li>
                       )
                     })}
@@ -813,27 +1351,77 @@ export function TemplateConfigSheet({
           ) : null}
         </div>
 
-        <div className="bg-background/80 flex items-center justify-end gap-3 border-t px-6 py-4 backdrop-blur-sm">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isApplying}
-          >
-            {t("pages.agent.templates.cancel")}
-          </Button>
-          <Button
-            onClick={onApply}
-            disabled={isApplying || !draft || draft.name.trim() === ""}
-          >
-            {isApplying ? (
-              <IconLoader2 className="size-4 animate-spin" />
-            ) : (
-              <IconCheck className="size-4" />
-            )}
-            {isApplying
-              ? t("pages.agent.templates.applying")
-              : t("pages.agent.templates.apply")}
-          </Button>
+        <div className="bg-background/80 flex flex-wrap items-center justify-between gap-3 border-t px-6 py-4 backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            {hasSavedOverride ? (
+              <Button
+                variant="outline"
+                onClick={onResetTemplate}
+                disabled={isApplying || isSavingTemplate || isResettingTemplate}
+              >
+                {isResettingTemplate ? (
+                  <IconLoader2 className="size-4 animate-spin" />
+                ) : null}
+                {isResettingTemplate
+                  ? t(
+                      "pages.agent.templates.resetting_template",
+                      "Restaurando...",
+                    )
+                  : t(
+                      "pages.agent.templates.reset_template",
+                      "Restaurar padrão",
+                    )}
+              </Button>
+            ) : null}
+            <Button
+              variant="secondary"
+              onClick={onSaveTemplate}
+              disabled={
+                isApplying ||
+                isSavingTemplate ||
+                isResettingTemplate ||
+                !draft ||
+                draft.name.trim() === ""
+              }
+            >
+              {isSavingTemplate ? (
+                <IconLoader2 className="size-4 animate-spin" />
+              ) : (
+                <IconCheck className="size-4" />
+              )}
+              {isSavingTemplate
+                ? t("pages.agent.templates.saving_template", "Salvando...")
+                : t("pages.agent.templates.save_template", "Salvar template")}
+            </Button>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isApplying || isSavingTemplate || isResettingTemplate}
+            >
+              {t("pages.agent.templates.cancel")}
+            </Button>
+            <Button
+              onClick={onApply}
+              disabled={
+                isApplying ||
+                isSavingTemplate ||
+                isResettingTemplate ||
+                !draft ||
+                draft.name.trim() === ""
+              }
+            >
+              {isApplying ? (
+                <IconLoader2 className="size-4 animate-spin" />
+              ) : (
+                <IconCheck className="size-4" />
+              )}
+              {isApplying
+                ? t("pages.agent.templates.applying")
+                : t("pages.agent.templates.apply")}
+            </Button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
@@ -898,6 +1486,78 @@ function Field({
         <p className="text-muted-foreground text-[11px] leading-relaxed">
           {description}
         </p>
+      ) : null}
+    </div>
+  )
+}
+
+function JsonObjectEditor({
+  editorKey,
+  value,
+  onChange,
+}: {
+  editorKey: string
+  value: unknown
+  onChange: (value: Record<string, unknown>) => void
+}) {
+  const { t } = useTranslation()
+  const [text, setText] = useState(() => JSON.stringify(value, null, 2))
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setText(JSON.stringify(value, null, 2))
+    setError(null)
+  }, [editorKey, value])
+
+  function commit(next: string) {
+    try {
+      const parsed = JSON.parse(next) as unknown
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        setError(
+          t(
+            "pages.agent.templates.json_object_error",
+            "Use um objeto JSON válido.",
+          ),
+        )
+        return
+      }
+      setError(null)
+      onChange(parsed as Record<string, unknown>)
+    } catch {
+      setError(
+        t(
+          "pages.agent.templates.json_syntax_error",
+          "JSON inválido. Corrija a sintaxe antes de salvar ou aplicar.",
+        ),
+      )
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Textarea
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value)
+          if (error) setError(null)
+        }}
+        onBlur={() => {
+          commit(text)
+          try {
+            setText(JSON.stringify(JSON.parse(text), null, 2))
+          } catch {
+            // commit already shows the syntax error.
+          }
+        }}
+        rows={8}
+        spellCheck={false}
+        className={cn(
+          "font-mono text-xs",
+          error && "border-destructive focus-visible:ring-destructive/40",
+        )}
+      />
+      {error ? (
+        <p className="text-destructive text-[11px] leading-relaxed">{error}</p>
       ) : null}
     </div>
   )

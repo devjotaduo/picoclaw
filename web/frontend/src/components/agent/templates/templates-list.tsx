@@ -82,6 +82,7 @@ export function TemplatesList({
         <TemplateCard
           key={template.id}
           template={template}
+          isActive={template.id === activeTemplateId}
           onUse={() => onUseTemplate(template)}
         />
       ))}

@@ -4,7 +4,11 @@ import type {
   CompanyScheduleStructured,
 } from "./types"
 
-function weekday(open: boolean, from = "09:00", to = "18:00"): CompanyDaySchedule {
+function weekday(
+  open: boolean,
+  from = "09:00",
+  to = "18:00",
+): CompanyDaySchedule {
   return { open, from, to }
 }
 
@@ -504,13 +508,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
       "send_exam_preparation_instructions",
       "route_health_risk_case",
     ],
-    tool_namespaces: [
-      "schedule",
-      "patients",
-      "insurance",
-      "clinic",
-      "routing",
-    ],
+    tool_namespaces: ["schedule", "patients", "insurance", "clinic", "routing"],
     required_integrations: [
       "calendar",
       "clinic_management_system",

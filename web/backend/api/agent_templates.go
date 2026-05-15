@@ -22,19 +22,21 @@ import (
 // agentTemplateApplyRequest is the payload sent by the frontend templates page.
 // It carries the (already customized) parameters the user picked in the drawer.
 type agentTemplateApplyRequest struct {
-	TemplateID   string                   `json:"template_id"`
-	Name         string                   `json:"name"`
-	Presentation string                   `json:"presentation"`
-	Personality  []string                 `json:"personality"`
-	Values       []string                 `json:"values"`
-	Functions    []string                 `json:"functions"`
-	Prohibitions []string                 `json:"prohibitions"`
-	Protections  []string                 `json:"protections"`
-	CompanyInfo  agentTemplateCompanyInfo `json:"company_info"`
-	Language     string                   `json:"language"`
-	Tone         string                   `json:"tone"`
-	Skills       []string                 `json:"skills"`
-	Model        string                   `json:"model,omitempty"`
+	TemplateID       string                     `json:"template_id"`
+	Name             string                     `json:"name"`
+	ShortDescription string                     `json:"short_description,omitempty"`
+	Presentation     string                     `json:"presentation"`
+	Personality      []string                   `json:"personality"`
+	Values           []string                   `json:"values"`
+	Functions        []string                   `json:"functions"`
+	Prohibitions     []string                   `json:"prohibitions"`
+	Protections      []string                   `json:"protections"`
+	CompanyInfo      agentTemplateCompanyInfo   `json:"company_info"`
+	Language         string                     `json:"language"`
+	Tone             string                     `json:"tone"`
+	Skills           []string                   `json:"skills"`
+	SkillConfigs     []agentTemplateSkillConfig `json:"skill_configs,omitempty"`
+	Model            string                     `json:"model,omitempty"`
 
 	ConversationFlow         []string                       `json:"conversation_flow,omitempty"`
 	RequiredFieldsByIntent   map[string][]string            `json:"required_fields_by_intent,omitempty"`
@@ -59,6 +61,17 @@ type agentTemplateApplyRequest struct {
 	ApprovalRequiredFor  []string `json:"approval_required_for,omitempty"`
 
 	Behavior agentTemplateBehavior `json:"behavior"`
+}
+
+// agentTemplateSkillConfig is the per-template configuration for an installed
+// skill. Enabled controls whether the skill is wired into the agent (it goes
+// into the AGENT.md frontmatter). Visible controls whether the skill is
+// publicly listed in the AGENT.md "Available Skills" section — a skill can
+// be Enabled+Invisible to run quietly without being advertised as a capability.
+type agentTemplateSkillConfig struct {
+	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
+	Visible bool   `json:"visible"`
 }
 
 // agentTemplateBehavior carries the runtime behavioral toggles persisted as
@@ -198,6 +211,216 @@ var agentTemplateWriteMu sync.Mutex
 
 func (h *Handler) registerAgentTemplateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/agent/templates/apply", h.handleApplyAgentTemplate)
+	mux.HandleFunc("GET /api/agent/templates/overrides", h.handleGetTemplateOverrides)
+	mux.HandleFunc("PUT /api/agent/templates/overrides/{templateID}", h.handlePutTemplateOverride)
+	mux.HandleFunc("DELETE /api/agent/templates/overrides/{templateID}", h.handleDeleteTemplateOverride)
+}
+
+// templateOverride is the per-template, persisted admin configuration applied
+// on top of the static catalog. Today it only carries skill defaults, but the
+// struct is intentionally a JSON record so future fields (recommended tools,
+// behavior defaults, etc.) can be added without breaking the on-disk format.
+type templateOverride struct {
+	SkillConfigs []agentTemplateSkillConfig `json:"skill_configs,omitempty"`
+	Draft        *agentTemplateApplyRequest `json:"draft,omitempty"`
+}
+
+type templateOverridesFile struct {
+	Overrides map[string]templateOverride `json:"overrides"`
+}
+
+var templateOverridesMu sync.Mutex
+
+func templateOverridesPath(workspace string) string {
+	return filepath.Join(workspace, "template_overrides.json")
+}
+
+// loadTemplateOverrides reads the on-disk overrides map. Returns an empty map
+// when the file does not exist; surfaces real I/O / decode errors so the API
+// can return 500 instead of silently masking corruption.
+func loadTemplateOverrides(workspace string) (map[string]templateOverride, error) {
+	path := templateOverridesPath(workspace)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return map[string]templateOverride{}, nil
+		}
+		return nil, err
+	}
+	var file templateOverridesFile
+	if err := json.Unmarshal(data, &file); err != nil {
+		return nil, fmt.Errorf("decode template overrides: %w", err)
+	}
+	if file.Overrides == nil {
+		file.Overrides = map[string]templateOverride{}
+	}
+	return file.Overrides, nil
+}
+
+func saveTemplateOverrides(workspace string, overrides map[string]templateOverride) error {
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		return err
+	}
+	file := templateOverridesFile{Overrides: overrides}
+	encoded, err := json.MarshalIndent(file, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(templateOverridesPath(workspace), encoded, 0o644)
+}
+
+func (h *Handler) workspaceForOverrides(w http.ResponseWriter) (string, bool) {
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
+		return "", false
+	}
+	workspace := cfg.WorkspacePath()
+	if workspace == "" {
+		writeJSONError(w, http.StatusInternalServerError, "workspace path is not configured")
+		return "", false
+	}
+	return workspace, true
+}
+
+func (h *Handler) handleGetTemplateOverrides(w http.ResponseWriter, _ *http.Request) {
+	workspace, ok := h.workspaceForOverrides(w)
+	if !ok {
+		return
+	}
+	templateOverridesMu.Lock()
+	defer templateOverridesMu.Unlock()
+	overrides, err := loadTemplateOverrides(workspace)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load overrides: %v", err))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(templateOverridesFile{Overrides: overrides})
+}
+
+func (h *Handler) handlePutTemplateOverride(w http.ResponseWriter, r *http.Request) {
+	templateID := strings.TrimSpace(r.PathValue("templateID"))
+	if templateID == "" {
+		writeJSONError(w, http.StatusBadRequest, "template_id is required")
+		return
+	}
+	if !isSafeTemplateID(templateID) {
+		writeJSONError(w, http.StatusBadRequest, "invalid template_id")
+		return
+	}
+	var body templateOverride
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %v", err))
+		return
+	}
+	body.SkillConfigs = normalizeSkillConfigs(body.SkillConfigs)
+	if body.Draft != nil {
+		if body.Draft.TemplateID == "" {
+			body.Draft.TemplateID = templateID
+		}
+		if body.Draft.TemplateID != templateID {
+			writeJSONError(w, http.StatusBadRequest, "draft template_id must match URL template_id")
+			return
+		}
+		body.Draft.SkillConfigs = normalizeSkillConfigs(body.Draft.SkillConfigs)
+		if err := validateAgentTemplateRequest(body.Draft); err != nil {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid draft: %v", err))
+			return
+		}
+		if len(body.SkillConfigs) == 0 {
+			body.SkillConfigs = body.Draft.SkillConfigs
+		}
+	}
+
+	workspace, ok := h.workspaceForOverrides(w)
+	if !ok {
+		return
+	}
+	templateOverridesMu.Lock()
+	defer templateOverridesMu.Unlock()
+	overrides, err := loadTemplateOverrides(workspace)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load overrides: %v", err))
+		return
+	}
+	overrides[templateID] = body
+	if err := saveTemplateOverrides(workspace, overrides); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to save overrides: %v", err))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "saved", "template_id": templateID, "override": body})
+}
+
+func (h *Handler) handleDeleteTemplateOverride(w http.ResponseWriter, r *http.Request) {
+	templateID := strings.TrimSpace(r.PathValue("templateID"))
+	if templateID == "" {
+		writeJSONError(w, http.StatusBadRequest, "template_id is required")
+		return
+	}
+	if !isSafeTemplateID(templateID) {
+		writeJSONError(w, http.StatusBadRequest, "invalid template_id")
+		return
+	}
+	workspace, ok := h.workspaceForOverrides(w)
+	if !ok {
+		return
+	}
+	templateOverridesMu.Lock()
+	defer templateOverridesMu.Unlock()
+	overrides, err := loadTemplateOverrides(workspace)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load overrides: %v", err))
+		return
+	}
+	delete(overrides, templateID)
+	if err := saveTemplateOverrides(workspace, overrides); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to save overrides: %v", err))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "deleted", "template_id": templateID})
+}
+
+// isSafeTemplateID rejects path-traversal and exotic characters in the URL
+// segment so the override map keys cannot smuggle in slashes/backslashes/etc.
+func isSafeTemplateID(id string) bool {
+	if id == "" || len(id) > 200 {
+		return false
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '-' || r == '_' || r == '.':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func normalizeSkillConfigs(in []agentTemplateSkillConfig) []agentTemplateSkillConfig {
+	out := make([]agentTemplateSkillConfig, 0, len(in))
+	seen := map[string]struct{}{}
+	for _, sc := range in {
+		name := strings.TrimSpace(sc.Name)
+		if name == "" {
+			continue
+		}
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, agentTemplateSkillConfig{
+			Name:    name,
+			Enabled: sc.Enabled,
+			Visible: sc.Visible,
+		})
+	}
+	return out
 }
 
 func (h *Handler) handleApplyAgentTemplate(w http.ResponseWriter, r *http.Request) {
@@ -526,6 +749,11 @@ Schedule notes: {{.ScheduleNotes}}
 {{.StructuredOutputJSON}}
 ` + "```" + `
 {{end}}
+{{- if .VisibleSkills}}
+## Available Skills
+
+{{range .VisibleSkills}}- ` + "`{{.}}`" + `
+{{end}}{{end}}
 {{- if .RecommendedTools}}
 ## Recommended Tools
 
@@ -585,6 +813,7 @@ type agentTemplateRenderData struct {
 	Presentation        string
 	Model               string
 	Skills              []string
+	VisibleSkills       []string
 	Functions           []string
 	Prohibitions        []string
 	Protections         []string
@@ -643,7 +872,8 @@ func buildRenderData(req *agentTemplateApplyRequest) agentTemplateRenderData {
 		PresentationOneLine: firstLine(req.Presentation),
 		Presentation:        req.Presentation,
 		Model:               req.Model,
-		Skills:              nonEmpty(req.Skills),
+		Skills:              resolveEnabledSkills(req),
+		VisibleSkills:       resolveVisibleSkills(req),
 		Functions:           nonEmpty(req.Functions),
 		Prohibitions:        nonEmpty(req.Prohibitions),
 		Protections:         nonEmpty(req.Protections),
@@ -1018,6 +1248,43 @@ func firstLine(s string) string {
 		return strings.TrimSpace(s)
 	}
 	return strings.TrimSpace(s[:idx])
+}
+
+// resolveEnabledSkills returns the skill names that should appear in the
+// AGENT.md frontmatter. When the request carries skill_configs, only enabled
+// entries are returned. Otherwise the legacy plain `skills` list is used as-is.
+func resolveEnabledSkills(req *agentTemplateApplyRequest) []string {
+	if len(req.SkillConfigs) > 0 {
+		out := make([]string, 0, len(req.SkillConfigs))
+		for _, sc := range req.SkillConfigs {
+			name := strings.TrimSpace(sc.Name)
+			if name == "" || !sc.Enabled {
+				continue
+			}
+			out = append(out, name)
+		}
+		return out
+	}
+	return nonEmpty(req.Skills)
+}
+
+// resolveVisibleSkills returns the enabled skills that should be advertised
+// in the AGENT.md "Available Skills" section. When no skill_configs are sent,
+// the legacy `skills` list is treated as fully visible to preserve previous
+// behaviour.
+func resolveVisibleSkills(req *agentTemplateApplyRequest) []string {
+	if len(req.SkillConfigs) > 0 {
+		out := make([]string, 0, len(req.SkillConfigs))
+		for _, sc := range req.SkillConfigs {
+			name := strings.TrimSpace(sc.Name)
+			if name == "" || !sc.Enabled || !sc.Visible {
+				continue
+			}
+			out = append(out, name)
+		}
+		return out
+	}
+	return nonEmpty(req.Skills)
 }
 
 func nonEmpty(items []string) []string {

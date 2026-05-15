@@ -135,6 +135,16 @@ export interface TemplateModules {
   products_enabled: boolean
 }
 
+// TemplateSkillConfig is the per-template setting for an installed skill.
+// `enabled` controls whether the skill is wired into the agent (frontmatter).
+// `visible` controls whether it shows up as an advertised capability in the
+// AGENT.md "Available Skills" section — only meaningful when enabled.
+export interface TemplateSkillConfig {
+  name: string
+  enabled: boolean
+  visible: boolean
+}
+
 // TemplateBehavior carries runtime behavioral toggles persisted as
 // behavior.json in the agent workspace. The channel and agent layers enforce
 // these as hard filters (drops before the LLM), not prompt instructions.
@@ -249,6 +259,7 @@ export interface AgentTemplate {
 export interface TemplateApplyPayload {
   template_id: string
   name: string
+  short_description: string
   presentation: string
   personality: string[]
   values: string[]
@@ -258,7 +269,7 @@ export interface TemplateApplyPayload {
   company_info: TemplateCompanyInfo
   language: TemplateLanguage
   tone: TemplateTone
-  skills: string[]
+  skill_configs: TemplateSkillConfig[]
   model?: string
 
   conversation_flow: string[]

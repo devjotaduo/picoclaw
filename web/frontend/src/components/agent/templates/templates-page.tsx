@@ -22,6 +22,9 @@ export function TemplatesPage() {
     groupedTemplates,
     hasActiveFilters,
     isApplying,
+    isSavingTemplate,
+    isResettingTemplate,
+    hasSavedOverride,
     setSearchQuery,
     setCategoryFilter,
     setLayoutMode,
@@ -29,6 +32,8 @@ export function TemplatesPage() {
     handleUseTemplate,
     handleDrawerOpenChange,
     handleApply,
+    handleSaveTemplate,
+    handleResetTemplate,
   } = useTemplatesPage()
 
   return (
@@ -77,9 +82,14 @@ export function TemplatesPage() {
         template={selectedTemplate}
         draft={draft}
         isApplying={isApplying}
+        isSavingTemplate={isSavingTemplate}
+        isResettingTemplate={isResettingTemplate}
+        hasSavedOverride={hasSavedOverride}
         installedSkills={installedSkills}
         onDraftChange={setDraft}
         onApply={handleApply}
+        onSaveTemplate={handleSaveTemplate}
+        onResetTemplate={handleResetTemplate}
         onOpenChange={handleDrawerOpenChange}
       />
     </div>
