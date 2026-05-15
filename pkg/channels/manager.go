@@ -96,8 +96,9 @@ type Manager struct {
 	placeholders  sync.Map          // "channel:chatID" → placeholderID (string)
 	typingStops   sync.Map          // "channel:chatID" → func()
 	reactionUndos sync.Map          // "channel:chatID" → reactionEntry
-	streamActive  sync.Map          // "channel:chatID" → true (set when streamer.Finalize sent the message)
-	channelHashes map[string]string // channel name → config hash
+	streamActive     sync.Map          // "channel:chatID" → true (set when streamer.Finalize sent the message)
+	channelHashes    map[string]string // channel name → config hash
+	behaviorProvider BehaviorProvider  // optional; injected into every channel via type assertion
 }
 
 type mediaStoreSetter interface {
@@ -111,6 +112,15 @@ type ManagerOption func(*Manager)
 func WithRuntimeEvents(eventBus runtimeevents.Bus) ManagerOption {
 	return func(m *Manager) {
 		m.runtimeEvents = eventBus
+	}
+}
+
+// WithManagerBehaviorProvider injects the BehaviorProvider that the Manager
+// will attach to every channel it constructs. Channels embedding *BaseChannel
+// automatically pick this up via type assertion against behaviorProviderSetter.
+func WithManagerBehaviorProvider(p BehaviorProvider) ManagerOption {
+	return func(m *Manager) {
+		m.behaviorProvider = p
 	}
 }
 
@@ -604,6 +614,13 @@ func (m *Manager) initChannel(typeName, channelName string) {
 		if m.mediaStore != nil {
 			if setter, ok := ch.(mediaStoreSetter); ok {
 				setter.SetMediaStore(m.mediaStore)
+			}
+		}
+		// Inject BehaviorProvider if channel supports it (every channel embedding
+		// *BaseChannel does, via SetBehaviorProvider).
+		if m.behaviorProvider != nil {
+			if setter, ok := ch.(behaviorProviderSetter); ok {
+				setter.SetBehaviorProvider(m.behaviorProvider)
 			}
 		}
 		// Inject PlaceholderRecorder if channel supports it

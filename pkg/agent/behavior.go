@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/sipeed/picoclaw/pkg/logger"
 )
@@ -127,4 +129,92 @@ func LoadBehavior(workspace string) *Behavior {
 		return DefaultBehavior()
 	}
 	return &b
+}
+
+// WithinSchedule reports whether `now` falls inside the configured weekly
+// schedule. Returns true when the schedule is empty (no constraints set),
+// false when the day is not open or now is outside [from, to].
+//
+// The schedule's from/to are HH:MM strings interpreted in the system's local
+// timezone. Malformed entries are treated as "closed for that day" so we err
+// on the side of out-of-hours rather than accidentally answering.
+func (b *Behavior) WithinSchedule(now time.Time) bool {
+	if b == nil {
+		return true
+	}
+	day := b.dayFor(now.Weekday())
+	if !day.Open {
+		return false
+	}
+	from, okFrom := parseClock(day.From)
+	to, okTo := parseClock(day.To)
+	if !okFrom || !okTo {
+		return false
+	}
+	current := now.Hour()*60 + now.Minute()
+	return current >= from && current <= to
+}
+
+func (b *Behavior) dayFor(wd time.Weekday) BehaviorDay {
+	switch wd {
+	case time.Monday:
+		return b.Schedule.Monday
+	case time.Tuesday:
+		return b.Schedule.Tuesday
+	case time.Wednesday:
+		return b.Schedule.Wednesday
+	case time.Thursday:
+		return b.Schedule.Thursday
+	case time.Friday:
+		return b.Schedule.Friday
+	case time.Saturday:
+		return b.Schedule.Saturday
+	case time.Sunday:
+		return b.Schedule.Sunday
+	}
+	return BehaviorDay{}
+}
+
+// parseClock parses an "HH:MM" string into total minutes from midnight.
+// Returns (0, false) on any parse failure.
+func parseClock(s string) (int, bool) {
+	s = strings.TrimSpace(s)
+	if len(s) < 4 {
+		return 0, false
+	}
+	parts := strings.SplitN(s, ":", 2)
+	if len(parts) != 2 {
+		return 0, false
+	}
+	h, bad := atoiClamped(parts[0], 0, 23)
+	if bad {
+		return 0, false
+	}
+	m, bad := atoiClamped(parts[1], 0, 59)
+	if bad {
+		return 0, false
+	}
+	return h*60 + m, true
+}
+
+// atoiClamped parses a numeric string and returns (value, true-if-bad). It is
+// "bad" when the string contains a non-digit, exceeds hi, or is below lo.
+func atoiClamped(s string, lo, hi int) (int, bool) {
+	if s == "" {
+		return 0, true
+	}
+	n := 0
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return 0, true
+		}
+		n = n*10 + int(r-'0')
+		if n > hi {
+			return 0, true
+		}
+	}
+	if n < lo {
+		return 0, true
+	}
+	return n, false
 }

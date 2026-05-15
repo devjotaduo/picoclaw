@@ -7,6 +7,8 @@ type SenderInfo struct {
 	CanonicalID string `json:"canonical_id,omitempty"` // "platform:id" format
 	Username    string `json:"username,omitempty"`     // username (e.g. @alice)
 	DisplayName string `json:"display_name,omitempty"` // display name
+	IsBot       bool   `json:"is_bot,omitempty"`       // true when the channel detects the sender is another bot account
+	IsSelf      bool   `json:"is_self,omitempty"`      // true when the channel detects the message is from this bot's own account
 }
 
 // InboundContext captures the normalized, platform-agnostic facts about an
@@ -30,6 +32,11 @@ type InboundContext struct {
 
 	ReplyToMessageID string `json:"reply_to_message_id,omitempty"`
 	ReplyToSenderID  string `json:"reply_to_sender_id,omitempty"`
+
+	// Forwarded is set by channels that can detect message forwarding
+	// (Telegram, WhatsApp, Discord). Consumed by behavior filters that need
+	// to ignore forwarded content.
+	Forwarded bool `json:"forwarded,omitempty"`
 
 	ReplyHandles map[string]string `json:"reply_handles,omitempty"`
 	Raw          map[string]string `json:"raw,omitempty"`

@@ -74,6 +74,7 @@ func (al *AgentLoop) PublishResponseIfNeeded(ctx context.Context, channel, chatI
 		return
 	}
 
+	response = al.applyOutboundPIIMask(sessionKey, response)
 	msg := bus.OutboundMessage{
 		Context: bus.NewOutboundContext(channel, chatID, ""),
 		Content: response,

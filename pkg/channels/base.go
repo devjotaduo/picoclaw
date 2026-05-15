@@ -82,6 +82,20 @@ type MessageLengthProvider interface {
 	MaxMessageLength() int
 }
 
+// behaviorProviderSetter is implemented by *BaseChannel (and channels that
+// embed it). The Manager uses this via type assertion to inject the per-agent
+// BehaviorProvider after each channel is constructed.
+type behaviorProviderSetter interface {
+	SetBehaviorProvider(p BehaviorProvider)
+}
+
+// SetBehaviorProvider attaches a BehaviorProvider to this channel. Subsequent
+// inbound messages will pass through the behavior filter before publishing.
+// Passing nil clears the provider (filter becomes a no-op).
+func (c *BaseChannel) SetBehaviorProvider(p BehaviorProvider) {
+	c.behaviorProvider = p
+}
+
 type BaseChannel struct {
 	config              any
 	bus                 *bus.MessageBus
@@ -94,6 +108,7 @@ type BaseChannel struct {
 	placeholderRecorder PlaceholderRecorder
 	owner               Channel // the concrete channel that embeds this BaseChannel
 	reasoningChannelID  string
+	behaviorProvider    BehaviorProvider // optional; supplies per-agent runtime filters
 }
 
 func NewBaseChannel(
@@ -282,6 +297,17 @@ func (c *BaseChannel) HandleMessageWithContext(
 			return
 		}
 	}
+
+	// Apply per-agent behavior filter (master switch, DM/group gating,
+	// keyword trigger, self/bot/forwarded drops, media-type filter).
+	// Session-aware filters (outbound-only, business hours, throttle, handoff)
+	// run later in pkg/agent.
+	filteredContent, filteredMedia, allow := c.applyBehaviorFilter(content, media, inboundCtx, sender)
+	if !allow {
+		return
+	}
+	content = filteredContent
+	media = filteredMedia
 
 	// Set SenderID to canonical if available, otherwise keep the raw senderID
 	resolvedSenderID := senderID

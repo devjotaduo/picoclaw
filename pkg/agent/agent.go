@@ -75,6 +75,10 @@ type AgentLoop struct {
 	reloadFunc func() error
 
 	providerFactory func(*config.ModelConfig) (providers.LLMProvider, string, error)
+
+	// behaviorThrottle enforces per-sender rate limiting and cooldown from
+	// the active Behavior. Lazily created on first use.
+	behaviorThrottle *behaviorThrottle
 }
 
 // processOptions configures how a message is processed
@@ -165,6 +169,14 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 				// Note: system messages are processed in the main goroutine,
 				// so they block the receive loop but guarantee session serialization.
 				al.processMessageSync(ctx, msg)
+				continue
+			}
+
+			// Apply session-aware behavior filters (business hours, outbound-only,
+			// max-messages-per-session). Returning false drops the message before
+			// any session-claim or worker is spawned. Channel-layer filters
+			// already ran in BaseChannel.applyBehaviorFilter.
+			if !al.passesSessionBehavior(ctx, msg, sessionKey) {
 				continue
 			}
 
