@@ -3,7 +3,6 @@
  * All consumer files (provider-label, provider-icon, models-page, add/edit sheets)
  * should derive their data from this registry.
  */
-
 import type { ModelProviderOption } from "@/api/models"
 
 export interface ProviderDefinition {

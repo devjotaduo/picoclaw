@@ -2,6 +2,7 @@ import { IconCheck, IconChevronDown } from "@tabler/icons-react"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 
+import type { ModelProviderOption } from "@/api/models"
 import { Button } from "@/components/ui/button"
 import {
   Command,
@@ -25,7 +26,6 @@ import {
   PROVIDERS,
   mergeWithBackendOptions,
 } from "./provider-registry"
-import type { ModelProviderOption } from "@/api/models"
 
 interface ProviderComboboxProps {
   value: string
@@ -127,7 +127,10 @@ export function ProviderCombobox({
           <IconChevronDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" container={containerEl}>
+      <PopoverContent
+        className="w-[--radix-popover-trigger-width] p-0"
+        container={containerEl}
+      >
         {customMode ? (
           <div className="flex flex-col gap-2 p-2">
             <Input

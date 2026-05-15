@@ -37,9 +37,9 @@ interface ProviderGroup {
 export function ModelsPage() {
   const { t } = useTranslation()
   const [models, setModels] = useState<ModelInfo[]>([])
-  const [providerOptions, setProviderOptions] = useState<
-    ModelProviderOption[]
-  >([])
+  const [providerOptions, setProviderOptions] = useState<ModelProviderOption[]>(
+    [],
+  )
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState("")
 
@@ -53,10 +53,14 @@ export function ModelsPage() {
 
   // Dynamic import for CatalogDialog (added in PR2)
   const [CatalogDialogComp, setCatalogDialogComp] = useState<ComponentType<{
-    open: boolean; onClose: () => void; onModelAdded: () => void;
+    open: boolean
+    onClose: () => void
+    onModelAdded: () => void
   }> | null>(null)
   useEffect(() => {
-    import("./catalog-dialog").then((m) => setCatalogDialogComp(() => m.CatalogDialog)).catch(() => {})
+    import("./catalog-dialog")
+      .then((m) => setCatalogDialogComp(() => m.CatalogDialog))
+      .catch(() => {})
   }, [])
 
   const fetchModels = useCallback(async () => {

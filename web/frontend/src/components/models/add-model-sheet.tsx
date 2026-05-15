@@ -3,7 +3,13 @@ import {
   IconLoader2,
   IconPlugConnected,
 } from "@tabler/icons-react"
-import { type ComponentType, useCallback, useEffect, useRef, useState } from "react"
+import {
+  type ComponentType,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -142,17 +148,34 @@ export function AddModelSheet({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Dynamic imports for dialogs added in later PRs
-  const [FetchModelsDialogComp, setFetchModelsDialogComp] = useState<ComponentType<{
-    open: boolean; onClose: () => void; onFill: (models: string[]) => void;
-    provider: string; apiKey: string; apiBase: string;
-  }> | null>(null)
+  const [FetchModelsDialogComp, setFetchModelsDialogComp] =
+    useState<ComponentType<{
+      open: boolean
+      onClose: () => void
+      onFill: (models: string[]) => void
+      provider: string
+      apiKey: string
+      apiBase: string
+    }> | null>(null)
   const [TestModelDialogComp, setTestModelDialogComp] = useState<ComponentType<{
-    model: unknown; open: boolean; onClose: () => void;
-    inlineParams: { provider: string; model: string; apiBase: string; apiKey: string; authMethod: string };
+    model: unknown
+    open: boolean
+    onClose: () => void
+    inlineParams: {
+      provider: string
+      model: string
+      apiBase: string
+      apiKey: string
+      authMethod: string
+    }
   }> | null>(null)
   useEffect(() => {
-    import("./fetch-models-dialog").then((m) => setFetchModelsDialogComp(() => m.FetchModelsDialog)).catch(() => {})
-    import("./test-model-dialog").then((m) => setTestModelDialogComp(() => m.TestModelDialog)).catch(() => {})
+    import("./fetch-models-dialog")
+      .then((m) => setFetchModelsDialogComp(() => m.FetchModelsDialog))
+      .catch(() => {})
+    import("./test-model-dialog")
+      .then((m) => setTestModelDialogComp(() => m.TestModelDialog))
+      .catch(() => {})
   }, [])
 
   const apiKeyPlaceholder = maskedSecretPlaceholder(
@@ -266,7 +289,9 @@ export function AddModelSheet({
       debouncedValidateModel(form.model, provider)
     }
     // Clear setAsDefault if the new provider doesn't support being default
-    const allowed = providerOptions?.find((o) => o.id === provider)?.default_model_allowed ?? false
+    const allowed =
+      providerOptions?.find((o) => o.id === provider)?.default_model_allowed ??
+      false
     if (!allowed) {
       setSetAsDefault(false)
     }
@@ -301,7 +326,8 @@ export function AddModelSheet({
   const providerDef = PROVIDER_MAP.get(form.provider)
   const commonModels = providerDef?.commonModels || []
   const defaultModelAllowed = form.provider
-    ? (providerOptions?.find((o) => o.id === form.provider)?.default_model_allowed ?? false)
+    ? (providerOptions?.find((o) => o.id === form.provider)
+        ?.default_model_allowed ?? false)
     : false
 
   const handleSave = async () => {
@@ -395,7 +421,10 @@ export function AddModelSheet({
             </SheetDescription>
           </SheetHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto" ref={scrollContainerRef}>
+          <div
+            className="min-h-0 flex-1 overflow-y-auto"
+            ref={scrollContainerRef}
+          >
             <div className="space-y-5 px-6 py-5">
               <Field
                 label={t("models.add.modelName")}
@@ -520,18 +549,19 @@ export function AddModelSheet({
                   </div>
                 )}
                 <div className="flex items-center gap-2">
-                  {form.provider && FETCHABLE_PROVIDER_KEYS.has(form.provider) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => setFetchOpen(true)}
-                      disabled={!FetchModelsDialogComp}
-                    >
-                      <IconDownload className="size-3" />
-                      {t("models.fetch.title")}
-                    </Button>
-                  )}
+                  {form.provider &&
+                    FETCHABLE_PROVIDER_KEYS.has(form.provider) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setFetchOpen(true)}
+                        disabled={!FetchModelsDialogComp}
+                      >
+                        <IconDownload className="size-3" />
+                        {t("models.fetch.title")}
+                      </Button>
+                    )}
                   {!form.provider && (
                     <span className="text-muted-foreground text-xs">
                       {t("models.field.selectProviderFirst")}
@@ -561,7 +591,9 @@ export function AddModelSheet({
                   variant="outline"
                   size="sm"
                   onClick={() => setTestOpen(true)}
-                  disabled={!form.provider || !form.model || !TestModelDialogComp}
+                  disabled={
+                    !form.provider || !form.model || !TestModelDialogComp
+                  }
                 >
                   <IconPlugConnected className="size-4" />
                   {t("models.test.testConnection")}
