@@ -3,7 +3,13 @@ import {
   IconLoader2,
   IconPlugConnected,
 } from "@tabler/icons-react"
-import { type ComponentType, useCallback, useEffect, useRef, useState } from "react"
+import {
+  type ComponentType,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -39,7 +45,11 @@ import { refreshGatewayState } from "@/store/gateway"
 import { type FieldValidation, validateModelField } from "./model-validation"
 import { ProviderCombobox } from "./provider-combobox"
 import { getProviderKey } from "./provider-label"
-import { FETCHABLE_PROVIDER_KEYS, PROVIDER_API_BASES, PROVIDER_MAP } from "./provider-registry"
+import {
+  FETCHABLE_PROVIDER_KEYS,
+  PROVIDER_API_BASES,
+  PROVIDER_MAP,
+} from "./provider-registry"
 
 interface EditForm {
   provider: string
@@ -159,17 +169,35 @@ export function EditModelSheet({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Dynamic imports for dialogs added in later PRs
-  const [FetchModelsDialogComp, setFetchModelsDialogComp] = useState<ComponentType<{
-    open: boolean; onClose: () => void; onFill: (models: string[]) => void;
-    provider: string; apiKey: string; apiBase: string;
-  }> | null>(null)
+  const [FetchModelsDialogComp, setFetchModelsDialogComp] =
+    useState<ComponentType<{
+      open: boolean
+      onClose: () => void
+      onFill: (models: string[]) => void
+      provider: string
+      apiKey: string
+      apiBase: string
+    }> | null>(null)
   const [TestModelDialogComp, setTestModelDialogComp] = useState<ComponentType<{
-    model: unknown; open: boolean; onClose: () => void;
-    inlineParams: { provider: string; model: string; apiBase: string; apiKey: string; authMethod: string; modelIndex?: number };
+    model: unknown
+    open: boolean
+    onClose: () => void
+    inlineParams: {
+      provider: string
+      model: string
+      apiBase: string
+      apiKey: string
+      authMethod: string
+      modelIndex?: number
+    }
   }> | null>(null)
   useEffect(() => {
-    import("./fetch-models-dialog").then((m) => setFetchModelsDialogComp(() => m.FetchModelsDialog)).catch(() => {})
-    import("./test-model-dialog").then((m) => setTestModelDialogComp(() => m.TestModelDialog)).catch(() => {})
+    import("./fetch-models-dialog")
+      .then((m) => setFetchModelsDialogComp(() => m.FetchModelsDialog))
+      .catch(() => {})
+    import("./test-model-dialog")
+      .then((m) => setTestModelDialogComp(() => m.TestModelDialog))
+      .catch(() => {})
   }, [])
 
   const initialForm = model ? buildInitialEditForm(model) : null
@@ -235,7 +263,9 @@ export function EditModelSheet({
     if (form.modelId) {
       debouncedValidateModel(form.modelId, provider)
     }
-    const allowed = providerOptions?.find((o) => o.id === provider)?.default_model_allowed ?? false
+    const allowed =
+      providerOptions?.find((o) => o.id === provider)?.default_model_allowed ??
+      false
     if (!allowed) {
       setSetAsDefault(false)
     }
@@ -264,7 +294,8 @@ export function EditModelSheet({
   const providerDef = PROVIDER_MAP.get(form.provider)
   const commonModels = providerDef?.commonModels || []
   const defaultModelAllowed = form.provider
-    ? (providerOptions?.find((o) => o.id === form.provider)?.default_model_allowed ?? false)
+    ? (providerOptions?.find((o) => o.id === form.provider)
+        ?.default_model_allowed ?? false)
     : false
 
   const handleSave = async () => {
@@ -371,7 +402,10 @@ export function EditModelSheet({
             </SheetDescription>
           </SheetHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto" ref={scrollContainerRef}>
+          <div
+            className="min-h-0 flex-1 overflow-y-auto"
+            ref={scrollContainerRef}
+          >
             <div className="space-y-5 px-6 py-5">
               <Field
                 label={t("models.field.provider")}
@@ -471,18 +505,19 @@ export function EditModelSheet({
                   </div>
                 )}
                 <div className="flex items-center gap-2">
-                  {form.provider && FETCHABLE_PROVIDER_KEYS.has(form.provider) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => setFetchOpen(true)}
-                      disabled={!FetchModelsDialogComp}
-                    >
-                      <IconDownload className="size-3" />
-                      {t("models.fetch.title")}
-                    </Button>
-                  )}
+                  {form.provider &&
+                    FETCHABLE_PROVIDER_KEYS.has(form.provider) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setFetchOpen(true)}
+                        disabled={!FetchModelsDialogComp}
+                      >
+                        <IconDownload className="size-3" />
+                        {t("models.fetch.title")}
+                      </Button>
+                    )}
                 </div>
               </Field>
 

@@ -615,7 +615,7 @@ function Instructions({
             size="sm"
             disabled={refreshing}
             onClick={onRefresh}
-            className="self-start gap-2"
+            className="gap-2 self-start"
             style={{
               borderColor:
                 status === "expired" || status === "error"
