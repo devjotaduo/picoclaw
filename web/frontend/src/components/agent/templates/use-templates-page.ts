@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
 import {
+  type AgentConfigResponse,
   type TemplateOverride,
   applyAgentTemplate,
   getTemplateOverrides,
@@ -15,6 +16,7 @@ import { getSkills } from "@/api/skills"
 
 import { AGENT_TEMPLATES } from "./catalog"
 import { compareTemplates, sortCategories } from "./category-utils"
+import { substituteAgentPlaceholders } from "./substitute-placeholders"
 import type { TemplateGroupSection } from "./templates-list"
 import { DEFAULT_BEHAVIOR } from "./types"
 import type {
@@ -29,7 +31,7 @@ function templateToDraft(
   template: AgentTemplate,
   defaultSkillConfigs: TemplateSkillConfig[] = [],
 ): TemplateApplyPayload {
-  return {
+  const draft: TemplateApplyPayload = {
     template_id: template.id,
     name: template.name,
     short_description: template.short_description,
@@ -104,6 +106,9 @@ function templateToDraft(
       handoff_keywords: [...DEFAULT_BEHAVIOR.handoff_keywords],
     },
   }
+  // Resolve {agent.name} / {company.name} so the editor and the rendered
+  // AGENT.md don't ship literal placeholders to the runtime / channels.
+  return substituteAgentPlaceholders(draft)
 }
 
 function templateFromDraft(
@@ -240,9 +245,19 @@ export function useTemplatesPage() {
     mutationFn: applyAgentTemplate,
     onSuccess: () => {
       toast.success(t("pages.agent.templates.apply_success"))
+      // Immediately populate the agent-config cache so any component that reads
+      // it (e.g. the editor page) sees the new data without waiting for a refetch.
+      if (draft) {
+        queryClient.setQueryData<AgentConfigResponse>(["agent-config"], (old) => ({
+          ...old,
+          configured: true,
+          payload: draft,
+        }))
+      }
       setSelectedTemplate(null)
       setDraft(null)
       void queryClient.invalidateQueries({ queryKey: ["config"] })
+      void queryClient.invalidateQueries({ queryKey: ["agent-config"] })
       void configQuery.refetch()
     },
     onError: (err) => {

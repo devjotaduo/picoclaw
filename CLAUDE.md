@@ -65,7 +65,7 @@ Every runtime artifact lives under one configurable directory:
 
 Inside that directory you'll find `config.json`, `.security.yml` (permissions/access control, loaded separately), `auth.json` (OAuth credentials per provider), `workspace/` (sessions, memory, skills), `state/state.json` (atomic-write last-channel/chat tracker), `dashboardauth.db` (single-row SQLite holding the bcrypt hash for the launcher login), and per-channel state subdirs (e.g. `whatsapp/store.db` for whatsmeow's session SQLite, `channels/weixin/sync/`).
 
-**There is no concept of tenant/user/owner in any model.** A single `$PICOCLAW_HOME` is one isolated instance. To run multiple isolated picoclaw instances on one host, set different `$PICOCLAW_HOME` values per process — that's the natural extension point and what the [`picosaas`](../picosaas/) sibling repo builds on.
+Core Picoclaw runtime remains single-home and isolated: one `$PICOCLAW_HOME` is one instance. The SaaS control plane in `cmd/picoclaw-saas` builds multi-tenancy around that boundary by provisioning one launcher container and one bind-mounted home per tenant, then routing public access through a central RBAC gateway.
 
 ## Configuration
 
@@ -109,4 +109,4 @@ When implementing a new tool that shells out, route the `exec.Cmd` through `isol
 - The version metadata (`Version`, `GitCommit`, `BuildTime`, `GoVersion`) is injected via `-ldflags -X github.com/sipeed/picoclaw/pkg/config.Var=…`. If you add a new metadata field, register it in `pkg/config/buildinfo.go` and add the `-X` flag to every relevant `go build` invocation in the Makefile.
 - AI-assisted contributions are first-class (see `CONTRIBUTING.md`): every PR must declare the AI involvement level, and reviewers apply extra security scrutiny to file-path handling, command execution, and channel handlers (commit `244eb0b` is cited as a real prior sandbox-escape incident).
 - The `docs/` tree has its own consistency lint via `scripts/lint-docs.sh` (called from `make lint-docs` and `make lint`); run it after adding or moving Markdown files.
-- The sibling repo [`../picosaas`](../picosaas/) hosts a multi-tenant SaaS shell that orchestrates picoclaw containers via Docker labels + LiteLLM virtual keys + per-tenant `$PICOCLAW_HOME`. Changes to picoclaw's home-dir layout, dashboard auth schema (`web/backend/dashboardauth/sql.go`), or launcher CLI flags can break picosaas's provisioner — coordinate when touching those surfaces.
+- SaaS tenancy now lives in this repo under `cmd/picoclaw-saas`, `internal/saas`, `web/saas-admin`, and `docker/saas`. Changes to Picoclaw's home-dir layout, dashboard auth schema (`web/backend/dashboardauth/sql.go`), launcher CLI flags, or trusted gateway auth headers can break tenant provisioning — coordinate those surfaces with `docs/architecture/saas-tenancy.md`.

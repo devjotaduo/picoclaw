@@ -729,6 +729,7 @@ func (c *WhatsAppNativeChannel) HealthPath() string {
 // to the inbox HTTP handler when the inbox store is available.
 //
 //	GET  /whatsapp_native/qr                          → pairing/QR JSON
+//	POST /whatsapp_native/disconnect                  → logout and clear session
 //	GET  /whatsapp_native/inbox/chats                 → list chats
 //	GET  /whatsapp_native/inbox/chats/{jid}           → chat detail
 //	GET  /whatsapp_native/inbox/chats/{jid}/messages  → messages
@@ -742,6 +743,8 @@ func (c *WhatsAppNativeChannel) HealthHandler(w http.ResponseWriter, r *http.Req
 	switch {
 	case sub == "qr":
 		c.serveQR(w, r)
+	case sub == "disconnect":
+		c.serveDisconnect(w, r)
 	case strings.HasPrefix(sub, "inbox"):
 		if c.inboxHandler == nil {
 			http.Error(w, `{"error":"inbox not available"}`, http.StatusServiceUnavailable)
@@ -795,6 +798,44 @@ func (c *WhatsAppNativeChannel) serveQR(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// serveDisconnect logs out the current WhatsApp session, clearing the device
+// store so the next Start() presents a fresh QR code for re-pairing.
+func (c *WhatsAppNativeChannel) serveDisconnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	c.mu.Lock()
+	client := c.client
+	c.mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+
+	if client == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "not connected"})
+		return
+	}
+
+	if err := client.Logout(r.Context()); err != nil {
+		logger.WarnCF("whatsapp", "logout failed", map[string]any{"error": err.Error()})
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	logger.InfoC("whatsapp", "WhatsApp session logged out via dashboard")
+	c.qrMu.Lock()
+	c.qrSnapshot = qrSnapshot{Status: "idle", UpdatedAt: time.Now()}
+	c.qrMu.Unlock()
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 // parseJID converts a chat ID (phone number or JID string) to types.JID.

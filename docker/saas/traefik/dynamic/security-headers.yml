@@ -1,0 +1,26 @@
+http:
+  middlewares:
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow"
+    rate-limit-auth:
+      rateLimit:
+        average: 5
+        period: 15m
+        burst: 3
+
+  routers: {}
+  services: {}
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: true

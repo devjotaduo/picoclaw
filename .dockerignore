@@ -2,10 +2,22 @@
 # during `go generate`, which runs inside `make build` in the Dockerfile.
 .git
 .gitignore
+.cache/
 build/
 .picoclaw/
 config/
 .env
 .env.example
+**/node_modules/
+**/dist/
+**/dist-server/
+web/frontend/node_modules/
+web/saas-admin/node_modules/
+docker/saas/opencrm/node_modules/
+web/saas-admin/dist/
+docker/saas/opencrm/dist/
+docker/saas/opencrm/dist-server/
 *.md
 assets/
+!web/backend/dist/.gitkeep
+!internal/saas/api/dist/.gitkeep

@@ -2,6 +2,7 @@ import {
   IconBrandWhatsapp,
   IconCheck,
   IconLoader2,
+  IconPlugConnectedX,
   IconRefresh,
   IconX,
 } from "@tabler/icons-react"
@@ -11,6 +12,7 @@ import { useTranslation } from "react-i18next"
 import {
   type WhatsAppNativeQRResponse,
   type WhatsAppNativeQRStatus,
+  disconnectWhatsAppNative,
   getWhatsAppNativeQR,
 } from "@/api/channels"
 import { restartGateway } from "@/api/gateway"
@@ -54,6 +56,8 @@ export function WhatsAppNativeForm({ enabled }: WhatsAppNativeFormProps) {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState("")
+  const [disconnecting, setDisconnecting] = useState(false)
+  const [disconnectError, setDisconnectError] = useState("")
   const pollGenRef = useRef(0)
   const autoRefreshedRef = useRef(false)
   const restartInFlightRef = useRef(false)
@@ -146,6 +150,23 @@ export function WhatsAppNativeForm({ enabled }: WhatsAppNativeFormProps) {
     void triggerRestart(false)
   }, [triggerRestart])
 
+  const handleDisconnect = useCallback(async () => {
+    setDisconnecting(true)
+    setDisconnectError("")
+    try {
+      await disconnectWhatsAppNative()
+      await triggerRestart(true)
+    } catch (e) {
+      setDisconnectError(
+        e instanceof Error
+          ? e.message
+          : t("channels.whatsappNative.disconnectError"),
+      )
+    } finally {
+      setDisconnecting(false)
+    }
+  }, [t, triggerRestart])
+
   return (
     <Card className="overflow-hidden p-0 shadow-sm">
       <CardHeader className="border-border/60 border-b px-6 py-5">
@@ -185,6 +206,9 @@ export function WhatsAppNativeForm({ enabled }: WhatsAppNativeFormProps) {
             refreshing={refreshing}
             refreshError={refreshError}
             onRefresh={handleRefresh}
+            disconnecting={disconnecting}
+            disconnectError={disconnectError}
+            onDisconnect={handleDisconnect}
           />
         </div>
       </CardContent>
@@ -522,12 +546,18 @@ function Instructions({
   refreshing,
   refreshError,
   onRefresh,
+  disconnecting,
+  disconnectError,
+  onDisconnect,
 }: {
   status: PairingStatus
   errorMessage: string
   refreshing: boolean
   refreshError: string
   onRefresh: () => void
+  disconnecting: boolean
+  disconnectError: string
+  onDisconnect: () => void
 }) {
   const { t } = useTranslation()
 
@@ -651,6 +681,33 @@ function Instructions({
               ? t("channels.whatsappNative.offlineFootnote")
               : t("channels.whatsappNative.retryFootnote")}
         </p>
+      )}
+
+      {status === "confirmed" && (
+        <div className="flex flex-col gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disconnecting}
+            onClick={onDisconnect}
+            className="gap-2 self-start border-red-500/40 text-red-600 hover:border-red-500/70 hover:bg-red-500/5 hover:text-red-600 dark:text-red-400"
+          >
+            {disconnecting ? (
+              <IconLoader2 size={14} className="animate-spin" />
+            ) : (
+              <IconPlugConnectedX size={14} />
+            )}
+            {disconnecting
+              ? t("channels.whatsappNative.disconnecting")
+              : t("channels.whatsappNative.disconnect")}
+          </Button>
+          {disconnectError && (
+            <p className="text-[11px] text-red-600 dark:text-red-300">
+              {disconnectError}
+            </p>
+          )}
+        </div>
       )}
     </div>
   )

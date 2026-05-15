@@ -5,6 +5,7 @@
     "models": "Modelos",
     "credentials": "Credenciais",
     "agent_group": "Agente",
+    "agent_editor": "Agente",
     "hub": "Hub",
     "whatsapp_inbox": "Caixa WhatsApp",
     "templates": "Templates",
@@ -88,6 +89,12 @@
     "attachImage": "Adicionar imagens",
     "removeImage": "Remover imagem",
     "uploadedImage": "Imagem enviada",
+    "recordAudio": "Gravar áudio",
+    "stopRecording": "Parar gravação",
+    "removeAudio": "Remover áudio",
+    "audioUnsupported": "Seu navegador não suporta gravação de áudio.",
+    "audioReadFailed": "Não foi possível processar o áudio gravado.",
+    "microphoneDenied": "Permissão de microfone negada ou indisponível.",
     "invalidImage": "\"{{name}}\" não é um arquivo de imagem suportado.",
     "imageTooLarge": "\"{{name}}\" excede o limite de {{size}}.",
     "imageReadFailed": "Falha ao ler \"{{name}}\".",
@@ -389,6 +396,9 @@
       "refresh": "Atualizar QR",
       "refreshing": "Reiniciando…",
       "refreshError": "Não foi possível reiniciar o canal.",
+      "disconnect": "Desconectar",
+      "disconnecting": "Desconectando…",
+      "disconnectError": "Não foi possível desconectar.",
       "status": {
         "idle": "Aguardando",
         "wait": "Pronto para escanear",
@@ -603,6 +613,26 @@
         "read_only_hint": "Skills builtin não podem ser editadas pelo dashboard; clone para o workspace antes de modificar.",
         "char_count": "{{count}} caracteres",
         "unsaved": "Alterações não salvas"
+      },
+      "editor": {
+        "loading": "Carregando…",
+        "edit": "Editar configurações",
+        "save_success": "Configurações do agente salvas.",
+        "save_error": "Não foi possível salvar as configurações.",
+        "empty_title": "Nenhum agente configurado ainda",
+        "empty_description": "Aplique um template para gerar a configuração inicial do agente. Depois disso, você pode voltar aqui para editar tudo: horários, profissionais, produtos, skills, comportamento, etc.",
+        "go_to_templates": "Ir para Templates",
+        "summary": {
+          "template": "Template aplicado",
+          "tone": "Tom",
+          "language": "Idioma",
+          "company": "Empresa",
+          "professionals": "Profissionais",
+          "products": "Produtos",
+          "skills_active": "Skills ativas",
+          "applied_at": "Última aplicação",
+          "disabled": "desativado"
+        }
       },
       "template_editor": {
         "search_placeholder": "Buscar templates",
@@ -1018,6 +1048,20 @@
         "devices": "Dispositivos"
       },
       "open_raw": "Configuração Bruta",
+      "open_nav_visibility": "Menu lateral",
+      "nav_visibility": {
+        "title": "Visibilidade do menu",
+        "description": "Escolha quais itens do menu lateral aparecem nesta instância. Itens desligados continuam acessíveis pela URL — apenas somem da navegação.",
+        "loading": "Carregando…",
+        "visible": "Visível",
+        "show_all": "Mostrar tudo",
+        "save": "Salvar",
+        "save_success": "Visibilidade do menu salva.",
+        "save_error": "Não foi possível salvar a visibilidade.",
+        "group_visibility_hint": "Desligar oculta o grupo inteiro do menu.",
+        "configured": "configurado",
+        "not_configured": "não configurado"
+      },
       "back_to_visual": "Configuração Visual",
       "raw_json_title": "Configuração JSON Bruta",
       "json_placeholder": "Digite uma configuração JSON válida...",

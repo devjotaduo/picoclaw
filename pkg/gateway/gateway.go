@@ -409,7 +409,7 @@ func setupAndStartServices(
 		msgBus,
 		runningServices.MediaStore,
 		channels.WithRuntimeEvents(agentLoop.RuntimeEventBus()),
-		channels.WithManagerBehaviorProvider(agent.NewBehaviorProvider(agentLoop.GetRegistry())),
+		channels.WithManagerBehaviorProvider(agent.NewBehaviorProvider(agentLoop)),
 	)
 	if err != nil {
 		if fms, ok := runningServices.MediaStore.(*media.FileMediaStore); ok {

@@ -1,0 +1,39 @@
+# Traefik config for LOCAL DEVELOPMENT.
+# No Let's Encrypt, no DNS-01 — Traefik uses a default self-signed cert
+# (auto-generated on first start) or the file-provider cert if you ran
+# `docker/saas/scripts/dev-setup.sh` to install mkcert + generate one.
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+accessLog: {}
+
+api:
+  dashboard: false
+  insecure: false
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    endpoint: "tcp://dockerproxy:2375"
+    exposedByDefault: false
+    network: saas_edge
+    watch: true
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true

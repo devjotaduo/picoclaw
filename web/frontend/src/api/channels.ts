@@ -144,4 +144,18 @@ export async function getWhatsAppNativeQR(): Promise<WhatsAppNativeQRResponse> {
   return request<WhatsAppNativeQRResponse>("/api/whatsapp_native/qr")
 }
 
+export async function disconnectWhatsAppNative(): Promise<void> {
+  const res = await fetch("/api/whatsapp_native/disconnect", { method: "POST" })
+  if (!res.ok) {
+    let detail: string
+    try {
+      const body = (await res.json()) as { error?: string }
+      detail = body.error ?? ""
+    } catch {
+      detail = res.statusText
+    }
+    throw new Error(detail || res.statusText)
+  }
+}
+
 export type { ChannelsCatalogResponse, ConfigActionResponse }

@@ -1,6 +1,4 @@
 import {
-  IconBook,
-  IconLanguage,
   IconLoader2,
   IconLogout,
   IconMenu2,
@@ -26,12 +24,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog.tsx"
 import { Button } from "@/components/ui/button.tsx"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu.tsx"
 import { Separator } from "@/components/ui/separator.tsx"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import {
@@ -43,7 +35,7 @@ import { useGateway } from "@/hooks/use-gateway.ts"
 import { useTheme } from "@/hooks/use-theme.ts"
 
 export function AppHeader() {
-  const { i18n, t } = useTranslation()
+  const { t } = useTranslation()
   const { theme, toggleTheme } = useTheme()
   const {
     state: gwState,
@@ -105,7 +97,16 @@ export function AppHeader() {
         </SidebarTrigger>
         <div className="hidden w-36 shrink-0 items-center sm:flex">
           <Link to="/">
-            <img className="w-full" src="/logo_with_text.png" alt="Logo" />
+            <img
+              className="block w-full dark:hidden"
+              src="/logo_with_text_light.png"
+              alt="Logo"
+            />
+            <img
+              className="hidden w-full dark:block"
+              src="/logo_with_text_dark.png"
+              alt="Logo"
+            />
           </Link>
         </div>
       </div>
@@ -263,39 +264,6 @@ export function AppHeader() {
           className="mx-4 my-2 hidden md:block"
           orientation="vertical"
         />
-
-        {/* Docs Link */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          data-tour="docs-button"
-          asChild
-        >
-          <a href="https://docs.picoclaw.io" target="_blank" rel="noreferrer">
-            <IconBook className="size-4.5" />
-          </a>
-        </Button>
-
-        {/* Language Switcher */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-8">
-              <IconLanguage className="size-4.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => i18n.changeLanguage("en")}>
-              English
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => i18n.changeLanguage("pt-BR")}>
-              Português (Brasil)
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => i18n.changeLanguage("zh")}>
-              简体中文
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
 
         {/* Theme Toggle */}
         <Button

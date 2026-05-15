@@ -123,6 +123,50 @@ func TestClaudeCliProvider_GetDefaultModel(t *testing.T) {
 	}
 }
 
+func TestBuildClaudeCliArgs_IncludesDangerousSkipPermissionsWhenAllowed(t *testing.T) {
+	args := strings.Join(buildClaudeCliArgs("", "", true), " ")
+	if !strings.Contains(args, "--dangerously-skip-permissions") {
+		t.Errorf("args missing --dangerously-skip-permissions, got: %s", args)
+	}
+}
+
+func TestBuildClaudeCliArgs_OmitsDangerousSkipPermissionsWhenDisallowed(t *testing.T) {
+	args := strings.Join(buildClaudeCliArgs("", "", false), " ")
+	if strings.Contains(args, "--dangerously-skip-permissions") {
+		t.Errorf("args should not contain --dangerously-skip-permissions, got: %s", args)
+	}
+}
+
+func TestCanUseClaudeDangerousSkipPermissions_Root(t *testing.T) {
+	got := canUseClaudeDangerousSkipPermissions(func() int { return 0 }, func(string) (string, bool) {
+		return "", false
+	})
+	if got {
+		t.Fatal("canUseClaudeDangerousSkipPermissions() = true for root, want false")
+	}
+}
+
+func TestCanUseClaudeDangerousSkipPermissions_SudoEnv(t *testing.T) {
+	got := canUseClaudeDangerousSkipPermissions(func() int { return 1000 }, func(key string) (string, bool) {
+		if key == "SUDO_UID" {
+			return "1000", true
+		}
+		return "", false
+	})
+	if got {
+		t.Fatal("canUseClaudeDangerousSkipPermissions() = true with sudo env, want false")
+	}
+}
+
+func TestCanUseClaudeDangerousSkipPermissions_NormalUser(t *testing.T) {
+	got := canUseClaudeDangerousSkipPermissions(func() int { return 1000 }, func(string) (string, bool) {
+		return "", false
+	})
+	if !got {
+		t.Fatal("canUseClaudeDangerousSkipPermissions() = false for normal user, want true")
+	}
+}
+
 // --- Chat() tests ---
 
 func TestChat_Success(t *testing.T) {

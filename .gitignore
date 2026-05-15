@@ -51,6 +51,8 @@ docs/superpowers/
 
 # Added by goreleaser init:
 dist/
+!internal/saas/api/dist/
+!internal/saas/api/dist/.gitkeep
 *.vite/
 
 # Windows Application Icon/Resource

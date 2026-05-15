@@ -90,9 +90,10 @@ func TestIntegration_RealClaudeCLI_ParsesRealJSON(t *testing.T) {
 		t.Skip("claude CLI not found in PATH")
 	}
 
-	// Run claude directly and verify our parser handles real output
-	cmd := exec.Command("claude", "-p", "--output-format", "json",
-		"--dangerously-skip-permissions", "--no-chrome", "--no-session-persistence", "-")
+	// Run claude directly and verify our parser handles real output.
+	args := buildClaudeCliArgs("", "", shouldUseClaudeDangerousSkipPermissions())
+	args = append(args[:len(args)-1], "--no-session-persistence", "-")
+	cmd := exec.Command("claude", args...)
 	cmd.Stdin = strings.NewReader("Say hi")
 	cmd.Dir = t.TempDir()
 

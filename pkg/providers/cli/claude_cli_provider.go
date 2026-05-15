@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -32,14 +33,7 @@ func (p *ClaudeCliProvider) Chat(
 	systemPrompt := p.buildSystemPrompt(messages, tools)
 	prompt := p.messagesToPrompt(messages)
 
-	args := []string{"-p", "--output-format", "json", "--dangerously-skip-permissions", "--no-chrome"}
-	if systemPrompt != "" {
-		args = append(args, "--system-prompt", systemPrompt)
-	}
-	if model != "" && model != "claude-code" {
-		args = append(args, "--model", model)
-	}
-	args = append(args, "-") // read from stdin
+	args := buildClaudeCliArgs(systemPrompt, model, shouldUseClaudeDangerousSkipPermissions())
 
 	cmd := exec.CommandContext(ctx, p.command, args...)
 	if p.workspace != "" {
@@ -74,6 +68,37 @@ func (p *ClaudeCliProvider) Chat(
 // GetDefaultModel returns the default model identifier.
 func (p *ClaudeCliProvider) GetDefaultModel() string {
 	return "claude-code"
+}
+
+func buildClaudeCliArgs(systemPrompt, model string, includeDangerousSkipPermissions bool) []string {
+	args := []string{"-p", "--output-format", "json"}
+	if includeDangerousSkipPermissions {
+		args = append(args, "--dangerously-skip-permissions")
+	}
+	args = append(args, "--no-chrome")
+	if systemPrompt != "" {
+		args = append(args, "--system-prompt", systemPrompt)
+	}
+	if model != "" && model != "claude-code" {
+		args = append(args, "--model", model)
+	}
+	return append(args, "-") // read from stdin
+}
+
+func shouldUseClaudeDangerousSkipPermissions() bool {
+	return canUseClaudeDangerousSkipPermissions(os.Geteuid, os.LookupEnv)
+}
+
+func canUseClaudeDangerousSkipPermissions(geteuid func() int, lookupEnv func(string) (string, bool)) bool {
+	if geteuid != nil && geteuid() == 0 {
+		return false
+	}
+	for _, key := range []string{"SUDO_UID", "SUDO_USER", "SUDO_GID"} {
+		if value, ok := lookupEnv(key); ok && value != "" {
+			return false
+		}
+	}
+	return true
 }
 
 // messagesToPrompt converts messages to a CLI-compatible prompt string.

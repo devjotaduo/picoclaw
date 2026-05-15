@@ -1,0 +1,467 @@
+import { useState } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Copy, Check, Sparkles, Bot, ExternalLink, PlusCircle } from "lucide-react";
+import {
+  getTenant,
+  getUsage,
+  suspendTenant,
+  resumeTenant,
+  deleteTenant,
+  rotatePassword,
+  setCRMLinks,
+} from "@/api/tenants";
+import {
+  getCRMContact,
+  listContactDeals,
+  createCRMContact,
+  createCRMDeal,
+  STAGE_LABEL,
+  STAGE_COLOR,
+} from "@/api/crm";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/badge";
+import { Dialog } from "@/components/ui/dialog";
+import { formatInt, formatUSD, relativeTime } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+
+export function TenantDetail() {
+  const { id = "" } = useParams();
+  const nav = useNavigate();
+  const qc = useQueryClient();
+  const { status } = useAuth();
+
+  const t = useQuery({ queryKey: ["tenant", id], queryFn: () => getTenant(id), refetchInterval: 10_000 });
+  const u = useQuery({ queryKey: ["usage", id], queryFn: () => getUsage(id), refetchInterval: 60_000 });
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [rotatedPwd, setRotatedPwd] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["tenant", id] });
+
+  const suspendM = useMutation({ mutationFn: () => suspendTenant(id), onSuccess: invalidate });
+  const resumeM  = useMutation({ mutationFn: () => resumeTenant(id),  onSuccess: invalidate });
+  const deleteM  = useMutation({ mutationFn: () => deleteTenant(id),  onSuccess: () => nav("/tenants") });
+  const rotateM  = useMutation({
+    mutationFn: () => rotatePassword(id),
+    onSuccess: (r) => setRotatedPwd(r.initial_password),
+  });
+
+  const copyPwd = async () => {
+    if (!rotatedPwd) return;
+    await navigator.clipboard.writeText(rotatedPwd);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  if (t.isLoading) return <div className="p-6 text-sm text-zinc-500">Loading…</div>;
+  if (t.isError || !t.data) return <div className="p-6 text-sm text-red-300">Failed to load tenant.</div>;
+  const tenant = t.data;
+  const isPlatformAdmin =
+    status.state === "authenticated" && status.me.platform_role === "platform_admin";
+  const role =
+    status.state === "authenticated"
+      ? status.me.memberships.find((m) => m.tenant_id === tenant.id)?.role
+      : undefined;
+  const canEditConfig = isPlatformAdmin || role === "tenant_owner" || role === "tenant_admin";
+
+  return (
+    <div className="mx-auto max-w-5xl p-6">
+      <Link to="/tenants" className="mb-3 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-200">
+        <ArrowLeft className="h-3 w-3" /> Back to tenants
+      </Link>
+
+      <header className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-semibold">{tenant.display_name}</h1>
+          <div className="mt-1 flex items-center gap-2 text-sm">
+            <StatusBadge status={tenant.status} />
+            <span className="text-zinc-500">{tenant.subdomain}</span>
+            <span className="text-zinc-700">•</span>
+            <span className="text-zinc-500">{tenant.owner_email}</span>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {canEditConfig && (
+            <>
+              <Link to={`/tenants/${tenant.id}/settings`}>
+                <Button variant="outline" size="sm">
+                  <Bot className="h-4 w-4" /> Agent
+                </Button>
+              </Link>
+              <Link to={`/tenants/${tenant.id}/skills`}>
+                <Button variant="outline" size="sm">
+                  <Sparkles className="h-4 w-4" /> Skills
+                </Button>
+              </Link>
+            </>
+          )}
+          {isPlatformAdmin && tenant.status === "active" && (
+            <Button variant="outline" size="sm" onClick={() => suspendM.mutate()} disabled={suspendM.isPending}>
+              Suspend
+            </Button>
+          )}
+          {isPlatformAdmin && tenant.status === "suspended" && (
+            <Button variant="outline" size="sm" onClick={() => resumeM.mutate()} disabled={resumeM.isPending}>
+              Resume
+            </Button>
+          )}
+          {isPlatformAdmin && (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => rotateM.mutate()} disabled={rotateM.isPending}>
+                Rotate password
+              </Button>
+              <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>Delete</Button>
+            </>
+          )}
+        </div>
+      </header>
+
+      {tenant.last_error && (
+        <div className="mb-4 rounded bg-red-950/50 px-3 py-2 text-xs text-red-300">
+          <strong>Last error:</strong> {tenant.last_error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-4">
+        <Card>
+          <CardHeader><CardTitle>Container</CardTitle></CardHeader>
+          <CardContent className="text-xs">
+            <Row label="ID" value={tenant.container_id ?? "—"} mono />
+            <Row label="Memory" value={`${tenant.mem_limit_mb} MB`} />
+            <Row label="CPU" value={String(tenant.cpu_quota)} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Billing</CardTitle></CardHeader>
+          <CardContent className="text-xs">
+            <Row label="Budget/mo" value={formatUSD(tenant.monthly_budget_usd)} />
+            {u.data && (
+              <>
+                <Row label="Spent this period" value={formatUSD(u.data.summary.cost_usd)} />
+                <Row label="Tokens (prompt)" value={formatInt(u.data.summary.prompt_tokens)} />
+                <Row label="Tokens (completion)" value={formatInt(u.data.summary.completion_tokens)} />
+              </>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Lifecycle</CardTitle></CardHeader>
+          <CardContent className="text-xs">
+            <Row label="Created" value={relativeTime(tenant.created_at)} />
+            <Row label="Suspended" value={relativeTime(tenant.suspended_at)} />
+            <Row label="Pwd delivered" value={tenant.initial_password_delivered ? "yes" : "no"} />
+            <Row
+              label="CRM"
+              value={
+                tenant.crm_contact_id != null ? (
+                  <a
+                    href={`/crm/`}
+                    className="text-brand-500 hover:underline"
+                    title={`contact #${tenant.crm_contact_id}`}
+                  >
+                    #{tenant.crm_contact_id}
+                  </a>
+                ) : (
+                  <span className="text-zinc-600">—</span>
+                )
+              }
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {isPlatformAdmin && (
+        <CRMSection tenantId={id} tenant={tenant} onLinked={() => qc.invalidateQueries({ queryKey: ["tenant", id] })} />
+      )}
+
+      <h2 className="mb-2 mt-6 text-sm font-semibold text-zinc-300">Recent usage</h2>
+      <div className="overflow-hidden rounded-lg border border-zinc-800">
+        <table className="w-full text-xs">
+          <thead className="bg-zinc-900/80 text-left text-[10px] uppercase tracking-wide text-zinc-500">
+            <tr>
+              <th className="px-3 py-2 font-medium">When</th>
+              <th className="px-3 py-2 font-medium">Model</th>
+              <th className="px-3 py-2 font-medium">Provider</th>
+              <th className="px-3 py-2 font-medium text-right">Prompt</th>
+              <th className="px-3 py-2 font-medium text-right">Completion</th>
+              <th className="px-3 py-2 font-medium text-right">Cost</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-800/60">
+            {(u.data?.recent ?? []).map((r) => (
+              <tr key={r.ID} className="hover:bg-zinc-900/40">
+                <td className="px-3 py-1.5 text-zinc-400">{relativeTime(r.Timestamp)}</td>
+                <td className="px-3 py-1.5 font-mono text-zinc-200">{r.Model}</td>
+                <td className="px-3 py-1.5 text-zinc-500">{r.Provider}</td>
+                <td className="px-3 py-1.5 text-right">{formatInt(r.PromptTokens)}</td>
+                <td className="px-3 py-1.5 text-right">{formatInt(r.CompletionTokens)}</td>
+                <td className="px-3 py-1.5 text-right">{formatUSD(r.CostUSD)}</td>
+              </tr>
+            ))}
+            {(u.data?.recent?.length ?? 0) === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-4 text-center text-zinc-500">No usage yet.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete tenant?" size="sm">
+        <p className="text-sm text-zinc-300">
+          This will stop the container, delete the LiteLLM key, archive the volume to a tarball,
+          and remove all data. The tarball is retained for 30 days.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button variant="danger" onClick={() => deleteM.mutate()} disabled={deleteM.isPending}>
+            {deleteM.isPending ? "Deleting…" : "Delete forever"}
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog open={!!rotatedPwd} onClose={() => setRotatedPwd(null)} title="New password" size="md" closable={false}>
+        {rotatedPwd && (
+          <div className="space-y-3 text-sm">
+            <p className="text-amber-300">Save this password now — it will not be shown again.</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
+                {rotatedPwd}
+              </code>
+              <Button variant="secondary" size="icon" onClick={copyPwd}>
+                {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button onClick={() => setRotatedPwd(null)}>Done</Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
+    </div>
+  );
+}
+
+// ── CRM Section ────────────────────────────────────────────────────────────
+
+type CRMSectionProps = {
+  tenantId: string;
+  tenant: { crm_contact_id?: number | null; display_name: string; owner_email: string };
+  onLinked: () => void;
+};
+
+function CRMSection({ tenantId, tenant, onLinked }: CRMSectionProps) {
+  const qc = useQueryClient();
+  const contactId = tenant.crm_contact_id ?? null;
+
+  const contactQ = useQuery({
+    queryKey: ["crm-contact", contactId],
+    queryFn: () => getCRMContact(contactId!),
+    enabled: contactId != null,
+  });
+
+  const dealsQ = useQuery({
+    queryKey: ["crm-deals", contactId],
+    queryFn: () => listContactDeals(contactId!),
+    enabled: contactId != null,
+  });
+
+  const [newDeal, setNewDeal] = useState(false);
+  const [dealName, setDealName] = useState("");
+  const [dealValue, setDealValue] = useState("");
+  const [dealStage, setDealStage] = useState("prospect");
+
+  const linkM = useMutation({
+    mutationFn: async () => {
+      const parts = tenant.display_name.trim().split(/\s+/);
+      const firstName = parts[0] ?? tenant.display_name;
+      const lastName = parts.slice(1).join(" ") || undefined;
+      const { contact } = await createCRMContact({ first_name: firstName, last_name: lastName, email: tenant.owner_email });
+      await setCRMLinks(tenantId, { contact_id: contact.id });
+      return contact;
+    },
+    onSuccess: () => {
+      onLinked();
+      qc.invalidateQueries({ queryKey: ["crm-contact"] });
+    },
+  });
+
+  const dealM = useMutation({
+    mutationFn: () =>
+      createCRMDeal({
+        name: dealName,
+        contact_id: contactId!,
+        value: dealValue ? parseFloat(dealValue) : undefined,
+        stage: dealStage,
+      }),
+    onSuccess: () => {
+      setNewDeal(false);
+      setDealName("");
+      setDealValue("");
+      setDealStage("prospect");
+      qc.invalidateQueries({ queryKey: ["crm-deals", contactId] });
+    },
+  });
+
+  const contact = contactQ.data?.contact;
+  const deals = dealsQ.data?.deals ?? [];
+  const totalValue = dealsQ.data?.totalValue ?? 0;
+
+  return (
+    <div className="mt-6">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-zinc-300">CRM</h2>
+        <a href="/crm/" className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300">
+          Open CRM <ExternalLink className="h-3 w-3" />
+        </a>
+      </div>
+
+      {contactId == null ? (
+        <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-4">
+          <span className="flex-1 text-sm text-zinc-500">No CRM contact linked to this tenant.</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => linkM.mutate()}
+            disabled={linkM.isPending}
+          >
+            {linkM.isPending ? "Creating…" : "Create CRM contact"}
+          </Button>
+          {linkM.isError && (
+            <span className="text-xs text-red-400">
+              {(linkM.error as { error?: string })?.error ?? "Failed"}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Contact</CardTitle>
+            </CardHeader>
+            <CardContent className="text-xs">
+              {contactQ.isLoading && <span className="text-zinc-500">Loading…</span>}
+              {contact && (
+                <>
+                  <Row label="Name" value={`${contact.first_name} ${contact.last_name}`.trim() || "—"} />
+                  <Row label="Email" value={contact.email || "—"} />
+                  <Row label="Status" value={contact.status || "—"} />
+                  {contact.title && <Row label="Title" value={contact.title} />}
+                  {contact.company_name && <Row label="Company" value={contact.company_name} />}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>Deals</span>
+                <div className="flex items-center gap-3">
+                  {totalValue > 0 && (
+                    <span className="text-xs font-normal text-zinc-400">{formatUSD(totalValue)} total</span>
+                  )}
+                  <button
+                    onClick={() => setNewDeal(true)}
+                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-100"
+                  >
+                    <PlusCircle className="h-3.5 w-3.5" /> New deal
+                  </button>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <table className="w-full text-xs">
+                <thead className="bg-zinc-900/50 text-left text-[10px] uppercase tracking-wide text-zinc-500">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Deal</th>
+                    <th className="px-3 py-2 font-medium">Stage</th>
+                    <th className="px-3 py-2 font-medium text-right">Value</th>
+                    <th className="px-3 py-2 font-medium">Close</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/60">
+                  {deals.map((d) => (
+                    <tr key={d.id} className="hover:bg-zinc-900/40">
+                      <td className="px-3 py-1.5 text-zinc-200">{d.name}</td>
+                      <td className={`px-3 py-1.5 ${STAGE_COLOR[d.stage] ?? "text-zinc-400"}`}>
+                        {STAGE_LABEL[d.stage] ?? d.stage}
+                      </td>
+                      <td className="px-3 py-1.5 text-right">{d.value ? formatUSD(d.value) : "—"}</td>
+                      <td className="px-3 py-1.5 text-zinc-500">{d.close_date ? d.close_date.slice(0, 10) : "—"}</td>
+                    </tr>
+                  ))}
+                  {deals.length === 0 && !dealsQ.isLoading && (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-4 text-center text-zinc-500">No deals yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <Dialog open={newDeal} onClose={() => setNewDeal(false)} title="New deal" size="sm">
+        <div className="space-y-3 text-sm">
+          <div>
+            <label className="mb-1 block text-xs text-zinc-400">Deal name</label>
+            <input
+              className="w-full rounded bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none ring-1 ring-zinc-700 focus:ring-brand-500"
+              value={dealName}
+              onChange={(e) => setDealName(e.target.value)}
+              placeholder="e.g. Annual subscription"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-zinc-400">Value (USD)</label>
+              <input
+                type="number"
+                min={0}
+                className="w-full rounded bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none ring-1 ring-zinc-700 focus:ring-brand-500"
+                value={dealValue}
+                onChange={(e) => setDealValue(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-zinc-400">Stage</label>
+              <select
+                className="w-full rounded bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none ring-1 ring-zinc-700 focus:ring-brand-500"
+                value={dealStage}
+                onChange={(e) => setDealStage(e.target.value)}
+              >
+                {Object.entries(STAGE_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setNewDeal(false)}>Cancel</Button>
+            <Button
+              onClick={() => dealM.mutate()}
+              disabled={!dealName.trim() || dealM.isPending}
+            >
+              {dealM.isPending ? "Saving…" : "Create"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    </div>
+  );
+}
+
+function Row({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div className="mb-1.5 flex items-center justify-between gap-3">
+      <span className="text-zinc-500">{label}</span>
+      <span className={mono ? "font-mono text-[10px] text-zinc-300" : "text-zinc-300"}>{value}</span>
+    </div>
+  );
+}

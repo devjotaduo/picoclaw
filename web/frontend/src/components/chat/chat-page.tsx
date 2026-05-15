@@ -369,6 +369,7 @@ export function ChatPage() {
         attachments={attachments}
         onInputChange={setInput}
         onAddImages={handleAddImages}
+        onAttachAudio={(audio) => setAttachments([audio])}
         onRemoveAttachment={handleRemoveAttachment}
         onSend={handleSend}
         onContextDetail={() => {

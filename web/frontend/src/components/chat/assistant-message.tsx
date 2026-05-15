@@ -49,8 +49,12 @@ export function AssistantMessage({
   const imageAttachments = attachments.filter(
     (attachment) => attachment.type === "image",
   )
+  const audioAttachments = attachments.filter(
+    (attachment) => attachment.type === "audio",
+  )
   const fileAttachments = attachments.filter(
-    (attachment) => attachment.type !== "image",
+    (attachment) =>
+      attachment.type !== "image" && attachment.type !== "audio",
   )
   const [isExpanded, setIsExpanded] = useState(true)
   const formattedTimestamp =
@@ -264,6 +268,19 @@ export function AssistantMessage({
               />
               <div className="absolute inset-0 bg-black/0 transition-colors group-hover/img:bg-black/10 dark:group-hover/img:bg-black/20" />
             </a>
+          ))}
+        </div>
+      )}
+
+      {audioAttachments.length > 0 && (
+        <div className="mt-1 flex flex-col gap-2">
+          {audioAttachments.map((attachment, index) => (
+            <audio
+              key={`${attachment.url}-${index}`}
+              controls
+              src={attachment.url}
+              className="max-w-[320px]"
+            />
           ))}
         </div>
       )}

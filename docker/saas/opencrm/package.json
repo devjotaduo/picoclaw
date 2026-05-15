@@ -1,0 +1,32 @@
+{
+  "name": "@picoclaw-saas/opencrm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted Node fork of clawnify/open-crm — D1 swapped for better-sqlite3.",
+  "scripts": {
+    "build:client": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build": "pnpm run build:client && pnpm run build:server",
+    "start": "node dist-server/server/server.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "@hono/zod-openapi": "^0.18.0",
+    "better-sqlite3": "^11.7.0",
+    "hono": "^4.6.0",
+    "zod": "^3.24.0",
+    "lucide-preact": "^0.575.0",
+    "preact": "^10.25.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.9.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "better-sqlite3"]
+  }
+}

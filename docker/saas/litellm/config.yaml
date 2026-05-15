@@ -1,0 +1,69 @@
+# LiteLLM config — pre-wired with the providers we have keys for.
+# All upstream traffic goes through OpenRouter (only key currently configured
+# in the host's ~/.picoclaw/.security.yml). To add OpenAI/Anthropic/etc.
+# direct, set the corresponding env var in .env and add a model_list entry.
+
+model_list:
+  # ----- Default OpenAI-class model (cheap, fast) -----
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openrouter/openai/gpt-4o-mini
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+  - model_name: gpt-4o
+    litellm_params:
+      model: openrouter/openai/gpt-4o
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+  # ----- Anthropic via OpenRouter -----
+  - model_name: claude-sonnet-4-5
+    litellm_params:
+      model: openrouter/anthropic/claude-sonnet-4.5
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: openrouter/anthropic/claude-haiku-4.5
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+  # ----- Google via OpenRouter -----
+  - model_name: gemini-2.0-flash
+    litellm_params:
+      model: openrouter/google/gemini-2.0-flash-001
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+  # ----- Free/cheap options -----
+  - model_name: llama-3.3-70b
+    litellm_params:
+      model: openrouter/meta-llama/llama-3.3-70b-instruct
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+  - model_name: deepseek-chat
+    litellm_params:
+      model: openrouter/deepseek/deepseek-chat
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+  # ----- OpenRouter auto-routing (lets OR pick the cheapest available) -----
+  - model_name: auto
+    litellm_params:
+      model: openrouter/openrouter/auto
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  store_model_in_db: true
+
+litellm_settings:
+  set_verbose: false
+  drop_params: true
+  success_callback: ["postgres"]
+  failure_callback: ["postgres"]

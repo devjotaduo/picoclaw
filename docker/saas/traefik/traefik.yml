@@ -1,0 +1,47 @@
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+accessLog: {}
+
+api:
+  dashboard: false
+  insecure: false
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    # Talk to the docker socket via the filtering proxy. The proxy enforces
+    # which endpoints we're allowed to hit; raw socket is no longer exposed.
+    endpoint: "tcp://dockerproxy:2375"
+    exposedByDefault: false
+    network: saas_edge
+    watch: true
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "${LE_EMAIL}"
+      storage: "/letsencrypt/acme.json"
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"

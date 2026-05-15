@@ -136,7 +136,10 @@ interface UseSidebarChannelsOptions {
   t: TFunction
 }
 
-export function useSidebarChannels({ language, t }: UseSidebarChannelsOptions) {
+export function useSidebarChannels({
+  language,
+  t,
+}: UseSidebarChannelsOptions) {
   const gateway = useAtomValue(gatewayAtom)
   const [channels, setChannels] = React.useState<SupportedChannel[]>([])
   const [enabledMap, setEnabledMap] = React.useState<Record<string, boolean>>(

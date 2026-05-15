@@ -1,4 +1,8 @@
-import { IconCode, IconDeviceFloppy, IconTag } from "@tabler/icons-react"
+import {
+  IconCode,
+  IconDeviceFloppy,
+  IconTag,
+} from "@tabler/icons-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useEffect, useState } from "react"

@@ -5,6 +5,7 @@
     "models": "Modelos",
     "credentials": "Credenciais",
     "agent_group": "Agente",
+    "agent_editor": "Agent",
     "hub": "Hub",
     "whatsapp_inbox": "WhatsApp inbox",
     "templates": "Templates",
@@ -88,6 +89,12 @@
     "attachImage": "Adicionar imagens",
     "removeImage": "Remover imagem",
     "uploadedImage": "Imagem enviada",
+    "recordAudio": "Record audio",
+    "stopRecording": "Stop recording",
+    "removeAudio": "Remove audio",
+    "audioUnsupported": "Your browser does not support audio recording.",
+    "audioReadFailed": "Could not process the recorded audio.",
+    "microphoneDenied": "Microphone permission denied or unavailable.",
     "invalidImage": "\"{{name}}\" não é um arquivo de imagem suportado.",
     "imageTooLarge": "\"{{name}}\" excede o limite de {{size}}.",
     "imageReadFailed": "Falha ao ler \"{{name}}\".",
@@ -389,6 +396,9 @@
       "refresh": "Refresh QR",
       "refreshing": "Restarting…",
       "refreshError": "Failed to restart the channel.",
+      "disconnect": "Disconnect",
+      "disconnecting": "Disconnecting…",
+      "disconnectError": "Failed to disconnect.",
       "status": {
         "idle": "Waiting",
         "wait": "Ready to scan",
@@ -603,6 +613,26 @@
         "read_only_hint": "Builtin skills cannot be edited from the dashboard; clone into the workspace first.",
         "char_count": "{{count}} characters",
         "unsaved": "Unsaved changes"
+      },
+      "editor": {
+        "loading": "Loading…",
+        "edit": "Edit configuration",
+        "save_success": "Agent configuration saved.",
+        "save_error": "Could not save agent configuration.",
+        "empty_title": "No agent configured yet",
+        "empty_description": "Apply a template to generate the initial agent configuration. After that, come back here to edit everything: schedule, professionals, products, skills, behavior, etc.",
+        "go_to_templates": "Go to Templates",
+        "summary": {
+          "template": "Applied template",
+          "tone": "Tone",
+          "language": "Language",
+          "company": "Company",
+          "professionals": "Professionals",
+          "products": "Products",
+          "skills_active": "Active skills",
+          "applied_at": "Last applied",
+          "disabled": "disabled"
+        }
       },
       "template_editor": {
         "search_placeholder": "Search templates",
@@ -1018,6 +1048,20 @@
         "devices": "Dispositivos"
       },
       "open_raw": "Configuração Bruta",
+      "open_nav_visibility": "Sidebar visibility",
+      "nav_visibility": {
+        "title": "Sidebar visibility",
+        "description": "Choose which sidebar entries appear in this instance. Hidden items remain reachable by URL — they just disappear from the navigation.",
+        "loading": "Loading…",
+        "visible": "Visible",
+        "show_all": "Show all",
+        "save": "Save",
+        "save_success": "Sidebar visibility saved.",
+        "save_error": "Could not save sidebar visibility.",
+        "group_visibility_hint": "Turning this off hides the entire group from the sidebar.",
+        "configured": "configured",
+        "not_configured": "not configured"
+      },
       "back_to_visual": "Configuração Visual",
       "raw_json_title": "Configuração JSON Bruta",
       "json_placeholder": "Digite uma configuração JSON válida...",

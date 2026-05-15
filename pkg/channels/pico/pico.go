@@ -44,6 +44,21 @@ var allowedInlineImageMIMETypes = map[string]struct{}{
 	"image/bmp":  {},
 }
 
+// allowedInlineAudioMIMETypes lists the audio mime types the Pico channel
+// accepts inline as base64 data URLs. Anything outside this set is rejected
+// so the agent never has to deal with unbounded codecs from the browser.
+var allowedInlineAudioMIMETypes = map[string]struct{}{
+	"audio/webm":          {}, // MediaRecorder default on Chromium
+	"audio/webm;codecs=opus": {},
+	"audio/ogg":           {},
+	"audio/ogg;codecs=opus": {},
+	"audio/mpeg":          {}, // mp3
+	"audio/mp4":           {}, // m4a
+	"audio/wav":           {},
+	"audio/x-wav":         {},
+	"audio/wave":          {},
+}
+
 func outboundMessageIsThought(msg bus.OutboundMessage) bool {
 	if len(msg.Context.Raw) == 0 {
 		return false
@@ -1052,30 +1067,50 @@ func inlineImageValue(item any) (string, error) {
 
 func validateInlineImageDataURL(mediaURL string) error {
 	if mediaURL == "" {
-		return fmt.Errorf("image payload is empty")
+		return fmt.Errorf("media payload is empty")
 	}
-	if !strings.HasPrefix(mediaURL, "data:image/") {
-		return fmt.Errorf("only inline image data URLs are supported")
+	if !strings.HasPrefix(mediaURL, "data:image/") &&
+		!strings.HasPrefix(mediaURL, "data:audio/") {
+		return fmt.Errorf("only inline image or audio data URLs are supported")
 	}
 
 	header, data, found := strings.Cut(mediaURL, ",")
 	if !found || strings.TrimSpace(data) == "" {
-		return fmt.Errorf("image data URL is malformed")
+		return fmt.Errorf("media data URL is malformed")
 	}
 	if !strings.Contains(header, ";base64") {
-		return fmt.Errorf("image data URL must be base64 encoded")
+		return fmt.Errorf("media data URL must be base64 encoded")
 	}
-	mimeType, _, _ := strings.Cut(strings.TrimPrefix(header, "data:"), ";")
-	if _, ok := allowedInlineImageMIMETypes[mimeType]; !ok {
-		return fmt.Errorf("unsupported image format: %s", mimeType)
+	// MediaRecorder often emits "audio/webm;codecs=opus" as the inner mime;
+	// we keep both the bare form ("audio/webm") and the codec form in the
+	// allow-list to avoid silently rejecting recordings produced by the UI.
+	mimeWithCodec := strings.TrimPrefix(header, "data:")
+	mimeWithCodec = strings.TrimSuffix(mimeWithCodec, ";base64")
+	mimeWithCodec = strings.TrimSpace(mimeWithCodec)
+	mimeType, _, _ := strings.Cut(mimeWithCodec, ";")
+	mimeType = strings.TrimSpace(mimeType)
+
+	switch {
+	case strings.HasPrefix(mimeType, "image/"):
+		if _, ok := allowedInlineImageMIMETypes[mimeType]; !ok {
+			return fmt.Errorf("unsupported image format: %s", mimeType)
+		}
+	case strings.HasPrefix(mimeType, "audio/"):
+		if _, ok := allowedInlineAudioMIMETypes[mimeWithCodec]; !ok {
+			if _, ok := allowedInlineAudioMIMETypes[mimeType]; !ok {
+				return fmt.Errorf("unsupported audio format: %s", mimeWithCodec)
+			}
+		}
+	default:
+		return fmt.Errorf("unsupported media format: %s", mimeType)
 	}
 
 	data = strings.TrimSpace(data)
 	if base64.StdEncoding.DecodedLen(len(data)) > config.DefaultMaxMediaSize {
-		return fmt.Errorf("image exceeds %d byte limit", config.DefaultMaxMediaSize)
+		return fmt.Errorf("media exceeds %d byte limit", config.DefaultMaxMediaSize)
 	}
 	if _, err := base64.StdEncoding.DecodeString(data); err != nil {
-		return fmt.Errorf("invalid base64 image data")
+		return fmt.Errorf("invalid base64 media data")
 	}
 
 	return nil

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sipeed/picoclaw/internal/saas/gatewayauth"
 )
 
 // LauncherDashboardCookieName is the HttpOnly cookie set after a successful password login.
@@ -46,6 +48,10 @@ func randomURLToken(n int) (string, error) {
 // LauncherDashboardAuthConfig holds runtime material for dashboard access checks.
 type LauncherDashboardAuthConfig struct {
 	ExpectedCookie string
+	// AuthMode is "local" by default. "trusted_gateway" accepts only
+	// HMAC-signed requests from the Picoclaw SaaS gateway for protected paths.
+	AuthMode             string
+	TrustedGatewaySecret string
 	// LocalAutoLogin enables one-shot startup auto-login.
 	LocalAutoLogin *LauncherDashboardLocalAutoLogin
 	// SecureCookie sets the session cookie's Secure flag. If nil, DefaultLauncherDashboardSecureCookie is used.
@@ -134,6 +140,18 @@ func ClearLauncherDashboardSessionCookie(w http.ResponseWriter, r *http.Request,
 func LauncherDashboardAuth(cfg LauncherDashboardAuthConfig, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := canonicalAuthPath(r.URL.Path)
+		if isTrustedGatewayMode(cfg) {
+			if isPublicLauncherDashboardStatic(r.Method, p) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if validTrustedGatewayAuth(r, cfg) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			rejectLauncherDashboardAuth(w, r, p)
+			return
+		}
 		if p == LauncherDashboardLocalAutoLoginPath {
 			handleLauncherLocalAutoLogin(w, r, cfg)
 			return
@@ -294,6 +312,15 @@ func validLauncherDashboardAuth(r *http.Request, cfg LauncherDashboardAuthConfig
 		}
 	}
 	return false
+}
+
+func isTrustedGatewayMode(cfg LauncherDashboardAuthConfig) bool {
+	return strings.EqualFold(strings.TrimSpace(cfg.AuthMode), "trusted_gateway")
+}
+
+func validTrustedGatewayAuth(r *http.Request, cfg LauncherDashboardAuthConfig) bool {
+	_, err := gatewayauth.VerifyRequest(r, cfg.TrustedGatewaySecret, 5*time.Minute, time.Now())
+	return err == nil
 }
 
 func rejectLauncherDashboardAuth(w http.ResponseWriter, r *http.Request, canonicalPath string) {

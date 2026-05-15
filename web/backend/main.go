@@ -597,8 +597,10 @@ func main() {
 	}
 
 	dashAuth := middleware.LauncherDashboardAuth(middleware.LauncherDashboardAuthConfig{
-		ExpectedCookie: dashboardSessionCookie,
-		LocalAutoLogin: localAutoLogin,
+		ExpectedCookie:       dashboardSessionCookie,
+		AuthMode:             os.Getenv("PICOCLAW_AUTH_MODE"),
+		TrustedGatewaySecret: os.Getenv("PICOCLAW_TRUSTED_GATEWAY_SECRET"),
+		LocalAutoLogin:       localAutoLogin,
 	}, accessControlledMux)
 
 	// Apply middleware stack

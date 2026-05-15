@@ -35,12 +35,18 @@ func isVisionUnsupportedError(err error) bool {
 	}
 	msg := strings.ToLower(err.Error())
 
-	// OpenRouter (and OpenAI-compatible) style.
+	// OpenRouter (and OpenAI-compatible) style — image.
 	if strings.Contains(msg, "no endpoints found that support image input") {
 		return true
 	}
 
-	// Common provider variants.
+	// OpenRouter style — audio input (e.g. sending raw audio to a text-only model).
+	if strings.Contains(msg, "no endpoints found that support input audio") ||
+		strings.Contains(msg, "no endpoints found that support audio input") {
+		return true
+	}
+
+	// Common provider variants — image.
 	if strings.Contains(msg, "does not support image input") ||
 		strings.Contains(msg, "does not support image inputs") ||
 		strings.Contains(msg, "does not support images") ||
@@ -48,6 +54,13 @@ func isVisionUnsupportedError(err error) bool {
 		strings.Contains(msg, "images are not supported") ||
 		strings.Contains(msg, "does not support vision") ||
 		strings.Contains(msg, "unsupported content type: image_url") {
+		return true
+	}
+
+	// Common provider variants — audio.
+	if strings.Contains(msg, "does not support audio input") ||
+		strings.Contains(msg, "audio input is not supported") ||
+		strings.Contains(msg, "does not support audio") {
 		return true
 	}
 

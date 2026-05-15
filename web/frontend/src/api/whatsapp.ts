@@ -91,7 +91,7 @@ export async function sendWhatsAppManual(
     },
   )
   if (!res.ok) {
-    let detail = ""
+    let detail: string
     try {
       const body = (await res.json()) as { error?: string }
       detail = body.error ?? ""

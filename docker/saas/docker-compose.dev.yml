@@ -1,0 +1,25 @@
+# Dev-only override: localhost domain, no Let's Encrypt.
+# Apply alongside the base compose:
+#   docker compose -f docker/saas/docker-compose.yml -f docker/saas/docker-compose.dev.yml --env-file .env up -d
+#
+# Differences from prod:
+#   - Traefik uses traefik.dev.yml (no LE, no DNS-01)
+#   - Traefik mounts a local certs/ dir (created by docker/saas/scripts/dev-setup.sh)
+#   - Controlplane sets TENANT_CERT_RESOLVER='' so tenant routers don't
+#     reference 'letsencrypt' (Traefik uses the default cert instead)
+#   - Cookies not Secure (so http://admin.picoclaw.localhost works during dev
+#     even if you skip HTTPS — though https is still the primary path)
+
+services:
+  traefik:
+    command:
+      - "--configFile=/etc/traefik/traefik.dev.yml"
+    volumes:
+      - ./traefik/traefik.dev.yml:/etc/traefik/traefik.dev.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - ./traefik/certs:/etc/traefik/certs:ro
+
+  controlplane:
+    environment:
+      TENANT_CERT_RESOLVER: ""
+      COOKIE_SECURE: "true"

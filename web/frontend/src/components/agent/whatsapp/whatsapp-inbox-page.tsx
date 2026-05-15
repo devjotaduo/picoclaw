@@ -431,7 +431,6 @@ function Bubble({ msg }: { msg: WhatsAppMessage }) {
 function Avatar({ name, url }: { name: string; url?: string }) {
   if (url) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={url}
         alt={name}

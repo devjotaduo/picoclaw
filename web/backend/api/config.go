@@ -29,6 +29,41 @@ func (h *Handler) applyRuntimeLogLevel() {
 	logger.SetLevelFromString(config.ResolveGatewayLogLevel(h.configPath))
 }
 
+// channelsConfigChanged reports whether the channel section differs between
+// two snapshots. We compare via JSON marshalling so secret fields, raw
+// settings blobs and nested structs are all covered.
+func channelsConfigChanged(oldCfg, newCfg *config.Config) bool {
+	a, errA := json.Marshal(oldCfg.Channels)
+	b, errB := json.Marshal(newCfg.Channels)
+	if errA != nil || errB != nil {
+		return true
+	}
+	return string(a) != string(b)
+}
+
+// restartGatewayIfChannelsChanged triggers a background gateway restart when
+// channel config has been mutated by a save. Channel runtime state (the
+// whatsmeow WebSocket, telegram poller, etc.) lives in the gateway process,
+// so a launcher-side save alone cannot tear down an active session — without
+// the restart the agent keeps replying on a channel the user just disabled.
+// The restart is fire-and-forget; errors are logged and not surfaced to the
+// HTTP response.
+func (h *Handler) restartGatewayIfChannelsChanged(oldCfg, newCfg *config.Config) {
+	if oldCfg == nil || newCfg == nil {
+		return
+	}
+	if !channelsConfigChanged(oldCfg, newCfg) {
+		return
+	}
+	go func() {
+		if _, err := h.RestartGateway(); err != nil {
+			logger.Warnf("auto-restart gateway after channel config change failed: %v", err)
+		} else {
+			logger.Infof("gateway restarted after channel config change")
+		}
+	}()
+}
+
 // handleGetConfig returns the complete system configuration.
 //
 //	GET /api/config
@@ -55,6 +90,10 @@ func (h *Handler) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
+
+	// Snapshot pre-save channel config so we can decide whether the gateway
+	// needs a restart to actually disconnect/connect channels.
+	oldCfg, _ := config.LoadConfig(h.configPath)
 
 	var raw map[string]any
 	if err = json.Unmarshal(body, &raw); err != nil {
@@ -104,6 +143,7 @@ func (h *Handler) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.applyRuntimeLogLevel()
+	h.restartGatewayIfChannelsChanged(oldCfg, &cfg)
 	logger.Infof("configuration updated successfully")
 
 	w.Header().Set("Content-Type", "application/json")
@@ -205,6 +245,7 @@ func (h *Handler) handlePatchConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.applyRuntimeLogLevel()
+	h.restartGatewayIfChannelsChanged(cfg, &newCfg)
 	logger.Infof("configuration updated successfully")
 
 	w.Header().Set("Content-Type", "application/json")

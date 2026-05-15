@@ -1,0 +1,16 @@
+# Local dev TLS store. If you ran docker/saas/scripts/dev-setup.sh, mkcert wrote a
+# trusted wildcard cert into /etc/traefik/certs/dev.pem + dev-key.pem and this
+# file references it. Without that, Traefik will fall back to its built-in
+# self-signed default — browsers show a warning but the site still loads.
+
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/dev.pem
+        keyFile: /etc/traefik/certs/dev-key.pem
+  certificates:
+    - certFile: /etc/traefik/certs/dev.pem
+      keyFile: /etc/traefik/certs/dev-key.pem
+      stores:
+        - default

@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #f0f9ff;
+  --color-brand-500: #06b6d4;
+  --color-brand-600: #0891b2;
+  --color-brand-700: #0e7490;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+/* shadcn-style ring focus, kept inline so we don't ship Radix */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}

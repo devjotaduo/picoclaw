@@ -1,7 +1,15 @@
-import { IconArrowUp, IconPhotoPlus, IconX } from "@tabler/icons-react"
+import {
+  IconArrowUp,
+  IconMicrophone,
+  IconPhotoPlus,
+  IconPlayerStopFilled,
+  IconX,
+} from "@tabler/icons-react"
 import type { KeyboardEvent } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import TextareaAutosize from "react-textarea-autosize"
+import { toast } from "sonner"
 
 import { ContextUsageRing } from "@/components/chat/context-usage-ring"
 import { Button } from "@/components/ui/button"
@@ -30,6 +38,7 @@ interface ChatComposerProps {
   attachments: ChatAttachment[]
   onInputChange: (value: string) => void
   onAddImages: () => void
+  onAttachAudio: (attachment: ChatAttachment) => void
   onRemoveAttachment: (index: number) => void
   onSend: () => void
   onContextDetail?: () => void
@@ -38,11 +47,42 @@ interface ChatComposerProps {
   contextUsage?: ContextUsage
 }
 
+// Max audio recording length in seconds. Anything longer is auto-stopped to
+// keep the base64 payload under the DefaultMaxMediaSize budget on the server.
+const MAX_AUDIO_RECORDING_SECONDS = 120
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error ?? new Error("read failed"))
+    reader.readAsDataURL(blob)
+  })
+}
+
+// Picks the best mime supported by the browser; Safari historically lacked
+// webm/opus, so we fall back to mp4/wav.
+function pickAudioMimeType(): string {
+  if (typeof MediaRecorder === "undefined") return ""
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/mp4",
+    "audio/wav",
+  ]
+  for (const m of candidates) {
+    if (MediaRecorder.isTypeSupported(m)) return m
+  }
+  return ""
+}
+
 export function ChatComposer({
   input,
   attachments,
   onInputChange,
   onAddImages,
+  onAttachAudio,
   onRemoveAttachment,
   onSend,
   onContextDetail,
@@ -58,6 +98,110 @@ export function ChatComposer({
       : t(`chat.disabledPlaceholder.${inputDisabledReason}`)
   const placeholder = disabledMessage ?? t("chat.placeholder")
 
+  // --- Audio recording state ---
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const streamRef = useRef<MediaStream | null>(null)
+  const timerRef = useRef<number | null>(null)
+
+  // Stop everything on unmount so a half-finished recording doesn't keep
+  // holding the microphone or the auto-stop timer.
+  useEffect(() => {
+    return () => {
+      if (recorderRef.current && recorderRef.current.state !== "inactive") {
+        try {
+          recorderRef.current.stop()
+        } catch {
+          /* ignore */
+        }
+      }
+      if (streamRef.current) {
+        for (const track of streamRef.current.getTracks()) track.stop()
+      }
+      if (timerRef.current !== null) window.clearInterval(timerRef.current)
+    }
+  }, [])
+
+  async function startRecording() {
+    if (!canInput || isRecording) return
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices ||
+      typeof MediaRecorder === "undefined"
+    ) {
+      toast.error(t("chat.audioUnsupported"))
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
+      const mimeType = pickAudioMimeType()
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream)
+      chunksRef.current = []
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
+      }
+      recorder.onstop = async () => {
+        const blob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || mimeType || "audio/webm",
+        })
+        chunksRef.current = []
+        if (streamRef.current) {
+          for (const track of streamRef.current.getTracks()) track.stop()
+          streamRef.current = null
+        }
+        if (timerRef.current !== null) {
+          window.clearInterval(timerRef.current)
+          timerRef.current = null
+        }
+        setIsRecording(false)
+        setRecordingSeconds(0)
+        if (blob.size === 0) return
+        try {
+          const dataUrl = await blobToDataUrl(blob)
+          onAttachAudio({
+            type: "audio",
+            url: dataUrl,
+            filename: `recording-${Date.now()}.webm`,
+            contentType: blob.type,
+          })
+        } catch {
+          toast.error(t("chat.audioReadFailed"))
+        }
+      }
+      recorder.start()
+      recorderRef.current = recorder
+      setIsRecording(true)
+      setRecordingSeconds(0)
+      timerRef.current = window.setInterval(() => {
+        setRecordingSeconds((prev) => {
+          const next = prev + 1
+          if (next >= MAX_AUDIO_RECORDING_SECONDS) {
+            stopRecording()
+          }
+          return next
+        })
+      }, 1000)
+    } catch {
+      toast.error(t("chat.microphoneDenied"))
+    }
+  }
+
+  function stopRecording() {
+    const recorder = recorderRef.current
+    if (recorder && recorder.state !== "inactive") {
+      try {
+        recorder.stop()
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return
     if (e.key === "Enter" && !e.shiftKey) {
@@ -71,27 +215,45 @@ export function ChatComposer({
       <div className="bg-card border-border/60 pointer-events-auto relative mx-auto flex max-w-[1000px] flex-col rounded-2xl border p-3 shadow-sm">
         {attachments.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-2 px-2">
-            {attachments.map((attachment, index) => (
-              <div
-                key={`${attachment.url}-${index}`}
-                className="bg-background relative h-20 w-20 overflow-hidden rounded-xl border"
-              >
-                <img
-                  src={attachment.url}
-                  alt={attachment.filename || t("chat.uploadedImage")}
-                  className="h-full w-full object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={() => onRemoveAttachment(index)}
-                  className="bg-background/85 text-foreground absolute top-1 right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border shadow-sm transition hover:bg-white"
-                  aria-label={t("chat.removeImage")}
-                  title={t("chat.removeImage")}
+            {attachments.map((attachment, index) =>
+              attachment.type === "audio" ? (
+                <div
+                  key={`${attachment.url}-${index}`}
+                  className="bg-background relative flex items-center gap-2 rounded-xl border px-3 py-2"
                 >
-                  <IconX className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
+                  <audio controls src={attachment.url} className="h-8" />
+                  <button
+                    type="button"
+                    onClick={() => onRemoveAttachment(index)}
+                    className="bg-background/85 text-foreground inline-flex h-6 w-6 items-center justify-center rounded-full border shadow-sm transition hover:bg-white"
+                    aria-label={t("chat.removeAudio")}
+                    title={t("chat.removeAudio")}
+                  >
+                    <IconX className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div
+                  key={`${attachment.url}-${index}`}
+                  className="bg-background relative h-20 w-20 overflow-hidden rounded-xl border"
+                >
+                  <img
+                    src={attachment.url}
+                    alt={attachment.filename || t("chat.uploadedImage")}
+                    className="h-full w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onRemoveAttachment(index)}
+                    className="bg-background/85 text-foreground absolute top-1 right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border shadow-sm transition hover:bg-white"
+                    aria-label={t("chat.removeImage")}
+                    title={t("chat.removeImage")}
+                  >
+                    <IconX className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ),
+            )}
           </div>
         )}
 
@@ -118,12 +280,45 @@ export function ChatComposer({
               size="icon"
               className="text-muted-foreground hover:text-foreground h-8 w-8 rounded-full"
               onClick={onAddImages}
-              disabled={!canInput}
+              disabled={!canInput || isRecording}
               aria-label={t("chat.attachImage")}
               title={t("chat.attachImage")}
             >
               <IconPhotoPlus className="size-4" />
             </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-8 w-8 rounded-full",
+                isRecording
+                  ? "text-red-500 hover:text-red-600 animate-pulse"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={!canInput}
+              aria-label={
+                isRecording ? t("chat.stopRecording") : t("chat.recordAudio")
+              }
+              title={
+                isRecording ? t("chat.stopRecording") : t("chat.recordAudio")
+              }
+            >
+              {isRecording ? (
+                <IconPlayerStopFilled className="size-4" />
+              ) : (
+                <IconMicrophone className="size-4" />
+              )}
+            </Button>
+            {isRecording ? (
+              <span className="text-muted-foreground ml-1 tabular-nums text-xs">
+                {Math.floor(recordingSeconds / 60)
+                  .toString()
+                  .padStart(2, "0")}
+                :{(recordingSeconds % 60).toString().padStart(2, "0")}
+              </span>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-1.5">

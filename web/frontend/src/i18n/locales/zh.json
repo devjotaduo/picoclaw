@@ -5,6 +5,7 @@
     "models": "模型",
     "credentials": "凭据",
     "agent_group": "智能体",
+    "agent_editor": "智能体",
     "hub": "Hub",
     "whatsapp_inbox": "WhatsApp 收件箱",
     "templates": "模板",
@@ -88,6 +89,12 @@
     "attachImage": "添加图片",
     "removeImage": "移除图片",
     "uploadedImage": "已上传图片",
+    "recordAudio": "录制音频",
+    "stopRecording": "停止录制",
+    "removeAudio": "移除音频",
+    "audioUnsupported": "您的浏览器不支持音频录制。",
+    "audioReadFailed": "无法处理录制的音频。",
+    "microphoneDenied": "麦克风权限被拒绝或不可用。",
     "invalidImage": "“{{name}}”不是支持的图片文件。",
     "imageTooLarge": "“{{name}}”超过了 {{size}} 限制。",
     "imageReadFailed": "读取“{{name}}”失败。",
@@ -468,6 +475,9 @@
       "refresh": "刷新二维码",
       "refreshing": "重启中…",
       "refreshError": "无法重启通道。",
+      "disconnect": "断开连接",
+      "disconnecting": "断开中…",
+      "disconnectError": "断开连接失败。",
       "status": {
         "idle": "等待中",
         "wait": "请扫描",
@@ -706,6 +716,26 @@
         "read_only_hint": "内置技能不能从仪表盘编辑；请先克隆到工作区。",
         "char_count": "{{count}} 字符",
         "unsaved": "存在未保存的更改"
+      },
+      "editor": {
+        "loading": "加载中…",
+        "edit": "编辑配置",
+        "save_success": "智能体配置已保存。",
+        "save_error": "无法保存智能体配置。",
+        "empty_title": "尚未配置智能体",
+        "empty_description": "请先应用一个模板以生成初始配置；之后可在此处编辑全部内容：排班、专业人员、产品、技能、行为等。",
+        "go_to_templates": "前往模板",
+        "summary": {
+          "template": "已应用模板",
+          "tone": "语气",
+          "language": "语言",
+          "company": "公司",
+          "professionals": "专业人员",
+          "products": "产品",
+          "skills_active": "已启用技能",
+          "applied_at": "上次应用",
+          "disabled": "已禁用"
+        }
       },
       "template_editor": {
         "search_placeholder": "搜索模板",
@@ -1152,6 +1182,20 @@
         "devices": "设备"
       },
       "open_raw": "原始配置",
+      "open_nav_visibility": "侧边栏可见性",
+      "nav_visibility": {
+        "title": "侧边栏可见性",
+        "description": "选择此实例中要显示的侧边栏项。隐藏的项目仍可通过 URL 访问，仅从导航中移除。",
+        "loading": "加载中…",
+        "visible": "可见",
+        "show_all": "全部显示",
+        "save": "保存",
+        "save_success": "侧边栏可见性已保存。",
+        "save_error": "无法保存侧边栏可见性。",
+        "group_visibility_hint": "关闭后将隐藏整个分组。",
+        "configured": "已配置",
+        "not_configured": "未配置"
+      },
       "back_to_visual": "可视化配置",
       "raw_json_title": "原始 JSON 配置",
       "json_placeholder": "请输入有效的 JSON 配置...",

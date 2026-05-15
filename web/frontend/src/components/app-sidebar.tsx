@@ -7,6 +7,7 @@ import {
   IconKey,
   IconListDetails,
   IconMessageCircle,
+  IconRobot,
   IconSearch,
   IconSettings,
   IconSparkles,
@@ -41,6 +42,7 @@ interface NavItem {
   url: string
   icon: React.ComponentType<{ className?: string }>
   translateTitle?: boolean
+  external?: boolean
 }
 
 interface NavGroup {
@@ -134,6 +136,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {
         ...baseNavGroups[2],
         items: [
+          {
+            title: "navigation.agent_editor",
+            url: "/agent/editor",
+            icon: IconRobot,
+            translateTitle: true,
+          },
           {
             title: "navigation.whatsapp_inbox",
             url: "/agent/whatsapp",
@@ -236,20 +244,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             }
                             className={`h-9 px-3 ${isActive ? "bg-accent/80 text-foreground font-medium" : "text-muted-foreground hover:bg-muted/60"}`}
                           >
-                            <Link to={item.url}>
-                              <item.icon
-                                className={`size-4 ${isActive ? "opacity-100" : "opacity-60"}`}
-                              />
-                              <span
-                                className={
-                                  isActive ? "opacity-100" : "opacity-80"
-                                }
-                              >
-                                {item.translateTitle === false
-                                  ? item.title
-                                  : t(item.title)}
-                              </span>
-                            </Link>
+                            {item.external ? (
+                              <a href={item.url}>
+                                <item.icon className="size-4 opacity-60" />
+                                <span className="opacity-80">{item.title}</span>
+                              </a>
+                            ) : (
+                              <Link to={item.url}>
+                                <item.icon
+                                  className={`size-4 ${isActive ? "opacity-100" : "opacity-60"}`}
+                                />
+                                <span
+                                  className={
+                                    isActive ? "opacity-100" : "opacity-80"
+                                  }
+                                >
+                                  {item.translateTitle === false
+                                    ? item.title
+                                    : t(item.title)}
+                                </span>
+                              </Link>
+                            )}
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                       )

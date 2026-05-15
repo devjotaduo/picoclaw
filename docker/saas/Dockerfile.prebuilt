@@ -1,0 +1,31 @@
+# Variant of docker/saas/Dockerfile that reuses the prebuilt SPA in
+# internal/saas/api/dist/ (vendored in the repo) instead of running pnpm install
+# during the image build. Use it on hosts that fail the strict CI pnpm step.
+
+FROM golang:1.25-alpine AS builder
+
+RUN apk add --no-cache git
+
+WORKDIR /src
+
+COPY go.mod go.sum* ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /out/picoclaw-saas ./cmd/picoclaw-saas && \
+    CGO_ENABLED=0 go build -ldflags "-s -w" -o /out/picoclaw-tenantctl ./cmd/picoclaw-tenantctl
+
+FROM alpine:3.23
+
+RUN apk add --no-cache ca-certificates tzdata curl
+
+COPY --from=builder /out/picoclaw-saas /usr/local/bin/picoclaw-saas
+COPY --from=builder /out/picoclaw-tenantctl /usr/local/bin/picoclaw-tenantctl
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD curl -fsS http://localhost:8080/healthz || exit 1
+
+ENTRYPOINT ["/usr/local/bin/picoclaw-saas"]

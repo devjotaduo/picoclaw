@@ -83,6 +83,20 @@ export async function saveTemplateOverride(
   return res.json() as Promise<TemplateOverrideSaveResponse>
 }
 
+export interface AgentConfigResponse {
+  configured: boolean
+  payload?: TemplateApplyPayload
+  applied_at?: number
+}
+
+export async function getAgentConfig(): Promise<AgentConfigResponse> {
+  const res = await launcherFetch("/api/agent/config")
+  if (!res.ok) {
+    throw new Error(await extractErrorMessage(res))
+  }
+  return res.json() as Promise<AgentConfigResponse>
+}
+
 export async function resetTemplateOverride(
   templateId: string,
 ): Promise<{ status: string; template_id: string }> {

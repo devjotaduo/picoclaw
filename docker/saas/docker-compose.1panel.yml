@@ -1,0 +1,31 @@
+# Override for hosts where OpenResty (1Panel) already owns 80/443.
+# - Removes Traefik (the host nginx is the edge).
+# - Binds controlplane to 127.0.0.1:18801 so 1Panel proxy can reach it.
+# - Keeps the saas_edge network so future tenant containers remain reachable.
+# Apply alongside the base compose:
+#   docker compose -f docker/saas/docker-compose.yml -f docker/saas/docker-compose.1panel.yml --env-file .env up -d
+
+services:
+  traefik:
+    profiles: ["disabled"]
+
+  controlplane:
+    build:
+      context: ../..
+      dockerfile: docker/saas/Dockerfile
+    ports:
+      - "127.0.0.1:18801:8080"
+    labels:
+      - "traefik.enable=false"
+    environment:
+      # Keep the cookie on the base domain so one login works on both
+      # admin.<domain> and <tenant>.<domain> through the central gateway.
+      COOKIE_DOMAIN: ${SAAS_BASE_DOMAIN}
+      COOKIE_SECURE: "true"
+      TENANT_CERT_RESOLVER: ""
+      # Every new tenant volume is seeded with a copy of this directory before
+      # the launcher container starts. Per-tenant state (launcher-auth.db, WA
+      # store.db, sessions, memory, …) is blocklisted in internal/tenant/template.go.
+      TENANT_TEMPLATE_DIR: /etc/picoclaw/tenant-template
+    volumes:
+      - /root/.picoclaw:/etc/picoclaw/tenant-template:ro
