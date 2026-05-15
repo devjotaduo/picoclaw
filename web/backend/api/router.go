@@ -90,6 +90,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	h.registerSkillRoutes(mux)
 	h.registerToolRoutes(mux)
 
+	// Agent templates (apply preset workspace AGENT.md/SOUL.md)
+	h.registerAgentTemplateRoutes(mux)
+
 	// OS startup / launch-at-login
 	h.registerStartupRoutes(mux)
 
@@ -107,6 +110,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// WeCom QR login flow
 	h.registerWecomRoutes(mux)
+
+	// WhatsApp native pairing QR
+	h.registerWhatsAppNativeRoutes(mux)
 }
 
 // Shutdown gracefully shuts down the handler, stopping the gateway if it was started by this handler.

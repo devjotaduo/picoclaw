@@ -119,4 +119,29 @@ export async function pollWecomFlow(
   )
 }
 
+// WhatsApp native pairing API
+
+export type WhatsAppNativeQRStatus =
+  | "idle"
+  | "wait"
+  | "scanned"
+  | "confirmed"
+  | "expired"
+  | "error"
+  | "offline"
+  | "disabled"
+
+export interface WhatsAppNativeQRResponse {
+  status: WhatsAppNativeQRStatus
+  qr_data_uri?: string
+  phone_number?: string
+  error?: string
+  updated_at?: number
+  expires_at?: number
+}
+
+export async function getWhatsAppNativeQR(): Promise<WhatsAppNativeQRResponse> {
+  return request<WhatsAppNativeQRResponse>("/api/whatsapp_native/qr")
+}
+
 export type { ChannelsCatalogResponse, ConfigActionResponse }

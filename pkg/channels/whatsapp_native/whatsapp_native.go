@@ -10,7 +10,10 @@ package whatsapp
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +30,7 @@ import (
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"google.golang.org/protobuf/proto"
 	_ "modernc.org/sqlite"
+	"rsc.io/qr"
 
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/channels"
@@ -45,6 +49,16 @@ const (
 	reconnectMultiplier = 2.0
 )
 
+// qrSnapshot captures the latest QR / pairing state for HTTP exposure.
+type qrSnapshot struct {
+	Status      string    // "wait" | "scanned" | "confirmed" | "expired" | "error" | "idle"
+	DataURI     string    // base64 PNG data URI when Status == "wait"
+	PhoneNumber string    // populated once paired
+	UpdatedAt   time.Time
+	ExpiresAt   time.Time
+	Error       string
+}
+
 // WhatsAppNativeChannel implements the WhatsApp channel using whatsmeow (in-process, no external bridge).
 type WhatsAppNativeChannel struct {
 	*channels.BaseChannel
@@ -59,6 +73,9 @@ type WhatsAppNativeChannel struct {
 	reconnecting bool
 	stopping     atomic.Bool    // set once Stop begins; prevents new wg.Add calls
 	wg           sync.WaitGroup // tracks background goroutines (QR handler, reconnect)
+
+	qrMu       sync.RWMutex
+	qrSnapshot qrSnapshot
 }
 
 // NewWhatsAppNativeChannel creates a WhatsApp channel that uses whatsmeow for connection.
@@ -187,20 +204,37 @@ func (c *WhatsAppNativeChannel) Start(ctx context.Context) error {
 					if !ok {
 						return
 					}
-					if evt.Event == "code" {
+					switch evt.Event {
+					case "code":
 						logger.InfoCF("whatsapp", "Scan this QR code with WhatsApp (Linked Devices):", nil)
 						qrterminal.GenerateWithConfig(evt.Code, qrterminal.Config{
 							Level:      qrterminal.L,
 							Writer:     os.Stdout,
 							HalfBlocks: true,
 						})
-					} else {
+						c.storeQRCode(evt.Code, evt.Timeout)
+					case "timeout":
+						c.setQRStatus("expired", "")
+						logger.InfoCF("whatsapp", "WhatsApp QR code timed out", nil)
+					case "success":
+						c.setQRConfirmed()
+						logger.InfoCF("whatsapp", "WhatsApp pairing confirmed", nil)
+					case "error":
+						errMsg := "pairing error"
+						if evt.Error != nil {
+							errMsg = evt.Error.Error()
+						}
+						c.setQRStatus("error", errMsg)
+						logger.WarnCF("whatsapp", "WhatsApp pairing error", map[string]any{"error": errMsg})
+					default:
+						c.setQRStatus("error", evt.Event)
 						logger.InfoCF("whatsapp", "WhatsApp login event", map[string]any{"event": evt.Event})
 					}
 				}
 			}
 		}()
 	} else {
+		c.setQRConfirmed()
 		if err := client.Connect(); err != nil {
 			return fmt.Errorf("connect: %w", err)
 		}
@@ -264,6 +298,9 @@ func (c *WhatsAppNativeChannel) Stop(ctx context.Context) error {
 	if container != nil {
 		_ = container.Close()
 	}
+	c.qrMu.Lock()
+	c.qrSnapshot = qrSnapshot{Status: "idle", UpdatedAt: time.Now()}
+	c.qrMu.Unlock()
 	c.SetRunning(false)
 	return nil
 }
@@ -344,6 +381,10 @@ func (c *WhatsAppNativeChannel) reconnectWithBackoff() {
 
 func (c *WhatsAppNativeChannel) handleIncoming(evt *events.Message) {
 	if evt.Message == nil {
+		return
+	}
+	// Ignore group messages — channel handles direct chats only.
+	if evt.Info.Chat.Server == types.GroupServer {
 		return
 	}
 	senderID := evt.Info.Sender.String()
@@ -444,6 +485,111 @@ func (c *WhatsAppNativeChannel) Send(ctx context.Context, msg bus.OutboundMessag
 		return nil, fmt.Errorf("whatsapp send: %w", channels.ErrTemporary)
 	}
 	return nil, nil
+}
+
+// storeQRCode encodes the raw QR string as a PNG data URI and updates the snapshot.
+func (c *WhatsAppNativeChannel) storeQRCode(code string, timeout time.Duration) {
+	dataURI := encodeQRDataURI(code)
+	now := time.Now()
+	expires := now.Add(timeout)
+	if timeout <= 0 {
+		expires = now.Add(60 * time.Second)
+	}
+	c.qrMu.Lock()
+	c.qrSnapshot = qrSnapshot{
+		Status:    "wait",
+		DataURI:   dataURI,
+		UpdatedAt: now,
+		ExpiresAt: expires,
+	}
+	c.qrMu.Unlock()
+}
+
+func (c *WhatsAppNativeChannel) setQRStatus(status, errMsg string) {
+	c.qrMu.Lock()
+	c.qrSnapshot.Status = status
+	c.qrSnapshot.Error = errMsg
+	c.qrSnapshot.UpdatedAt = time.Now()
+	if status != "wait" {
+		c.qrSnapshot.DataURI = ""
+	}
+	c.qrMu.Unlock()
+}
+
+func (c *WhatsAppNativeChannel) setQRConfirmed() {
+	phone := ""
+	c.mu.Lock()
+	if c.client != nil && c.client.Store != nil && c.client.Store.ID != nil {
+		phone = c.client.Store.ID.User
+	}
+	c.mu.Unlock()
+	c.qrMu.Lock()
+	c.qrSnapshot = qrSnapshot{
+		Status:      "confirmed",
+		PhoneNumber: phone,
+		UpdatedAt:   time.Now(),
+	}
+	c.qrMu.Unlock()
+}
+
+func encodeQRDataURI(content string) string {
+	code, err := qr.Encode(content, qr.L)
+	if err != nil {
+		return ""
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(code.PNG())
+}
+
+// HealthPath implements channels.HealthChecker — the gateway's shared HTTP server
+// will mount HealthHandler at this path.
+func (c *WhatsAppNativeChannel) HealthPath() string {
+	return "/whatsapp_native/qr"
+}
+
+// HealthHandler returns the current pairing / QR state as JSON.
+//
+//	GET /whatsapp_native/qr
+func (c *WhatsAppNativeChannel) HealthHandler(w http.ResponseWriter, r *http.Request) {
+	c.qrMu.RLock()
+	snap := c.qrSnapshot
+	c.qrMu.RUnlock()
+
+	if snap.Status == "wait" && !snap.ExpiresAt.IsZero() && time.Now().After(snap.ExpiresAt) {
+		c.setQRStatus("expired", "")
+		c.qrMu.RLock()
+		snap = c.qrSnapshot
+		c.qrMu.RUnlock()
+	}
+
+	if snap.Status == "" {
+		snap.Status = "idle"
+	}
+
+	type response struct {
+		Status      string `json:"status"`
+		QRDataURI   string `json:"qr_data_uri,omitempty"`
+		PhoneNumber string `json:"phone_number,omitempty"`
+		Error       string `json:"error,omitempty"`
+		UpdatedAt   int64  `json:"updated_at,omitempty"`
+		ExpiresAt   int64  `json:"expires_at,omitempty"`
+	}
+
+	resp := response{
+		Status:      snap.Status,
+		QRDataURI:   snap.DataURI,
+		PhoneNumber: snap.PhoneNumber,
+		Error:       snap.Error,
+	}
+	if !snap.UpdatedAt.IsZero() {
+		resp.UpdatedAt = snap.UpdatedAt.Unix()
+	}
+	if !snap.ExpiresAt.IsZero() {
+		resp.ExpiresAt = snap.ExpiresAt.Unix()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // parseJID converts a chat ID (phone number or JID string) to types.JID.

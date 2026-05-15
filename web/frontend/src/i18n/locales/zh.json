@@ -6,6 +6,7 @@
     "credentials": "凭据",
     "agent_group": "智能体",
     "hub": "Hub",
+    "templates": "模板",
     "skills": "技能",
     "tools": "工具",
     "services": "服务",
@@ -437,6 +438,44 @@
       "refresh": "刷新二维码",
       "errorGeneric": "发生错误，请重试。"
     },
+    "whatsappNative": {
+      "bindTitle": "配对 WhatsApp 设备",
+      "bindDesc": "在「已链接的设备」菜单中用手机相机扫描下方二维码。",
+      "howTo": "配对步骤",
+      "step1Title": "在手机上打开 WhatsApp",
+      "step1Desc": "支持 Android、iPhone 和 WhatsApp Business。",
+      "step2Title": "点击「已链接的设备」",
+      "step2Desc": "Android：设置 → 已链接的设备。iPhone：设置 → 已链接的设备。",
+      "step3Title": "点击「链接设备」",
+      "step3Desc": "如有提示请通过生物识别确认。",
+      "step4Title": "将相机对准右侧二维码",
+      "step4Desc": "数秒内完成配对,请保持本页面打开。",
+      "generating": "正在生成二维码…",
+      "starting": "正在启动通道…",
+      "linked": "已连接",
+      "confirmOnPhone": "就快好了——请在手机上确认",
+      "expiredHint": "二维码已过期,系统将自动生成新二维码。",
+      "errorGeneric": "配对过程中出现问题。",
+      "errorOffline": "无法连接到网关。",
+      "offlineHint": "网关已停止",
+      "offlineFootnote": "请从控制台启动网关后,配对二维码才会出现在此处。",
+      "disabledHint": "通道未启用",
+      "disabledFootnote": "请在上方启用此通道并保存配置以开始配对。",
+      "retryFootnote": "点击「刷新二维码」按钮生成新的代码。",
+      "refresh": "刷新二维码",
+      "refreshing": "重启中…",
+      "refreshError": "无法重启通道。",
+      "status": {
+        "idle": "等待中",
+        "wait": "请扫描",
+        "scanned": "已扫描",
+        "confirmed": "已配对",
+        "expired": "已过期",
+        "error": "错误",
+        "offline": "离线",
+        "disabled": "未启用"
+      }
+    },
     "field": {
       "token": "Bot Token",
       "tokenPlaceholder": "输入 Bot Token",
@@ -648,6 +687,154 @@
           "installing": "正在安装...",
           "installed": "已安装",
           "cannotInstall": "无法安装：相关工具未启用"
+        }
+      },
+      "templates": {
+        "title": "智能体模板",
+        "subtitle": "选择一个客服模板，自定义名称、问候语、性格、职能、禁止事项和数据保护规则，然后应用到工作区。",
+        "search_placeholder": "按名称或职能搜索模板",
+        "category_label": "类别",
+        "use_template": "使用模板",
+        "apply": "应用模板",
+        "applying": "正在应用...",
+        "cancel": "取消",
+        "apply_success": "模板已应用。AGENT.md 和 SOUL.md 已在工作区更新。",
+        "apply_error": "应用模板失败。",
+        "empty": "暂无可用模板。",
+        "no_results": "没有模板符合当前筛选条件。",
+        "drawer_title": "配置模板",
+        "drawer_description": "在应用到 picoclaw 之前自定义参数。",
+        "add_item": "添加",
+        "remove_item": "删除",
+        "skills_empty": "尚未安装任何技能。请在 Hub 中安装技能后再附加到该智能体。",
+        "categories": {
+          "all": "全部",
+          "customer_service": "客户服务",
+          "sales": "销售",
+          "support": "支持",
+          "internal": "内部"
+        },
+        "tones": {
+          "formal": "正式",
+          "friendly": "友好",
+          "neutral": "中性"
+        },
+        "card": {
+          "functions_count": "职能",
+          "prohibitions_count": "禁止",
+          "protections_count": "保护"
+        },
+        "card_badges": {
+          "appointment": "预约",
+          "catalog": "商品"
+        },
+        "modules": {
+          "title": "模块",
+          "description": "根据业务类型为智能体启用额外功能。",
+          "professionals_label": "专业人员与预约",
+          "professionals_hint": "登记专业人员及其服务、时长与价格。",
+          "products_label": "商品与价格",
+          "products_hint": "商品目录，包括详情和价格。"
+        },
+        "professionals": {
+          "title": "专业人员",
+          "description": "智能体知道的专业人员及其各自提供的服务。",
+          "add": "添加专业人员",
+          "remove": "删除专业人员",
+          "empty": "尚未添加专业人员。点击\"添加专业人员\"开始。",
+          "fields": {
+            "name": "姓名",
+            "role": "职位/专业",
+            "bio": "备注（可选）"
+          },
+          "placeholders": {
+            "name": "例如：张医生",
+            "role": "例如：心脏科医生",
+            "bio": "例如：周一和周三出诊"
+          },
+          "service": {
+            "title": "服务",
+            "add": "添加服务",
+            "remove": "删除服务",
+            "empty": "该专业人员尚未添加任何服务。",
+            "fields": {
+              "name": "服务",
+              "duration": "时长",
+              "price": "价格",
+              "details": "详情",
+              "show_price": "向客户显示价格"
+            },
+            "placeholders": {
+              "name": "例如：心脏科咨询",
+              "details": "包含内容、备注、准备事项等。"
+            }
+          }
+        },
+        "products": {
+          "title": "商品",
+          "description": "智能体可以向客户介绍的商品目录。",
+          "add": "添加商品",
+          "remove": "删除商品",
+          "empty": "尚未添加商品。点击\"添加商品\"开始。",
+          "fields": {
+            "name": "名称",
+            "details": "详情",
+            "price": "价格",
+            "show_price": "向客户显示价格"
+          },
+          "placeholders": {
+            "name": "例如：笔记本电脑 XYZ",
+            "details": "规格、保修、备注等。"
+          }
+        },
+        "sections": {
+          "identity": "身份",
+          "identity_description": "智能体名称、问候语、语气和语言。",
+          "company": "公司",
+          "company_description": "智能体会引用的公司信息。",
+          "personality": "性格",
+          "personality_description": "智能体在对话中体现的性格特征（写入 SOUL.md）。",
+          "functions": "职能与能力",
+          "functions_description": "智能体能够处理和回答的内容。",
+          "prohibitions": "禁止事项",
+          "prohibitions_description": "智能体不能做或承诺的事情，重要的业务风险约束。",
+          "protections": "数据保护与隐私",
+          "protections_description": "数据保护、合规与保密规则。智能体将在所有对话中遵守。",
+          "skills": "附加技能",
+          "skills_description": "选择该智能体可以使用的已安装技能。"
+        },
+        "fields": {
+          "name": "智能体名称",
+          "presentation": "问候语",
+          "presentation_hint": "智能体发送给客户的第一条消息。使用 {company.name} 插入公司名称。",
+          "tone": "语气",
+          "language": "语言",
+          "company_name": "公司名称",
+          "company_hours": "服务时间",
+          "company_contact": "联系方式",
+          "company_schedule": "营业时间",
+          "company_schedule_hint": "选择营业的日期与时段。使用备注填写节假日、午休或例外情况。",
+          "company_general_info": "公司信息",
+          "company_general_info_hint": "智能体需要了解的额外背景：地址、社交媒体、使命、重要备注、节假日政策等。",
+          "company_general_info_placeholder": "例如：地址：某某街123号。凭印章免费停车2小时。提供中英双语服务。网址：www.example.com"
+        },
+        "company": {
+          "schedule": {
+            "to": "至",
+            "closed": "休息",
+            "toggle_label": "本日营业",
+            "notes_label": "营业时间备注",
+            "notes_placeholder": "例如：法定节假日不营业。午休时间 12:00-13:00。",
+            "days": {
+              "monday": "周一",
+              "tuesday": "周二",
+              "wednesday": "周三",
+              "thursday": "周四",
+              "friday": "周五",
+              "saturday": "周六",
+              "sunday": "周日"
+            }
+          }
         }
       },
       "tools": {

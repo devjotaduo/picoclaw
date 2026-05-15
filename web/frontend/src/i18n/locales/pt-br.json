@@ -6,6 +6,7 @@
     "credentials": "Credenciais",
     "agent_group": "Agente",
     "hub": "Hub",
+    "templates": "Templates",
     "skills": "Skills",
     "tools": "Ferramentas",
     "services": "Serviços",
@@ -358,6 +359,44 @@
       "refresh": "Atualizar QR",
       "errorGeneric": "Ocorreu um erro. Tente novamente."
     },
+    "whatsappNative": {
+      "bindTitle": "Parear dispositivo WhatsApp",
+      "bindDesc": "Aponte a câmera do seu celular para o código abaixo dentro do menu Dispositivos conectados.",
+      "howTo": "Como parear",
+      "step1Title": "Abra o WhatsApp no celular",
+      "step1Desc": "Use o app oficial — funciona em Android, iPhone e WhatsApp Business.",
+      "step2Title": "Toque em Dispositivos conectados",
+      "step2Desc": "No Android: Configurações → Dispositivos conectados. No iPhone: Configurações → Dispositivos conectados.",
+      "step3Title": "Toque em Conectar um dispositivo",
+      "step3Desc": "Confirme com biometria se for solicitado.",
+      "step4Title": "Aponte a câmera para o QR ao lado",
+      "step4Desc": "O pareamento é concluído em poucos segundos. Mantenha esta página aberta.",
+      "generating": "Gerando QR code…",
+      "starting": "Iniciando canal…",
+      "linked": "Conectado",
+      "confirmOnPhone": "Quase lá — confirme no celular",
+      "expiredHint": "O QR expirou. Um novo é gerado automaticamente.",
+      "errorGeneric": "Algo deu errado durante o pareamento.",
+      "errorOffline": "Não foi possível falar com o gateway.",
+      "offlineHint": "Gateway parado",
+      "offlineFootnote": "Inicie o gateway pelo painel para que o QR de pareamento apareça aqui.",
+      "disabledHint": "Canal desativado",
+      "disabledFootnote": "Ative o canal acima e salve a configuração para que o pareamento comece.",
+      "retryFootnote": "Use o botão Atualizar QR para gerar um novo código.",
+      "refresh": "Atualizar QR",
+      "refreshing": "Reiniciando…",
+      "refreshError": "Não foi possível reiniciar o canal.",
+      "status": {
+        "idle": "Aguardando",
+        "wait": "Pronto para escanear",
+        "scanned": "Escaneado",
+        "confirmed": "Pareado",
+        "expired": "Expirado",
+        "error": "Erro",
+        "offline": "Offline",
+        "disabled": "Desativado"
+      }
+    },
     "field": {
       "token": "Token do Bot",
       "tokenPlaceholder": "Digite o token do bot",
@@ -545,6 +584,154 @@
           "installing": "Instalando...",
           "installed": "Já instalada",
           "cannotInstall": "Não é possível instalar: ferramenta relacionada não está habilitada"
+        }
+      },
+      "templates": {
+        "title": "Templates de Agente",
+        "subtitle": "Escolha um perfil pronto de atendente, personalize nome, apresentação, personalidade, funções, proibições e proteções, e aplique no workspace.",
+        "search_placeholder": "Buscar templates por nome ou função",
+        "category_label": "Categoria",
+        "use_template": "Usar template",
+        "apply": "Aplicar template",
+        "applying": "Aplicando...",
+        "cancel": "Cancelar",
+        "apply_success": "Template aplicado. AGENT.md e SOUL.md foram atualizados no workspace.",
+        "apply_error": "Falha ao aplicar template.",
+        "empty": "Nenhum template disponível.",
+        "no_results": "Nenhum template corresponde aos filtros atuais.",
+        "drawer_title": "Configurar template",
+        "drawer_description": "Customize os parâmetros antes de aplicar no picoclaw.",
+        "add_item": "Adicionar",
+        "remove_item": "Remover",
+        "skills_empty": "Nenhuma skill instalada. Instale skills no Hub para anexá-las a este agente.",
+        "categories": {
+          "all": "Todas",
+          "customer_service": "Atendimento ao Cliente",
+          "sales": "Vendas",
+          "support": "Suporte",
+          "internal": "Interno"
+        },
+        "tones": {
+          "formal": "Formal",
+          "friendly": "Amigável",
+          "neutral": "Neutro"
+        },
+        "card": {
+          "functions_count": "Funções",
+          "prohibitions_count": "Proibições",
+          "protections_count": "Proteções"
+        },
+        "card_badges": {
+          "appointment": "Agendamento",
+          "catalog": "Catálogo"
+        },
+        "modules": {
+          "title": "Módulos",
+          "description": "Habilite recursos extras para o agente conforme o tipo do negócio.",
+          "professionals_label": "Profissionais e Agendamento",
+          "professionals_hint": "Cadastro de profissionais com serviços, duração e preço.",
+          "products_label": "Produtos e Valores",
+          "products_hint": "Catálogo de produtos com detalhes e preço."
+        },
+        "professionals": {
+          "title": "Profissionais",
+          "description": "Lista de profissionais que o agente conhece, com seus respectivos serviços.",
+          "add": "Adicionar profissional",
+          "remove": "Remover profissional",
+          "empty": "Nenhum profissional cadastrado. Clique em \"Adicionar profissional\" para começar.",
+          "fields": {
+            "name": "Nome",
+            "role": "Cargo / Especialidade",
+            "bio": "Observação (opcional)"
+          },
+          "placeholders": {
+            "name": "Ex.: Dr. João Silva",
+            "role": "Ex.: Cardiologista",
+            "bio": "Ex.: Atende segundas e quartas"
+          },
+          "service": {
+            "title": "Serviços",
+            "add": "Adicionar serviço",
+            "remove": "Remover serviço",
+            "empty": "Nenhum serviço cadastrado para este profissional.",
+            "fields": {
+              "name": "Serviço",
+              "duration": "Duração",
+              "price": "Preço",
+              "details": "Detalhes",
+              "show_price": "Mostrar preço ao cliente"
+            },
+            "placeholders": {
+              "name": "Ex.: Consulta cardiológica",
+              "details": "O que está incluído, observações, preparo etc."
+            }
+          }
+        },
+        "products": {
+          "title": "Produtos",
+          "description": "Catálogo de produtos que o agente pode mencionar ao cliente.",
+          "add": "Adicionar produto",
+          "remove": "Remover produto",
+          "empty": "Nenhum produto cadastrado. Clique em \"Adicionar produto\" para começar.",
+          "fields": {
+            "name": "Nome",
+            "details": "Detalhes",
+            "price": "Preço",
+            "show_price": "Mostrar preço ao cliente"
+          },
+          "placeholders": {
+            "name": "Ex.: Notebook XYZ",
+            "details": "Especificações, garantia, observações etc."
+          }
+        },
+        "sections": {
+          "identity": "Identidade",
+          "identity_description": "Nome do agente, mensagem de apresentação, tom e idioma.",
+          "company": "Empresa",
+          "company_description": "Informações da empresa que serão referenciadas pelo agente.",
+          "personality": "Personalidade",
+          "personality_description": "Traços de personalidade que o agente demonstra nas conversas (gravado em SOUL.md).",
+          "functions": "Funções e capacidades",
+          "functions_description": "O que o agente sabe fazer e responder.",
+          "prohibitions": "Proibições",
+          "prohibitions_description": "O que o agente NÃO pode fazer ou prometer. Importante para limitar riscos do negócio.",
+          "protections": "Proteções e privacidade",
+          "protections_description": "Regras de proteção de dados, LGPD e sigilo. O agente seguirá essas diretrizes em todas as conversas.",
+          "skills": "Skills anexadas",
+          "skills_description": "Selecione skills instaladas que esse agente poderá usar."
+        },
+        "fields": {
+          "name": "Nome do agente",
+          "presentation": "Mensagem de apresentação",
+          "presentation_hint": "Primeira mensagem que o agente envia ao cliente. Use {company.name} para inserir o nome da empresa.",
+          "tone": "Tom de voz",
+          "language": "Idioma",
+          "company_name": "Nome da empresa",
+          "company_hours": "Horário de atendimento",
+          "company_contact": "Canal de contato",
+          "company_schedule": "Horário de atendimento",
+          "company_schedule_hint": "Marque os dias em que a empresa atende e os horários. Use observações para feriados, almoço ou exceções.",
+          "company_general_info": "Informações gerais",
+          "company_general_info_hint": "Contexto extra que o agente deve conhecer: endereço, redes sociais, missão, observações importantes, política de feriados, etc.",
+          "company_general_info_placeholder": "Ex.: Endereço: Rua X, 123. Estacionamento gratuito por 2h com selo. Atendimento bilíngue (PT/EN). Site: www.exemplo.com.br"
+        },
+        "company": {
+          "schedule": {
+            "to": "às",
+            "closed": "Fechado",
+            "toggle_label": "Aberto neste dia",
+            "notes_label": "Observações de horário",
+            "notes_placeholder": "Ex.: Feriados nacionais fechado. Intervalo para almoço 12h-13h.",
+            "days": {
+              "monday": "Segunda",
+              "tuesday": "Terça",
+              "wednesday": "Quarta",
+              "thursday": "Quinta",
+              "friday": "Sexta",
+              "saturday": "Sábado",
+              "sunday": "Domingo"
+            }
+          }
         }
       },
       "tools": {

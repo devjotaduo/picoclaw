@@ -29,6 +29,7 @@ import { SlackForm } from "@/components/channels/channel-forms/slack-form"
 import { TelegramForm } from "@/components/channels/channel-forms/telegram-form"
 import { WecomForm } from "@/components/channels/channel-forms/wecom-form"
 import { WeixinForm } from "@/components/channels/channel-forms/weixin-form"
+import { WhatsAppNativeForm } from "@/components/channels/channel-forms/whatsapp-native-form"
 import { ConfigChangeNotice } from "@/components/config-change-notice"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
@@ -660,6 +661,22 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
               onChange={handleChange}
               configuredSecrets={configuredSecrets}
               hiddenKeys={[...hiddenKeys, "bot_id"]}
+              requiredKeys={requiredKeys}
+              fieldErrors={fieldErrors}
+              registerArrayFieldFlusher={registerArrayFieldFlusher}
+              arrayFieldResetVersion={arrayFieldResetVersion}
+            />
+          </>
+        )
+      case "whatsapp_native":
+        return (
+          <>
+            <WhatsAppNativeForm enabled={enabled} />
+            <GenericForm
+              config={editConfig}
+              onChange={handleChange}
+              configuredSecrets={configuredSecrets}
+              hiddenKeys={hiddenKeys}
               requiredKeys={requiredKeys}
               fieldErrors={fieldErrors}
               registerArrayFieldFlusher={registerArrayFieldFlusher}

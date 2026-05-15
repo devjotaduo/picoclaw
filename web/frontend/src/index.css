@@ -179,3 +179,48 @@
     transform: translateY(0);
   }
 }
+
+/* WhatsApp native pairing — scan-line sweep over the QR canvas */
+@keyframes waScanline {
+  0% {
+    transform: translateY(-12%);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(112%);
+    opacity: 0;
+  }
+}
+
+@keyframes waCornerPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes waStatusBreath {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+
+  50% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}

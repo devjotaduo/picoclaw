@@ -1,0 +1,256 @@
+[    1351ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=4fda2010:14337
+[    1660ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/gateway/status:0
+[    1661ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/channels/catalog:0
+[    1661ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/config:0
+[    1662ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/channels/catalog:0
+[    1662ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/config:0
+[    1663ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/channels/catalog:0
+[    1663ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/channels/catalog:0
+[    1765ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=4fda2010:14337
+[    1995ms] [VERBOSE] [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) %o @ http://localhost:5173/launcher-login:0
+[   16376ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/auth/login:0
+[   25015ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=4fda2010:14337
+[   48330ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://cdn.simpleicons.org/venice:0
+[   58870ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   60882ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   62881ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   64868ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   66883ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   68881ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   70877ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   72880ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   74869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   76882ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   78881ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   80872ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   82868ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   84868ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   86877ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   88869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   90870ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   92868ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   94869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   96882ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[   98878ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  100876ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  102868ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  104882ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  106873ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  108871ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  110879ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  112869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  114874ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  116877ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  118871ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  120868ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  122870ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  124869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  126881ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  128869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  130871ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  132882ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  134876ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  136879ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  138882ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  140868ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  142869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  144869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  146869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  148882ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  150883ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  152882ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  154869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  156871ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  158869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  160873ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  162882ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  164868ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  166869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  168883ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  170881ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  172879ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  174872ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  176870ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  178873ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  180873ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  182869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  184880ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  186881ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  188869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  190881ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  192874ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  194869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  196875ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  198879ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  200881ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  202869ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  204870ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  206876ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  208881ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  210871ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  212876ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  214878ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  216879ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  218875ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  220881ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  222876ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  224871ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  226876ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  228883ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  230883ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  232873ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  234883ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  236872ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  238873ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  240870ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  242882ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  244880ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  246876ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  248873ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  250880ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  252868ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  254877ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  256873ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  258876ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  260872ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  262872ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  264875ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  266870ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  268880ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  270872ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  271590ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  272184ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  272880ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  273607ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  274193ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  274879ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  275619ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  276877ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  277632ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  278202ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  278881ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  279638ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  280885ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  281647ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  282872ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  283208ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  283661ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  284868ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  285671ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  286870ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  287680ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  288233ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  288877ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  289690ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  290888ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  291694ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  292879ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  293237ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  293699ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  294883ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  295704ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  296869ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  297717ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  298265ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  298881ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  299729ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  300868ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  301739ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  302883ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  303294ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  303749ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  304882ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  305759ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  306870ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  307778ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  308323ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  308872ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  309795ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  310874ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  311799ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  312872ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  313348ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  313817ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  314885ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  315829ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  316876ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  317844ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  318411ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  318869ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  319856ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  320876ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  321862ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  322876ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  323469ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  323870ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  324872ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  325885ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  326877ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  327901ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  328559ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  328880ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  329920ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  330880ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  331930ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  332882ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  333818ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  333941ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  334869ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  335955ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  336868ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  337968ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  338868ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  339409ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  339984ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  340871ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  341993ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  342876ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  344000ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  344904ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  346017ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  346853ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  346875ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  348029ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  348877ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  350039ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  350878ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  352048ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  352873ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  354052ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  354395ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[  354872ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  356070ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  356868ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  358080ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  358871ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  360096ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[  360734ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=f26941eb-7135-48c7-837e-21cd91669f64' failed: HTTP Authentication failed; no valid credentials available @ http://localhost:5173/src/features/chat/controller.ts:89
+[  360885ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/whatsapp_native/qr:0
+[  361070ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=4fda2010:14337
+[  361354ms] [VERBOSE] [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) %o @ http://localhost:5173/launcher-login:0
+[  999727ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=4fda2010:14337
+[ 1191991ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[ 1192204ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[ 1192991ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=63ddfcaf-094e-43ba-aed0-5c0c05a03585' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[ 1194012ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[ 1194214ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[ 1195009ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=63ddfcaf-094e-43ba-aed0-5c0c05a03585' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[ 1196017ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[ 1196201ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[ 1198021ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[ 1198204ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[ 1199024ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=63ddfcaf-094e-43ba-aed0-5c0c05a03585' failed: Connection closed before receiving a handshake response @ http://localhost:5173/src/features/chat/controller.ts:89
+[ 1200031ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[ 1200216ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[ 1202037ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/gateway/status:0
+[ 1202206ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:5173/api/whatsapp_native/qr:0
+[ 1204032ms] [ERROR] WebSocket connection to 'ws://localhost:5173/pico/ws?session_id=63ddfcaf-094e-43ba-aed0-5c0c05a03585' failed: HTTP Authentication failed; no valid credentials available @ http://localhost:5173/src/features/chat/controller.ts:89
+[ 1204056ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/gateway/status:0
+[ 1204228ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=4fda2010:14337
+[ 1204396ms] [VERBOSE] [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) %o @ http://localhost:5173/launcher-login:0
+[ 1865684ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=4fda2010:14337
+[ 1865865ms] [VERBOSE] [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) %o @ http://localhost:5173/launcher-login:0
+[ 1872077ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=4fda2010:14337
+[ 1872258ms] [VERBOSE] [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) %o @ http://localhost:5173/launcher-login:0
+[ 1878895ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=4fda2010:14337
+[ 1879073ms] [VERBOSE] [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) %o @ http://localhost:5173/launcher-login:0
