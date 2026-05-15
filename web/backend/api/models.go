@@ -226,6 +226,51 @@ func normalizeStoredModelProviders(cfg *config.Config) bool {
 	return changed
 }
 
+// propagateAPIKeyToProviderSiblings copies the API key from the source model
+// to every other model in cfg.ModelList that shares the same provider and
+// has no api_keys configured yet.
+//
+// Rationale: dashboards typically let users add a credential by editing one
+// model card; the natural expectation is that the same credential covers
+// every model from that provider until the user explicitly overrides it.
+// Without this, a configured default that happens to point at a sibling
+// model fails with 401, which is opaque from the UI's perspective.
+//
+// Returns the number of sibling entries that received the key.
+func propagateAPIKeyToProviderSiblings(cfg *config.Config, sourceIdx int) int {
+	if cfg == nil || sourceIdx < 0 || sourceIdx >= len(cfg.ModelList) {
+		return 0
+	}
+	src := cfg.ModelList[sourceIdx]
+	if src == nil {
+		return 0
+	}
+	provider := strings.TrimSpace(src.Provider)
+	if provider == "" {
+		return 0
+	}
+	key := strings.TrimSpace(src.APIKey())
+	if key == "" {
+		return 0
+	}
+
+	propagated := 0
+	for i, m := range cfg.ModelList {
+		if i == sourceIdx || m == nil {
+			continue
+		}
+		if strings.TrimSpace(m.Provider) != provider {
+			continue
+		}
+		if strings.TrimSpace(m.APIKey()) != "" {
+			continue
+		}
+		m.SetAPIKey(key)
+		propagated++
+	}
+	return propagated
+}
+
 // handleListModels returns all model_list entries with masked API keys.
 //
 //	GET /api/models
@@ -333,6 +378,7 @@ func (h *Handler) handleAddModel(w http.ResponseWriter, r *http.Request) {
 
 	cfg.ModelList = append(cfg.ModelList, &mc.ModelConfig)
 	normalizeStoredModelProviders(cfg)
+	propagated := propagateAPIKeyToProviderSiblings(cfg, len(cfg.ModelList)-1)
 
 	if err := config.SaveConfig(h.configPath, cfg); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to save config: %v", err), http.StatusInternalServerError)
@@ -341,8 +387,9 @@ func (h *Handler) handleAddModel(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"status": "ok",
-		"index":  len(cfg.ModelList) - 1,
+		"status":              "ok",
+		"index":               len(cfg.ModelList) - 1,
+		"propagated_siblings": propagated,
 	})
 }
 
@@ -464,6 +511,13 @@ func (h *Handler) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 
 	cfg.ModelList[idx] = &mc.ModelConfig
 	normalizeStoredModelProviders(cfg)
+	propagated := 0
+	if mc.APIKey != "" {
+		// Only propagate when the caller explicitly sent a key (not when the
+		// existing one was preserved). This avoids silently overwriting blanks
+		// that a previous propagate pass already filled.
+		propagated = propagateAPIKeyToProviderSiblings(cfg, idx)
+	}
 
 	logger.Debugf("update model config: %#v", mc.ModelConfig)
 
@@ -473,7 +527,10 @@ func (h *Handler) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":              "ok",
+		"propagated_siblings": propagated,
+	})
 }
 
 // handleDeleteModel removes a model configuration entry at the given index.
