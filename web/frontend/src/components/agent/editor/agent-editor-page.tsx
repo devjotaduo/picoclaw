@@ -1,5 +1,8 @@
 import {
   IconAlertCircle,
+  IconAlertTriangle,
+  IconBraces,
+  IconCheck,
   IconEdit,
   IconLoader2,
   IconPlus,
@@ -22,6 +25,7 @@ import {
   listAgents,
 } from "@/api/agent-templates"
 import { getSkills } from "@/api/skills"
+import { CodeEditor } from "@/components/code-editor"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -216,6 +220,9 @@ export function AgentEditorPage() {
   const [newAgentTemplateID, setNewAgentTemplateID] = useState(
     AGENT_TEMPLATES[0]?.id ?? "",
   )
+  const [rawOpen, setRawOpen] = useState(false)
+  const [rawDraft, setRawDraft] = useState("")
+  const [rawError, setRawError] = useState<string | null>(null)
 
   // The catalog supplies the template metadata (icon, short_description) that
   // the sheet uses for its header. When creating a fresh agent, the draft owns
@@ -323,6 +330,79 @@ export function AgentEditorPage() {
     const cloned = JSON.parse(JSON.stringify(payload)) as TemplateApplyPayload
     setDraft(prepareDraftForEdit(cloned, selectedAgentId))
     setEditing(true)
+  }
+
+  function parseRawDraft(): TemplateApplyPayload | null {
+    try {
+      const parsed = JSON.parse(rawDraft) as unknown
+      if (
+        parsed === null ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed)
+      ) {
+        setRawError(
+          t("pages.agent.editor.raw_object_required", {
+            defaultValue: "Agent configuration must be a JSON object.",
+          }),
+        )
+        return null
+      }
+      const payload = hydrateAgentPayload(parsed as TemplateApplyPayload)
+      setRawError(null)
+      return {
+        ...payload,
+        agent_id: payload.agent_id ?? selectedAgentId,
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : t("pages.agent.editor.raw_unknown_error", {
+              defaultValue: "Unknown parse error",
+            })
+      setRawError(
+        t("pages.agent.editor.raw_invalid_json", {
+          defaultValue: "Invalid JSON: {{message}}",
+          message,
+        }),
+      )
+      return null
+    }
+  }
+
+  function handleOpenRawEditor() {
+    const payload = configQuery.data?.payload
+    if (!payload) return
+    const cloned = JSON.parse(JSON.stringify(payload)) as TemplateApplyPayload
+    const rawPayload = {
+      ...hydrateAgentPayload(cloned),
+      agent_id: cloned.agent_id ?? selectedAgentId,
+    }
+    setRawDraft(JSON.stringify(rawPayload, null, 2))
+    setRawError(null)
+    setRawOpen(true)
+  }
+
+  function handleFormatRawDraft() {
+    const payload = parseRawDraft()
+    if (!payload) return
+    setRawDraft(JSON.stringify(payload, null, 2))
+  }
+
+  function handleSaveRawDraft() {
+    const payload = parseRawDraft()
+    if (!payload) return
+    applyMutation.mutate(payload, {
+      onSuccess: () => setRawOpen(false),
+    })
+  }
+
+  function handleRawOpenChange(open: boolean) {
+    if (!open && applyMutation.isPending) return
+    setRawOpen(open)
+    if (!open) {
+      setRawError(null)
+    }
   }
 
   function handleCreateOpen() {
@@ -568,7 +648,15 @@ export function AgentEditorPage() {
                   </div>
                 </section>
 
-                <div className="flex items-center justify-end">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleOpenRawEditor}
+                    size="lg"
+                  >
+                    <IconBraces className="size-4" />
+                    {t("pages.agent.editor.raw_json", "Raw JSON")}
+                  </Button>
                   <Button onClick={handleEdit} size="lg">
                     <IconEdit className="size-4" />
                     {t("pages.agent.editor.edit")}
@@ -668,6 +756,85 @@ export function AgentEditorPage() {
               {t("pages.agent.editor.create_agent", "Create")}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rawOpen} onOpenChange={handleRawOpenChange}>
+        <DialogContent className="flex h-[min(86vh,760px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
+          <DialogHeader className="border-border/40 border-b px-6 py-4 pr-14">
+            <DialogTitle>
+              {t("pages.agent.editor.raw_json_title", "Raw agent JSON")}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                "pages.agent.editor.raw_json_description",
+                "Advanced editor for the exact payload saved into this agent workspace.",
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="min-h-0 flex-1 p-4">
+            <CodeEditor
+              value={rawDraft}
+              onChange={(value) => {
+                setRawDraft(value)
+                if (rawError) setRawError(null)
+              }}
+              language="json"
+              path={`${selectedAgentId}/agent_config.json`}
+              ariaLabel={t(
+                "pages.agent.editor.raw_json_title",
+                "Raw agent JSON",
+              )}
+              className="h-full min-h-[360px]"
+            />
+          </div>
+
+          <div className="border-border/40 flex min-h-10 items-center justify-between gap-3 border-t px-6 py-3 text-xs">
+            <div className="min-w-0 flex-1">
+              {rawError ? (
+                <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
+                  <IconAlertTriangle className="size-3 shrink-0" />
+                  <span className="truncate">{rawError}</span>
+                </span>
+              ) : (
+                <span className="text-muted-foreground">
+                  {t("pages.agent.editor.raw_char_count", {
+                    count: rawDraft.length,
+                    defaultValue: "{{count}} characters",
+                  })}
+                </span>
+              )}
+            </div>
+            <DialogFooter className="shrink-0">
+              <Button
+                variant="outline"
+                onClick={() => handleRawOpenChange(false)}
+                disabled={applyMutation.isPending}
+              >
+                {t("pages.agent.templates.cancel")}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleFormatRawDraft}
+                disabled={applyMutation.isPending}
+              >
+                <IconBraces className="size-4" />
+                {t("pages.agent.editor.raw_format", "Format")}
+              </Button>
+              <Button
+                onClick={handleSaveRawDraft}
+                disabled={applyMutation.isPending}
+              >
+                {applyMutation.isPending ? (
+                  <IconLoader2 className="size-4 animate-spin" />
+                ) : (
+                  <IconCheck className="size-4" />
+                )}
+                {t("pages.agent.editor.raw_save", "Save JSON")}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

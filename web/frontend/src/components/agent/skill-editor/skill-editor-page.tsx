@@ -16,10 +16,10 @@ import {
   getSkills,
   updateSkill,
 } from "@/api/skills"
+import { CodeEditor } from "@/components/code-editor"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
 export function SkillEditorPage() {
@@ -212,18 +212,17 @@ export function SkillEditorPage() {
               ) : null}
 
               <div className="flex flex-1 flex-col gap-2 overflow-hidden p-6 pt-4">
-                <Textarea
+                <CodeEditor
                   value={draft}
-                  onChange={(e) => {
-                    setDraft(e.target.value)
+                  onChange={(value) => {
+                    setDraft(value)
                     setDirty(true)
                   }}
+                  language="markdown"
+                  path={rawQuery.data?.path}
                   readOnly={!editable}
-                  spellCheck={false}
-                  className={cn(
-                    "h-full min-h-[400px] flex-1 resize-none font-mono text-xs leading-relaxed",
-                    !editable && "bg-muted/30",
-                  )}
+                  ariaLabel={t("navigation.skill_editor")}
+                  className="min-h-[400px] flex-1"
                 />
                 <div className="text-muted-foreground flex items-center justify-between text-[11px]">
                   <span>

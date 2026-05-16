@@ -30,6 +30,90 @@ export interface WhatsAppMessage {
   error?: string
 }
 
+export interface WhatsAppProductMention {
+  product: string
+  quantity?: string
+  price_text?: string
+  objection?: string
+  ts?: number
+}
+
+export interface WhatsAppContactProfile {
+  chat_jid: string
+  phone?: string
+  push_name?: string
+  display_name?: string
+  name?: string
+  city?: string
+  company?: string
+  interest?: string
+  preferences?: string
+  summary?: string
+  lead_stage: string
+  lead_score: number
+  priority: string
+  intent?: string
+  consent_status: string
+  tags: string[]
+  assigned_to?: string
+  next_action?: string
+  follow_up_at?: number
+  follow_up_reason?: string
+  created_at: number
+  updated_at: number
+}
+
+export interface WhatsAppConversationInsight {
+  chat_jid: string
+  intent?: string
+  priority: string
+  lead_stage: string
+  needs_handoff: boolean
+  unanswered: boolean
+  target_sector?: string
+  summary?: string
+  next_action?: string
+  collected_fields: Record<string, string>
+  missing_fields: string[]
+  products: WhatsAppProductMention[]
+  last_message_ts: number
+  updated_at: number
+}
+
+export interface WhatsAppLabelCount {
+  label: string
+  count: number
+}
+
+export interface WhatsAppDailyMetric {
+  date: string
+  inbound: number
+  outbound: number
+  contacts: number
+}
+
+export interface WhatsAppReport {
+  from: number
+  to: number
+  contacts: number
+  new_contacts: number
+  messages: number
+  inbound_messages: number
+  outbound_messages: number
+  agent_replies: number
+  human_replies: number
+  paused_chats: number
+  qualified_leads: number
+  handoffs: number
+  unanswered: number
+  avg_first_response_seconds: number
+  by_intent: WhatsAppLabelCount[]
+  by_priority: WhatsAppLabelCount[]
+  by_lead_stage: WhatsAppLabelCount[]
+  top_products: WhatsAppLabelCount[]
+  daily: WhatsAppDailyMetric[]
+}
+
 export interface InboxEvent {
   kind: "message" | "chat_update"
   chat?: WhatsAppChat
@@ -59,6 +143,50 @@ export async function listWhatsAppMessages(
     `/api/whatsapp/chats/${encodeURIComponent(jid)}/messages?limit=${limit}`,
   )
   return data.messages ?? []
+}
+
+export async function getWhatsAppContactProfile(
+  jid: string,
+): Promise<WhatsAppContactProfile> {
+  return getJSON<WhatsAppContactProfile>(
+    `/api/whatsapp/chats/${encodeURIComponent(jid)}/profile`,
+  )
+}
+
+export async function saveWhatsAppContactProfile(
+  profile: WhatsAppContactProfile,
+): Promise<WhatsAppContactProfile> {
+  const res = await launcherFetch(
+    `/api/whatsapp/chats/${encodeURIComponent(profile.chat_jid)}/profile`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profile),
+    },
+  )
+  if (!res.ok) {
+    throw new Error(`profile save failed: ${res.status} ${res.statusText}`)
+  }
+  return res.json() as Promise<WhatsAppContactProfile>
+}
+
+export async function getWhatsAppConversationInsight(
+  jid: string,
+): Promise<WhatsAppConversationInsight> {
+  return getJSON<WhatsAppConversationInsight>(
+    `/api/whatsapp/chats/${encodeURIComponent(jid)}/insights`,
+  )
+}
+
+export async function getWhatsAppReport(input?: {
+  from?: number
+  to?: number
+}): Promise<WhatsAppReport> {
+  const params = new URLSearchParams()
+  if (input?.from) params.set("from", String(input.from))
+  if (input?.to) params.set("to", String(input.to))
+  const suffix = params.toString() ? `?${params.toString()}` : ""
+  return getJSON<WhatsAppReport>(`/api/whatsapp/reports${suffix}`)
 }
 
 export async function pauseWhatsAppChat(

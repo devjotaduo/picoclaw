@@ -20,6 +20,7 @@ import { Route as ChannelsRouteRouteImport } from './routes/channels/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConfigRawRouteImport } from './routes/config.raw'
 import { Route as ChannelsNameRouteImport } from './routes/channels/$name'
+import { Route as AgentWhatsappReportsRouteImport } from './routes/agent/whatsapp-reports'
 import { Route as AgentWhatsappRouteImport } from './routes/agent/whatsapp'
 import { Route as AgentToolsRouteImport } from './routes/agent/tools'
 import { Route as AgentTemplatesRouteImport } from './routes/agent/templates'
@@ -84,6 +85,11 @@ const ChannelsNameRoute = ChannelsNameRouteImport.update({
   path: '/$name',
   getParentRoute: () => ChannelsRouteRoute,
 } as any)
+const AgentWhatsappReportsRoute = AgentWhatsappReportsRouteImport.update({
+  id: '/whatsapp-reports',
+  path: '/whatsapp-reports',
+  getParentRoute: () => AgentRoute,
+} as any)
 const AgentWhatsappRoute = AgentWhatsappRouteImport.update({
   id: '/whatsapp',
   path: '/whatsapp',
@@ -143,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/agent/templates': typeof AgentTemplatesRoute
   '/agent/tools': typeof AgentToolsRoute
   '/agent/whatsapp': typeof AgentWhatsappRoute
+  '/agent/whatsapp-reports': typeof AgentWhatsappReportsRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
 }
@@ -164,6 +171,7 @@ export interface FileRoutesByTo {
   '/agent/templates': typeof AgentTemplatesRoute
   '/agent/tools': typeof AgentToolsRoute
   '/agent/whatsapp': typeof AgentWhatsappRoute
+  '/agent/whatsapp-reports': typeof AgentWhatsappReportsRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
 }
@@ -186,6 +194,7 @@ export interface FileRoutesById {
   '/agent/templates': typeof AgentTemplatesRoute
   '/agent/tools': typeof AgentToolsRoute
   '/agent/whatsapp': typeof AgentWhatsappRoute
+  '/agent/whatsapp-reports': typeof AgentWhatsappReportsRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
 }
@@ -209,6 +218,7 @@ export interface FileRouteTypes {
     | '/agent/templates'
     | '/agent/tools'
     | '/agent/whatsapp'
+    | '/agent/whatsapp-reports'
     | '/channels/$name'
     | '/config/raw'
   fileRoutesByTo: FileRoutesByTo
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/agent/templates'
     | '/agent/tools'
     | '/agent/whatsapp'
+    | '/agent/whatsapp-reports'
     | '/channels/$name'
     | '/config/raw'
   id:
@@ -251,6 +262,7 @@ export interface FileRouteTypes {
     | '/agent/templates'
     | '/agent/tools'
     | '/agent/whatsapp'
+    | '/agent/whatsapp-reports'
     | '/channels/$name'
     | '/config/raw'
   fileRoutesById: FileRoutesById
@@ -346,6 +358,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChannelsNameRouteImport
       parentRoute: typeof ChannelsRouteRoute
     }
+    '/agent/whatsapp-reports': {
+      id: '/agent/whatsapp-reports'
+      path: '/whatsapp-reports'
+      fullPath: '/agent/whatsapp-reports'
+      preLoaderRoute: typeof AgentWhatsappReportsRouteImport
+      parentRoute: typeof AgentRoute
+    }
     '/agent/whatsapp': {
       id: '/agent/whatsapp'
       path: '/whatsapp'
@@ -426,6 +445,7 @@ interface AgentRouteChildren {
   AgentTemplatesRoute: typeof AgentTemplatesRoute
   AgentToolsRoute: typeof AgentToolsRoute
   AgentWhatsappRoute: typeof AgentWhatsappRoute
+  AgentWhatsappReportsRoute: typeof AgentWhatsappReportsRoute
 }
 
 const AgentRouteChildren: AgentRouteChildren = {
@@ -437,6 +457,7 @@ const AgentRouteChildren: AgentRouteChildren = {
   AgentTemplatesRoute: AgentTemplatesRoute,
   AgentToolsRoute: AgentToolsRoute,
   AgentWhatsappRoute: AgentWhatsappRoute,
+  AgentWhatsappReportsRoute: AgentWhatsappReportsRoute,
 }
 
 const AgentRouteWithChildren = AgentRoute._addFileChildren(AgentRouteChildren)

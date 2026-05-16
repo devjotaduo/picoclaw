@@ -2,6 +2,7 @@ import { IconChevronRight } from "@tabler/icons-react"
 import {
   IconAtom,
   IconBrandWhatsapp,
+  IconChartBar,
   IconChevronsDown,
   IconChevronsUp,
   IconKey,
@@ -81,8 +82,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { i18n, t } = useTranslation()
   const { isMobile, setOpenMobile } = useSidebar()
   const currentPath = routerState.location.pathname
-  const [features, setFeatures] =
-    React.useState<Record<string, LauncherFeatureAccess> | null>(null)
+  const [features, setFeatures] = React.useState<Record<
+    string,
+    LauncherFeatureAccess
+  > | null>(null)
   const {
     channelItems,
     hasMoreChannels,
@@ -164,13 +167,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {
         label: "navigation.channels_group",
         defaultOpen: true,
-        items: channelItems.map((item) => ({
-          title: item.title,
-          url: item.url,
-          icon: item.icon,
-          feature: "channels",
-          translateTitle: false,
-        })).filter((item) => canRead(item.feature)),
+        items: channelItems
+          .map((item) => ({
+            title: item.title,
+            url: item.url,
+            icon: item.icon,
+            feature: "channels",
+            translateTitle: false,
+          }))
+          .filter((item) => canRead(item.feature)),
         isChannelsGroup: true,
       },
       {
@@ -187,6 +192,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "navigation.whatsapp_inbox",
             url: "/agent/whatsapp",
             icon: IconBrandWhatsapp,
+            feature: "whatsapp_inbox",
+            translateTitle: true,
+          },
+          {
+            title: "navigation.whatsapp_reports",
+            url: "/agent/whatsapp-reports",
+            icon: IconChartBar,
             feature: "whatsapp_inbox",
             translateTitle: true,
           },
@@ -253,10 +265,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           },
         ],
       },
-    ].map((group) => ({
-      ...group,
-      items: group.items.filter((item) => canRead(item.feature)),
-    })).filter((group) => group.items.length > 0)
+    ]
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => canRead(item.feature)),
+      }))
+      .filter((group) => group.items.length > 0)
   }, [canRead, channelItems])
 
   return (

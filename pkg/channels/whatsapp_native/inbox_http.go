@@ -41,6 +41,8 @@ func (h *inboxHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case sub == "chats" && r.Method == http.MethodGet:
 		h.listChats(w, r)
+	case sub == "reports" && r.Method == http.MethodGet:
+		h.getReport(w, r)
 	case sub == "events" && r.Method == http.MethodGet:
 		h.streamEvents(w, r)
 	case strings.HasPrefix(sub, "chats/"):
@@ -58,6 +60,8 @@ func (h *inboxHTTPHandler) routeChatSubresource(w http.ResponseWriter, r *http.R
 	//   {jid}/send             POST → send manual message
 	//   {jid}/read             POST → mark as read
 	//   {jid}/avatar           GET  → fetch/cache avatar info
+	//   {jid}/profile          GET/PUT → CRM-light contact profile
+	//   {jid}/insights         GET → latest structured extraction
 	parts := strings.SplitN(rest, "/", 2)
 	if parts[0] == "" {
 		http.NotFound(w, r)
@@ -81,6 +85,12 @@ func (h *inboxHTTPHandler) routeChatSubresource(w http.ResponseWriter, r *http.R
 		h.markRead(w, r, jid)
 	case tail == "avatar" && r.Method == http.MethodGet:
 		h.fetchAvatar(w, r, jid)
+	case tail == "profile" && r.Method == http.MethodGet:
+		h.getProfile(w, r, jid)
+	case tail == "profile" && r.Method == http.MethodPut:
+		h.saveProfile(w, r, jid)
+	case tail == "insights" && r.Method == http.MethodGet:
+		h.getInsights(w, r, jid)
 	default:
 		http.NotFound(w, r)
 	}
@@ -95,6 +105,18 @@ func (h *inboxHTTPHandler) listChats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"chats": chats})
+}
+
+// GET /whatsapp_native/inbox/reports?from=unix_ms&to=unix_ms
+func (h *inboxHTTPHandler) getReport(w http.ResponseWriter, r *http.Request) {
+	from, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
+	to, _ := strconv.ParseInt(r.URL.Query().Get("to"), 10, 64)
+	report, err := h.store.BuildReport(r.Context(), from, to)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, report)
 }
 
 // GET /whatsapp_native/inbox/chats/{jid}
@@ -120,6 +142,54 @@ func (h *inboxHTTPHandler) listMessages(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	writeJSON(w, map[string]any{"messages": msgs})
+}
+
+// GET /whatsapp_native/inbox/chats/{jid}/profile
+func (h *inboxHTTPHandler) getProfile(w http.ResponseWriter, r *http.Request, jid string) {
+	profile, err := h.store.GetContactProfile(r.Context(), jid)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if profile == nil {
+		jsonError(w, http.StatusNotFound, "profile not found")
+		return
+	}
+	writeJSON(w, profile)
+}
+
+// PUT /whatsapp_native/inbox/chats/{jid}/profile
+func (h *inboxHTTPHandler) saveProfile(w http.ResponseWriter, r *http.Request, jid string) {
+	var profile inbox.ContactProfile
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&profile); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid body: "+err.Error())
+		return
+	}
+	profile.ChatJID = jid
+	saved, err := h.store.SaveContactProfile(r.Context(), profile)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	chat, _ := h.store.GetChat(r.Context(), jid)
+	if chat != nil {
+		h.pubsub.Publish(inboxEvent{Kind: "chat_update", Chat: chat})
+	}
+	writeJSON(w, saved)
+}
+
+// GET /whatsapp_native/inbox/chats/{jid}/insights
+func (h *inboxHTTPHandler) getInsights(w http.ResponseWriter, r *http.Request, jid string) {
+	insight, err := h.store.GetConversationInsight(r.Context(), jid)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if insight == nil {
+		jsonError(w, http.StatusNotFound, "insights not found")
+		return
+	}
+	writeJSON(w, insight)
 }
 
 // POST /whatsapp_native/inbox/chats/{jid}/pause   body: {"paused": true}

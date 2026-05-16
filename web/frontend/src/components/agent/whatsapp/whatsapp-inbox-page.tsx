@@ -6,7 +6,11 @@ import { toast } from "sonner"
 import {
   type InboxEvent,
   type WhatsAppChat,
+  type WhatsAppContactProfile,
+  type WhatsAppConversationInsight,
   type WhatsAppMessage,
+  getWhatsAppContactProfile,
+  getWhatsAppConversationInsight,
   listWhatsAppChats,
   listWhatsAppMessages,
   markWhatsAppChatRead,
@@ -288,6 +292,20 @@ function ConversationPane({
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages.length, chat?.jid])
 
+  const activeJID = chat?.jid ?? ""
+  const profileQuery = useQuery({
+    queryKey: ["whatsapp", "profile", activeJID],
+    queryFn: () => getWhatsAppContactProfile(activeJID),
+    enabled: activeJID !== "",
+    retry: false,
+  })
+  const insightQuery = useQuery({
+    queryKey: ["whatsapp", "insights", activeJID],
+    queryFn: () => getWhatsAppConversationInsight(activeJID),
+    enabled: activeJID !== "",
+    retry: false,
+  })
+
   if (!chat) {
     return (
       <section className="text-muted-foreground flex h-full items-center justify-center p-6 text-sm">
@@ -336,6 +354,10 @@ function ConversationPane({
           />
         </div>
       </header>
+      <ContactContextStrip
+        profile={profileQuery.data ?? null}
+        insight={insightQuery.data ?? null}
+      />
 
       <div
         ref={scrollRef}
@@ -390,6 +412,57 @@ function ConversationPane({
         </form>
       </footer>
     </section>
+  )
+}
+
+function ContactContextStrip({
+  profile,
+  insight,
+}: {
+  profile: WhatsAppContactProfile | null
+  insight: WhatsAppConversationInsight | null
+}) {
+  if (!profile && !insight) return null
+  const labels = [
+    profile?.intent || insight?.intent,
+    profile?.lead_stage || insight?.lead_stage,
+    profile?.priority || insight?.priority,
+    profile?.consent_status && profile.consent_status !== "unknown"
+      ? profile.consent_status
+      : "",
+  ].filter((label): label is string => Boolean(label))
+
+  return (
+    <div className="border-b px-4 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {profile?.name || profile?.phone ? (
+          <span className="text-xs font-medium">
+            {profile.name || profile.phone}
+          </span>
+        ) : null}
+        {labels.map((label) => (
+          <span
+            key={label}
+            className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium uppercase"
+          >
+            {label}
+          </span>
+        ))}
+        {profile?.tags?.slice(0, 4).map((tag) => (
+          <span
+            key={tag}
+            className="bg-primary/10 text-primary rounded px-1.5 py-0.5 text-[10px] font-medium"
+          >
+            {tag}
+          </span>
+        ))}
+      </div>
+      {insight?.next_action || profile?.next_action ? (
+        <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">
+          {insight?.next_action || profile?.next_action}
+        </p>
+      ) : null}
+    </div>
   )
 }
 
