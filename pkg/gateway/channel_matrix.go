@@ -1,9 +1,13 @@
-//go:build !mipsle && !netbsd && !(freebsd && arm) && !android
+//go:build goolm && !mipsle && !netbsd && !(freebsd && arm) && !android
 
 package gateway
 
 import (
 	// Matrix currently pulls in mautrix crypto and modernc sqlite transitively.
+	// Keep the gateway's default no-tag build free of the libolm C headers by
+	// registering Matrix only when the pure-Go mautrix crypto tag (`goolm`) is
+	// explicitly enabled. The project Makefile, Dockerfile, SaaS dev-sync, and
+	// CI already enable this tag for normal builds.
 	//
 	// We exclude it on:
 	// - linux/mipsle: mautrix crypto falls back to libolm when the `goolm` build

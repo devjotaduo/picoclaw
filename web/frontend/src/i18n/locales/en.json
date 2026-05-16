@@ -6,6 +6,7 @@
     "credentials": "Credenciais",
     "agent_group": "Agente",
     "agent_editor": "Agent",
+    "orchestration": "Orchestration",
     "hub": "Hub",
     "whatsapp_inbox": "WhatsApp inbox",
     "whatsapp_reports": "WhatsApp reports",
@@ -512,6 +513,18 @@
     }
   },
   "pages": {
+    "orchestration": {
+      "agents": "Internal agents",
+      "main_allowlist": "Main permissions",
+      "admin_jids_placeholder": "Admin WhatsApp JIDs, one per line",
+      "saved": "Orchestration saved",
+      "internal": "Internal",
+      "available": "Available",
+      "empty_chat": "Select an internal agent and send a message.",
+      "send": "Send",
+      "proposals": "Proposals",
+      "empty_proposals": "No saved proposals."
+    },
     "agent": {
       "load_error": "Falha ao carregar informações de suporte do agente.",
       "skills": {

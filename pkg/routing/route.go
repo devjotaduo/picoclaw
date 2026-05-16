@@ -192,7 +192,7 @@ func ruleMatchesView(rule config.DispatchRule, view dispatchView) bool {
 	if when.Topic != "" && when.Topic != view.Topic {
 		return false
 	}
-	if when.Sender != "" && when.Sender != view.Sender {
+	if when.Sender != "" && when.Sender != view.Sender && when.Sender != view.Channel+":"+view.Sender {
 		return false
 	}
 	if when.Mentioned != nil && *when.Mentioned != view.Mentioned {

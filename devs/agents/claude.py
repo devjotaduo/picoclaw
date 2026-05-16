@@ -2,6 +2,7 @@
 import json
 import re
 import subprocess
+from pathlib import Path
 
 from . import prompts
 
@@ -14,6 +15,15 @@ def _extract_json(text: str) -> dict:
     if start == -1 or end == -1:
         raise ValueError(f"No JSON object found in output:\n{text[:400]}")
     return json.loads(text[start : end + 1])
+
+
+def _clip(value: str, limit: int = 1200) -> str:
+    value = value.strip()
+    if not value:
+        return "(empty)"
+    if len(value) <= limit:
+        return value
+    return f"{value[:limit]}…"
 
 
 def _run_claude(
@@ -31,39 +41,50 @@ def _run_claude(
     --output-format json  outer JSON: {result, is_error, cost_usd, ...}
     --system-prompt      override system prompt with our terse executor prompt
     """
+    project_path = Path(project_dir).resolve()
     # Prompt via stdin — evita ambiguidade de parsing quando o texto
     # tem múltiplas linhas ou começa com caracteres especiais.
     result = subprocess.run(
         [
             "claude", "--print",
             "--model", model,
-            "--no-session-persistence",
             "--dangerously-skip-permissions",
             "--output-format", "json",
             "--system-prompt", system,
-            "--add-dir", project_dir,
+            "--add-dir", str(project_path),
         ],
         input=prompt,
         capture_output=True,
         text=True,
+        cwd=project_path,
         timeout=timeout,
     )
 
     if result.returncode != 0:
-        stderr = result.stderr[:400] if result.stderr else "(no stderr)"
-        raise RuntimeError(f"`claude` exited {result.returncode}:\n{stderr}")
+        raise RuntimeError(
+            "`claude` exited "
+            f"{result.returncode} (model={model}, cwd={project_path}):\n"
+            f"stderr:\n{_clip(result.stderr)}\n\n"
+            f"stdout:\n{_clip(result.stdout)}"
+        )
 
     try:
         outer = json.loads(result.stdout)
     except json.JSONDecodeError:
-        raise RuntimeError(f"claude returned non-JSON:\n{result.stdout[:400]}")
+        raise RuntimeError(f"claude returned non-JSON:\n{_clip(result.stdout)}")
 
     if outer.get("is_error"):
         raise RuntimeError(f"claude error: {outer.get('result', 'unknown')}")
 
     # `.result` is the assistant's final text; we parse JSON from it
     inner_text = outer.get("result", "")
-    return _extract_json(inner_text)
+    try:
+        return _extract_json(inner_text)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            f"claude returned unparsable task JSON: {exc}\n"
+            f"raw result:\n{_clip(inner_text)}"
+        ) from exc
 
 
 class ClaudeAgent:
@@ -82,7 +103,7 @@ class ClaudeAgent:
             system=prompts.EXECUTOR,
             model=model,
             project_dir=project_dir,
-            timeout=300,
+            timeout=600,
         )
 
     def run_tests(self, project_dir: str, changed_files: list[str]) -> dict:
@@ -93,5 +114,5 @@ class ClaudeAgent:
             system=prompts.TESTER,
             model=self.sonnet,
             project_dir=project_dir,
-            timeout=180,
+            timeout=300,
         )

@@ -30,12 +30,16 @@ const RANGE_OPTIONS = [7, 30, 90] as const
 export function WhatsAppReportsPage() {
   const { t } = useTranslation()
   const [days, setDays] = useState<(typeof RANGE_OPTIONS)[number]>(7)
-  const now = Date.now()
-  const from = now - days * 24 * 60 * 60 * 1000
 
   const reportQuery = useQuery({
     queryKey: ["whatsapp", "reports", days],
-    queryFn: () => getWhatsAppReport({ from, to: now }),
+    queryFn: () => {
+      const now = Date.now()
+      return getWhatsAppReport({
+        from: now - days * 24 * 60 * 60 * 1000,
+        to: now,
+      })
+    },
     refetchInterval: 60_000,
   })
   const configQuery = useQuery({

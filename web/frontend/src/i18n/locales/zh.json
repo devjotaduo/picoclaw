@@ -6,6 +6,7 @@
     "credentials": "凭据",
     "agent_group": "智能体",
     "agent_editor": "智能体",
+    "orchestration": "编排",
     "hub": "Hub",
     "whatsapp_inbox": "WhatsApp 收件箱",
     "templates": "模板",
@@ -614,6 +615,18 @@
     }
   },
   "pages": {
+    "orchestration": {
+      "agents": "内部智能体",
+      "main_allowlist": "主智能体权限",
+      "admin_jids_placeholder": "管理员 WhatsApp JID，每行一个",
+      "saved": "编排已保存",
+      "internal": "内部",
+      "available": "可用",
+      "empty_chat": "选择内部智能体并发送消息。",
+      "send": "发送",
+      "proposals": "提案",
+      "empty_proposals": "没有已保存的提案。"
+    },
     "agent": {
       "load_error": "加载 Agent 支持信息失败。",
       "skills": {

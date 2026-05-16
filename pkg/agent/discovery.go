@@ -251,9 +251,9 @@ func formatAgentDiscoverySection(agents []AgentDescriptor) string {
 
 	var header strings.Builder
 	header.WriteString("# Agent Discovery\n\n")
-	header.WriteString("This registry lists the peer agents this agent is permitted to spawn.\n")
+	header.WriteString("This registry lists the peer agents this agent is permitted to delegate to.\n")
 	header.WriteString(
-		"Choose a peer based on its description. Use only agent IDs listed here when calling spawn.\n\n",
+		"Choose a peer based on its description. Use only agent IDs listed here when calling delegate or spawn.\n\n",
 	)
 	header.WriteString("```json\n")
 	header.Write(encoded)

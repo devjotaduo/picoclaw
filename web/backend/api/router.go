@@ -93,6 +93,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Agent templates (apply preset workspace AGENT.md/SOUL.md)
 	h.registerAgentTemplateRoutes(mux)
 
+	// Internal panel agents and orchestration controls.
+	h.registerInternalAgentRoutes(mux)
+
 	// OS startup / launch-at-login
 	h.registerStartupRoutes(mux)
 

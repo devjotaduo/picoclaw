@@ -308,18 +308,26 @@ func (m AgentModelConfig) MarshalJSON() ([]byte, error) {
 }
 
 type AgentConfig struct {
-	ID        string            `json:"id"`
-	Default   bool              `json:"default,omitempty"`
-	Name      string            `json:"name,omitempty"`
-	Workspace string            `json:"workspace,omitempty"`
-	Model     *AgentModelConfig `json:"model,omitempty"`
-	Skills    []string          `json:"skills,omitempty"`
-	Subagents *SubagentsConfig  `json:"subagents,omitempty"`
+	ID        string             `json:"id"`
+	Default   bool               `json:"default,omitempty"`
+	Name      string             `json:"name,omitempty"`
+	Workspace string             `json:"workspace,omitempty"`
+	Model     *AgentModelConfig  `json:"model,omitempty"`
+	Skills    []string           `json:"skills,omitempty"`
+	Subagents *SubagentsConfig   `json:"subagents,omitempty"`
+	Access    *AgentAccessConfig `json:"access,omitempty"`
 }
 
 type SubagentsConfig struct {
 	AllowAgents []string          `json:"allow_agents,omitempty"`
 	Model       *AgentModelConfig `json:"model,omitempty"`
+}
+
+type AgentAccessConfig struct {
+	PanelEnabled           bool     `json:"panel_enabled,omitempty"`
+	PanelRoles             []string `json:"panel_roles,omitempty"`
+	WhatsAppDirectEnabled  bool     `json:"whatsapp_direct_enabled,omitempty"`
+	WhatsAppAllowedSenders []string `json:"whatsapp_allowed_senders,omitempty"`
 }
 
 type DispatchConfig struct {
@@ -787,6 +795,15 @@ type ToolConfig struct {
 	Enabled bool `json:"enabled" yaml:"-" env:"ENABLED"`
 }
 
+type ImageGenerationToolsConfig struct {
+	ToolConfig `             envPrefix:"PICOCLAW_TOOLS_IMAGE_GENERATION_"`
+	APIBase    string       `json:"api_base,omitempty" env:"PICOCLAW_TOOLS_IMAGE_GENERATION_API_BASE"`
+	APIKey     SecureString `json:"api_key,omitzero" yaml:"api_key,omitempty" env:"PICOCLAW_TOOLS_IMAGE_GENERATION_API_KEY"`
+	Model      string       `json:"model,omitempty" env:"PICOCLAW_TOOLS_IMAGE_GENERATION_MODEL"`
+	Size       string       `json:"size,omitempty" env:"PICOCLAW_TOOLS_IMAGE_GENERATION_SIZE"`
+	OutputDir  string       `json:"output_dir,omitempty" env:"PICOCLAW_TOOLS_IMAGE_GENERATION_OUTPUT_DIR"`
+}
+
 type BraveConfig struct {
 	Enabled    bool          `json:"enabled"           yaml:"-"                  env:"PICOCLAW_TOOLS_WEB_BRAVE_ENABLED"`
 	APIKeys    SecureStrings `json:"api_keys,omitzero" yaml:"api_keys,omitempty" env:"PICOCLAW_TOOLS_WEB_BRAVE_API_KEYS"`
@@ -985,30 +1002,34 @@ type ToolsConfig struct {
 	// FilterMinLength is the minimum content length required for filtering.
 	// Content shorter than this will be returned unchanged for performance.
 	// Default: 8
-	FilterMinLength int                `json:"filter_min_length" yaml:"-"                env:"PICOCLAW_TOOLS_FILTER_MIN_LENGTH"`
-	Web             WebToolsConfig     `json:"web"               yaml:"web,omitempty"`
-	Cron            CronToolsConfig    `json:"cron"              yaml:"-"`
-	Exec            ExecConfig         `json:"exec"              yaml:"-"`
-	Skills          SkillsToolsConfig  `json:"skills"            yaml:"skills,omitempty"`
-	MediaCleanup    MediaCleanupConfig `json:"media_cleanup"     yaml:"-"`
-	MCP             MCPConfig          `json:"mcp"               yaml:"-"`
-	AppendFile      ToolConfig         `json:"append_file"       yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_APPEND_FILE_"`
-	EditFile        ToolConfig         `json:"edit_file"         yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_EDIT_FILE_"`
-	FindSkills      ToolConfig         `json:"find_skills"       yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_FIND_SKILLS_"`
-	I2C             ToolConfig         `json:"i2c"               yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_I2C_"`
-	InstallSkill    ToolConfig         `json:"install_skill"     yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_INSTALL_SKILL_"`
-	ListDir         ToolConfig         `json:"list_dir"          yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_LIST_DIR_"`
-	Message         ToolConfig         `json:"message"           yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_MESSAGE_"`
-	ReadFile        ReadFileToolConfig `json:"read_file"         yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_READ_FILE_"`
-	Serial          ToolConfig         `json:"serial"            yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SERIAL_"`
-	SendFile        ToolConfig         `json:"send_file"         yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SEND_FILE_"`
-	SendTTS         ToolConfig         `json:"send_tts"          yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SEND_TTS_"`
-	Spawn           ToolConfig         `json:"spawn"             yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SPAWN_"`
-	SpawnStatus     ToolConfig         `json:"spawn_status"      yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SPAWN_STATUS_"`
-	SPI             ToolConfig         `json:"spi"               yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SPI_"`
-	Subagent        ToolConfig         `json:"subagent"          yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SUBAGENT_"`
-	WebFetch        ToolConfig         `json:"web_fetch"         yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_WEB_FETCH_"`
-	WriteFile       ToolConfig         `json:"write_file"        yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_WRITE_FILE_"`
+	FilterMinLength       int                        `json:"filter_min_length" yaml:"-"                env:"PICOCLAW_TOOLS_FILTER_MIN_LENGTH"`
+	Web                   WebToolsConfig             `json:"web"               yaml:"web,omitempty"`
+	Cron                  CronToolsConfig            `json:"cron"              yaml:"-"`
+	Exec                  ExecConfig                 `json:"exec"              yaml:"-"`
+	Skills                SkillsToolsConfig          `json:"skills"            yaml:"skills,omitempty"`
+	MediaCleanup          MediaCleanupConfig         `json:"media_cleanup"     yaml:"-"`
+	MCP                   MCPConfig                  `json:"mcp"               yaml:"-"`
+	ImageGeneration       ImageGenerationToolsConfig `json:"image_generation" yaml:"-" envPrefix:"PICOCLAW_TOOLS_IMAGE_GENERATION_"`
+	AppendFile            ToolConfig                 `json:"append_file"       yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_APPEND_FILE_"`
+	EditFile              ToolConfig                 `json:"edit_file"         yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_EDIT_FILE_"`
+	FindSkills            ToolConfig                 `json:"find_skills"       yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_FIND_SKILLS_"`
+	I2C                   ToolConfig                 `json:"i2c"               yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_I2C_"`
+	InstallSkill          ToolConfig                 `json:"install_skill"     yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_INSTALL_SKILL_"`
+	ListDir               ToolConfig                 `json:"list_dir"          yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_LIST_DIR_"`
+	Message               ToolConfig                 `json:"message"           yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_MESSAGE_"`
+	ReadFile              ReadFileToolConfig         `json:"read_file"         yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_READ_FILE_"`
+	Serial                ToolConfig                 `json:"serial"            yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SERIAL_"`
+	SendFile              ToolConfig                 `json:"send_file"         yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SEND_FILE_"`
+	SendTTS               ToolConfig                 `json:"send_tts"          yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SEND_TTS_"`
+	Spawn                 ToolConfig                 `json:"spawn"             yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SPAWN_"`
+	SpawnStatus           ToolConfig                 `json:"spawn_status"      yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SPAWN_STATUS_"`
+	SPI                   ToolConfig                 `json:"spi"               yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SPI_"`
+	Subagent              ToolConfig                 `json:"subagent"          yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SUBAGENT_"`
+	SaveMarketingProposal ToolConfig                 `json:"save_marketing_proposal" yaml:"-"                                                envPrefix:"PICOCLAW_TOOLS_SAVE_MARKETING_PROPOSAL_"`
+	TenantManager         ToolConfig                 `json:"tenant_manager"    yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_TENANT_MANAGER_"`
+	WhatsAppReportQuery   ToolConfig                 `json:"whatsapp_report_query" yaml:"-"                                                   envPrefix:"PICOCLAW_TOOLS_WHATSAPP_REPORT_QUERY_"`
+	WebFetch              ToolConfig                 `json:"web_fetch"         yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_WEB_FETCH_"`
+	WriteFile             ToolConfig                 `json:"write_file"        yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_WRITE_FILE_"`
 }
 
 // IsFilterSensitiveDataEnabled returns true if sensitive data filtering is enabled
@@ -1712,6 +1733,8 @@ func (t *ToolsConfig) IsToolEnabled(name string) bool {
 		return t.Skills.Enabled
 	case "media_cleanup":
 		return t.MediaCleanup.Enabled
+	case "generate_image", "image_generation":
+		return t.ImageGeneration.Enabled
 	case "append_file":
 		return t.AppendFile.Enabled
 	case "edit_file":
@@ -1738,6 +1761,12 @@ func (t *ToolsConfig) IsToolEnabled(name string) bool {
 		return t.SPI.Enabled
 	case "subagent":
 		return t.Subagent.Enabled
+	case "save_marketing_proposal":
+		return t.SaveMarketingProposal.Enabled
+	case "tenant_manager":
+		return t.TenantManager.Enabled
+	case "whatsapp_report_query":
+		return t.WhatsAppReportQuery.Enabled
 	case "web_fetch":
 		return t.WebFetch.Enabled
 	case "send_file":

@@ -426,6 +426,14 @@ func DefaultConfig() *Config {
 				MaxInlineTextChars: DefaultMCPMaxInlineTextChars,
 				Servers:            map[string]MCPServerConfig{},
 			},
+			ImageGeneration: ImageGenerationToolsConfig{
+				ToolConfig: ToolConfig{
+					Enabled: false,
+				},
+				APIBase: "https://api.openai.com/v1",
+				Model:   "gpt-image-1",
+				Size:    "1024x1024",
+			},
 			AppendFile: ToolConfig{
 				Enabled: true,
 			},
@@ -465,6 +473,15 @@ func DefaultConfig() *Config {
 				Enabled: false, // Hardware tool - Linux only
 			},
 			Subagent: ToolConfig{
+				Enabled: true,
+			},
+			SaveMarketingProposal: ToolConfig{
+				Enabled: true,
+			},
+			TenantManager: ToolConfig{
+				Enabled: true,
+			},
+			WhatsAppReportQuery: ToolConfig{
 				Enabled: true,
 			},
 			WebFetch: ToolConfig{

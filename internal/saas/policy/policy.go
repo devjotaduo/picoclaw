@@ -32,6 +32,7 @@ const (
 	FeatureChannels       = "channels"
 	FeatureAgentEditor    = "agent_editor"
 	FeatureAgentTemplates = "agent_templates"
+	FeatureInternalAgents = "internal_agents"
 	FeatureSkills         = "skills"
 	FeatureTools          = "tools"
 	FeatureConfig         = "config"
@@ -47,6 +48,7 @@ var FeatureIDs = []string{
 	FeatureChannels,
 	FeatureAgentEditor,
 	FeatureAgentTemplates,
+	FeatureInternalAgents,
 	FeatureSkills,
 	FeatureTools,
 	FeatureConfig,
@@ -85,6 +87,7 @@ func DefaultRolePolicy() RolePolicy {
 	viewer[FeatureModels] = AccessNone
 	viewer[FeatureCredentials] = AccessNone
 	viewer[FeatureRawConfig] = AccessNone
+	viewer[FeatureInternalAgents] = AccessNone
 
 	return RolePolicy{
 		RoleTenantOwner: writeAll,
@@ -204,6 +207,8 @@ func FeatureForRequest(method, requestPath string) (string, Access, bool) {
 		return FeatureAgentEditor, required, true
 	case strings.HasPrefix(p, "/api/agent/templates/"):
 		return FeatureAgentTemplates, required, true
+	case p == "/api/internal-agents" || strings.HasPrefix(p, "/api/internal-agents/"):
+		return FeatureInternalAgents, required, true
 	case p == "/api/skills" || strings.HasPrefix(p, "/api/skills/"):
 		return FeatureSkills, required, true
 	case p == "/api/tools" || strings.HasPrefix(p, "/api/tools/"):

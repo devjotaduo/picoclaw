@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sipeed/picoclaw/internal/orchestrator"
 	"github.com/sipeed/picoclaw/pkg/agent"
 	"github.com/sipeed/picoclaw/pkg/audio/asr"
 	"github.com/sipeed/picoclaw/pkg/audio/tts"
@@ -150,6 +151,14 @@ func Run(debug bool, homePath, configPath string, allowEmptyStartup bool) (runEr
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("error loading config: %w", err)
+	}
+	if orchestrator.EnsureSpecialistConfig(cfg) {
+		if err = config.SaveConfig(configPath, cfg); err != nil {
+			return fmt.Errorf("error saving orchestrator defaults: %w", err)
+		}
+	}
+	if err = orchestrator.EnsureWorkspaceFiles(cfg); err != nil {
+		return fmt.Errorf("error preparing orchestrator workspaces: %w", err)
 	}
 
 	if err = preCheckConfig(cfg); err != nil {
@@ -381,6 +390,7 @@ func setupAndStartServices(
 	if err = runningServices.CronService.Start(); err != nil {
 		return nil, fmt.Errorf("error starting cron service: %w", err)
 	}
+	ensureMarketingCronJobs(runningServices.CronService, cfg)
 	fmt.Println("✓ Cron service started")
 
 	runningServices.HeartbeatService = heartbeat.NewHeartbeatService(
@@ -450,6 +460,7 @@ func setupAndStartServices(
 		listenAddr,
 		runningServices.HealthServer,
 	)
+	registerInternalAgentTurnRoute(runningServices.ChannelManager, agentLoop, authToken)
 
 	if err = runningServices.ChannelManager.StartAll(context.Background()); err != nil {
 		return nil, fmt.Errorf("error starting channels: %w", err)
@@ -630,6 +641,7 @@ func restartServices(
 	if err = runningServices.CronService.Start(); err != nil {
 		return fmt.Errorf("error restarting cron service: %w", err)
 	}
+	ensureMarketingCronJobs(runningServices.CronService, cfg)
 	fmt.Println("  ✓ Cron service restarted")
 
 	runningServices.HeartbeatService = heartbeat.NewHeartbeatService(

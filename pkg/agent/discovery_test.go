@@ -95,7 +95,7 @@ func TestAgentRegistry_ListSpawnableAgentsRespectsPermissions(t *testing.T) {
 	}
 }
 
-func TestAgentRegistry_ListSpawnableAgentsRequiresSpawnTool(t *testing.T) {
+func TestAgentRegistry_ListSpawnableAgentsUsesDelegateTool(t *testing.T) {
 	cfg := testCfg([]config.AgentConfig{
 		{
 			ID:      "parent",
@@ -111,8 +111,9 @@ func TestAgentRegistry_ListSpawnableAgentsRequiresSpawnTool(t *testing.T) {
 	al := NewAgentLoop(cfg, bus.NewMessageBus(), &mockRegistryProvider{})
 	defer al.Close()
 
-	if descriptors := al.GetRegistry().ListSpawnableAgents("parent"); len(descriptors) != 0 {
-		t.Fatalf("expected no spawnable descriptors without spawn tool, got %+v", descriptors)
+	descriptors := al.GetRegistry().ListSpawnableAgents("parent")
+	if len(descriptors) != 1 || descriptors[0].ID != "child" {
+		t.Fatalf("expected delegate-discoverable child descriptor, got %+v", descriptors)
 	}
 }
 

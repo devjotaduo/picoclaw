@@ -7,11 +7,12 @@ import (
 )
 
 type SpawnTool struct {
-	spawner        SubTurnSpawner
-	defaultModel   string
-	maxTokens      int
-	temperature    float64
-	allowlistCheck func(targetAgentID string) bool
+	spawner               SubTurnSpawner
+	defaultModel          string
+	maxTokens             int
+	temperature           float64
+	allowlistCheck        func(targetAgentID string) bool
+	contextAllowlistCheck func(ctx context.Context, targetAgentID string) bool
 }
 
 // Compile-time check: SpawnTool implements AsyncExecutor.
@@ -66,6 +67,10 @@ func (t *SpawnTool) SetAllowlistChecker(check func(targetAgentID string) bool) {
 	t.allowlistCheck = check
 }
 
+func (t *SpawnTool) SetContextAllowlistChecker(check func(ctx context.Context, targetAgentID string) bool) {
+	t.contextAllowlistCheck = check
+}
+
 func (t *SpawnTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
 	return t.execute(ctx, args, nil)
 }
@@ -95,8 +100,12 @@ func (t *SpawnTool) execute(
 	targetAgentID := strings.TrimSpace(agentID)
 
 	// Check allowlist if targeting a specific agent
-	if targetAgentID != "" && t.allowlistCheck != nil {
-		if !t.allowlistCheck(targetAgentID) {
+	if targetAgentID != "" {
+		if t.contextAllowlistCheck != nil {
+			if !t.contextAllowlistCheck(ctx, targetAgentID) {
+				return ErrorResult(fmt.Sprintf("not allowed to spawn agent '%s'", targetAgentID))
+			}
+		} else if t.allowlistCheck != nil && !t.allowlistCheck(targetAgentID) {
 			return ErrorResult(fmt.Sprintf("not allowed to spawn agent '%s'", targetAgentID))
 		}
 	}

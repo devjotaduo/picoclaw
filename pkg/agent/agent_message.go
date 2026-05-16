@@ -44,20 +44,40 @@ func (al *AgentLoop) ProcessDirectWithChannel(
 	ctx context.Context,
 	content, sessionKey, channel, chatID string,
 ) (string, error) {
+	return al.ProcessDirectWithContext(ctx, content, sessionKey, bus.InboundContext{
+		Channel:  channel,
+		ChatID:   chatID,
+		ChatType: "direct",
+		SenderID: "cron",
+	})
+}
+
+func (al *AgentLoop) ProcessDirectWithContext(
+	ctx context.Context,
+	content, sessionKey string,
+	inbound bus.InboundContext,
+) (string, error) {
 	if err := al.ensureHooksInitialized(ctx); err != nil {
 		return "", err
 	}
 	if err := al.ensureMCPInitialized(ctx); err != nil {
 		return "", err
 	}
+	if inbound.Channel == "" {
+		inbound.Channel = "cli"
+	}
+	if inbound.ChatID == "" {
+		inbound.ChatID = "direct"
+	}
+	if inbound.ChatType == "" {
+		inbound.ChatType = "direct"
+	}
+	if inbound.SenderID == "" {
+		inbound.SenderID = "cron"
+	}
 
 	msg := bus.InboundMessage{
-		Context: bus.InboundContext{
-			Channel:  channel,
-			ChatID:   chatID,
-			ChatType: "direct",
-			SenderID: "cron",
-		},
+		Context:    inbound,
 		Content:    content,
 		SessionKey: sessionKey,
 	}

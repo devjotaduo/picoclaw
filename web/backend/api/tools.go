@@ -137,6 +137,30 @@ var toolCatalog = []toolCatalogEntry{
 		ConfigKey:   "send_file",
 	},
 	{
+		Name:        "generate_image",
+		Description: "Generate real images and save them in workspace assets.",
+		Category:    "marketing",
+		ConfigKey:   "generate_image",
+	},
+	{
+		Name:        "save_marketing_proposal",
+		Description: "Save marketing proposals and generated asset references for approval or history.",
+		Category:    "marketing",
+		ConfigKey:   "save_marketing_proposal",
+	},
+	{
+		Name:        "tenant_manager",
+		Description: "Apply controlled tenant workspace and orchestration changes from gerente.",
+		Category:    "agents",
+		ConfigKey:   "tenant_manager",
+	},
+	{
+		Name:        "whatsapp_report_query",
+		Description: "Query WhatsApp inbox/report data for internal analysis.",
+		Category:    "analytics",
+		ConfigKey:   "whatsapp_report_query",
+	},
+	{
 		Name:        "find_skills",
 		Description: "Search external skill registries for installable skills.",
 		Category:    "skills",
@@ -358,6 +382,14 @@ func applyToolState(cfg *config.Config, toolName string, enabled bool) error {
 		cfg.Tools.Message.Enabled = enabled
 	case "send_file":
 		cfg.Tools.SendFile.Enabled = enabled
+	case "generate_image":
+		cfg.Tools.ImageGeneration.Enabled = enabled
+	case "save_marketing_proposal":
+		cfg.Tools.SaveMarketingProposal.Enabled = enabled
+	case "tenant_manager":
+		cfg.Tools.TenantManager.Enabled = enabled
+	case "whatsapp_report_query":
+		cfg.Tools.WhatsAppReportQuery.Enabled = enabled
 	case "find_skills":
 		cfg.Tools.FindSkills.Enabled = enabled
 		if enabled {

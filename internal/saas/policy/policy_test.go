@@ -17,6 +17,9 @@ func TestDefaultRolePolicyRequestPermissions(t *testing.T) {
 		{RoleViewer, "GET", "/api/config", false},
 		{RoleTenantAdmin, "PUT", "/api/models/0", true},
 		{RoleTenantAdmin, "POST", "/api/agents", true},
+		{RoleTenantAdmin, "POST", "/api/internal-agents/gerente/turn", true},
+		{RoleOperator, "GET", "/api/internal-agents", false},
+		{RoleViewer, "GET", "/api/internal-agents", false},
 		{RoleViewer, "POST", "/api/agents", false},
 		{RolePlatformAdmin, "DELETE", "/api/models/0", true},
 	}

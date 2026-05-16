@@ -522,6 +522,7 @@ toolLoop:
 			ts.opts.Dispatch.MessageID(),
 			ts.opts.Dispatch.ReplyToMessageID(),
 		)
+		execCtx = tools.WithToolSenderContext(execCtx, ts.opts.Dispatch.SenderID())
 		execCtx = tools.WithToolSessionContext(
 			execCtx,
 			ts.agent.ID,

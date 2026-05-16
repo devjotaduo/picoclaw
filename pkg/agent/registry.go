@@ -58,6 +58,16 @@ func NewAgentRegistry(
 	for _, instance := range registry.agents {
 		if instance.ContextBuilder != nil {
 			instance.ContextBuilder.WithAgentDiscovery(instance.ID, registry.ListSpawnableAgents)
+			if err := instance.ContextBuilder.RegisterPromptContributor(privilegedWhatsAppAgentDiscoveryPromptContributor{
+				agentID:  instance.ID,
+				cfg:      cfg,
+				registry: registry,
+			}); err != nil {
+				logger.WarnCF("agent", "Failed to register privileged WhatsApp discovery prompt contributor", map[string]any{
+					"agent_id": instance.ID,
+					"error":    err.Error(),
+				})
+			}
 		}
 	}
 
@@ -141,7 +151,10 @@ func agentHasSpawnTool(agent *AgentInstance) bool {
 	if agent == nil || agent.Tools == nil {
 		return false
 	}
-	_, ok := agent.Tools.Get("spawn")
+	if _, ok := agent.Tools.Get("spawn"); ok {
+		return true
+	}
+	_, ok := agent.Tools.Get("delegate")
 	return ok
 }
 

@@ -27,6 +27,7 @@ import { Route as AgentTemplatesRouteImport } from './routes/agent/templates'
 import { Route as AgentTemplateEditorRouteImport } from './routes/agent/template-editor'
 import { Route as AgentSkillsRouteImport } from './routes/agent/skills'
 import { Route as AgentSkillEditorRouteImport } from './routes/agent/skill-editor'
+import { Route as AgentOrchestrationRouteImport } from './routes/agent/orchestration'
 import { Route as AgentHubRouteImport } from './routes/agent/hub'
 import { Route as AgentEditorRouteImport } from './routes/agent/editor'
 
@@ -120,6 +121,11 @@ const AgentSkillEditorRoute = AgentSkillEditorRouteImport.update({
   path: '/skill-editor',
   getParentRoute: () => AgentRoute,
 } as any)
+const AgentOrchestrationRoute = AgentOrchestrationRouteImport.update({
+  id: '/orchestration',
+  path: '/orchestration',
+  getParentRoute: () => AgentRoute,
+} as any)
 const AgentHubRoute = AgentHubRouteImport.update({
   id: '/hub',
   path: '/hub',
@@ -143,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/models': typeof ModelsRoute
   '/agent/editor': typeof AgentEditorRoute
   '/agent/hub': typeof AgentHubRoute
+  '/agent/orchestration': typeof AgentOrchestrationRoute
   '/agent/skill-editor': typeof AgentSkillEditorRoute
   '/agent/skills': typeof AgentSkillsRoute
   '/agent/template-editor': typeof AgentTemplateEditorRoute
@@ -165,6 +172,7 @@ export interface FileRoutesByTo {
   '/models': typeof ModelsRoute
   '/agent/editor': typeof AgentEditorRoute
   '/agent/hub': typeof AgentHubRoute
+  '/agent/orchestration': typeof AgentOrchestrationRoute
   '/agent/skill-editor': typeof AgentSkillEditorRoute
   '/agent/skills': typeof AgentSkillsRoute
   '/agent/template-editor': typeof AgentTemplateEditorRoute
@@ -188,6 +196,7 @@ export interface FileRoutesById {
   '/models': typeof ModelsRoute
   '/agent/editor': typeof AgentEditorRoute
   '/agent/hub': typeof AgentHubRoute
+  '/agent/orchestration': typeof AgentOrchestrationRoute
   '/agent/skill-editor': typeof AgentSkillEditorRoute
   '/agent/skills': typeof AgentSkillsRoute
   '/agent/template-editor': typeof AgentTemplateEditorRoute
@@ -212,6 +221,7 @@ export interface FileRouteTypes {
     | '/models'
     | '/agent/editor'
     | '/agent/hub'
+    | '/agent/orchestration'
     | '/agent/skill-editor'
     | '/agent/skills'
     | '/agent/template-editor'
@@ -234,6 +244,7 @@ export interface FileRouteTypes {
     | '/models'
     | '/agent/editor'
     | '/agent/hub'
+    | '/agent/orchestration'
     | '/agent/skill-editor'
     | '/agent/skills'
     | '/agent/template-editor'
@@ -256,6 +267,7 @@ export interface FileRouteTypes {
     | '/models'
     | '/agent/editor'
     | '/agent/hub'
+    | '/agent/orchestration'
     | '/agent/skill-editor'
     | '/agent/skills'
     | '/agent/template-editor'
@@ -407,6 +419,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentSkillEditorRouteImport
       parentRoute: typeof AgentRoute
     }
+    '/agent/orchestration': {
+      id: '/agent/orchestration'
+      path: '/orchestration'
+      fullPath: '/agent/orchestration'
+      preLoaderRoute: typeof AgentOrchestrationRouteImport
+      parentRoute: typeof AgentRoute
+    }
     '/agent/hub': {
       id: '/agent/hub'
       path: '/hub'
@@ -439,6 +458,7 @@ const ChannelsRouteRouteWithChildren = ChannelsRouteRoute._addFileChildren(
 interface AgentRouteChildren {
   AgentEditorRoute: typeof AgentEditorRoute
   AgentHubRoute: typeof AgentHubRoute
+  AgentOrchestrationRoute: typeof AgentOrchestrationRoute
   AgentSkillEditorRoute: typeof AgentSkillEditorRoute
   AgentSkillsRoute: typeof AgentSkillsRoute
   AgentTemplateEditorRoute: typeof AgentTemplateEditorRoute
@@ -451,6 +471,7 @@ interface AgentRouteChildren {
 const AgentRouteChildren: AgentRouteChildren = {
   AgentEditorRoute: AgentEditorRoute,
   AgentHubRoute: AgentHubRoute,
+  AgentOrchestrationRoute: AgentOrchestrationRoute,
   AgentSkillEditorRoute: AgentSkillEditorRoute,
   AgentSkillsRoute: AgentSkillsRoute,
   AgentTemplateEditorRoute: AgentTemplateEditorRoute,

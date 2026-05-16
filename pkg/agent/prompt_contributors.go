@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/sipeed/picoclaw/internal/orchestrator"
+	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/sipeed/picoclaw/pkg/routing"
 )
 
 type toolDiscoveryPromptContributor struct {
@@ -127,6 +131,66 @@ func (c agentDiscoveryPromptContributor) ContributePrompt(
 			Slot:    PromptSlotTooling,
 			Source:  PromptSource{ID: PromptSourceAgentDiscovery, Name: "agent:discovery"},
 			Title:   "agent discovery",
+			Content: content,
+			Stable:  false,
+			Cache:   PromptCacheNone,
+		},
+	}, nil
+}
+
+type privilegedWhatsAppAgentDiscoveryPromptContributor struct {
+	agentID  string
+	cfg      *config.Config
+	registry *AgentRegistry
+}
+
+func (c privilegedWhatsAppAgentDiscoveryPromptContributor) PromptSource() PromptSourceDescriptor {
+	return PromptSourceDescriptor{
+		ID:              PromptSourceID("agent:discovery:whatsapp_admin"),
+		Owner:           "agent",
+		Description:     "Privileged WhatsApp sender multi-agent discovery registry",
+		Allowed:         []PromptPlacement{{Layer: PromptLayerCapability, Slot: PromptSlotTooling}},
+		StableByDefault: false,
+	}
+}
+
+func (c privilegedWhatsAppAgentDiscoveryPromptContributor) ContributePrompt(
+	_ context.Context,
+	req PromptBuildRequest,
+) ([]PromptPart, error) {
+	if routing.NormalizeAgentID(c.agentID) != orchestrator.AgentMain {
+		return nil, nil
+	}
+	if strings.ToLower(strings.TrimSpace(req.Channel)) != "whatsapp" {
+		return nil, nil
+	}
+	if !orchestrator.WhatsAppAdminSenderAllowed(c.cfg, req.SenderID) {
+		return nil, nil
+	}
+	if c.registry == nil {
+		return nil, nil
+	}
+	descriptors := c.registry.ListAgents("")
+	filtered := descriptors[:0]
+	for _, descriptor := range descriptors {
+		if routing.NormalizeAgentID(descriptor.ID) == orchestrator.AgentMain {
+			continue
+		}
+		filtered = append(filtered, descriptor)
+	}
+	content := formatAgentDiscoverySection(filtered)
+	if strings.TrimSpace(content) == "" {
+		return nil, nil
+	}
+	content += "\n\nThis WhatsApp sender is registered as an internal/admin number. The main agent may delegate to any listed internal agent, including marketing and gerente, while still mediating the final WhatsApp response."
+
+	return []PromptPart{
+		{
+			ID:      "capability.agent_discovery.whatsapp_admin",
+			Layer:   PromptLayerCapability,
+			Slot:    PromptSlotTooling,
+			Source:  PromptSource{ID: PromptSourceID("agent:discovery:whatsapp_admin"), Name: "agent:discovery:whatsapp_admin"},
+			Title:   "privileged WhatsApp agent discovery",
 			Content: content,
 			Stable:  false,
 			Cache:   PromptCacheNone,

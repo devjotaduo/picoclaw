@@ -12,6 +12,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/constants"
 	"github.com/sipeed/picoclaw/pkg/cron"
+	"github.com/sipeed/picoclaw/pkg/routing"
 	"github.com/sipeed/picoclaw/pkg/utils"
 )
 
@@ -21,6 +22,10 @@ type JobExecutor interface {
 	// PublishResponseIfNeeded sends response to the outbound bus only when the
 	// agent did not already deliver content through the message tool in this round.
 	PublishResponseIfNeeded(ctx context.Context, channel, chatID, sessionKey, response string)
+}
+
+type ContextJobExecutor interface {
+	ProcessDirectWithContext(ctx context.Context, content, sessionKey string, inbound bus.InboundContext) (string, error)
 }
 
 // CronTool provides scheduling capabilities for the agent
@@ -115,6 +120,10 @@ func (t *CronTool) Parameters() map[string]any {
 			"job_id": map[string]any{
 				"type":        "string",
 				"description": "Job ID (for remove/enable/disable)",
+			},
+			"agent_id": map[string]any{
+				"type":        "string",
+				"description": "Optional internal agent ID to run this job as. Use marketing for proactive marketing agendas.",
 			},
 		},
 		"required": []string{"action"},
@@ -212,12 +221,16 @@ func (t *CronTool) addJob(ctx context.Context, args map[string]any) *ToolResult 
 	// Truncate message for job name (max 30 chars)
 	messagePreview := utils.Truncate(message, 30)
 
-	job, err := t.cronService.AddJob(
+	agentID, _ := args["agent_id"].(string)
+	agentID = routing.NormalizeAgentID(agentID)
+
+	job, err := t.cronService.AddAgentJob(
 		messagePreview,
 		schedule,
 		message,
 		channel,
 		chatID,
+		agentID,
 	)
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("Error adding job: %v", err))
@@ -343,6 +356,29 @@ func (t *CronTool) ExecuteJob(ctx context.Context, job *cron.CronJob) string {
 	}
 
 	sessionKey := fmt.Sprintf("agent:cron-%s-%s", job.ID, uuid.New().String())
+	agentID := routing.NormalizeAgentID(job.Payload.AgentID)
+	if agentID != "" {
+		if contextExecutor, ok := t.executor.(ContextJobExecutor); ok {
+			response, err := contextExecutor.ProcessDirectWithContext(
+				ctx,
+				job.Payload.Message,
+				sessionKey,
+				bus.InboundContext{
+					Channel:   "cron",
+					ChatID:    "cron:" + job.ID,
+					ChatType:  "direct",
+					SpaceID:   agentID,
+					SpaceType: "agent",
+					SenderID:  "cron",
+					Raw:       map[string]string{"agent_id": agentID},
+				},
+			)
+			if err != nil {
+				return fmt.Sprintf("Error: %v", err)
+			}
+			return response
+		}
+	}
 
 	// Call agent with the job message
 	response, err := t.executor.ProcessDirectWithChannel(

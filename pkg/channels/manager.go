@@ -777,6 +777,15 @@ func (m *Manager) SetupHTTPServerListeners(listeners []net.Listener, addr string
 	m.httpListeners = append([]net.Listener(nil), listeners...)
 }
 
+func (m *Manager) HandleHTTPFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.mux == nil {
+		return
+	}
+	m.mux.HandleFunc(pattern, handler)
+}
+
 // registerHTTPHandlersLocked registers webhook and health-check handlers for
 // all channels currently in m.channels. Caller must hold m.mu (or ensure
 // exclusive access).

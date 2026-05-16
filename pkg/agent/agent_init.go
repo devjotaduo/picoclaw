@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sipeed/picoclaw/internal/orchestrator"
 	"github.com/sipeed/picoclaw/pkg/agent/interfaces"
 	"github.com/sipeed/picoclaw/pkg/audio/tts"
 	"github.com/sipeed/picoclaw/pkg/bus"
@@ -16,6 +17,7 @@ import (
 	runtimeevents "github.com/sipeed/picoclaw/pkg/events"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/sipeed/picoclaw/pkg/routing"
 	"github.com/sipeed/picoclaw/pkg/skills"
 	"github.com/sipeed/picoclaw/pkg/state"
 	"github.com/sipeed/picoclaw/pkg/tools"
@@ -101,6 +103,29 @@ func NewAgentLoop(
 	registerSharedTools(al, cfg, msgBus, registry, provider)
 
 	return al
+}
+
+func canMainDelegateToAnyForAdminWhatsApp(
+	ctx context.Context,
+	cfg *config.Config,
+	currentAgentID, targetAgentID string,
+	registry *AgentRegistry,
+) bool {
+	if currentAgentID != orchestrator.AgentMain {
+		return false
+	}
+	if tools.ToolChannel(ctx) != "whatsapp" {
+		return false
+	}
+	if !orchestrator.WhatsAppAdminSenderAllowed(cfg, tools.ToolSenderID(ctx)) {
+		return false
+	}
+	targetAgentID = routing.NormalizeAgentID(targetAgentID)
+	if targetAgentID == "" || targetAgentID == currentAgentID {
+		return false
+	}
+	_, ok := registry.GetAgent(targetAgentID)
+	return ok
 }
 
 func registerSharedTools(
@@ -214,6 +239,18 @@ func registerSharedTools(
 				allowReadPaths,
 			)
 			agent.Tools.Register(sendFileTool)
+		}
+		if cfg.Tools.IsToolEnabled("save_marketing_proposal") {
+			agent.Tools.Register(tools.NewSaveMarketingProposalTool(agent.Workspace))
+		}
+		if cfg.Tools.IsToolEnabled("generate_image") {
+			agent.Tools.Register(tools.NewGenerateImageTool(agent.Workspace, cfg.Tools.ImageGeneration))
+		}
+		if cfg.Tools.IsToolEnabled("tenant_manager") {
+			agent.Tools.Register(tools.NewTenantManagerTool(""))
+		}
+		if cfg.Tools.IsToolEnabled("whatsapp_report_query") {
+			agent.Tools.Register(tools.NewWhatsAppReportQueryTool())
 		}
 
 		if ttsProvider != nil {
@@ -339,6 +376,10 @@ func registerSharedTools(
 				spawnTool.SetAllowlistChecker(func(targetAgentID string) bool {
 					return registry.CanSpawnSubagent(currentAgentID, targetAgentID)
 				})
+				spawnTool.SetContextAllowlistChecker(func(ctx context.Context, targetAgentID string) bool {
+					return registry.CanSpawnSubagent(currentAgentID, targetAgentID) ||
+						canMainDelegateToAnyForAdminWhatsApp(ctx, cfg, currentAgentID, targetAgentID, registry)
+				})
 
 				agent.Tools.Register(spawnTool)
 
@@ -365,6 +406,10 @@ func registerSharedTools(
 			delegateTool.SetSelfAgentID(currentAgentID)
 			delegateTool.SetAllowlistChecker(func(targetAgentID string) bool {
 				return registry.CanSpawnSubagent(currentAgentID, targetAgentID)
+			})
+			delegateTool.SetContextAllowlistChecker(func(ctx context.Context, targetAgentID string) bool {
+				return registry.CanSpawnSubagent(currentAgentID, targetAgentID) ||
+					canMainDelegateToAnyForAdminWhatsApp(ctx, cfg, currentAgentID, targetAgentID, registry)
 			})
 			agent.Tools.Register(delegateTool)
 		}

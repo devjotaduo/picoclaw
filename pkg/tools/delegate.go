@@ -13,9 +13,10 @@ import (
 // generic), delegate targets a named agent and runs the task using that
 // agent's own workspace, model, and tools.
 type DelegateTool struct {
-	spawner        SubTurnSpawner
-	allowlistCheck func(targetAgentID string) bool
-	selfAgentID    string
+	spawner               SubTurnSpawner
+	allowlistCheck        func(targetAgentID string) bool
+	contextAllowlistCheck func(ctx context.Context, targetAgentID string) bool
+	selfAgentID           string
 }
 
 func NewDelegateTool() *DelegateTool {
@@ -28,6 +29,10 @@ func (t *DelegateTool) SetSpawner(spawner SubTurnSpawner) {
 
 func (t *DelegateTool) SetAllowlistChecker(check func(targetAgentID string) bool) {
 	t.allowlistCheck = check
+}
+
+func (t *DelegateTool) SetContextAllowlistChecker(check func(ctx context.Context, targetAgentID string) bool) {
+	t.contextAllowlistCheck = check
 }
 
 func (t *DelegateTool) SetSelfAgentID(id string) {
@@ -78,7 +83,11 @@ func (t *DelegateTool) Execute(ctx context.Context, args map[string]any) *ToolRe
 		return ErrorResult("cannot delegate to self")
 	}
 
-	if t.allowlistCheck != nil && !t.allowlistCheck(agentID) {
+	if t.contextAllowlistCheck != nil {
+		if !t.contextAllowlistCheck(ctx, agentID) {
+			return ErrorResult(fmt.Sprintf("not allowed to delegate to agent %q", agentID))
+		}
+	} else if t.allowlistCheck != nil && !t.allowlistCheck(agentID) {
 		return ErrorResult(fmt.Sprintf("not allowed to delegate to agent %q", agentID))
 	}
 
