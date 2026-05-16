@@ -13,6 +13,13 @@ type channelCatalogItem struct {
 	Variant   string `json:"variant,omitempty"`
 }
 
+type channelStatusItem struct {
+	Name      string `json:"name"`
+	ConfigKey string `json:"config_key"`
+	Variant   string `json:"variant,omitempty"`
+	Enabled   bool   `json:"enabled"`
+}
+
 var channelCatalog = []channelCatalogItem{
 	{Name: "weixin", ConfigKey: "weixin"},
 	{Name: "telegram", ConfigKey: "telegram"},
@@ -43,6 +50,7 @@ type channelConfigResponse struct {
 // registerChannelRoutes binds read-only channel catalog endpoints to the ServeMux.
 func (h *Handler) registerChannelRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/channels/catalog", h.handleListChannelCatalog)
+	mux.HandleFunc("GET /api/channels/status", h.handleListChannelStatus)
 	mux.HandleFunc("GET /api/channels/{name}/config", h.handleGetChannelConfig)
 }
 
@@ -54,6 +62,25 @@ func (h *Handler) handleListChannelCatalog(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(map[string]any{
 		"channels": channelCatalog,
 	})
+}
+
+func (h *Handler) handleListChannelStatus(w http.ResponseWriter, r *http.Request) {
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		http.Error(w, "Failed to load config", http.StatusInternalServerError)
+		return
+	}
+	items := make([]channelStatusItem, 0, len(channelCatalog))
+	for _, item := range channelCatalog {
+		items = append(items, channelStatusItem{
+			Name:      item.Name,
+			ConfigKey: item.ConfigKey,
+			Variant:   item.Variant,
+			Enabled:   isCatalogChannelEnabled(cfg, item),
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"channels": items})
 }
 
 // handleGetChannelConfig returns safe channel config plus secret presence metadata.
@@ -147,6 +174,24 @@ func buildChannelConfigResponse(cfg *config.Config, item channelCatalogItem) cha
 	resp.Config = settings
 
 	return resp
+}
+
+func isCatalogChannelEnabled(cfg *config.Config, item channelCatalogItem) bool {
+	bc := cfg.Channels.Get(item.ConfigKey)
+	if bc == nil || !bc.Enabled {
+		return false
+	}
+	settings := map[string]any{}
+	if len(bc.Settings) > 0 {
+		_ = json.Unmarshal(bc.Settings, &settings)
+	}
+	if item.Name == "whatsapp_native" {
+		return settings["use_native"] == true
+	}
+	if item.Name == "whatsapp" {
+		return settings["use_native"] != true
+	}
+	return true
 }
 
 func defaultChannelConfig(configKey string) *config.Channel {

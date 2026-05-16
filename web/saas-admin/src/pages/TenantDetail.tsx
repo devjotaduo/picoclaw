@@ -8,9 +8,11 @@ import {
   suspendTenant,
   resumeTenant,
   deleteTenant,
+  applyLauncherProfile,
   rotatePassword,
   setCRMLinks,
 } from "@/api/tenants";
+import { listLauncherProfiles } from "@/api/launcher-profiles";
 import {
   getCRMContact,
   listContactDeals,
@@ -34,10 +36,16 @@ export function TenantDetail() {
 
   const t = useQuery({ queryKey: ["tenant", id], queryFn: () => getTenant(id), refetchInterval: 10_000 });
   const u = useQuery({ queryKey: ["usage", id], queryFn: () => getUsage(id), refetchInterval: 60_000 });
+  const profilesQ = useQuery({
+    queryKey: ["launcher-profiles"],
+    queryFn: listLauncherProfiles,
+    enabled: status.state === "authenticated" && status.me.platform_role === "platform_admin",
+  });
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [rotatedPwd, setRotatedPwd] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [applyProfileId, setApplyProfileId] = useState("");
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["tenant", id] });
 
@@ -47,6 +55,13 @@ export function TenantDetail() {
   const rotateM  = useMutation({
     mutationFn: () => rotatePassword(id),
     onSuccess: (r) => setRotatedPwd(r.initial_password),
+  });
+  const applyProfileM = useMutation({
+    mutationFn: (profileId: string) => applyLauncherProfile(id, profileId),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["tenant", id] });
+      await qc.invalidateQueries({ queryKey: ["launcher-profiles"] });
+    },
   });
 
   const copyPwd = async () => {
@@ -66,6 +81,10 @@ export function TenantDetail() {
       ? status.me.memberships.find((m) => m.tenant_id === tenant.id)?.role
       : undefined;
   const canEditConfig = isPlatformAdmin || role === "tenant_owner" || role === "tenant_admin";
+  const profiles = profilesQ.data?.profiles ?? [];
+  const currentProfile = profiles.find((profile) => profile.id === tenant.launcher_profile_id);
+  const selectedProfileId =
+    applyProfileId || tenant.launcher_profile_id || profiles.find((profile) => profile.is_default)?.id || "";
 
   return (
     <div className="mx-auto max-w-5xl p-6">
@@ -172,6 +191,39 @@ export function TenantDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {isPlatformAdmin && (
+        <Card className="mt-4">
+          <CardHeader><CardTitle>Launcher profile</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-[1fr_auto] gap-3 text-xs">
+            <div>
+              <Row label="Applied" value={currentProfile?.name ?? tenant.launcher_profile_id ?? "—"} />
+              <Row label="Version" value={tenant.launcher_profile_version_applied ?? "—"} />
+            </div>
+            <div className="flex items-end gap-2">
+              <select
+                value={selectedProfileId}
+                onChange={(e) => setApplyProfileId(e.target.value)}
+                className="h-8 rounded-md border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-100"
+              >
+                <option value="">Choose profile</option>
+                {profiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name} · v{profile.version}
+                  </option>
+                ))}
+              </select>
+              <Button
+                size="sm"
+                onClick={() => selectedProfileId && applyProfileM.mutate(selectedProfileId)}
+                disabled={!selectedProfileId || applyProfileM.isPending}
+              >
+                {applyProfileM.isPending ? "Applying…" : "Apply profile"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isPlatformAdmin && (
         <CRMSection tenantId={id} tenant={tenant} onLinked={() => qc.invalidateQueries({ queryKey: ["tenant", id] })} />

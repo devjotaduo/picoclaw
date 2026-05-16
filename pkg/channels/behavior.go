@@ -42,6 +42,14 @@ type BehaviorProvider interface {
 	ChannelBehavior(channelName string, chatID string) *ChannelBehavior
 }
 
+// ContextBehaviorProvider lets providers resolve behavior after looking at the
+// full inbound context. Multi-agent runtimes use this to choose the same agent
+// that the routing layer will use, so channel filters match the target agent's
+// behavior.json instead of always using the default agent.
+type ContextBehaviorProvider interface {
+	ChannelBehaviorForContext(inbound bus.InboundContext) *ChannelBehavior
+}
+
 // WithBehaviorProvider injects the provider that BaseChannel.applyBehaviorFilter
 // queries on every inbound message. When unset, no behavior filter runs.
 func WithBehaviorProvider(p BehaviorProvider) BaseChannelOption {
@@ -64,7 +72,16 @@ func (c *BaseChannel) applyBehaviorFilter(
 	if c.behaviorProvider == nil {
 		return content, media, true
 	}
-	beh := c.behaviorProvider.ChannelBehavior(c.name, inboundCtx.ChatID)
+	ctxForBehavior := inboundCtx
+	if strings.TrimSpace(ctxForBehavior.Channel) == "" {
+		ctxForBehavior.Channel = c.name
+	}
+	var beh *ChannelBehavior
+	if contextual, ok := c.behaviorProvider.(ContextBehaviorProvider); ok {
+		beh = contextual.ChannelBehaviorForContext(ctxForBehavior)
+	} else {
+		beh = c.behaviorProvider.ChannelBehavior(c.name, inboundCtx.ChatID)
+	}
 	if beh == nil {
 		return content, media, true
 	}

@@ -28,6 +28,20 @@ func (s *staticProvider) ChannelBehavior(_ string, _ string) *ChannelBehavior {
 	return s.beh
 }
 
+type contextProvider struct {
+	beh *ChannelBehavior
+	got bus.InboundContext
+}
+
+func (s *contextProvider) ChannelBehavior(_ string, _ string) *ChannelBehavior {
+	return s.beh
+}
+
+func (s *contextProvider) ChannelBehaviorForContext(ctx bus.InboundContext) *ChannelBehavior {
+	s.got = ctx
+	return s.beh
+}
+
 func newBaseChannelWith(beh *ChannelBehavior) *BaseChannel {
 	bc := &BaseChannel{name: "test", behaviorProvider: &staticProvider{beh: beh}}
 	return bc
@@ -41,6 +55,18 @@ func TestApplyBehaviorFilter_NoProvider_Passes(t *testing.T) {
 	}
 	if content != "hi" || len(media) != 1 {
 		t.Errorf("content/media should be unchanged, got %q %v", content, media)
+	}
+}
+
+func TestApplyBehaviorFilter_ContextProviderGetsInboundContext(t *testing.T) {
+	provider := &contextProvider{beh: newAllPassBehavior()}
+	bc := &BaseChannel{name: "whatsapp", behaviorProvider: provider}
+	_, _, allow := bc.applyBehaviorFilter("hi", nil, bus.InboundContext{ChatType: "direct", ChatID: "123"}, bus.SenderInfo{})
+	if !allow {
+		t.Fatal("all-pass behavior should allow message")
+	}
+	if provider.got.Channel != "whatsapp" || provider.got.ChatID != "123" {
+		t.Fatalf("context provider got %+v, want channel whatsapp chat 123", provider.got)
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sipeed/picoclaw/internal/saas/gatewayauth"
+	"github.com/sipeed/picoclaw/internal/saas/policy"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 )
 
@@ -36,7 +37,7 @@ func (h *Handler) tenantSubdomain(hostport string) (string, bool) {
 		host = strings.ToLower(h)
 	}
 	host = strings.Trim(host, ".")
-	if host == base || host == "admin."+base {
+	if host == base || host == "admin."+base || host == "adm."+base {
 		return "", false
 	}
 	suffix := "." + base
@@ -83,7 +84,11 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
-	if !tenantDashboardAllowed(role, r.Method, r.URL.Path) {
+	rolePolicy := policy.DefaultRolePolicy()
+	if launcherPolicy, err := policy.LoadFile(t.VolumePath); err == nil {
+		rolePolicy = launcherPolicy.RolePolicy
+	}
+	if !tenantDashboardAllowed(role, rolePolicy, r.Method, r.URL.Path) {
 		writeError(w, http.StatusForbidden, "tenant role does not allow this action")
 		return
 	}
@@ -100,7 +105,7 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 			TenantID:  t.ID,
 			UserID:    strconv.FormatInt(user.ID, 10),
 			UserEmail: user.Email,
-			Role:      string(role),
+			Role:      role,
 		}, time.Now())
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
@@ -109,7 +114,7 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 	proxy.ServeHTTP(w, r)
 }
 
-func (h *Handler) authenticateTenantRequest(w http.ResponseWriter, r *http.Request, tenantID string) (*store.User, store.TenantRole, bool) {
+func (h *Handler) authenticateTenantRequest(w http.ResponseWriter, r *http.Request, tenantID string) (*store.User, string, bool) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil || cookie.Value == "" {
 		rejectTenantGatewayAuth(w, r, h.Cfg.TenantBaseDomain)
@@ -121,30 +126,22 @@ func (h *Handler) authenticateTenantRequest(w http.ResponseWriter, r *http.Reque
 		return nil, "", false
 	}
 	if user.IsPlatformAdmin() {
-		return user, store.RoleTenantOwner, true
+		return user, policy.RolePlatformAdmin, true
 	}
 	role, err := h.Memberships.GetRole(r.Context(), user.ID, tenantID)
 	if err != nil {
 		rejectTenantGatewayAuth(w, r, h.Cfg.TenantBaseDomain)
 		return nil, "", false
 	}
-	return user, role, true
+	return user, string(role), true
 }
 
-func tenantDashboardAllowed(role store.TenantRole, method, path string) bool {
-	if method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions {
+func tenantDashboardAllowed(role string, rolePolicy policy.RolePolicy, method, path string) bool {
+	feature, required, known := policy.FeatureForRequest(method, path)
+	if !known {
 		return true
 	}
-	if role == store.RoleTenantOwner || role == store.RoleTenantAdmin {
-		return true
-	}
-	if role == store.RoleOperator {
-		return strings.Contains(path, "/inbox") ||
-			strings.Contains(path, "/messages") ||
-			strings.Contains(path, "/manual") ||
-			strings.Contains(path, "/pause")
-	}
-	return false
+	return policy.Allowed(role, rolePolicy, feature, required)
 }
 
 func rejectTenantGatewayAuth(w http.ResponseWriter, r *http.Request, baseDomain string) {
@@ -154,7 +151,7 @@ func rejectTenantGatewayAuth(w http.ResponseWriter, r *http.Request, baseDomain 
 	}
 	target := "/login"
 	if baseDomain != "" {
-		target = "https://admin." + strings.Trim(baseDomain, ".") + "/login"
+		target = "https://adm." + strings.Trim(baseDomain, ".") + "/login"
 	}
 	http.Redirect(w, r, target, http.StatusFound)
 }

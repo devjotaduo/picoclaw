@@ -3,10 +3,13 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -29,7 +32,22 @@ func setupTemplateHandler(t *testing.T) (*Handler, string) {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
 
+	writeTemplateTestSkill(t, workspace, "agendamento")
+	writeTemplateTestSkill(t, workspace, "faq-medico")
+
 	return NewHandler(configPath), workspace
+}
+
+func writeTemplateTestSkill(t *testing.T, workspace, name string) {
+	t.Helper()
+	dir := filepath.Join(workspace, "skills", name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s) error = %v", dir, err)
+	}
+	content := "---\nname: " + name + "\ndescription: Test skill " + name + "\n---\n# " + name + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile(%s/SKILL.md) error = %v", dir, err)
+	}
 }
 
 func buildSampleRequest() agentTemplateApplyRequest {
@@ -253,6 +271,231 @@ func TestApplyAgentTemplate_WritesWorkspaceFiles(t *testing.T) {
 	}
 }
 
+func TestApplyAgentTemplate_PersistsAgentConfigAndActiveTemplateID(t *testing.T) {
+	h, workspace := setupTemplateHandler(t)
+	req := buildSampleRequest()
+	req.TemplateID = "atendente-geral"
+	req.ShortDescription = "Configuração editável de atendimento geral"
+	req.Model = "frontmatter-runtime-model"
+	req.Modules.ProductsEnabled = true
+	req.Products = []agentTemplateProduct{
+		{Name: "Cimento", Price: "50", ShowPrice: true},
+	}
+	req.Behavior.MasterEnabled = false
+	req.Behavior.RespondInDM = false
+	req.Behavior.RespondInGroups = false
+
+	rec := postApplyTemplate(t, h, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	saved, err := loadAgentConfig(workspace)
+	if err != nil {
+		t.Fatalf("loadAgentConfig() error = %v", err)
+	}
+	if saved == nil {
+		t.Fatal("expected persisted agent_config.json")
+	}
+	if len(saved.Products) != 1 {
+		t.Fatalf("saved products = %+v, want one product", saved.Products)
+	}
+	if saved.TemplateID != req.TemplateID ||
+		saved.ShortDescription != req.ShortDescription ||
+		saved.Model != req.Model ||
+		saved.Products[0].Name != "Cimento" ||
+		saved.Behavior.MasterEnabled {
+		t.Fatalf("saved payload did not round-trip key fields: %+v", saved)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/agent/config", nil)
+	getRec := httptest.NewRecorder()
+	h.handleGetAgentConfig(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("GET agent config: expected 200, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+	var cfgResp agentConfigResponse
+	if err := json.NewDecoder(getRec.Body).Decode(&cfgResp); err != nil {
+		t.Fatalf("decode agent config response: %v", err)
+	}
+	if !cfgResp.Configured || cfgResp.Payload == nil {
+		t.Fatalf("expected configured response with payload, got %+v", cfgResp)
+	}
+	if len(cfgResp.Payload.Products) != 1 {
+		t.Fatalf("agent config response products = %+v, want one product", cfgResp.Payload.Products)
+	}
+	if cfgResp.Payload.TemplateID != req.TemplateID || cfgResp.Payload.Products[0].Name != "Cimento" {
+		t.Fatalf("agent config response lost applied payload: %+v", cfgResp.Payload)
+	}
+
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.Agents.Defaults.ActiveTemplateID != req.TemplateID {
+		t.Fatalf("active_template_id = %q, want %q", cfg.Agents.Defaults.ActiveTemplateID, req.TemplateID)
+	}
+}
+
+func TestApplyAgentTemplate_WritesNamedAgentWorkspaceAndConfig(t *testing.T) {
+	h, mainWorkspace := setupTemplateHandler(t)
+	writeTemplateTestSkill(t, mainWorkspace, "catalogo")
+	writeTemplateTestSkill(t, mainWorkspace, "internal-pricing")
+	req := buildSampleRequest()
+	req.AgentID = "sales"
+	req.TemplateID = "atendente-vendas"
+	req.Name = "Vendas Consultivas"
+	req.Model = "sales-model"
+	req.SkillConfigs = []agentTemplateSkillConfig{
+		{Name: "catalogo", Enabled: true, Visible: true},
+		{Name: "internal-pricing", Enabled: true, Visible: false},
+	}
+	req.Behavior.RespondInDM = false
+
+	rec := postApplyTemplate(t, h, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var applyResp agentTemplateApplyResponse
+	if err := json.NewDecoder(rec.Body).Decode(&applyResp); err != nil {
+		t.Fatalf("decode apply response: %v", err)
+	}
+	salesWorkspace := filepath.Join(filepath.Dir(mainWorkspace), "workspace-sales")
+	if applyResp.AgentID != "sales" || applyResp.Workspace != salesWorkspace {
+		t.Fatalf("apply response = %+v, want agent sales workspace %s", applyResp, salesWorkspace)
+	}
+
+	for _, name := range []string{"AGENT.md", "SOUL.md", "behavior.json", "agent_config.json"} {
+		if _, err := os.Stat(filepath.Join(salesWorkspace, name)); err != nil {
+			t.Fatalf("expected %s in named agent workspace: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(mainWorkspace, "AGENT.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("main workspace should not receive named-agent AGENT.md, stat err=%v", err)
+	}
+
+	saved, err := loadAgentConfig(salesWorkspace)
+	if err != nil {
+		t.Fatalf("load named agent config: %v", err)
+	}
+	if saved == nil || saved.AgentID != "sales" || saved.Name != req.Name || saved.Model != req.Model {
+		t.Fatalf("saved named agent payload = %+v", saved)
+	}
+
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if len(cfg.Agents.List) != 2 {
+		t.Fatalf("agents.list len = %d, want 2: %+v", len(cfg.Agents.List), cfg.Agents.List)
+	}
+	if cfg.Agents.List[0].ID != "main" || !cfg.Agents.List[0].Default {
+		t.Fatalf("expected explicit default main agent, got %+v", cfg.Agents.List[0])
+	}
+	if cfg.Agents.List[1].ID != "sales" ||
+		cfg.Agents.List[1].Name != req.Name ||
+		cfg.Agents.List[1].Workspace != salesWorkspace ||
+		cfg.Agents.List[1].Model == nil ||
+		cfg.Agents.List[1].Model.Primary != req.Model ||
+		len(cfg.Agents.List[1].Skills) != 2 {
+		t.Fatalf("named agent config not persisted correctly: %+v", cfg.Agents.List[1])
+	}
+	if cfg.Agents.Defaults.ActiveTemplateID == req.TemplateID {
+		t.Fatalf("named agent apply must not overwrite global active_template_id")
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/agent/config?agent_id=sales", nil)
+	getRec := httptest.NewRecorder()
+	h.handleGetAgentConfig(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("GET named agent config: expected 200, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+	var cfgResp agentConfigResponse
+	if err := json.NewDecoder(getRec.Body).Decode(&cfgResp); err != nil {
+		t.Fatalf("decode named agent config response: %v", err)
+	}
+	if !cfgResp.Configured || cfgResp.Payload == nil || cfgResp.Payload.AgentID != "sales" {
+		t.Fatalf("expected named configured response, got %+v", cfgResp)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/agents", nil)
+	listRec := httptest.NewRecorder()
+	h.handleListAgents(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("GET agents: expected 200, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+	var listResp agentsResponse
+	if err := json.NewDecoder(listRec.Body).Decode(&listResp); err != nil {
+		t.Fatalf("decode agents response: %v", err)
+	}
+	if len(listResp.Agents) != 2 || listResp.Agents[1].ID != "sales" || !listResp.Agents[1].Configured {
+		t.Fatalf("agents response did not include configured sales agent: %+v", listResp.Agents)
+	}
+}
+
+func TestAgentCRUD_ManagesConfigListWithoutDeletingWorkspace(t *testing.T) {
+	h, mainWorkspace := setupTemplateHandler(t)
+
+	createBody := bytes.NewBufferString(`{"id":"Suporte Premium","name":"Suporte Premium"}`)
+	createReq := httptest.NewRequest(http.MethodPost, "/api/agents", createBody)
+	createRec := httptest.NewRecorder()
+	h.handleCreateAgent(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/agents: expected 201, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+	var created agentSummary
+	if err := json.NewDecoder(createRec.Body).Decode(&created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	expectedWorkspace := filepath.Join(filepath.Dir(mainWorkspace), "workspace-suporte-premium")
+	if created.ID != "suporte-premium" || created.Workspace != expectedWorkspace {
+		t.Fatalf("created agent = %+v, want id suporte-premium workspace %s", created, expectedWorkspace)
+	}
+
+	makeDefault := true
+	updatePayload, _ := json.Marshal(updateAgentRequest{Default: &makeDefault})
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/agents/suporte-premium", bytes.NewReader(updatePayload))
+	updateReq.SetPathValue("agentID", "suporte-premium")
+	updateRec := httptest.NewRecorder()
+	h.handleUpdateAgent(updateRec, updateReq)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("PUT /api/agents/suporte-premium: expected 200, got %d: %s", updateRec.Code, updateRec.Body.String())
+	}
+	var updated agentSummary
+	if err := json.NewDecoder(updateRec.Body).Decode(&updated); err != nil {
+		t.Fatalf("decode update response: %v", err)
+	}
+	if !updated.Default {
+		t.Fatalf("updated agent should be default: %+v", updated)
+	}
+
+	if err := os.MkdirAll(expectedWorkspace, 0o755); err != nil {
+		t.Fatalf("mkdir expected workspace: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(expectedWorkspace, "keep.txt"), []byte("keep"), 0o644); err != nil {
+		t.Fatalf("seed workspace marker: %v", err)
+	}
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/agents/suporte-premium", nil)
+	deleteReq.SetPathValue("agentID", "suporte-premium")
+	deleteRec := httptest.NewRecorder()
+	h.handleDeleteAgent(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusOK {
+		t.Fatalf("DELETE /api/agents/suporte-premium: expected 200, got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(expectedWorkspace, "keep.txt")); err != nil {
+		t.Fatalf("delete should preserve workspace files: %v", err)
+	}
+
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if len(cfg.Agents.List) != 1 || cfg.Agents.List[0].ID != "main" || !cfg.Agents.List[0].Default {
+		t.Fatalf("expected only default main after delete, got %+v", cfg.Agents.List)
+	}
+}
+
 func TestApplyAgentTemplate_RejectsMissingName(t *testing.T) {
 	h, _ := setupTemplateHandler(t)
 	req := buildSampleRequest()
@@ -368,6 +611,64 @@ func TestApplyAgentTemplate_SkillConfigs_EnabledOnlyInFrontmatter(t *testing.T) 
 	}
 }
 
+func TestApplyAgentTemplate_RejectsMissingEnabledSkill(t *testing.T) {
+	h, _ := setupTemplateHandler(t)
+	req := buildSampleRequest()
+	req.Skills = nil
+	req.SkillConfigs = []agentTemplateSkillConfig{
+		{Name: "agendamento", Enabled: true, Visible: true},
+		{Name: "missing-skill", Enabled: true, Visible: true},
+	}
+	rec := postApplyTemplate(t, h, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "missing-skill") {
+		t.Fatalf("expected missing skill error, got %s", rec.Body.String())
+	}
+}
+
+func TestApplyAgentTemplate_DropsMissingDisabledSkill(t *testing.T) {
+	h, workspace := setupTemplateHandler(t)
+	req := buildSampleRequest()
+	req.Skills = nil
+	req.SkillConfigs = []agentTemplateSkillConfig{
+		{Name: "agendamento", Enabled: true, Visible: true},
+		{Name: "missing-skill", Enabled: false, Visible: true},
+	}
+	rec := postApplyTemplate(t, h, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	agentBytes, err := os.ReadFile(filepath.Join(workspace, "AGENT.md"))
+	if err != nil {
+		t.Fatalf("read AGENT.md: %v", err)
+	}
+	if strings.Contains(string(agentBytes), "missing-skill") {
+		t.Fatalf("disabled missing skill should be discarded from AGENT.md:\n%s", string(agentBytes))
+	}
+	configBytes, err := os.ReadFile(filepath.Join(workspace, "agent_config.json"))
+	if err != nil {
+		t.Fatalf("read agent_config.json: %v", err)
+	}
+	if strings.Contains(string(configBytes), "missing-skill") {
+		t.Fatalf("disabled missing skill should be discarded from agent_config.json:\n%s", string(configBytes))
+	}
+}
+
+func TestApplyAgentTemplate_RejectsLegacyMissingSkill(t *testing.T) {
+	h, _ := setupTemplateHandler(t)
+	req := buildSampleRequest()
+	req.Skills = []string{"agendamento", "missing-skill"}
+	rec := postApplyTemplate(t, h, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "missing-skill") {
+		t.Fatalf("expected missing skill error, got %s", rec.Body.String())
+	}
+}
+
 func TestApplyAgentTemplate_LegacySkillsAllVisible(t *testing.T) {
 	h, workspace := setupTemplateHandler(t)
 	rec := postApplyTemplate(t, h, buildSampleRequest())
@@ -410,7 +711,7 @@ func TestTemplateOverrides_RoundTrip(t *testing.T) {
 	override := templateOverride{
 		SkillConfigs: []agentTemplateSkillConfig{
 			{Name: "agendamento", Enabled: true, Visible: true},
-			{Name: "internal-debug", Enabled: true, Visible: false},
+			{Name: "faq-medico", Enabled: true, Visible: false},
 		},
 		Draft: &agentTemplateApplyRequest{
 			TemplateID:       "atendente-clinica",
@@ -478,6 +779,69 @@ func TestTemplateOverrides_RoundTrip(t *testing.T) {
 	_ = json.NewDecoder(rec.Body).Decode(&afterDelete)
 	if _, present := afterDelete.Overrides["atendente-clinica"]; present {
 		t.Errorf("override should be gone after DELETE: %+v", afterDelete)
+	}
+}
+
+func TestTemplateOverrides_DropsMissingDisabledSkill(t *testing.T) {
+	h, workspace := setupTemplateHandler(t)
+	override := templateOverride{
+		SkillConfigs: []agentTemplateSkillConfig{
+			{Name: "agendamento", Enabled: true, Visible: true},
+			{Name: "missing-skill", Enabled: false, Visible: true},
+		},
+	}
+	body, _ := json.Marshal(override)
+	req := httptest.NewRequest(http.MethodPut, "/api/agent/templates/overrides/atendente-clinica", bytes.NewReader(body))
+	req.SetPathValue("templateID", "atendente-clinica")
+	rec := httptest.NewRecorder()
+	h.handlePutTemplateOverride(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	data, err := os.ReadFile(filepath.Join(workspace, "template_overrides.json"))
+	if err != nil {
+		t.Fatalf("read template_overrides.json: %v", err)
+	}
+	if strings.Contains(string(data), "missing-skill") {
+		t.Fatalf("disabled missing skill should be discarded from override:\n%s", string(data))
+	}
+}
+
+func TestTemplateCatalogRecommendedSkillsExist(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "../../.."))
+	catalogPath := filepath.Join(repoRoot, "web", "frontend", "src", "components", "agent", "templates", "catalog.ts")
+	catalogBytes, err := os.ReadFile(catalogPath)
+	if err != nil {
+		t.Fatalf("read catalog.ts: %v", err)
+	}
+	skillsRoot := filepath.Join(repoRoot, "workspace", "skills")
+	dirs, err := os.ReadDir(skillsRoot)
+	if err != nil {
+		t.Fatalf("read workspace skills: %v", err)
+	}
+	available := map[string]struct{}{}
+	for _, dir := range dirs {
+		if dir.IsDir() {
+			available[dir.Name()] = struct{}{}
+		}
+	}
+
+	blockRe := regexp.MustCompile(`recommended_skills:\s*\[([\s\S]*?)\]`)
+	nameRe := regexp.MustCompile(`"([^"]+)"`)
+	for _, block := range blockRe.FindAllSubmatch(catalogBytes, -1) {
+		for _, match := range nameRe.FindAllSubmatch(block[1], -1) {
+			name := string(match[1])
+			if name == "memory-and-knowledge-check" {
+				t.Fatalf("memory-and-knowledge-check must not be a default recommended template skill")
+			}
+			if _, ok := available[name]; !ok {
+				t.Fatalf("recommended skill %q is missing from workspace/skills", name)
+			}
+		}
 	}
 }
 
@@ -780,19 +1144,32 @@ func TestApplyAgentTemplate_WritesBehaviorJSON(t *testing.T) {
 	h, workspace := setupTemplateHandler(t)
 	req := buildSampleRequest()
 	req.Behavior = agentTemplateBehavior{
-		MasterEnabled:     true,
-		BusinessHoursOnly: true,
-		OutOfHoursReply:   "Voltamos amanhã às 8h.",
-		RespondInDM:       true,
-		RespondInGroups:   false,
-		GroupMentionOnly:  true,
-		KeywordTrigger:    "/atendimento",
-		OutboundOnlyMode:  true,
-		ProcessImages:     false,
-		ProcessDocuments:  false,
-		ProcessAudio:      true,
-		MaxMediaSizeMB:    5,
-		HandoffKeywords:   []string{"falar com humano", "atendente"},
+		MasterEnabled:               true,
+		BusinessHoursOnly:           true,
+		OutOfHoursReply:             "Voltamos amanhã às 8h.",
+		RespondInDM:                 false,
+		RespondInGroups:             false,
+		GroupMentionOnly:            true,
+		KeywordTrigger:              "/atendimento",
+		OutboundOnlyMode:            true,
+		IgnoreOtherBots:             true,
+		IgnoreForwardedMessages:     true,
+		IgnoreSelfMessages:          false,
+		ProcessImages:               false,
+		ProcessDocuments:            false,
+		ProcessAudio:                true,
+		ProcessVideo:                false,
+		ProcessStickers:             false,
+		ProcessLocation:             false,
+		MaxMediaSizeMB:              5,
+		SessionTimeoutMinutes:       30,
+		MaxMessagesPerSession:       7,
+		MaskPIIInReplies:            true,
+		StoreReceivedMedia:          false,
+		MaxMessagesPerMinutePerUser: 3,
+		ResponseCooldownSeconds:     9,
+		HandoffKeywords:             []string{"falar com humano", "atendente"},
+		HandoffAfterFailures:        4,
 	}
 	req.CompanyInfo.Schedule = agentTemplateCompanySchedule{
 		Monday: agentTemplateDaySchedule{Open: true, From: "08:00", To: "18:00"},
@@ -836,6 +1213,9 @@ func TestApplyAgentTemplate_WritesBehaviorJSON(t *testing.T) {
 	if got.OutOfHoursReply != "Voltamos amanhã às 8h." {
 		t.Errorf("OutOfHoursReply = %q", got.OutOfHoursReply)
 	}
+	if got.RespondInDM {
+		t.Error("RespondInDM should be false")
+	}
 	if got.RespondInGroups {
 		t.Error("RespondInGroups should be false")
 	}
@@ -848,17 +1228,47 @@ func TestApplyAgentTemplate_WritesBehaviorJSON(t *testing.T) {
 	if !got.OutboundOnlyMode {
 		t.Error("OutboundOnlyMode should be true")
 	}
+	if !got.IgnoreOtherBots || !got.IgnoreForwardedMessages {
+		t.Error("IgnoreOtherBots/IgnoreForwardedMessages should be true")
+	}
+	if got.IgnoreSelfMessages {
+		t.Error("IgnoreSelfMessages should be false")
+	}
 	if got.ProcessImages || got.ProcessDocuments {
 		t.Error("ProcessImages/ProcessDocuments should be false")
 	}
 	if !got.ProcessAudio {
 		t.Error("ProcessAudio should be true")
 	}
+	if got.ProcessVideo || got.ProcessStickers || got.ProcessLocation {
+		t.Error("ProcessVideo/ProcessStickers/ProcessLocation should be false")
+	}
 	if got.MaxMediaSizeMB != 5 {
 		t.Errorf("MaxMediaSizeMB = %d, want 5", got.MaxMediaSizeMB)
 	}
+	if got.SessionTimeoutMinutes != 30 {
+		t.Errorf("SessionTimeoutMinutes = %d, want 30", got.SessionTimeoutMinutes)
+	}
+	if got.MaxMessagesPerSession != 7 {
+		t.Errorf("MaxMessagesPerSession = %d, want 7", got.MaxMessagesPerSession)
+	}
+	if !got.MaskPIIInReplies {
+		t.Error("MaskPIIInReplies should be true")
+	}
+	if got.StoreReceivedMedia {
+		t.Error("StoreReceivedMedia should be false")
+	}
+	if got.MaxMessagesPerMinutePerUser != 3 {
+		t.Errorf("MaxMessagesPerMinutePerUser = %d, want 3", got.MaxMessagesPerMinutePerUser)
+	}
+	if got.ResponseCooldownSeconds != 9 {
+		t.Errorf("ResponseCooldownSeconds = %d, want 9", got.ResponseCooldownSeconds)
+	}
 	if len(got.HandoffKeywords) != 2 || got.HandoffKeywords[0] != "falar com humano" {
 		t.Errorf("HandoffKeywords = %v", got.HandoffKeywords)
+	}
+	if got.HandoffAfterFailures != 4 {
+		t.Errorf("HandoffAfterFailures = %d, want 4", got.HandoffAfterFailures)
 	}
 	if !got.Schedule.Monday.Open || got.Schedule.Monday.From != "08:00" {
 		t.Errorf("Schedule.Monday = %+v", got.Schedule.Monday)

@@ -293,11 +293,8 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     language: "pt-br",
     tone: "friendly",
     recommended_skills: [
-      "memory-and-knowledge-check",
       "faq-answering",
       "intent-routing",
-      "customer-data-collector",
-      "complaint-summary",
       "sector-routing",
       "lgpd-check",
     ],
@@ -491,13 +488,11 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     language: "pt-br",
     tone: "formal",
     recommended_skills: [
-      "memory-and-knowledge-check",
       "appointment-triage",
       "clinic-scheduling",
-      "insurance-check",
-      "exam-preparation-info",
       "health-safety-routing",
       "sensitive-data-protection",
+      "lgpd-check",
     ],
     recommended_tools: [
       "check_available_slots",
@@ -688,13 +683,10 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     language: "pt-br",
     tone: "friendly",
     recommended_skills: [
-      "memory-and-knowledge-check",
-      "product-recommendation",
       "order-status-triage",
       "returns-and-refunds-policy",
-      "delivery-issue-summary",
-      "payment-safety-check",
       "customer-identity-verification",
+      "lgpd-check",
     ],
     recommended_tools: [
       "search_product_catalog",
@@ -903,12 +895,11 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     language: "pt-br",
     tone: "neutral",
     recommended_skills: [
-      "memory-and-knowledge-check",
       "technical-troubleshooting",
+      "knowledge-base-resolution",
       "bug-report-builder",
       "log-sanitizer",
       "severity-classification",
-      "knowledge-base-resolution",
       "security-incident-routing",
     ],
     recommended_tools: [
@@ -1116,13 +1107,10 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     language: "pt-br",
     tone: "friendly",
     recommended_skills: [
-      "memory-and-knowledge-check",
       "lead-qualification",
       "bant-spin-discovery",
       "objection-handling",
-      "meeting-preparation",
-      "crm-lead-summary",
-      "commercial-fit-scoring",
+      "sector-routing",
     ],
     recommended_tools: [
       "create_crm_lead",
@@ -1313,13 +1301,10 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     language: "pt-br",
     tone: "formal",
     recommended_skills: [
-      "memory-and-knowledge-check",
       "internal-policy-search",
-      "employee-request-triage",
-      "access-request-routing",
       "confidentiality-check",
-      "expense-request-summary",
       "conduct-case-routing",
+      "lgpd-check",
     ],
     recommended_tools: [
       "search_internal_policy",

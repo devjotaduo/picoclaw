@@ -14,12 +14,13 @@ import (
 )
 
 type createTenantReq struct {
-	DisplayName      string   `json:"display_name"`
-	OwnerEmail       string   `json:"owner_email"`
-	Subdomain        string   `json:"subdomain"`
-	MonthlyBudgetUSD *float64 `json:"monthly_budget_usd,omitempty"`
-	MemLimitMB       int      `json:"mem_limit_mb,omitempty"`
-	CPUQuota         float64  `json:"cpu_quota,omitempty"`
+	DisplayName       string   `json:"display_name"`
+	OwnerEmail        string   `json:"owner_email"`
+	Subdomain         string   `json:"subdomain"`
+	MonthlyBudgetUSD  *float64 `json:"monthly_budget_usd,omitempty"`
+	MemLimitMB        int      `json:"mem_limit_mb,omitempty"`
+	CPUQuota          float64  `json:"cpu_quota,omitempty"`
+	LauncherProfileID string   `json:"launcher_profile_id,omitempty"`
 }
 
 func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
@@ -31,6 +32,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	req.DisplayName = strings.TrimSpace(req.DisplayName)
 	req.OwnerEmail = strings.TrimSpace(strings.ToLower(req.OwnerEmail))
 	req.Subdomain = strings.TrimSpace(strings.ToLower(req.Subdomain))
+	req.LauncherProfileID = strings.TrimSpace(req.LauncherProfileID)
 	if req.DisplayName == "" || req.OwnerEmail == "" || req.Subdomain == "" {
 		writeError(w, http.StatusBadRequest, "display_name, owner_email and subdomain are required")
 		return
@@ -48,12 +50,13 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out, err := h.Provisioner.Create(r.Context(), tenant.CreateInput{
-		DisplayName:      req.DisplayName,
-		OwnerEmail:       req.OwnerEmail,
-		Subdomain:        req.Subdomain,
-		MonthlyBudgetUSD: req.MonthlyBudgetUSD,
-		MemLimitMB:       req.MemLimitMB,
-		CPUQuota:         req.CPUQuota,
+		DisplayName:       req.DisplayName,
+		OwnerEmail:        req.OwnerEmail,
+		Subdomain:         req.Subdomain,
+		MonthlyBudgetUSD:  req.MonthlyBudgetUSD,
+		MemLimitMB:        req.MemLimitMB,
+		CPUQuota:          req.CPUQuota,
+		LauncherProfileID: req.LauncherProfileID,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -242,21 +245,23 @@ func (h *Handler) handleSetCRMLinks(w http.ResponseWriter, r *http.Request) {
 
 func summarizeTenant(t *store.Tenant) map[string]any {
 	return map[string]any{
-		"id":                         t.ID,
-		"display_name":               t.DisplayName,
-		"owner_email":                t.OwnerEmail,
-		"subdomain":                  t.Subdomain,
-		"status":                     t.Status,
-		"container_id":               t.ContainerID,
-		"mem_limit_mb":               t.MemLimitMB,
-		"cpu_quota":                  t.CPUQuota,
-		"monthly_budget_usd":         t.MonthlyBudgetUSD,
-		"initial_password_delivered": t.InitialPasswordDelivered,
-		"last_error":                 t.LastError,
-		"created_at":                 t.CreatedAt,
-		"suspended_at":               t.SuspendedAt,
-		"crm_contact_id":             t.CRMContactID,
-		"crm_company_id":             t.CRMCompanyID,
-		"crm_deal_id":                t.CRMDealID,
+		"id":                               t.ID,
+		"display_name":                     t.DisplayName,
+		"owner_email":                      t.OwnerEmail,
+		"subdomain":                        t.Subdomain,
+		"status":                           t.Status,
+		"container_id":                     t.ContainerID,
+		"mem_limit_mb":                     t.MemLimitMB,
+		"cpu_quota":                        t.CPUQuota,
+		"monthly_budget_usd":               t.MonthlyBudgetUSD,
+		"initial_password_delivered":       t.InitialPasswordDelivered,
+		"last_error":                       t.LastError,
+		"created_at":                       t.CreatedAt,
+		"suspended_at":                     t.SuspendedAt,
+		"crm_contact_id":                   t.CRMContactID,
+		"crm_company_id":                   t.CRMCompanyID,
+		"crm_deal_id":                      t.CRMDealID,
+		"launcher_profile_id":              t.LauncherProfileID,
+		"launcher_profile_version_applied": t.LauncherProfileVersionApplied,
 	}
 }

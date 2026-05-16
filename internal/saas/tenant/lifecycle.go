@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/sipeed/picoclaw/internal/saas/store"
 )
 
 // Suspend stops the container (graceful 30s). Volume and DB row remain.
@@ -84,7 +86,10 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 	if err := p.Tenants.SetContainer(ctx, id, cid); err != nil {
 		return fmt.Errorf("set container: %w", err)
 	}
-	return p.Docker.WaitRunning(ctx, cid, 60*time.Second)
+	if err := p.Docker.WaitRunning(ctx, cid, 60*time.Second); err != nil {
+		return err
+	}
+	return p.Tenants.SetStatus(ctx, id, store.StatusActive, nil)
 }
 
 // Delete marks the tenant deleted and best-effort stops the container. The

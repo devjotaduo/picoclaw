@@ -10,15 +10,21 @@ import (
 	"github.com/sipeed/picoclaw/pkg/logger"
 )
 
+func defaultConfigWithoutChannels() *config.Config {
+	cfg := config.DefaultConfig()
+	cfg.Channels = config.ChannelsConfig{}
+	return cfg
+}
+
 func TestToChannelHashes(t *testing.T) {
 	logger.SetLevel(logger.DEBUG)
-	cfg := config.DefaultConfig()
+	cfg := defaultConfigWithoutChannels()
 	results := toChannelHashes(cfg)
 	assert.Equal(t, 0, len(results))
 	logger.Debugf("results: %v", results)
 
 	// Add dingtalk channel via map
-	cfg2 := config.DefaultConfig()
+	cfg2 := defaultConfigWithoutChannels()
 	cfg2.Channels["dingtalk"] = &config.Channel{
 		Enabled:  true,
 		Type:     config.ChannelDingTalk,
@@ -32,7 +38,7 @@ func TestToChannelHashes(t *testing.T) {
 	assert.EqualValues(t, []string(nil), removed)
 
 	// Add telegram channel
-	cfg3 := config.DefaultConfig()
+	cfg3 := defaultConfigWithoutChannels()
 	cfg3.Channels["telegram"] = &config.Channel{
 		Enabled:  true,
 		Type:     config.ChannelTelegram,
@@ -76,7 +82,7 @@ func TestToChannelHashes(t *testing.T) {
 }
 
 func TestToChannelHashes_SerializationStability(t *testing.T) {
-	cfg := config.DefaultConfig()
+	cfg := defaultConfigWithoutChannels()
 	cfg.Channels["test"] = &config.Channel{
 		Enabled:  true,
 		Settings: config.RawNode(`{"enabled":true,"key":"value"}`),
@@ -84,7 +90,7 @@ func TestToChannelHashes_SerializationStability(t *testing.T) {
 	h1 := toChannelHashes(cfg)
 
 	// Same config should produce same hash
-	cfg2 := config.DefaultConfig()
+	cfg2 := defaultConfigWithoutChannels()
 	cfg2.Channels["test"] = &config.Channel{
 		Enabled:  true,
 		Settings: config.RawNode(`{"enabled":true,"key":"value"}`),
@@ -94,7 +100,7 @@ func TestToChannelHashes_SerializationStability(t *testing.T) {
 }
 
 func TestCompareChannels_NoChanges(t *testing.T) {
-	cfg := config.DefaultConfig()
+	cfg := defaultConfigWithoutChannels()
 	cfg.Channels["a"] = &config.Channel{Enabled: true, Settings: config.RawNode(`{}`)}
 	cfg.Channels["b"] = &config.Channel{Enabled: true, Settings: config.RawNode(`{}`)}
 	h := toChannelHashes(cfg)
@@ -105,7 +111,7 @@ func TestCompareChannels_NoChanges(t *testing.T) {
 }
 
 func TestToChannelConfig_EmptyList(t *testing.T) {
-	cfg := config.DefaultConfig()
+	cfg := defaultConfigWithoutChannels()
 	cfg.Channels["test"] = &config.Channel{Enabled: true, Settings: config.RawNode(`{}`)}
 
 	cc, err := toChannelConfig(cfg, []string{})
@@ -114,7 +120,7 @@ func TestToChannelConfig_EmptyList(t *testing.T) {
 }
 
 func TestToChannelHashes_NonEnabledSkipped(t *testing.T) {
-	cfg := config.DefaultConfig()
+	cfg := defaultConfigWithoutChannels()
 	cfg.Channels["test"] = &config.Channel{Enabled: false, Settings: config.RawNode(`{"enabled":false}`)}
 
 	h := toChannelHashes(cfg)
@@ -122,7 +128,7 @@ func TestToChannelHashes_NonEnabledSkipped(t *testing.T) {
 }
 
 func TestToChannelHashes_InvalidJSON(t *testing.T) {
-	cfg := config.DefaultConfig()
+	cfg := defaultConfigWithoutChannels()
 	cfg.Channels["test"] = &config.Channel{
 		Enabled:  true,
 		Settings: config.RawNode(`invalid-json`),
@@ -134,7 +140,7 @@ func TestToChannelHashes_InvalidJSON(t *testing.T) {
 }
 
 func TestToChannelHashes_RealWorldChannel(t *testing.T) {
-	cfg := config.DefaultConfig()
+	cfg := defaultConfigWithoutChannels()
 
 	// Simulate a telegram channel config
 	telegramSettings, _ := json.Marshal(map[string]any{

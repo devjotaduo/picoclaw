@@ -156,8 +156,8 @@ func (h *Handler) handleGetSkillRaw(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleUpdateSkill writes a new SKILL.md body for the skill. Only skills
-// under the workspace can be edited — builtins live in the binary's resource
-// tree and any change there would be reverted on the next deploy.
+// under the workspace can be edited. Global and builtin skills are shared
+// runtime inputs and must stay read-only from the launcher.
 func (h *Handler) handleUpdateSkill(w http.ResponseWriter, r *http.Request) {
 	cfg, err := config.LoadConfig(h.configPath)
 	if err != nil {
@@ -217,15 +217,11 @@ func (h *Handler) handleUpdateSkill(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// isSkillEditableSource gates the PUT endpoint. "workspace" is the user-owned
-// installation directory and is safe to edit; "builtin" lives inside the
-// binary's embedded resource tree and would be reverted on every deploy.
+// isSkillEditableSource gates the PUT endpoint. "workspace" is the tenant-owned
+// installation directory and is safe to edit. Global/builtin sources are shared
+// inputs and should not be mutated from a tenant launcher.
 func isSkillEditableSource(source string) bool {
-	switch source {
-	case "workspace", "global", "manual":
-		return true
-	}
-	return false
+	return source == "workspace"
 }
 
 func (h *Handler) handleListSkills(w http.ResponseWriter, r *http.Request) {

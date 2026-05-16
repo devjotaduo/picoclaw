@@ -10,6 +10,13 @@ export interface SupportedChannel {
   variant?: string
 }
 
+export interface ChannelStatus {
+  name: string
+  config_key: string
+  variant?: string
+  enabled: boolean
+}
+
 export interface ChannelConfigResponse {
   config: ChannelConfig
   configured_secrets: string[]
@@ -19,6 +26,10 @@ export interface ChannelConfigResponse {
 
 interface ChannelsCatalogResponse {
   channels: SupportedChannel[]
+}
+
+interface ChannelsStatusResponse {
+  channels: ChannelStatus[]
 }
 
 interface ConfigActionResponse {
@@ -53,6 +64,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export async function getChannelsCatalog(): Promise<ChannelsCatalogResponse> {
   return request<ChannelsCatalogResponse>("/api/channels/catalog")
+}
+
+export async function getChannelsStatus(): Promise<ChannelsStatusResponse> {
+  return request<ChannelsStatusResponse>("/api/channels/status")
 }
 
 export async function getAppConfig(): Promise<AppConfig> {

@@ -42,6 +42,9 @@ func run() error {
 	if err := db.Migrate(ctx); err != nil {
 		return err
 	}
+	if err := tenant.EnsureDefaultLauncherProfile(ctx, cfg, &store.LauncherProfileStore{DB: db}); err != nil {
+		return err
+	}
 
 	dk, err := tenant.NewDockerClient(cfg.DockerHost)
 	if err != nil {

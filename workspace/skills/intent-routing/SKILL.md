@@ -24,7 +24,7 @@ description: Classificar a intenção do cliente em uma das categorias da empres
 
 ## Workflow
 
-1. Ler a mensagem do cliente (já tendo passado por `memory-and-knowledge-check`).
+1. Ler a mensagem do cliente e o contexto disponível da conversa.
 2. Identificar palavras-chave e contexto. Cruzar com a categoria mais provável.
 3. Se a categoria for clara → seguir o fluxo correspondente (responder, coletar dados, encaminhar).
 4. Se a categoria for ambígua → fazer **uma** pergunta de esclarecimento ("Posso te ajudar com mais agilidade se souber: é uma dúvida, uma reclamação ou um pedido novo?").

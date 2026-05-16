@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -31,6 +32,13 @@ const (
 	// password is initialized.
 	LauncherDashboardSetupPath = "/launcher-setup"
 )
+
+type trustedGatewayClaimsContextKey struct{}
+
+func TrustedGatewayClaims(r *http.Request) (gatewayauth.Claims, bool) {
+	claims, ok := r.Context().Value(trustedGatewayClaimsContextKey{}).(gatewayauth.Claims)
+	return claims, ok
+}
 
 // NewLauncherDashboardSessionCookie creates the per-process session cookie value.
 func NewLauncherDashboardSessionCookie() (string, error) {
@@ -145,8 +153,9 @@ func LauncherDashboardAuth(cfg LauncherDashboardAuthConfig, next http.Handler) h
 				next.ServeHTTP(w, r)
 				return
 			}
-			if validTrustedGatewayAuth(r, cfg) {
-				next.ServeHTTP(w, r)
+			if claims, ok := validTrustedGatewayAuth(r, cfg); ok {
+				ctx := context.WithValue(r.Context(), trustedGatewayClaimsContextKey{}, claims)
+				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
 			rejectLauncherDashboardAuth(w, r, p)
@@ -318,9 +327,9 @@ func isTrustedGatewayMode(cfg LauncherDashboardAuthConfig) bool {
 	return strings.EqualFold(strings.TrimSpace(cfg.AuthMode), "trusted_gateway")
 }
 
-func validTrustedGatewayAuth(r *http.Request, cfg LauncherDashboardAuthConfig) bool {
-	_, err := gatewayauth.VerifyRequest(r, cfg.TrustedGatewaySecret, 5*time.Minute, time.Now())
-	return err == nil
+func validTrustedGatewayAuth(r *http.Request, cfg LauncherDashboardAuthConfig) (gatewayauth.Claims, bool) {
+	claims, err := gatewayauth.VerifyRequest(r, cfg.TrustedGatewaySecret, 5*time.Minute, time.Now())
+	return claims, err == nil
 }
 
 func rejectLauncherDashboardAuth(w http.ResponseWriter, r *http.Request, canonicalPath string) {

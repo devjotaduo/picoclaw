@@ -1,8 +1,12 @@
 package api
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/sipeed/picoclaw/internal/saas/config"
+	"github.com/sipeed/picoclaw/internal/saas/policy"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 )
 
@@ -28,19 +32,46 @@ func TestTenantRoleAllowsHierarchy(t *testing.T) {
 }
 
 func TestTenantDashboardAllowed(t *testing.T) {
-	if !tenantDashboardAllowed(store.RoleViewer, "GET", "/api/config") {
+	rolePolicy := policy.DefaultRolePolicy()
+	if !tenantDashboardAllowed(string(store.RoleViewer), rolePolicy, "GET", "/api/models") {
 		t.Fatal("viewer should be able to read")
 	}
-	if tenantDashboardAllowed(store.RoleViewer, "PUT", "/api/config") {
+	if tenantDashboardAllowed(string(store.RoleViewer), rolePolicy, "PUT", "/api/config") {
 		t.Fatal("viewer should not be able to mutate config")
 	}
-	if !tenantDashboardAllowed(store.RoleTenantAdmin, "PUT", "/api/config") {
+	if !tenantDashboardAllowed(string(store.RoleTenantAdmin), rolePolicy, "PUT", "/api/config") {
 		t.Fatal("tenant_admin should be able to mutate config")
 	}
-	if !tenantDashboardAllowed(store.RoleOperator, "POST", "/api/whatsapp/inbox/messages/send") {
+	if !tenantDashboardAllowed(string(store.RoleOperator), rolePolicy, "POST", "/api/whatsapp/inbox/messages/send") {
 		t.Fatal("operator should be able to use inbox/manual-action routes")
 	}
-	if tenantDashboardAllowed(store.RoleOperator, "PUT", "/api/config") {
+	if tenantDashboardAllowed(string(store.RoleOperator), rolePolicy, "PUT", "/api/config") {
 		t.Fatal("operator should not be able to mutate config")
+	}
+}
+
+func TestTenantSubdomainSkipsAdminHosts(t *testing.T) {
+	h := &Handler{Cfg: &config.Config{TenantBaseDomain: "jotaduo.com"}}
+	for _, host := range []string{"jotaduo.com", "admin.jotaduo.com", "adm.jotaduo.com"} {
+		if sub, ok := h.tenantSubdomain(host); ok {
+			t.Fatalf("tenantSubdomain(%q) = %q,true; want admin host skipped", host, sub)
+		}
+	}
+	if sub, ok := h.tenantSubdomain("carlao.jotaduo.com"); !ok || sub != "carlao" {
+		t.Fatalf("tenantSubdomain(carlao.jotaduo.com) = %q,%v; want carlao,true", sub, ok)
+	}
+}
+
+func TestRejectTenantGatewayAuthRedirectsToAdmHost(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "https://carlao.jotaduo.com/", nil)
+	rec := httptest.NewRecorder()
+
+	rejectTenantGatewayAuth(rec, req, "jotaduo.com")
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusFound)
+	}
+	if got := rec.Header().Get("Location"); got != "https://adm.jotaduo.com/login" {
+		t.Fatalf("Location = %q", got)
 	}
 }

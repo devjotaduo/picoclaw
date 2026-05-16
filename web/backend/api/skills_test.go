@@ -35,6 +35,13 @@ func setGithubBaseURL(cfg *config.Config, baseURL string) {
 	cfg.Tools.Skills.Registries.Set("github", registryCfg)
 }
 
+func TestIsSkillEditableSourceOnlyWorkspace(t *testing.T) {
+	assert.True(t, isSkillEditableSource("workspace"))
+	assert.False(t, isSkillEditableSource("global"))
+	assert.False(t, isSkillEditableSource("builtin"))
+	assert.False(t, isSkillEditableSource("manual"))
+}
+
 func TestHandleListSkills(t *testing.T) {
 	configPath, cleanup := setupOAuthTestEnv(t)
 	defer cleanup()

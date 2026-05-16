@@ -12,7 +12,7 @@ import (
 var (
 	subdomainRE       = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
 	reservedSubdomain = map[string]struct{}{
-		"admin": {}, "api": {}, "www": {}, "traefik": {}, "litellm": {},
+		"adm": {}, "admin": {}, "api": {}, "www": {}, "traefik": {}, "litellm": {},
 		"postgres": {}, "controlplane": {}, "root": {}, "mail": {},
 		"docs": {}, "blog": {}, "status": {},
 	}

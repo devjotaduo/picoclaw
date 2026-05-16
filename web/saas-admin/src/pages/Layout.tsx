@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign } from "lucide-react";
+import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,7 @@ export function Layout() {
   const { signOut, status } = useAuth();
   const loc = useLocation();
   const inCrm = loc.pathname.startsWith("/crm");
+  const inProfiles = loc.pathname.startsWith("/launcher-profiles");
   const isPlatformAdmin =
     status.state === "authenticated" && status.me.platform_role === "platform_admin";
 
@@ -29,6 +30,12 @@ export function Layout() {
           <SideLink to="/tenants" icon={<Users className="h-4 w-4" />} active={loc.pathname.startsWith("/tenants")}>
             Tenants
           </SideLink>
+
+          {isPlatformAdmin && (
+            <SideLink to="/launcher-profiles" icon={<SlidersHorizontal className="h-4 w-4" />} active={inProfiles}>
+              Launcher profiles
+            </SideLink>
+          )}
 
           {isPlatformAdmin && (
             <SideLink to="/crm/contacts" icon={<Briefcase className="h-4 w-4" />} active={inCrm}>

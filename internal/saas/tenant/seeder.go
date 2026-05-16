@@ -17,8 +17,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/sipeed/picoclaw/internal/saas/auth"
+	"gopkg.in/yaml.v3"
 	_ "modernc.org/sqlite"
 )
 
@@ -41,9 +43,12 @@ const (
 // agent is pre-configured to use LiteLLM with the tenant's virtual key.
 // The key is written to litellm.key and referenced as file://litellm.key so
 // the plaintext never lives inside a human-readable JSON field.
-// No-op when llmKey is empty (LiteLLM integration disabled). When a template
-// already includes config.json, this merges the required LiteLLM defaults
-// instead of trusting the template to point at the tenant-scoped virtual key.
+// No-op when llmKey is empty (LiteLLM integration disabled). When a launcher
+// profile already includes config.json, this injects the tenant-scoped LiteLLM
+// credential into LiteLLM model entries. A profile-selected default model is
+// kept only when it resolves to a tenant-safe usable model; sanitized profiles
+// with a provider default but no credential fall back to the per-tenant LiteLLM
+// model so the gateway can start in production.
 func SeedPicoConfig(_ context.Context, volumeDir, litellmBase, llmKey string) error {
 	if llmKey == "" {
 		return nil
@@ -66,7 +71,7 @@ func SeedPicoConfig(_ context.Context, volumeDir, litellmBase, llmKey string) er
 		return fmt.Errorf("read config.json: %w", err)
 	}
 
-	mergeLiteLLMDefaults(cfg, litellmBase)
+	mergeLiteLLMCredential(cfg, litellmBase)
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
@@ -123,11 +128,15 @@ func defaultPicoConfig(litellmBase string) map[string]any {
 	}
 }
 
-func mergeLiteLLMDefaults(cfg map[string]any, litellmBase string) {
+func mergeLiteLLMCredential(cfg map[string]any, litellmBase string) {
 	agents := ensureMap(cfg, "agents")
 	defaults := ensureMap(agents, "defaults")
-	defaults["provider"] = "litellm"
-	defaults["model_name"] = "default"
+	if _, ok := defaults["provider"]; !ok {
+		defaults["provider"] = "litellm"
+	}
+	if _, ok := defaults["model_name"]; !ok {
+		defaults["model_name"] = "default"
+	}
 	if _, ok := defaults["workspace"]; !ok {
 		defaults["workspace"] = "/root/.picoclaw/workspace"
 	}
@@ -135,7 +144,7 @@ func mergeLiteLLMDefaults(cfg map[string]any, litellmBase string) {
 		defaults["restrict_to_workspace"] = true
 	}
 
-	model := map[string]any{
+	fallbackModel := map[string]any{
 		"model_name": "default",
 		"provider":   "litellm",
 		"model":      "gpt-4o-mini",
@@ -144,22 +153,30 @@ func mergeLiteLLMDefaults(cfg map[string]any, litellmBase string) {
 		"enabled":    true,
 	}
 	list, _ := cfg["model_list"].([]any)
-	replaced := false
-	for i, item := range list {
+	hasLiteLLMModel := false
+	fallbackModelName := "default"
+	for _, item := range list {
 		m, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
-		if m["model_name"] == "default" {
-			list[i] = model
-			replaced = true
-			break
+		if isLiteLLMModel(m) {
+			m["api_base"] = litellmBase + "/v1"
+			m["api_keys"] = []string{"file://litellm.key"}
+			if _, ok := m["enabled"]; !ok {
+				m["enabled"] = true
+			}
+			hasLiteLLMModel = true
+			if name := modelName(m); name != "" {
+				fallbackModelName = name
+			}
 		}
 	}
-	if !replaced {
-		list = append(list, model)
+	if !hasLiteLLMModel {
+		list = append(list, fallbackModel)
 	}
 	cfg["model_list"] = list
+	ensureUsableDefaultModel(defaults, list, fallbackModelName)
 
 	channels := ensureMap(cfg, "channel_list")
 	if _, ok := channels["pico"]; !ok {
@@ -174,6 +191,74 @@ func mergeLiteLLMDefaults(cfg map[string]any, litellmBase string) {
 	}
 }
 
+func isLiteLLMModel(m map[string]any) bool {
+	provider, _ := m["provider"].(string)
+	if strings.EqualFold(strings.TrimSpace(provider), "litellm") {
+		return true
+	}
+	model, _ := m["model"].(string)
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), "litellm/")
+}
+
+func ensureUsableDefaultModel(defaults map[string]any, list []any, fallbackModelName string) {
+	defaultName, _ := defaults["model_name"].(string)
+	defaultName = strings.TrimSpace(defaultName)
+	defaultModel := findModelByName(list, defaultName)
+	if defaultModel != nil && tenantSafeModelUsable(defaultModel) {
+		return
+	}
+	if strings.TrimSpace(fallbackModelName) == "" {
+		fallbackModelName = "default"
+	}
+	defaults["provider"] = "litellm"
+	defaults["model_name"] = fallbackModelName
+}
+
+func findModelByName(list []any, name string) map[string]any {
+	if name == "" {
+		return nil
+	}
+	for _, item := range list {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if modelName(m) == name {
+			return m
+		}
+	}
+	return nil
+}
+
+func modelName(m map[string]any) string {
+	if s, _ := m["model_name"].(string); strings.TrimSpace(s) != "" {
+		return strings.TrimSpace(s)
+	}
+	if s, _ := m["name"].(string); strings.TrimSpace(s) != "" {
+		return strings.TrimSpace(s)
+	}
+	return ""
+}
+
+func tenantSafeModelUsable(m map[string]any) bool {
+	if enabled, ok := m["enabled"].(bool); ok && !enabled {
+		return false
+	}
+	if isLiteLLMModel(m) {
+		return true
+	}
+	if s, _ := m["api_key"].(string); strings.TrimSpace(s) != "" {
+		return true
+	}
+	switch keys := m["api_keys"].(type) {
+	case []any:
+		return len(keys) > 0
+	case []string:
+		return len(keys) > 0
+	}
+	return false
+}
+
 func ensureMap(parent map[string]any, key string) map[string]any {
 	if m, ok := parent[key].(map[string]any); ok {
 		return m
@@ -181,6 +266,34 @@ func ensureMap(parent map[string]any, key string) map[string]any {
 	m := map[string]any{}
 	parent[key] = m
 	return m
+}
+
+func sanitizeSecurityYAMLFile(path string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	clean, err := sanitizeSecurityYAML(b)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, clean, 0o600)
+}
+
+func sanitizeSecurityYAML(b []byte) ([]byte, error) {
+	if len(strings.TrimSpace(string(b))) == 0 {
+		return b, nil
+	}
+	var v any
+	if err := yaml.Unmarshal(b, &v); err != nil {
+		return nil, err
+	}
+	stripSecretsRecursive(v)
+	out, err := yaml.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // SeedDashboardPassword creates (or rewrites) the launcher-auth.db inside

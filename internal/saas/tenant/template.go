@@ -2,7 +2,7 @@ package tenant
 
 // CopyTemplate seeds a freshly-created tenant volume with the contents of a
 // "template" PICOCLAW_HOME (e.g. the operator's own ~/.picoclaw with the
-// desired models, channel list, .security.yml, *.key files…). Per-tenant
+// desired models, channel list, and .security.yml. Per-tenant
 // state files are blocklisted so each tenant still gets:
 //   - its own admin password (launcher-auth.db is reseeded after this runs)
 //   - its own WhatsApp pairing (workspace/whatsapp/store.db left absent)
@@ -36,12 +36,16 @@ var templateSkip = []string{
 	".picoclaw.pid",
 	"logs",
 	"runtime-user-env",
+	"auth.json",
+	"backups",
 }
 
 // extensionsToSkip — file-extension blocklist (anywhere in tree).
 var templateSkipSuffix = []string{
 	".pid",
 	".sock",
+	".key",
+	".db",
 }
 
 func shouldSkipTemplatePath(rel string) bool {

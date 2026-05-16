@@ -19,6 +19,7 @@ type Handler struct {
 	Invites       *store.InviteStore
 	Audit         *store.AuditStore
 	Tenants       *store.TenantStore
+	Profiles      *store.LauncherProfileStore
 	Usage         *store.UsageStore
 	Provisioner   *tenant.Provisioner
 	LoginAttempts *loginAttempts
@@ -34,6 +35,7 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner) *Han
 		Invites:       &store.InviteStore{DB: db},
 		Audit:         &store.AuditStore{DB: db},
 		Tenants:       &store.TenantStore{DB: db},
+		Profiles:      &store.LauncherProfileStore{DB: db},
 		Usage:         &store.UsageStore{DB: db},
 		Provisioner:   prov,
 		LoginAttempts: newLoginAttempts(),
@@ -82,6 +84,15 @@ func (h *Handler) Routes() http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(h.requirePlatformAdmin)
 				r.Post("/tenants", h.handleCreateTenant)
+				r.Get("/launcher-profiles", h.handleListLauncherProfiles)
+				r.Post("/launcher-profiles", h.handleCreateLauncherProfile)
+				r.Get("/launcher-profiles/{id}", h.handleGetLauncherProfile)
+				r.Put("/launcher-profiles/{id}", h.handleUpdateLauncherProfile)
+				r.Delete("/launcher-profiles/{id}", h.handleDeleteLauncherProfile)
+				r.Get("/launcher-profiles/{id}/seed", h.handleGetLauncherProfileSeed)
+				r.Put("/launcher-profiles/{id}/seed", h.handlePutLauncherProfileSeed)
+				r.Post("/launcher-profiles/{id}/import-standalone", h.handleImportStandaloneLauncherProfile)
+				r.Post("/tenants/{id}/apply-profile", h.handleApplyLauncherProfile)
 				r.Post("/tenants/{id}/suspend", h.handleSuspendTenant)
 				r.Post("/tenants/{id}/resume", h.handleResumeTenant)
 				r.Post("/tenants/{id}/restart", h.handleRestartTenant)

@@ -18,6 +18,7 @@ func TestValidateSubdomain(t *testing.T) {
 		{"Alice", false, "uppercase"},
 		{"alice_co", false, "underscore"},
 		{"alice.co", false, "dot"},
+		{"adm", false, "reserved"},
 		{"admin", false, "reserved"},
 		{"api", false, "reserved"},
 		{"www", false, "reserved"},

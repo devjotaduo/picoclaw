@@ -105,6 +105,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Runtime build/version metadata
 	h.registerVersionRoutes(mux)
 
+	// Tenant role policy exposed to the launcher frontend.
+	h.registerLauncherPolicyRoutes(mux)
+
 	// WeChat QR login flow
 	h.registerWeixinRoutes(mux)
 

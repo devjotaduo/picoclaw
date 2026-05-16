@@ -19,6 +19,8 @@ export type Tenant = {
   crm_contact_id?: number | null;
   crm_company_id?: number | null;
   crm_deal_id?: number | null;
+  launcher_profile_id?: string | null;
+  launcher_profile_version_applied?: number | null;
 };
 
 export type CreateTenantInput = {
@@ -28,6 +30,7 @@ export type CreateTenantInput = {
   monthly_budget_usd?: number;
   mem_limit_mb?: number;
   cpu_quota?: number;
+  launcher_profile_id?: string;
 };
 
 export type CreateTenantResponse = {
@@ -89,6 +92,13 @@ export async function resumeTenant(id: string) {
 
 export async function restartTenant(id: string) {
   return api<void>(`/api/v1/tenants/${id}/restart`, { method: "POST" });
+}
+
+export async function applyLauncherProfile(id: string, launcherProfileId: string) {
+  return api<{ ok: boolean; backup_dir: string }>(`/api/v1/tenants/${id}/apply-profile`, {
+    method: "POST",
+    body: JSON.stringify({ launcher_profile_id: launcherProfileId }),
+  });
 }
 
 export async function deleteTenant(id: string) {

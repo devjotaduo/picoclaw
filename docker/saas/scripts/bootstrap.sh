@@ -16,6 +16,7 @@ install -d -m 755 /srv/saas/tenants
 install -d -m 700 /srv/saas/traefik
 install -d -m 755 /srv/saas/postgres/data
 install -d -m 755 /srv/saas/controlplane/data
+install -d -m 755 /srv/saas/controlplane/data/launcher-profiles
 install -d -m 755 /srv/saas/backups
 install -d -m 755 /srv/saas/backups/restic
 install -d -m 755 /srv/saas/backups/deleted

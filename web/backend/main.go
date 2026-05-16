@@ -596,12 +596,14 @@ func main() {
 		logger.Fatalf("Invalid allowed CIDR configuration: %v", err)
 	}
 
+	policyMux := apiHandler.PolicyMiddleware(accessControlledMux)
+
 	dashAuth := middleware.LauncherDashboardAuth(middleware.LauncherDashboardAuthConfig{
 		ExpectedCookie:       dashboardSessionCookie,
 		AuthMode:             os.Getenv("PICOCLAW_AUTH_MODE"),
 		TrustedGatewaySecret: os.Getenv("PICOCLAW_TRUSTED_GATEWAY_SECRET"),
 		LocalAutoLogin:       localAutoLogin,
-	}, accessControlledMux)
+	}, policyMux)
 
 	// Apply middleware stack
 	handler := middleware.Recoverer(

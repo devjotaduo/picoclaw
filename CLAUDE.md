@@ -67,6 +67,62 @@ Inside that directory you'll find `config.json`, `.security.yml` (permissions/ac
 
 Core Picoclaw runtime remains single-home and isolated: one `$PICOCLAW_HOME` is one instance. The SaaS control plane in `cmd/picoclaw-saas` builds multi-tenancy around that boundary by provisioning one launcher container and one bind-mounted home per tenant, then routing public access through a central RBAC gateway.
 
+## Template runtime business rules
+
+For the current deployment, the live runtime workspace is `/root/.picoclaw/workspace`, not the repo-local `workspace/`. The applied template flow is dashboard editor -> backend apply -> runtime files -> gateway reload -> agent registry.
+
+Template apply writes these artifacts:
+
+- `AGENT.md`: main prompt plus frontmatter such as model, skills, and tool allowlists.
+- `SOUL.md`: identity, personality, values, tone, and language.
+- `behavior.json`: hard business switches and filters used by channels and the agent loop.
+- `agent_config.json`: full editor payload for dashboard round-trip; not the primary runtime prompt source.
+- `config.json` `agents.defaults.active_template_id`: selected template id for dashboard state.
+
+The launcher agent editor supports multiple runtime agents through the existing `agents.list` model. `main` remains implicit when `agents.list` is empty. Applying a template with `agent_id=main` writes the default workspace and updates `agents.defaults.active_template_id`; applying a template with any other normalized agent id writes a sibling workspace such as `workspace-sales`, creates/updates that entry in `agents.list`, and does not overwrite the global active template marker.
+
+Runtime source of truth: prompt and frontmatter come from `AGENT.md`; identity/style comes from `SOUL.md`; hard filters come from `behavior.json`. `agent_config.json` is for editing continuity. If the rendered prompt contains both a company name and a different presentation name, treat that first as payload data mismatch, not renderer drift.
+
+Template skills are curated, not bulk-enabled. The default business templates may recommend only skills that exist in the seed and are suitable for tenant-facing agents: atendimento, clínica, loja, vendas, suporte, internal/compliance, privacy, and routing. `memory-and-knowledge-check` is an optional high-risk audit skill, not a default always-on skill. Technical/operator skills such as `agent-browser`, `github`, `hardware`, `skill-creator`, `summarize`, `tmux`, and `weather` stay available for dev/operator profiles but should not appear in a standard tenant's default recommended skill set.
+
+When applying a template, the backend rejects any enabled skill that the loader cannot resolve and drops disabled unknown skill entries. This prevents `AGENT.md` frontmatter from referencing capabilities that the runtime agent cannot load.
+
+Current live template state to preserve unless the dashboard explicitly changes it:
+
+- Active template: `atendente-geral`.
+- Last live template file write: `2026-05-16 03:46:11 +0200`.
+- `master_enabled=true`, `respond_in_dm=true`, `respond_in_groups=false`, and `group_mention_only=true` are the current business state for the live standalone seed.
+
+Behavior enforcement is split deliberately:
+
+- `pkg/channels` applies cheap inbound filters before publishing to the bus: master switch, DM/group response flags, group mention rule, keyword trigger, ignore bot/forwarded/self, media type gates, and max media size.
+- `pkg/agent` applies session-aware rules: business hours and out-of-hours reply, outbound-only mode, max messages per session, throttle/cooldown, PII masking, and handoff keyword events.
+
+For multi-agent deployments, channel-layer behavior lookup must resolve the same `agents.dispatch.rules` route that the agent loop will use. Do not fall back to the default agent's `behavior.json` for routed messages; otherwise secondary agents can be configured in the dashboard but their hard DM/group/media filters are bypassed at channel ingress.
+
+Gateway readiness rule: `/health` means the process is alive; `/ready` means the shared channel HTTP server is ready. The channel manager must mark the shared `health.Server` not-ready during setup/stop/reload and ready only after channels start or reload successfully. See `docs/architecture/template-runtime-business-rules.md` for the full contract and regression commands.
+
+## SaaS launcher profiles
+
+Launcher profiles are the central business mechanism for deciding what base `picoclaw-launcher` a tenant receives. They are managed in the integrated SaaS admin (`web/saas-admin`, `internal/saas/api`), not in the legacy `/opt/1panel/www/sites/picosaas` tree.
+
+Profile data is stored in Postgres table `launcher_profiles`; the seed files live under `TENANT_PROFILE_DIR` (default `/var/lib/picoclaw-saas/launcher-profiles`). Each profile has its own sanitized `$PICOCLAW_HOME` seed plus `role_policy_json`. The seed may include `config.json`, `.security.yml`, `workspace/AGENT.md`, `workspace/SOUL.md`, `workspace/behavior.json`, skills, tools, and other allowed workspace files.
+
+Never propagate live tenant state through profiles. The copy/import/apply path must preserve or skip dashboard auth DBs, LiteLLM keys, OAuth/channel secrets, sessions, memory, logs, PID/socket files, WhatsApp/Matrix/channel runtime state, and runtime env state. `SeedPicoConfig` still creates a tenant-specific `litellm.key` after the profile seed is copied.
+
+New tenants receive the selected launcher profile automatically. Existing tenants receive profile changes only through explicit `Apply profile`, which makes a backup under the tenant volume, merges managed files, preserves secrets/runtime state, writes `launcher_policy.json`, updates `launcher_profile_version_applied`, and restarts the active launcher when needed.
+
+Role policy is enforced twice: the SaaS controlplane blocks proxied tenant API calls before forwarding to `tenant-<id>:18800`, and the launcher blocks local trusted-gateway requests with the same feature policy. The launcher frontend uses `/api/launcher/policy` only for navigation/UX; backend enforcement is the source of truth.
+
+Current production routing state as of `2026-05-16`:
+
+- Admin domain: `adm.jotaduo.com` -> OpenResty -> `http://127.0.0.1:18801` -> `controlplane`.
+- Tenant domains are generated by `/usr/local/sbin/picosaas-tenant-router`; the script now discovers containers via `picoclaw.saas.managed=true` / `picoclaw.saas.subdomain` and writes vhosts that proxy to the central controlplane upstream `http://127.0.0.1:18801`. The enabled systemd watcher is `/etc/systemd/system/picosaas-tenant-router.service`, which runs the reconciler on Docker container lifecycle events.
+- Tenant containers must not be exposed directly by Nginx. They run `picoclaw-launcher:latest` with `PICOCLAW_AUTH_MODE=trusted_gateway` and receive signed trusted headers from the controlplane.
+- Current default launcher profile is `default-business`, stored at `/srv/saas/controlplane/data/launcher-profiles/default-business/seed` inside the host volume and mounted in the controlplane at `/var/lib/picoclaw-saas/launcher-profiles/default-business/seed`.
+- Existing production tenants `carlao`, `clonev2`, `demo`, `eduardo`, `mysa2`, and `teste` have profile `default-business` version `1` applied, per-tenant `litellm.key` restored, default model set to tenant LiteLLM (`provider=litellm`, `model_name=default`), and healthy `/health` + `/ready`.
+- Production backup before the migration: `/root/.picoclaw/backups/production-20260516T020839Z`.
+
 ## Configuration
 
 `pkg/config/config.go` defines a single `Config` struct with ~15 fields (Isolation, Agents, Session, Channels, ModelList, Gateway, Events, Hooks, Tools, Voice, …). Each top-level field has env-var overrides via `caarlos0/env` struct tags (e.g. `PICOCLAW_CHANNELS_TELEGRAM_TOKEN`, `PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME`). The exhaustive list is in `pkg/config/envkeys.go`.

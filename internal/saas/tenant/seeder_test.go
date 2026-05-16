@@ -3,6 +3,8 @@ package tenant
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -86,5 +88,96 @@ func TestSeedDashboardPassword_Reseed(t *testing.T) {
 	}
 	if !auth.VerifyPassword(hash, "second") {
 		t.Error("new password does not verify after reseed")
+	}
+}
+
+func TestSeedPicoConfigPreservesProfileDefaultModel(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(cfgPath, []byte(`{
+	  "agents": {"defaults": {"provider": "litellm", "model_name": "support"}},
+	  "model_list": [
+	    {"model_name": "support", "provider": "litellm", "model": "gpt-4o-mini"},
+	    {"model_name": "dev", "provider": "openrouter", "model": "anthropic/claude-sonnet-4.5"}
+	  ]
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SeedPicoConfig(context.Background(), dir, "http://litellm:4000", "sk-tenant"); err != nil {
+		t.Fatalf("SeedPicoConfig: %v", err)
+	}
+
+	var cfg map[string]any
+	b, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	defaults := cfg["agents"].(map[string]any)["defaults"].(map[string]any)
+	if got := defaults["model_name"]; got != "support" {
+		t.Fatalf("model_name = %v, want support", got)
+	}
+	models := cfg["model_list"].([]any)
+	support := models[0].(map[string]any)
+	if got := support["api_base"]; got != "http://litellm:4000/v1" {
+		t.Fatalf("support api_base = %v", got)
+	}
+	if keys, ok := support["api_keys"].([]any); !ok || len(keys) != 1 || keys[0] != "file://litellm.key" {
+		t.Fatalf("support api_keys = %#v, want file://litellm.key", support["api_keys"])
+	}
+	dev := models[1].(map[string]any)
+	if _, ok := dev["api_keys"]; ok {
+		t.Fatalf("non-LiteLLM model should not receive tenant litellm key: %#v", dev)
+	}
+}
+
+func TestSeedPicoConfigFallsBackWhenProfileDefaultHasNoCredential(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(cfgPath, []byte(`{
+	  "agents": {"defaults": {"provider": "qwen-intl", "model_name": "qwen-plus"}},
+	  "model_list": [
+	    {"model_name": "qwen-plus", "provider": "qwen-intl", "model": "qwen-plus", "api_base": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"}
+	  ]
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SeedPicoConfig(context.Background(), dir, "http://litellm:4000", "sk-tenant"); err != nil {
+		t.Fatalf("SeedPicoConfig: %v", err)
+	}
+
+	var cfg map[string]any
+	b, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	defaults := cfg["agents"].(map[string]any)["defaults"].(map[string]any)
+	if got := defaults["provider"]; got != "litellm" {
+		t.Fatalf("provider = %v, want litellm", got)
+	}
+	if got := defaults["model_name"]; got != "default" {
+		t.Fatalf("model_name = %v, want default fallback", got)
+	}
+
+	var fallback map[string]any
+	for _, item := range cfg["model_list"].([]any) {
+		m := item.(map[string]any)
+		if m["model_name"] == "default" {
+			fallback = m
+			break
+		}
+	}
+	if fallback == nil {
+		t.Fatal("missing default LiteLLM fallback model")
+	}
+	if keys, ok := fallback["api_keys"].([]any); !ok || len(keys) != 1 || keys[0] != "file://litellm.key" {
+		t.Fatalf("fallback api_keys = %#v, want file://litellm.key", fallback["api_keys"])
 	}
 }

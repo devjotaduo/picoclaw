@@ -257,6 +257,7 @@ export interface AgentTemplate {
 }
 
 export interface TemplateApplyPayload {
+  agent_id?: string
   template_id: string
   name: string
   short_description: string

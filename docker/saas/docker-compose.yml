@@ -184,6 +184,7 @@ services:
       TENANT_IMAGE: ${TENANT_IMAGE}
       TENANT_BASE_DOMAIN: ${SAAS_BASE_DOMAIN}
       TENANT_HOST_DATA_DIR: ${TENANT_HOST_DATA_DIR}
+      TENANT_PROFILE_DIR: ${TENANT_PROFILE_DIR:-/var/lib/picoclaw-saas/launcher-profiles}
       TENANT_NETWORK_EDGE: saas_edge
       TENANT_NETWORK_LLM: saas_llm
       COOKIE_DOMAIN: ${SAAS_BASE_DOMAIN}

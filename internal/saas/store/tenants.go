@@ -21,28 +21,30 @@ const (
 )
 
 type Tenant struct {
-	ID                       string
-	DisplayName              string
-	OwnerEmail               string
-	Subdomain                string
-	Status                   TenantStatus
-	ContainerID              *string
-	ContainerImage           string
-	VolumePath               string
-	LiteLLMKeyID             *string
-	LiteLLMKeyHash           *string
-	MonthlyBudgetUSD         *float64
-	MemLimitMB               int
-	CPUQuota                 float64
-	InitialPasswordDelivered bool
-	LastError                *string
-	CreatedAt                time.Time
-	SuspendedAt              *time.Time
-	DeletedAt                *time.Time
-	CleanupCompletedAt       *time.Time
-	CRMContactID             *int64
-	CRMCompanyID             *int64
-	CRMDealID                *int64
+	ID                            string
+	DisplayName                   string
+	OwnerEmail                    string
+	Subdomain                     string
+	Status                        TenantStatus
+	ContainerID                   *string
+	ContainerImage                string
+	VolumePath                    string
+	LiteLLMKeyID                  *string
+	LiteLLMKeyHash                *string
+	MonthlyBudgetUSD              *float64
+	MemLimitMB                    int
+	CPUQuota                      float64
+	InitialPasswordDelivered      bool
+	LastError                     *string
+	CreatedAt                     time.Time
+	SuspendedAt                   *time.Time
+	DeletedAt                     *time.Time
+	CleanupCompletedAt            *time.Time
+	CRMContactID                  *int64
+	CRMCompanyID                  *int64
+	CRMDealID                     *int64
+	LauncherProfileID             *string
+	LauncherProfileVersionApplied *int64
 }
 
 type TenantStore struct{ DB *DB }
@@ -51,7 +53,8 @@ const tenantCols = `tenants.id, tenants.display_name, tenants.owner_email, tenan
     tenants.container_image, tenants.volume_path, tenants.litellm_key_id, tenants.litellm_key_hash, tenants.monthly_budget_usd,
     tenants.mem_limit_mb, tenants.cpu_quota, tenants.initial_password_delivered, tenants.last_error,
     tenants.created_at, tenants.suspended_at, tenants.deleted_at, tenants.cleanup_completed_at,
-    tenants.crm_contact_id, tenants.crm_company_id, tenants.crm_deal_id`
+    tenants.crm_contact_id, tenants.crm_company_id, tenants.crm_deal_id,
+    tenants.launcher_profile_id, tenants.launcher_profile_version_applied`
 
 func scanTenant(row pgx.Row) (*Tenant, error) {
 	var t Tenant
@@ -61,6 +64,7 @@ func scanTenant(row pgx.Row) (*Tenant, error) {
 		&t.MemLimitMB, &t.CPUQuota, &t.InitialPasswordDelivered, &t.LastError,
 		&t.CreatedAt, &t.SuspendedAt, &t.DeletedAt, &t.CleanupCompletedAt,
 		&t.CRMContactID, &t.CRMCompanyID, &t.CRMDealID,
+		&t.LauncherProfileID, &t.LauncherProfileVersionApplied,
 	)
 	return &t, err
 }
@@ -69,12 +73,13 @@ func (s *TenantStore) Insert(ctx context.Context, t *Tenant) error {
 	const q = `
 		INSERT INTO tenants (id, display_name, owner_email, subdomain, status,
 		                     container_image, volume_path, monthly_budget_usd,
-		                     mem_limit_mb, cpu_quota)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`
+		                     mem_limit_mb, cpu_quota, launcher_profile_id,
+		                     launcher_profile_version_applied)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`
 	_, err := s.DB.Pool.Exec(ctx, q,
 		t.ID, t.DisplayName, t.OwnerEmail, t.Subdomain, t.Status,
 		t.ContainerImage, t.VolumePath, t.MonthlyBudgetUSD,
-		t.MemLimitMB, t.CPUQuota,
+		t.MemLimitMB, t.CPUQuota, t.LauncherProfileID, t.LauncherProfileVersionApplied,
 	)
 	return err
 }
@@ -214,6 +219,12 @@ func (s *TenantStore) SetContainer(ctx context.Context, id, containerID string) 
 func (s *TenantStore) SetLiteLLMKey(ctx context.Context, id, keyID, keyHash string) error {
 	const q = `UPDATE tenants SET litellm_key_id = $1, litellm_key_hash = $2 WHERE id = $3`
 	_, err := s.DB.Pool.Exec(ctx, q, keyID, keyHash, id)
+	return err
+}
+
+func (s *TenantStore) SetLauncherProfileApplied(ctx context.Context, id, profileID string, version int64) error {
+	const q = `UPDATE tenants SET launcher_profile_id = $2, launcher_profile_version_applied = $3 WHERE id = $1`
+	_, err := s.DB.Pool.Exec(ctx, q, id, profileID, version)
 	return err
 }
 

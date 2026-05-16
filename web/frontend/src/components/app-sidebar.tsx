@@ -19,6 +19,10 @@ import * as React from "react"
 import { useTranslation } from "react-i18next"
 
 import {
+  type LauncherFeatureAccess,
+  getLauncherPolicy,
+} from "@/api/launcher-policy"
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -41,6 +45,7 @@ interface NavItem {
   title: string
   url: string
   icon: React.ComponentType<{ className?: string }>
+  feature: string
   translateTitle?: boolean
   external?: boolean
 }
@@ -76,6 +81,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { i18n, t } = useTranslation()
   const { isMobile, setOpenMobile } = useSidebar()
   const currentPath = routerState.location.pathname
+  const [features, setFeatures] =
+    React.useState<Record<string, LauncherFeatureAccess> | null>(null)
   const {
     channelItems,
     hasMoreChannels,
@@ -85,6 +92,35 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     language: (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase(),
     t,
   })
+
+  React.useEffect(() => {
+    let active = true
+    getLauncherPolicy()
+      .then((policy) => {
+        if (active) {
+          setFeatures(policy.features)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setFeatures(null)
+        }
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const canRead = React.useCallback(
+    (feature: string) => {
+      if (!features) {
+        return true
+      }
+      const access = features[feature]
+      return access === "read" || access === "write"
+    },
+    [features],
+  )
 
   const handleNavItemClick = React.useCallback(() => {
     if (isMobile) {
@@ -101,6 +137,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "navigation.chat",
             url: "/",
             icon: IconMessageCircle,
+            feature: "chat",
             translateTitle: true,
           },
         ],
@@ -112,12 +149,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "navigation.models",
             url: "/models",
             icon: IconAtom,
+            feature: "models",
             translateTitle: true,
           },
           {
             title: "navigation.credentials",
             url: "/credentials",
             icon: IconKey,
+            feature: "credentials",
             translateTitle: true,
           },
         ],
@@ -129,8 +168,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           title: item.title,
           url: item.url,
           icon: item.icon,
+          feature: "channels",
           translateTitle: false,
-        })),
+        })).filter((item) => canRead(item.feature)),
         isChannelsGroup: true,
       },
       {
@@ -140,48 +180,56 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "navigation.agent_editor",
             url: "/agent/editor",
             icon: IconRobot,
+            feature: "agent_editor",
             translateTitle: true,
           },
           {
             title: "navigation.whatsapp_inbox",
             url: "/agent/whatsapp",
             icon: IconBrandWhatsapp,
+            feature: "whatsapp_inbox",
             translateTitle: true,
           },
           {
             title: "navigation.hub",
             url: "/agent/hub",
             icon: IconSearch,
+            feature: "tools",
             translateTitle: true,
           },
           {
             title: "navigation.templates",
             url: "/agent/templates",
             icon: IconUserCheck,
+            feature: "agent_templates",
             translateTitle: true,
           },
           {
             title: "navigation.template_editor",
             url: "/agent/template-editor",
             icon: IconListDetails,
+            feature: "agent_templates",
             translateTitle: true,
           },
           {
             title: "navigation.skills",
             url: "/agent/skills",
             icon: IconSparkles,
+            feature: "skills",
             translateTitle: true,
           },
           {
             title: "navigation.skill_editor",
             url: "/agent/skill-editor",
             icon: IconListDetails,
+            feature: "skills",
             translateTitle: true,
           },
           {
             title: "navigation.tools",
             url: "/agent/tools",
             icon: IconTools,
+            feature: "tools",
             translateTitle: true,
           },
         ],
@@ -193,18 +241,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "navigation.config",
             url: "/config",
             icon: IconSettings,
+            feature: "config",
             translateTitle: true,
           },
           {
             title: "navigation.logs",
             url: "/logs",
             icon: IconListDetails,
+            feature: "logs",
             translateTitle: true,
           },
         ],
       },
-    ]
-  }, [channelItems])
+    ].map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canRead(item.feature)),
+    })).filter((group) => group.items.length > 0)
+  }, [canRead, channelItems])
 
   return (
     <Sidebar

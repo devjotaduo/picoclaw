@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/channels"
 )
 
@@ -31,9 +32,16 @@ func NewBehaviorProvider(loop *AgentLoop) channels.BehaviorProvider {
 }
 
 // ChannelBehavior returns the active filter for an inbound message on
-// (channelName, chatID). Returns nil when the default agent has no Behavior
-// loaded, which the channel layer interprets as "no filtering".
+// (channelName, chatID). Legacy callers without a full inbound context fall
+// back to normal route resolution with the available fields.
 func (a *behaviorProviderAdapter) ChannelBehavior(channelName, chatID string) *channels.ChannelBehavior {
+	return a.ChannelBehaviorForContext(bus.InboundContext{Channel: channelName, ChatID: chatID})
+}
+
+// ChannelBehaviorForContext returns the active filter for the routed target
+// agent. This keeps cheap channel-layer filters aligned with the same
+// agents.dispatch.rules decision that the agent loop will use for the turn.
+func (a *behaviorProviderAdapter) ChannelBehaviorForContext(inbound bus.InboundContext) *channels.ChannelBehavior {
 	if a == nil || a.source == nil {
 		return nil
 	}
@@ -41,7 +49,11 @@ func (a *behaviorProviderAdapter) ChannelBehavior(channelName, chatID string) *c
 	if registry == nil {
 		return nil
 	}
-	inst := registry.GetDefaultAgent()
+	route := registry.ResolveRoute(inbound)
+	inst, ok := registry.GetAgent(route.AgentID)
+	if !ok {
+		inst = registry.GetDefaultAgent()
+	}
 	if inst == nil || inst.Behavior == nil {
 		return nil
 	}

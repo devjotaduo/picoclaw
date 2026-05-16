@@ -19,10 +19,9 @@ import { useAtomValue } from "jotai"
 import * as React from "react"
 
 import {
-  type AppConfig,
   type SupportedChannel,
-  getAppConfig,
   getChannelsCatalog,
+  getChannelsStatus,
 } from "@/api/channels"
 import { getChannelDisplayName } from "@/components/channels/channel-display-name"
 import { gatewayAtom } from "@/store/gateway"
@@ -85,45 +84,6 @@ const CHANNEL_ICON_MAP: Record<
   irc: IconMessages,
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>
-  }
-  return {}
-}
-
-function isChannelEnabled(
-  channel: SupportedChannel,
-  channelsConfig: Record<string, unknown>,
-): boolean {
-  const channelConfig = asRecord(channelsConfig[channel.config_key])
-  if (channelConfig.enabled !== true) {
-    return false
-  }
-
-  // whatsapp / whatsapp_native share one config block and are split by use_native.
-  if (channel.name === "whatsapp_native") {
-    return channelConfig.use_native === true
-  }
-  if (channel.name === "whatsapp") {
-    return channelConfig.use_native !== true
-  }
-
-  return true
-}
-
-function buildChannelEnabledMap(
-  channels: SupportedChannel[],
-  appConfig: AppConfig,
-): Record<string, boolean> {
-  const channelsConfig = asRecord(asRecord(appConfig).channels)
-  const result: Record<string, boolean> = {}
-  for (const channel of channels) {
-    result[channel.name] = isChannelEnabled(channel, channelsConfig)
-  }
-  return result
-}
-
 export interface SidebarChannelNavItem {
   key: string
   title: string
@@ -150,14 +110,18 @@ export function useSidebarChannels({
   const reloadChannels = React.useCallback((shouldApply?: () => boolean) => {
     Promise.all([
       getChannelsCatalog(),
-      getAppConfig().catch(() => ({}) as AppConfig),
+      getChannelsStatus().catch(() => ({ channels: [] })),
     ])
-      .then(([catalog, appConfig]) => {
+      .then(([catalog, status]) => {
         if (shouldApply && !shouldApply()) {
           return
         }
         setChannels(catalog.channels)
-        setEnabledMap(buildChannelEnabledMap(catalog.channels, appConfig))
+        setEnabledMap(
+          Object.fromEntries(
+            status.channels.map((channel) => [channel.name, channel.enabled]),
+          ),
+        )
       })
       .catch(() => {
         if (shouldApply && !shouldApply()) {

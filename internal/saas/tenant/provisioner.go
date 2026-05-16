@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sipeed/picoclaw/internal/saas/auth"
@@ -16,28 +18,31 @@ import (
 )
 
 type Provisioner struct {
-	Cfg     *config.Config
-	Tenants *store.TenantStore
-	Docker  *DockerClient
-	LiteLLM *litellm.Client // optional; when nil the tenant is provisioned without an LLM key
+	Cfg      *config.Config
+	Tenants  *store.TenantStore
+	Profiles *store.LauncherProfileStore
+	Docker   *DockerClient
+	LiteLLM  *litellm.Client // optional; when nil the tenant is provisioned without an LLM key
 }
 
 func NewProvisioner(cfg *config.Config, db *store.DB, dk *DockerClient, ll *litellm.Client) *Provisioner {
 	return &Provisioner{
-		Cfg:     cfg,
-		Tenants: &store.TenantStore{DB: db},
-		Docker:  dk,
-		LiteLLM: ll,
+		Cfg:      cfg,
+		Tenants:  &store.TenantStore{DB: db},
+		Profiles: &store.LauncherProfileStore{DB: db},
+		Docker:   dk,
+		LiteLLM:  ll,
 	}
 }
 
 type CreateInput struct {
-	DisplayName      string
-	OwnerEmail       string
-	Subdomain        string
-	MonthlyBudgetUSD *float64
-	MemLimitMB       int
-	CPUQuota         float64
+	DisplayName       string
+	OwnerEmail        string
+	Subdomain         string
+	MonthlyBudgetUSD  *float64
+	MemLimitMB        int
+	CPUQuota          float64
+	LauncherProfileID string
 }
 
 type CreateOutput struct {
@@ -72,6 +77,10 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 	}
 
 	volumePath := filepath.Join(p.Cfg.TenantHostDataDir, id)
+	profile, err := p.resolveProfile(ctx, in.LauncherProfileID)
+	if err != nil {
+		return nil, err
+	}
 
 	t := &store.Tenant{
 		ID:               id,
@@ -85,11 +94,17 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		MemLimitMB:       in.MemLimitMB,
 		CPUQuota:         in.CPUQuota,
 	}
+	if profile != nil {
+		profileID := profile.ID
+		version := profile.Version
+		t.LauncherProfileID = &profileID
+		t.LauncherProfileVersionApplied = &version
+	}
 	if err := p.Tenants.Insert(ctx, t); err != nil {
 		return nil, fmt.Errorf("insert tenant: %w", err)
 	}
 
-	if err := p.runProvision(ctx, t, password); err != nil {
+	if err := p.runProvision(ctx, t, password, profile); err != nil {
 		msg := err.Error()
 		_ = p.Tenants.SetStatus(ctx, id, store.StatusError, &msg)
 		return nil, err
@@ -102,12 +117,23 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 	}, nil
 }
 
-func (p *Provisioner) runProvision(ctx context.Context, t *store.Tenant, password string) error {
+func (p *Provisioner) runProvision(ctx context.Context, t *store.Tenant, password string, profile *store.LauncherProfile) error {
 	if err := os.MkdirAll(t.VolumePath, 0o755); err != nil {
 		return fmt.Errorf("mkdir volume: %w", err)
 	}
-	if err := CopyTemplate(p.Cfg.TenantTemplateDir, t.VolumePath); err != nil {
+	seedPath := p.Cfg.TenantTemplateDir
+	if profile != nil {
+		seedPath = profile.SeedPath
+	}
+	if err := CopyTemplate(seedPath, t.VolumePath); err != nil {
 		return fmt.Errorf("copy template: %w", err)
+	}
+	if profile != nil {
+		if err := WriteLauncherPolicy(t.VolumePath, profile.RolePolicy()); err != nil {
+			return fmt.Errorf("write launcher policy: %w", err)
+		}
+	} else if err := WriteLauncherPolicy(t.VolumePath, nil); err != nil {
+		return fmt.Errorf("write launcher policy: %w", err)
 	}
 	if err := SeedDashboardPassword(ctx, t.VolumePath, password); err != nil {
 		return fmt.Errorf("seed password: %w", err)
@@ -154,6 +180,95 @@ func (p *Provisioner) runProvision(ctx context.Context, t *store.Tenant, passwor
 		return fmt.Errorf("set active: %w", err)
 	}
 	return nil
+}
+
+func (p *Provisioner) resolveProfile(ctx context.Context, profileID string) (*store.LauncherProfile, error) {
+	if p.Profiles == nil {
+		return nil, nil
+	}
+	if profileID != "" {
+		profile, err := p.Profiles.Get(ctx, profileID)
+		if err != nil {
+			return nil, fmt.Errorf("launcher profile: %w", err)
+		}
+		return profile, nil
+	}
+	profile, err := p.Profiles.GetDefault(ctx)
+	if err != nil {
+		if errors.Is(err, store.ErrLauncherProfileNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("launcher default profile: %w", err)
+	}
+	return profile, nil
+}
+
+func (p *Provisioner) ApplyProfile(ctx context.Context, tenantID, profileID string) (string, error) {
+	if p.Profiles == nil {
+		return "", fmt.Errorf("launcher profiles are not configured")
+	}
+	t, err := p.Tenants.Get(ctx, tenantID)
+	if err != nil {
+		return "", err
+	}
+	profile, err := p.Profiles.Get(ctx, profileID)
+	if err != nil {
+		return "", err
+	}
+	backupDir, err := ApplyProfileSeed(profile.SeedPath, t.VolumePath)
+	if err != nil {
+		return backupDir, fmt.Errorf("apply profile seed: %w", err)
+	}
+	if err := WriteLauncherPolicy(t.VolumePath, profile.RolePolicy()); err != nil {
+		return backupDir, fmt.Errorf("write launcher policy: %w", err)
+	}
+	if err := p.ensureTenantLiteLLMConfig(ctx, t); err != nil {
+		return backupDir, fmt.Errorf("ensure litellm config: %w", err)
+	}
+	if err := p.Tenants.SetLauncherProfileApplied(ctx, t.ID, profile.ID, profile.Version); err != nil {
+		return backupDir, err
+	}
+	if p.Docker != nil && t.ContainerID != nil && *t.ContainerID != "" && t.Status == store.StatusActive {
+		if err := p.Restart(ctx, t.ID); err != nil {
+			return backupDir, err
+		}
+	}
+	return backupDir, nil
+}
+
+func (p *Provisioner) ensureTenantLiteLLMConfig(ctx context.Context, t *store.Tenant) error {
+	if p.Cfg == nil || strings.TrimSpace(p.Cfg.LiteLLMURL) == "" {
+		return nil
+	}
+	keyPath := filepath.Join(t.VolumePath, "litellm.key")
+	if b, err := os.ReadFile(keyPath); err == nil {
+		if key := strings.TrimSpace(string(b)); key != "" {
+			return SeedPicoConfig(ctx, t.VolumePath, p.Cfg.LiteLLMURL, key)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("read litellm.key: %w", err)
+	}
+
+	if p.LiteLLM == nil {
+		return nil
+	}
+	// If the plaintext file was lost but the LiteLLM alias may still exist,
+	// remove the stale alias first. The plaintext key is only returned at
+	// generation time, so rotating is the only way to restore the tenant volume.
+	_ = p.LiteLLM.DeleteKey(ctx, t.ID)
+	out, err := p.LiteLLM.GenerateKey(ctx, litellm.GenerateKeyInput{
+		TenantID:         t.ID,
+		MonthlyBudgetUSD: t.MonthlyBudgetUSD,
+	})
+	if err != nil {
+		return fmt.Errorf("litellm key: %w", err)
+	}
+	h := sha256.Sum256([]byte(out.Key))
+	if err := p.Tenants.SetLiteLLMKey(ctx, t.ID, out.KeyName, hex.EncodeToString(h[:])); err != nil {
+		_ = p.LiteLLM.DeleteKey(ctx, t.ID)
+		return fmt.Errorf("save litellm key: %w", err)
+	}
+	return SeedPicoConfig(ctx, t.VolumePath, p.Cfg.LiteLLMURL, out.Key)
 }
 
 func (p *Provisioner) buildSpec(t *store.Tenant) ContainerSpec {

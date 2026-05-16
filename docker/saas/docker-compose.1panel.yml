@@ -27,5 +27,6 @@ services:
       # the launcher container starts. Per-tenant state (launcher-auth.db, WA
       # store.db, sessions, memory, …) is blocklisted in internal/tenant/template.go.
       TENANT_TEMPLATE_DIR: /etc/picoclaw/tenant-template
+      TENANT_PROFILE_DIR: /var/lib/picoclaw-saas/launcher-profiles
     volumes:
       - /root/.picoclaw:/etc/picoclaw/tenant-template:ro

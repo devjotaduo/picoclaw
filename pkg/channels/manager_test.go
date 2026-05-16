@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,6 +17,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/config"
 	runtimeevents "github.com/sipeed/picoclaw/pkg/events"
+	"github.com/sipeed/picoclaw/pkg/health"
 	"github.com/sipeed/picoclaw/pkg/media"
 	"github.com/sipeed/picoclaw/pkg/utils"
 )
@@ -312,6 +315,40 @@ func TestStartAllPublishesLifecycleRuntimeEvents(t *testing.T) {
 	}
 	if evt, ok := seen[runtimeevents.KindChannelLifecycleStartFailed]; !ok || evt.Scope.Channel != "bad" {
 		t.Fatalf("missing failed event for bad channel: %+v", events)
+	}
+}
+
+func TestSharedHealthReadyTracksManagerLifecycle(t *testing.T) {
+	m := newTestManager()
+	m.channels["good"] = &mockChannel{}
+	healthServer := health.NewServer("127.0.0.1", 0, "")
+	m.SetupHTTPServerListeners(nil, "127.0.0.1:0", healthServer)
+	// Keep the test deterministic: exercise the same shared mux path without
+	// opening a real listener in the background.
+	m.httpServer = nil
+
+	assertSharedReadyStatus(t, m, http.StatusServiceUnavailable)
+
+	if err := m.StartAll(t.Context()); err != nil {
+		t.Fatalf("StartAll() error = %v", err)
+	}
+	assertSharedReadyStatus(t, m, http.StatusOK)
+
+	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := m.StopAll(stopCtx); err != nil {
+		t.Fatalf("StopAll() error = %v", err)
+	}
+	assertSharedReadyStatus(t, m, http.StatusServiceUnavailable)
+}
+
+func assertSharedReadyStatus(t *testing.T, m *Manager, want int) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	rec := httptest.NewRecorder()
+	m.mux.ServeHTTP(rec, req)
+	if rec.Code != want {
+		t.Fatalf("/ready status = %d, want %d; body=%s", rec.Code, want, rec.Body.String())
 	}
 }
 

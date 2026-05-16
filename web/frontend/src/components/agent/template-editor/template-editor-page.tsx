@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils"
 import { AGENT_TEMPLATES } from "../templates/catalog"
 import { TemplateIcon } from "../templates/template-icon"
 import type { AgentTemplate, TemplateSkillConfig } from "../templates/types"
+import { defaultTemplateSkillConfigs } from "../templates/use-templates-page"
 
 export function TemplateEditorPage() {
   const { t } = useTranslation()
@@ -62,10 +63,18 @@ export function TemplateEditorPage() {
       setDirty(false)
       return
     }
-    const fromServer = overrides[selectedId]?.skill_configs ?? []
-    setDraftConfigs(fromServer.map((c) => ({ ...c })))
+    const fromServer =
+      overrides[selectedId]?.draft?.skill_configs ??
+      overrides[selectedId]?.skill_configs
+    setDraftConfigs(
+      fromServer
+        ? fromServer.map((c) => ({ ...c }))
+        : selectedTemplate
+          ? defaultTemplateSkillConfigs(selectedTemplate, installedSkills)
+          : [],
+    )
     setDirty(false)
-  }, [selectedId, overrides])
+  }, [selectedId, selectedTemplate, installedSkills, overrides])
 
   const filteredTemplates = useMemo(() => {
     const q = search.trim().toLowerCase()

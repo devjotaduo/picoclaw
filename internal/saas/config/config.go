@@ -26,6 +26,7 @@ type Config struct {
 	TenantBaseDomain   string
 	TenantHostDataDir  string
 	TenantTemplateDir  string // optional: copied into every new tenant volume before container start
+	TenantProfileDir   string // stores centrally managed launcher profile seed directories
 	TenantNetworkEdge  string
 	TenantNetworkLLM   string
 	TenantCertResolver string // empty = no resolver label (Traefik falls back to default cert)
@@ -57,6 +58,7 @@ func Load() (*Config, error) {
 		TenantBaseDomain:    os.Getenv("TENANT_BASE_DOMAIN"),
 		TenantHostDataDir:   envOr("TENANT_HOST_DATA_DIR", "/srv/saas/tenants"),
 		TenantTemplateDir:   os.Getenv("TENANT_TEMPLATE_DIR"),
+		TenantProfileDir:    envOr("TENANT_PROFILE_DIR", "/var/lib/picoclaw-saas/launcher-profiles"),
 		TenantNetworkEdge:   envOr("TENANT_NETWORK_EDGE", "saas_edge"),
 		TenantNetworkLLM:    envOr("TENANT_NETWORK_LLM", "saas_llm"),
 		TenantCertResolver:  envOr("TENANT_CERT_RESOLVER", "letsencrypt"),

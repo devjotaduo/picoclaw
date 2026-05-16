@@ -11,6 +11,7 @@ import { AgentEdit } from "@/pages/AgentEdit";
 import { AgentSettings } from "@/pages/AgentSettings";
 import { CrmPage } from "@/pages/CrmPage";
 import { AcceptInvite } from "@/pages/AcceptInvite";
+import { LauncherProfiles } from "@/pages/LauncherProfiles";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { status } = useAuth();
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="/tenants/:id/agent" element={<AgentEdit />} />
         <Route path="/tenants/:id/skills" element={<SkillsList />} />
         <Route path="/tenants/:id/skills/:name" element={<SkillEdit />} />
+        <Route path="/launcher-profiles" element={<RequirePlatform><LauncherProfiles /></RequirePlatform>} />
         <Route path="/crm" element={<RequirePlatform><Navigate to="/crm/contacts" replace /></RequirePlatform>} />
         <Route path="/crm/:view" element={<RequirePlatform><CrmPage /></RequirePlatform>} />
         <Route path="/" element={<Navigate to="/tenants" replace />} />

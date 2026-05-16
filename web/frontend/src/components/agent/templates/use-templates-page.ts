@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useDeferredValue, useMemo, useState } from "react"
+import { useDeferredValue, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
@@ -12,7 +12,7 @@ import {
   saveTemplateOverride,
 } from "@/api/agent-templates"
 import { getAppConfig } from "@/api/channels"
-import { getSkills } from "@/api/skills"
+import { getSkills, type SkillSupportItem } from "@/api/skills"
 
 import { AGENT_TEMPLATES } from "./catalog"
 import { compareTemplates, sortCategories } from "./category-utils"
@@ -27,7 +27,7 @@ import type {
   TemplateSkillConfig,
 } from "./types"
 
-function templateToDraft(
+export function templateToDraft(
   template: AgentTemplate,
   defaultSkillConfigs: TemplateSkillConfig[] = [],
 ): TemplateApplyPayload {
@@ -109,6 +109,31 @@ function templateToDraft(
   // Resolve {agent.name} / {company.name} so the editor and the rendered
   // AGENT.md don't ship literal placeholders to the runtime / channels.
   return substituteAgentPlaceholders(draft)
+}
+
+export function defaultTemplateSkillConfigs(
+  template: AgentTemplate,
+  installedSkills: SkillSupportItem[],
+): TemplateSkillConfig[] {
+  const installedByName = new Map(
+    installedSkills.map((skill) => [skill.name.toLowerCase(), skill.name]),
+  )
+  return template.recommended_skills
+    .map((name) => installedByName.get(name.toLowerCase()))
+    .filter((name): name is string => Boolean(name))
+    .map((name) => ({ name, enabled: true, visible: true }))
+}
+
+function skillConfigsForTemplate(
+  template: AgentTemplate,
+  installedSkills: SkillSupportItem[],
+  override?: TemplateOverride,
+): TemplateSkillConfig[] {
+  const fromOverride = override?.draft?.skill_configs ?? override?.skill_configs
+  if (fromOverride) {
+    return fromOverride.map((config) => ({ ...config }))
+  }
+  return defaultTemplateSkillConfigs(template, installedSkills)
 }
 
 function templateFromDraft(
@@ -248,15 +273,27 @@ export function useTemplatesPage() {
       // Immediately populate the agent-config cache so any component that reads
       // it (e.g. the editor page) sees the new data without waiting for a refetch.
       if (draft) {
-        queryClient.setQueryData<AgentConfigResponse>(["agent-config"], (old) => ({
-          ...old,
-          configured: true,
-          payload: draft,
-        }))
+        queryClient.setQueryData<AgentConfigResponse>(
+          ["agent-config"],
+          (old) => ({
+            ...old,
+            configured: true,
+            payload: draft,
+          }),
+        )
+        queryClient.setQueryData<AgentConfigResponse>(
+          ["agent-config", draft.agent_id ?? "main"],
+          (old) => ({
+            ...old,
+            configured: true,
+            payload: draft,
+          }),
+        )
       }
       setSelectedTemplate(null)
       setDraft(null)
       void queryClient.invalidateQueries({ queryKey: ["config"] })
+      void queryClient.invalidateQueries({ queryKey: ["agents"] })
       void queryClient.invalidateQueries({ queryKey: ["agent-config"] })
       void configQuery.refetch()
     },
@@ -305,7 +342,14 @@ export function useTemplatesPage() {
       const baseTemplate =
         AGENT_TEMPLATES.find((tpl) => tpl.id === templateId) ?? null
       setSelectedTemplate(baseTemplate)
-      setDraft(baseTemplate ? templateToDraft(baseTemplate) : null)
+      setDraft(
+        baseTemplate
+          ? templateToDraft(
+              baseTemplate,
+              defaultTemplateSkillConfigs(baseTemplate, installedSkills),
+            )
+          : null,
+      )
       void queryClient.invalidateQueries({ queryKey: ["template-overrides"] })
     },
     onError: (err) => {
@@ -366,13 +410,32 @@ export function useTemplatesPage() {
   const hasActiveFilters =
     normalizedSearchQuery !== "" || categoryFilter !== "all"
 
+  useEffect(() => {
+    if (!selectedTemplate || !draft || installedSkills.length === 0) return
+    const override = overrides[selectedTemplate.id]
+    const overrideSkillConfigs =
+      override?.draft?.skill_configs ?? override?.skill_configs
+    if (overrideSkillConfigs !== undefined || draft.skill_configs.length > 0) {
+      return
+    }
+    const defaults = defaultTemplateSkillConfigs(selectedTemplate, installedSkills)
+    if (defaults.length === 0) return
+    setDraft((current) =>
+      current?.template_id === selectedTemplate.id &&
+      current.skill_configs.length === 0
+        ? { ...current, skill_configs: defaults }
+        : current,
+    )
+  }, [draft, installedSkills, overrides, selectedTemplate])
+
   function handleUseTemplate(template: AgentTemplate) {
     setSelectedTemplate(template)
-    const override =
-      overrides[template.id]?.draft?.skill_configs ??
-      overrides[template.id]?.skill_configs ??
-      []
-    setDraft(templateToDraft(template, override))
+    setDraft(
+      templateToDraft(
+        template,
+        skillConfigsForTemplate(template, installedSkills, overrides[template.id]),
+      ),
+    )
   }
 
   function handleDrawerOpenChange(open: boolean) {

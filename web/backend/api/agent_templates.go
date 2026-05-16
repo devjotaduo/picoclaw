@@ -17,11 +17,13 @@ import (
 
 	"github.com/sipeed/picoclaw/pkg/config"
 	ppid "github.com/sipeed/picoclaw/pkg/pid"
+	"github.com/sipeed/picoclaw/pkg/routing"
 )
 
 // agentTemplateApplyRequest is the payload sent by the frontend templates page.
 // It carries the (already customized) parameters the user picked in the drawer.
 type agentTemplateApplyRequest struct {
+	AgentID          string                     `json:"agent_id,omitempty"`
 	TemplateID       string                     `json:"template_id"`
 	Name             string                     `json:"name"`
 	ShortDescription string                     `json:"short_description,omitempty"`
@@ -38,17 +40,17 @@ type agentTemplateApplyRequest struct {
 	SkillConfigs     []agentTemplateSkillConfig `json:"skill_configs,omitempty"`
 	Model            string                     `json:"model,omitempty"`
 
-	ConversationFlow         []string                       `json:"conversation_flow,omitempty"`
-	RequiredFieldsByIntent   map[string][]string            `json:"required_fields_by_intent,omitempty"`
-	ResponseExamples         agentTemplateResponseExamples  `json:"response_examples"`
-	StyleGuide               agentTemplateStyleGuide        `json:"style_guide"`
-	FallbackPolicy           agentTemplateFallbackPolicy    `json:"fallback_policy"`
-	HandoffSummaryTemplate   map[string]any                 `json:"handoff_summary_template,omitempty"`
-	StructuredOutputTemplate map[string]any                 `json:"structured_output_template,omitempty"`
-	PriorityRules            agentTemplatePriorityRules     `json:"priority_rules"`
-	KnowledgePolicy          []string                       `json:"knowledge_policy,omitempty"`
-	SecurityRules            []string                       `json:"security_rules,omitempty"`
-	QualityMetrics           []string                       `json:"quality_metrics,omitempty"`
+	ConversationFlow         []string                      `json:"conversation_flow,omitempty"`
+	RequiredFieldsByIntent   map[string][]string           `json:"required_fields_by_intent,omitempty"`
+	ResponseExamples         agentTemplateResponseExamples `json:"response_examples"`
+	StyleGuide               agentTemplateStyleGuide       `json:"style_guide"`
+	FallbackPolicy           agentTemplateFallbackPolicy   `json:"fallback_policy"`
+	HandoffSummaryTemplate   map[string]any                `json:"handoff_summary_template,omitempty"`
+	StructuredOutputTemplate map[string]any                `json:"structured_output_template,omitempty"`
+	PriorityRules            agentTemplatePriorityRules    `json:"priority_rules"`
+	KnowledgePolicy          []string                      `json:"knowledge_policy,omitempty"`
+	SecurityRules            []string                      `json:"security_rules,omitempty"`
+	QualityMetrics           []string                      `json:"quality_metrics,omitempty"`
 
 	Modules       agentTemplateModules        `json:"modules"`
 	Professionals []agentTemplateProfessional `json:"professionals,omitempty"`
@@ -201,6 +203,8 @@ type agentTemplatePriorityRules struct {
 
 type agentTemplateApplyResponse struct {
 	Status       string `json:"status"`
+	AgentID      string `json:"agent_id,omitempty"`
+	Workspace    string `json:"workspace,omitempty"`
 	AgentPath    string `json:"agent_path"`
 	SoulPath     string `json:"soul_path"`
 	BehaviorPath string `json:"behavior_path,omitempty"`
@@ -210,6 +214,10 @@ type agentTemplateApplyResponse struct {
 var agentTemplateWriteMu sync.Mutex
 
 func (h *Handler) registerAgentTemplateRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/agents", h.handleListAgents)
+	mux.HandleFunc("POST /api/agents", h.handleCreateAgent)
+	mux.HandleFunc("PUT /api/agents/{agentID}", h.handleUpdateAgent)
+	mux.HandleFunc("DELETE /api/agents/{agentID}", h.handleDeleteAgent)
 	mux.HandleFunc("POST /api/agent/templates/apply", h.handleApplyAgentTemplate)
 	mux.HandleFunc("GET /api/agent/templates/overrides", h.handleGetTemplateOverrides)
 	mux.HandleFunc("PUT /api/agent/templates/overrides/{templateID}", h.handlePutTemplateOverride)
@@ -221,9 +229,36 @@ func (h *Handler) registerAgentTemplateRoutes(mux *http.ServeMux) {
 // whether the agent was configured yet, plus the full applied payload so the
 // admin can re-edit every field captured at apply time.
 type agentConfigResponse struct {
-	Configured bool                          `json:"configured"`
-	Payload    *agentTemplateApplyRequest    `json:"payload,omitempty"`
-	AppliedAt  int64                         `json:"applied_at,omitempty"`
+	Configured bool                       `json:"configured"`
+	Payload    *agentTemplateApplyRequest `json:"payload,omitempty"`
+	AppliedAt  int64                      `json:"applied_at,omitempty"`
+}
+
+type agentSummary struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name,omitempty"`
+	Default    bool     `json:"default"`
+	Workspace  string   `json:"workspace"`
+	Configured bool     `json:"configured"`
+	TemplateID string   `json:"template_id,omitempty"`
+	AppliedAt  int64    `json:"applied_at,omitempty"`
+	Model      string   `json:"model,omitempty"`
+	Skills     []string `json:"skills,omitempty"`
+}
+
+type agentsResponse struct {
+	Agents []agentSummary `json:"agents"`
+}
+
+type createAgentRequest struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Default bool   `json:"default,omitempty"`
+}
+
+type updateAgentRequest struct {
+	Name    *string `json:"name,omitempty"`
+	Default *bool   `json:"default,omitempty"`
 }
 
 func agentConfigPath(workspace string) string {
@@ -258,13 +293,420 @@ func saveAgentConfig(workspace string, payload *agentTemplateApplyRequest) error
 	return os.WriteFile(agentConfigPath(workspace), encoded, 0o644)
 }
 
-func (h *Handler) handleGetAgentConfig(w http.ResponseWriter, _ *http.Request) {
+func normalizeDashboardAgentID(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return routing.DefaultAgentID, nil
+	}
+	normalized := routing.NormalizeAgentID(trimmed)
+	if normalized == routing.DefaultAgentID && strings.ToLower(trimmed) != routing.DefaultAgentID {
+		return "", fmt.Errorf("invalid agent_id")
+	}
+	return normalized, nil
+}
+
+func expandDashboardPath(path string) string {
+	if path == "" || path[0] != '~' {
+		return path
+	}
+	home, _ := os.UserHomeDir()
+	if path == "~" {
+		return home
+	}
+	if strings.HasPrefix(path, "~/") {
+		return home + path[1:]
+	}
+	return home
+}
+
+func defaultWorkspaceForAgent(cfg *config.Config, agentID string) string {
+	base := cfg.WorkspacePath()
+	if base == "" {
+		return ""
+	}
+	if routing.NormalizeAgentID(agentID) == routing.DefaultAgentID {
+		return base
+	}
+	return filepath.Join(filepath.Dir(base), "workspace-"+routing.NormalizeAgentID(agentID))
+}
+
+func findAgentConfigIndex(cfg *config.Config, agentID string) int {
+	normalized := routing.NormalizeAgentID(agentID)
+	for i := range cfg.Agents.List {
+		if routing.NormalizeAgentID(cfg.Agents.List[i].ID) == normalized {
+			return i
+		}
+	}
+	return -1
+}
+
+func agentConfigExists(cfg *config.Config, agentID string) bool {
+	normalized := routing.NormalizeAgentID(agentID)
+	if len(cfg.Agents.List) == 0 {
+		return normalized == routing.DefaultAgentID
+	}
+	return findAgentConfigIndex(cfg, normalized) >= 0
+}
+
+func workspaceForAgentID(cfg *config.Config, agentID string) string {
+	normalized := routing.NormalizeAgentID(agentID)
+	if idx := findAgentConfigIndex(cfg, normalized); idx >= 0 {
+		if workspace := strings.TrimSpace(cfg.Agents.List[idx].Workspace); workspace != "" {
+			return expandDashboardPath(workspace)
+		}
+	}
+	return defaultWorkspaceForAgent(cfg, normalized)
+}
+
+func effectiveDefaultAgentID(cfg *config.Config) string {
+	if len(cfg.Agents.List) == 0 {
+		return routing.DefaultAgentID
+	}
+	for _, agentCfg := range cfg.Agents.List {
+		if agentCfg.Default {
+			return routing.NormalizeAgentID(agentCfg.ID)
+		}
+	}
+	if id := strings.TrimSpace(cfg.Agents.List[0].ID); id != "" {
+		return routing.NormalizeAgentID(id)
+	}
+	return routing.DefaultAgentID
+}
+
+func ensureOneDefaultAgent(cfg *config.Config) {
+	if len(cfg.Agents.List) == 0 {
+		return
+	}
+	for _, agentCfg := range cfg.Agents.List {
+		if agentCfg.Default {
+			return
+		}
+	}
+	mainIdx := findAgentConfigIndex(cfg, routing.DefaultAgentID)
+	if mainIdx >= 0 {
+		cfg.Agents.List[mainIdx].Default = true
+		return
+	}
+	cfg.Agents.List[0].Default = true
+}
+
+func setDefaultAgent(cfg *config.Config, agentID string) {
+	normalized := routing.NormalizeAgentID(agentID)
+	for i := range cfg.Agents.List {
+		cfg.Agents.List[i].Default = routing.NormalizeAgentID(cfg.Agents.List[i].ID) == normalized
+	}
+}
+
+func templateModelConfig(req *agentTemplateApplyRequest) *config.AgentModelConfig {
+	model := strings.TrimSpace(req.Model)
+	if model == "" {
+		return nil
+	}
+	return &config.AgentModelConfig{Primary: model}
+}
+
+func ensureAgentEntryForTemplate(cfg *config.Config, agentID string, req *agentTemplateApplyRequest) (string, bool) {
+	normalized := routing.NormalizeAgentID(agentID)
+	workspace := workspaceForAgentID(cfg, normalized)
+	if workspace == "" {
+		return "", false
+	}
+	changed := false
+	if len(cfg.Agents.List) == 0 {
+		if normalized == routing.DefaultAgentID {
+			return workspace, false
+		}
+		cfg.Agents.List = append(cfg.Agents.List, config.AgentConfig{
+			ID:        routing.DefaultAgentID,
+			Default:   true,
+			Workspace: cfg.WorkspacePath(),
+		})
+		changed = true
+	}
+
+	idx := findAgentConfigIndex(cfg, normalized)
+	if idx < 0 {
+		cfg.Agents.List = append(cfg.Agents.List, config.AgentConfig{ID: normalized})
+		idx = len(cfg.Agents.List) - 1
+		changed = true
+	}
+
+	entry := &cfg.Agents.List[idx]
+	if entry.ID != normalized {
+		entry.ID = normalized
+		changed = true
+	}
+	if strings.TrimSpace(entry.Name) != req.Name {
+		entry.Name = req.Name
+		changed = true
+	}
+	if strings.TrimSpace(entry.Workspace) == "" {
+		entry.Workspace = workspace
+		changed = true
+	}
+	entry.Model = templateModelConfig(req)
+	entry.Skills = resolveEnabledSkills(req)
+	changed = true
+	ensureOneDefaultAgent(cfg)
+	return workspaceForAgentID(cfg, normalized), changed
+}
+
+func agentSummaryForID(cfg *config.Config, agentID string, entry *config.AgentConfig) agentSummary {
+	normalized := routing.NormalizeAgentID(agentID)
+	workspace := workspaceForAgentID(cfg, normalized)
+	summary := agentSummary{
+		ID:        normalized,
+		Default:   normalized == effectiveDefaultAgentID(cfg),
+		Workspace: workspace,
+	}
+	if entry != nil {
+		summary.Name = strings.TrimSpace(entry.Name)
+		if entry.Model != nil {
+			summary.Model = strings.TrimSpace(entry.Model.Primary)
+		}
+		summary.Skills = append([]string(nil), entry.Skills...)
+	}
+	payload, err := loadAgentConfig(workspace)
+	if err == nil && payload != nil {
+		summary.Configured = true
+		if summary.Name == "" {
+			summary.Name = payload.Name
+		}
+		summary.TemplateID = payload.TemplateID
+		if model := strings.TrimSpace(payload.Model); model != "" {
+			summary.Model = model
+		}
+		summary.Skills = resolveEnabledSkills(payload)
+	}
+	if normalized == routing.DefaultAgentID && summary.TemplateID == "" {
+		summary.TemplateID = cfg.Agents.Defaults.ActiveTemplateID
+	}
+	if info, err := os.Stat(agentConfigPath(workspace)); err == nil {
+		summary.AppliedAt = info.ModTime().Unix()
+	}
+	if summary.Name == "" {
+		if normalized == routing.DefaultAgentID {
+			summary.Name = "Main"
+		} else {
+			summary.Name = normalized
+		}
+	}
+	return summary
+}
+
+func agentSummaries(cfg *config.Config) []agentSummary {
+	if len(cfg.Agents.List) == 0 {
+		return []agentSummary{agentSummaryForID(cfg, routing.DefaultAgentID, nil)}
+	}
+	out := make([]agentSummary, 0, len(cfg.Agents.List))
+	seen := make(map[string]struct{}, len(cfg.Agents.List))
+	for i := range cfg.Agents.List {
+		id := routing.NormalizeAgentID(cfg.Agents.List[i].ID)
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, agentSummaryForID(cfg, id, &cfg.Agents.List[i]))
+	}
+	return out
+}
+
+func validateDashboardAgentName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return errors.New("name is required")
+	}
+	if strings.ContainsAny(name, "\r\n\t") {
+		return errors.New("name must not contain control characters")
+	}
+	return nil
+}
+
+func (h *Handler) handleListAgents(w http.ResponseWriter, _ *http.Request) {
 	cfg, err := config.LoadConfig(h.configPath)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
 		return
 	}
-	workspace := cfg.WorkspacePath()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(agentsResponse{Agents: agentSummaries(cfg)})
+}
+
+func (h *Handler) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
+	var req createAgentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %v", err))
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	idSource := req.ID
+	if strings.TrimSpace(idSource) == "" {
+		idSource = req.Name
+	}
+	agentID, err := normalizeDashboardAgentID(idSource)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := validateDashboardAgentName(req.Name); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	agentTemplateWriteMu.Lock()
+	defer agentTemplateWriteMu.Unlock()
+
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
+		return
+	}
+	if agentConfigExists(cfg, agentID) {
+		writeJSONError(w, http.StatusConflict, "agent already exists")
+		return
+	}
+	workspace := defaultWorkspaceForAgent(cfg, agentID)
+	if workspace == "" {
+		writeJSONError(w, http.StatusInternalServerError, "workspace path is not configured")
+		return
+	}
+
+	if len(cfg.Agents.List) == 0 {
+		cfg.Agents.List = append(cfg.Agents.List, config.AgentConfig{
+			ID:        routing.DefaultAgentID,
+			Default:   !req.Default,
+			Workspace: cfg.WorkspacePath(),
+		})
+	}
+	cfg.Agents.List = append(cfg.Agents.List, config.AgentConfig{
+		ID:        agentID,
+		Name:      req.Name,
+		Default:   req.Default,
+		Workspace: workspace,
+	})
+	if req.Default {
+		setDefaultAgent(cfg, agentID)
+	}
+	ensureOneDefaultAgent(cfg)
+	if err := config.SaveConfig(h.configPath, cfg); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to save config: %v", err))
+		return
+	}
+
+	summary := agentSummaryForID(cfg, agentID, &cfg.Agents.List[findAgentConfigIndex(cfg, agentID)])
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(summary)
+}
+
+func (h *Handler) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
+	agentID, err := normalizeDashboardAgentID(r.PathValue("agentID"))
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var req updateAgentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %v", err))
+		return
+	}
+
+	agentTemplateWriteMu.Lock()
+	defer agentTemplateWriteMu.Unlock()
+
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
+		return
+	}
+	if len(cfg.Agents.List) == 0 {
+		if agentID != routing.DefaultAgentID {
+			writeJSONError(w, http.StatusNotFound, "agent not found")
+			return
+		}
+		cfg.Agents.List = append(cfg.Agents.List, config.AgentConfig{
+			ID:        routing.DefaultAgentID,
+			Default:   true,
+			Workspace: cfg.WorkspacePath(),
+		})
+	}
+	idx := findAgentConfigIndex(cfg, agentID)
+	if idx < 0 {
+		writeJSONError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if err := validateDashboardAgentName(name); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		cfg.Agents.List[idx].Name = name
+	}
+	if req.Default != nil {
+		if *req.Default {
+			setDefaultAgent(cfg, agentID)
+		} else {
+			cfg.Agents.List[idx].Default = false
+			ensureOneDefaultAgent(cfg)
+		}
+	}
+	if strings.TrimSpace(cfg.Agents.List[idx].Workspace) == "" {
+		cfg.Agents.List[idx].Workspace = defaultWorkspaceForAgent(cfg, agentID)
+	}
+	if err := config.SaveConfig(h.configPath, cfg); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to save config: %v", err))
+		return
+	}
+	idx = findAgentConfigIndex(cfg, agentID)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(agentSummaryForID(cfg, agentID, &cfg.Agents.List[idx]))
+}
+
+func (h *Handler) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
+	agentID, err := normalizeDashboardAgentID(r.PathValue("agentID"))
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if agentID == routing.DefaultAgentID {
+		writeJSONError(w, http.StatusBadRequest, "main agent cannot be deleted")
+		return
+	}
+	agentTemplateWriteMu.Lock()
+	defer agentTemplateWriteMu.Unlock()
+
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
+		return
+	}
+	idx := findAgentConfigIndex(cfg, agentID)
+	if idx < 0 {
+		writeJSONError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+	cfg.Agents.List = append(cfg.Agents.List[:idx], cfg.Agents.List[idx+1:]...)
+	ensureOneDefaultAgent(cfg)
+	if err := config.SaveConfig(h.configPath, cfg); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to save config: %v", err))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "deleted", "agent_id": agentID})
+}
+
+func (h *Handler) handleGetAgentConfig(w http.ResponseWriter, r *http.Request) {
+	agentID, err := normalizeDashboardAgentID(r.URL.Query().Get("agent_id"))
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
+		return
+	}
+	workspace := workspaceForAgentID(cfg, agentID)
 	if workspace == "" {
 		writeJSONError(w, http.StatusInternalServerError, "workspace path is not configured")
 		return
@@ -273,6 +715,9 @@ func (h *Handler) handleGetAgentConfig(w http.ResponseWriter, _ *http.Request) {
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load agent config: %v", err))
 		return
+	}
+	if payload != nil && payload.AgentID == "" {
+		payload.AgentID = agentID
 	}
 	resp := agentConfigResponse{Configured: payload != nil, Payload: payload}
 	if info, err := os.Stat(agentConfigPath(workspace)); err == nil {
@@ -380,7 +825,18 @@ func (h *Handler) handlePutTemplateOverride(w http.ResponseWriter, r *http.Reque
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %v", err))
 		return
 	}
-	body.SkillConfigs = normalizeSkillConfigs(body.SkillConfigs)
+
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
+		return
+	}
+	availableSkills := availableTemplateSkillNames(cfg)
+	body.SkillConfigs, err = normalizeSkillConfigsForAvailability(body.SkillConfigs, availableSkills)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if body.Draft != nil {
 		if body.Draft.TemplateID == "" {
 			body.Draft.TemplateID = templateID
@@ -389,8 +845,11 @@ func (h *Handler) handlePutTemplateOverride(w http.ResponseWriter, r *http.Reque
 			writeJSONError(w, http.StatusBadRequest, "draft template_id must match URL template_id")
 			return
 		}
-		body.Draft.SkillConfigs = normalizeSkillConfigs(body.Draft.SkillConfigs)
 		if err := validateAgentTemplateRequest(body.Draft); err != nil {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid draft: %v", err))
+			return
+		}
+		if err := normalizeTemplateRequestSkills(body.Draft, availableSkills); err != nil {
 			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid draft: %v", err))
 			return
 		}
@@ -468,7 +927,22 @@ func isSafeTemplateID(id string) bool {
 	return true
 }
 
-func normalizeSkillConfigs(in []agentTemplateSkillConfig) []agentTemplateSkillConfig {
+func availableTemplateSkillNames(cfg *config.Config) map[string]string {
+	out := map[string]string{}
+	if cfg == nil {
+		return out
+	}
+	for _, skill := range newSkillsLoader(cfg.WorkspacePath()).ListSkills() {
+		name := strings.TrimSpace(skill.Name)
+		if name == "" {
+			continue
+		}
+		out[strings.ToLower(name)] = name
+	}
+	return out
+}
+
+func normalizeSkillConfigsForAvailability(in []agentTemplateSkillConfig, available map[string]string) ([]agentTemplateSkillConfig, error) {
 	out := make([]agentTemplateSkillConfig, 0, len(in))
 	seen := map[string]struct{}{}
 	for _, sc := range in {
@@ -476,17 +950,67 @@ func normalizeSkillConfigs(in []agentTemplateSkillConfig) []agentTemplateSkillCo
 		if name == "" {
 			continue
 		}
-		if _, dup := seen[name]; dup {
+		canonical, ok := available[strings.ToLower(name)]
+		if !ok {
+			if sc.Enabled {
+				return nil, fmt.Errorf("unknown enabled skill %q", name)
+			}
 			continue
 		}
-		seen[name] = struct{}{}
+		key := strings.ToLower(canonical)
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
 		out = append(out, agentTemplateSkillConfig{
-			Name:    name,
+			Name:    canonical,
 			Enabled: sc.Enabled,
 			Visible: sc.Visible,
 		})
 	}
-	return out
+	return out, nil
+}
+
+func normalizeTemplateSkillNames(in []string, available map[string]string) ([]string, error) {
+	out := make([]string, 0, len(in))
+	seen := map[string]struct{}{}
+	for _, raw := range in {
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			continue
+		}
+		canonical, ok := available[strings.ToLower(name)]
+		if !ok {
+			return nil, fmt.Errorf("unknown enabled skill %q", name)
+		}
+		key := strings.ToLower(canonical)
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, canonical)
+	}
+	return out, nil
+}
+
+func normalizeTemplateRequestSkills(req *agentTemplateApplyRequest, available map[string]string) error {
+	if req == nil {
+		return nil
+	}
+	if len(req.SkillConfigs) > 0 {
+		normalized, err := normalizeSkillConfigsForAvailability(req.SkillConfigs, available)
+		if err != nil {
+			return err
+		}
+		req.SkillConfigs = normalized
+		return nil
+	}
+	normalized, err := normalizeTemplateSkillNames(req.Skills, available)
+	if err != nil {
+		return err
+	}
+	req.Skills = normalized
+	return nil
 }
 
 func (h *Handler) handleApplyAgentTemplate(w http.ResponseWriter, r *http.Request) {
@@ -495,26 +1019,36 @@ func (h *Handler) handleApplyAgentTemplate(w http.ResponseWriter, r *http.Reques
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %v", err))
 		return
 	}
+	agentID, err := normalizeDashboardAgentID(req.AgentID)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	req.AgentID = agentID
 
 	if err := validateAgentTemplateRequest(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
+	agentTemplateWriteMu.Lock()
+	defer agentTemplateWriteMu.Unlock()
+
 	cfg, err := config.LoadConfig(h.configPath)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
 		return
 	}
+	if err := normalizeTemplateRequestSkills(&req, availableTemplateSkillNames(cfg)); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
-	workspace := cfg.WorkspacePath()
+	workspace, configChanged := ensureAgentEntryForTemplate(cfg, agentID, &req)
 	if workspace == "" {
 		writeJSONError(w, http.StatusInternalServerError, "workspace path is not configured")
 		return
 	}
-
-	agentTemplateWriteMu.Lock()
-	defer agentTemplateWriteMu.Unlock()
 
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to ensure workspace directory: %v", err))
@@ -582,15 +1116,17 @@ func (h *Handler) handleApplyAgentTemplate(w http.ResponseWriter, r *http.Reques
 		w.Header().Set("X-Picoclaw-Warning", fmt.Sprintf("failed to save agent_config: %v", err))
 	}
 
-	// Persist active template ID so the dashboard can show which template is
-	// currently applied across reloads. Saved best-effort: rendered files are
-	// already on disk, so a config write failure should not fail the request.
-	if cfg.Agents.Defaults.ActiveTemplateID != req.TemplateID {
+	// Persist active template ID for the main agent and agents.list metadata for
+	// non-main agents. Unlike the editor round-trip file, this config write is
+	// required for newly created agents to be visible to the runtime registry.
+	if agentID == routing.DefaultAgentID && cfg.Agents.Defaults.ActiveTemplateID != req.TemplateID {
 		cfg.Agents.Defaults.ActiveTemplateID = req.TemplateID
+		configChanged = true
+	}
+	if configChanged {
 		if err := config.SaveConfig(h.configPath, cfg); err != nil {
-			// Surface as a warning header but keep status applied; the rendered
-			// files are the source of truth for the runtime.
-			w.Header().Set("X-Picoclaw-Warning", fmt.Sprintf("failed to save active_template_id: %v", err))
+			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to save agent registry config: %v", err))
+			return
 		}
 	}
 
@@ -603,6 +1139,8 @@ func (h *Handler) handleApplyAgentTemplate(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(agentTemplateApplyResponse{
 		Status:       "applied",
+		AgentID:      agentID,
+		Workspace:    workspace,
 		AgentPath:    agentPath,
 		SoulPath:     soulPath,
 		BehaviorPath: behaviorPath,
@@ -918,32 +1456,32 @@ type agentTemplateRenderData struct {
 	Language            string
 	Tone                string
 
-	ConversationFlow                []string
-	StyleGuideDo                    []string
-	StyleGuideDont                  []string
-	FallbackPolicyEnabled           bool
-	FallbackMaxClarifyingQuestions  int
-	FallbackWhenUnsure              string
-	FallbackWhenToRoute             []string
-	FallbackRouteMessage            string
-	PriorityHigh                    []string
-	PriorityMedium                  []string
-	PriorityLow                     []string
-	KnowledgePolicy                 []string
-	SecurityRules                   []string
-	QualityMetrics                  []string
-	RequiredFieldsLines             []string
-	ResponseExampleLines            []string
-	HandoffJSON                     string
-	StructuredOutputJSON            string
-	ProfessionalsBlock              string
-	ProductsBlock                   string
-	RecommendedTools                []string
-	ToolNamespaces                  []string
-	RequiredIntegrations            []string
-	PermissionLevel                 string
-	PermissionLevelHuman            string
-	ApprovalRequiredFor             []string
+	ConversationFlow               []string
+	StyleGuideDo                   []string
+	StyleGuideDont                 []string
+	FallbackPolicyEnabled          bool
+	FallbackMaxClarifyingQuestions int
+	FallbackWhenUnsure             string
+	FallbackWhenToRoute            []string
+	FallbackRouteMessage           string
+	PriorityHigh                   []string
+	PriorityMedium                 []string
+	PriorityLow                    []string
+	KnowledgePolicy                []string
+	SecurityRules                  []string
+	QualityMetrics                 []string
+	RequiredFieldsLines            []string
+	ResponseExampleLines           []string
+	HandoffJSON                    string
+	StructuredOutputJSON           string
+	ProfessionalsBlock             string
+	ProductsBlock                  string
+	RecommendedTools               []string
+	ToolNamespaces                 []string
+	RequiredIntegrations           []string
+	PermissionLevel                string
+	PermissionLevelHuman           string
+	ApprovalRequiredFor            []string
 }
 
 func buildRenderData(req *agentTemplateApplyRequest) agentTemplateRenderData {

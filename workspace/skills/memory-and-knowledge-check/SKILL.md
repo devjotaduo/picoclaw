@@ -1,11 +1,11 @@
 ---
 name: memory-and-knowledge-check
-description: Consultar memória (MEMORY.md + histórico da sessão) E base de conhecimento da empresa (AGENT.md, skills carregadas, módulos de Profissionais/Produtos, FAQ/políticas) antes de produzir qualquer resposta ao cliente ou colaborador. Ativar SEMPRE no início de cada turno de conversa, antes de responder qualquer pergunta, prometer prazos, citar valores, agendar, encaminhar ou registrar caso. Disciplina anti-alucinação obrigatória.
+description: Auditar memória e base oficial antes de respostas de alto risco ou quando houver dúvida factual importante. Usar para revisar MEMORY.md, histórico da sessão, AGENT.md, módulos, FAQ e políticas antes de prometer prazos, valores, disponibilidade, encaminhamentos ou registrar fatos sensíveis.
 ---
 
 # Memory and Knowledge Check
 
-Esta é a checagem que precede toda resposta. A regra: **nunca afirmar um fato sem antes ter procurado em memória e na base de conhecimento.**
+Esta skill é uma checagem reforçada para respostas em que erro factual pode causar impacto operacional, comercial, jurídico ou de privacidade. Ela não precisa ser ativada em todo turno: use quando houver promessa, dado sensível, regra de negócio, conflito de informação ou risco de alucinação.
 
 ## Princípios
 
@@ -16,11 +16,12 @@ Esta é a checagem que precede toda resposta. A regra: **nunca afirmar um fato s
 
 ## Workflow
 
-1. **Ler memória**: carregar `MEMORY.md` e os últimos turnos da sessão. Procurar nome, contato, preferências, caso aberto, promessas anteriores, dados já fornecidos, tom usado.
-2. **Ler base de conhecimento**: revisar `AGENT.md` (Company Context, Restrictions, módulos), skills carregadas e qualquer KB anexada. Procurar a informação oficial relevante à pergunta atual.
-3. **Combinar e responder**: ancorar a resposta em ambos. Usar a memória pra personalizar e a KB pra fundamentar. Citar políticas, horários, valores e prazos exatamente como aparecem na base.
-4. **Marcar lacunas**: se a info não estiver em nenhum dos dois, escalar via "vou verificar com a equipe responsável".
-5. **Atualizar memória**: ao fim do turno, gravar em `MEMORY.md` os fatos novos relevantes para próximas interações (nome, canal preferido, caso aberto, status). Nunca gravar CPF completo, cartão, senha, dados de saúde ou dados de salário sem necessidade explícita.
+1. **Identificar o risco**: confirmar por que a resposta exige verificação reforçada (valor, prazo, disponibilidade, política, dado sensível, histórico do caso).
+2. **Ler memória**: carregar `MEMORY.md` e os últimos turnos da sessão. Procurar nome, contato, preferências, caso aberto, promessas anteriores, dados já fornecidos, tom usado.
+3. **Ler base de conhecimento**: revisar `AGENT.md` (Company Context, Restrictions, módulos), skills carregadas e qualquer KB anexada. Procurar a informação oficial relevante à pergunta atual.
+4. **Combinar e responder**: ancorar a resposta em ambos. Usar a memória para personalizar e a KB para fundamentar. Citar políticas, horários, valores e prazos exatamente como aparecem na base.
+5. **Marcar lacunas**: se a info não estiver em nenhum dos dois, escalar via "vou verificar com a equipe responsável".
+6. **Atualizar memória**: ao fim do turno, gravar em `MEMORY.md` os fatos novos relevantes para próximas interações (nome, canal preferido, caso aberto, status). Nunca gravar CPF completo, cartão, senha, dados de saúde ou dados de salário sem necessidade explícita.
 
 ## Exemplos
 

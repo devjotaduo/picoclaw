@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Check, Loader2 } from "lucide-react";
 import { createTenant, getTenant, markPasswordDelivered, type CreateTenantInput, type CreateTenantResponse } from "@/api/tenants";
+import { listLauncherProfiles } from "@/api/launcher-profiles";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Dialog } from "@/components/ui/dialog";
@@ -20,6 +21,8 @@ export function NewTenant() {
   });
   const [result, setResult] = useState<CreateTenantResponse | null>(null);
   const [copied, setCopied] = useState(false);
+  const profilesQ = useQuery({ queryKey: ["launcher-profiles"], queryFn: listLauncherProfiles });
+  const profiles = profilesQ.data?.profiles ?? [];
 
   const m = useMutation({
     mutationFn: (input: CreateTenantInput) => createTenant(input),
@@ -103,6 +106,22 @@ export function NewTenant() {
             value={form.subdomain}
             onChange={(e) => setForm({ ...form, subdomain: e.target.value.toLowerCase() })}
           />
+        </div>
+        <div>
+          <Label htmlFor="launcher_profile_id">Launcher profile</Label>
+          <select
+            id="launcher_profile_id"
+            value={form.launcher_profile_id ?? ""}
+            onChange={(e) => setForm({ ...form, launcher_profile_id: e.target.value || undefined })}
+            className="flex h-9 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1 text-sm text-zinc-100"
+          >
+            <option value="">Default profile</option>
+            {profiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name}{profile.is_default ? " (default)" : ""} · v{profile.version}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="grid grid-cols-3 gap-3">
           <div>

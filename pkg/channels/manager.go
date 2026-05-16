@@ -82,20 +82,21 @@ type channelWorker struct {
 }
 
 type Manager struct {
-	channels      map[string]Channel
-	workers       map[string]*channelWorker
-	bus           *bus.MessageBus
-	runtimeEvents runtimeevents.Bus
-	config        *config.Config
-	mediaStore    media.MediaStore
-	dispatchTask  *asyncTask
-	mux           *dynamicServeMux
-	httpServer    *http.Server
-	httpListeners []net.Listener
-	mu            sync.RWMutex
-	placeholders  sync.Map          // "channel:chatID" → placeholderID (string)
-	typingStops   sync.Map          // "channel:chatID" → func()
-	reactionUndos sync.Map          // "channel:chatID" → reactionEntry
+	channels         map[string]Channel
+	workers          map[string]*channelWorker
+	bus              *bus.MessageBus
+	runtimeEvents    runtimeevents.Bus
+	config           *config.Config
+	mediaStore       media.MediaStore
+	dispatchTask     *asyncTask
+	mux              *dynamicServeMux
+	httpServer       *http.Server
+	httpListeners    []net.Listener
+	healthServer     *health.Server
+	mu               sync.RWMutex
+	placeholders     sync.Map          // "channel:chatID" → placeholderID (string)
+	typingStops      sync.Map          // "channel:chatID" → func()
+	reactionUndos    sync.Map          // "channel:chatID" → reactionEntry
 	streamActive     sync.Map          // "channel:chatID" → true (set when streamer.Finalize sent the message)
 	channelHashes    map[string]string // channel name → config hash
 	behaviorProvider BehaviorProvider  // optional; injected into every channel via type assertion
@@ -756,9 +757,11 @@ func (m *Manager) SetupHTTPServer(addr string, healthServer *health.Server) {
 // When listeners is empty it falls back to Addr-based ListenAndServe behavior.
 func (m *Manager) SetupHTTPServerListeners(listeners []net.Listener, addr string, healthServer *health.Server) {
 	m.mux = newDynamicServeMux()
+	m.healthServer = healthServer
 
 	// Register health endpoints
 	if healthServer != nil {
+		healthServer.SetReady(false)
 		healthServer.RegisterOnMux(m.mux)
 	}
 
@@ -838,6 +841,8 @@ func (m *Manager) unregisterChannelHTTPHandler(name string, ch Channel) {
 func (m *Manager) StartAll(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	m.setHealthReadyLocked(false)
 
 	if len(m.channels) == 0 {
 		logger.WarnC("channels", "No channels enabled")
@@ -963,12 +968,15 @@ func (m *Manager) StartAll(ctx context.Context) error {
 		"failed":  len(failedNames),
 		"total":   len(m.channels),
 	})
+	m.setHealthReadyLocked(true)
 	return nil
 }
 
 func (m *Manager) StopAll(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	m.setHealthReadyLocked(false)
 
 	logger.InfoC("channels", "Stopping all channels")
 
@@ -1488,6 +1496,8 @@ func (m *Manager) Reload(ctx context.Context, cfg *config.Config) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	m.setHealthReadyLocked(false)
+
 	// Save old config so we can revert on error.
 	oldConfig := m.config
 
@@ -1579,7 +1589,17 @@ func (m *Manager) Reload(ctx context.Context, cfg *config.Config) error {
 			f()
 		}
 	}()
+	m.setHealthReadyLocked(true)
 	return nil
+}
+
+// setHealthReadyLocked updates the shared health endpoint readiness bit.
+// Caller must hold m.mu so readiness transitions stay aligned with manager
+// lifecycle transitions.
+func (m *Manager) setHealthReadyLocked(ready bool) {
+	if m.healthServer != nil {
+		m.healthServer.SetReady(ready)
+	}
 }
 
 func (m *Manager) RegisterChannel(name string, channel Channel) {
