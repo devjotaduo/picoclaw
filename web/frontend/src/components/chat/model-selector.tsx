@@ -28,6 +28,11 @@ export function ModelSelector({
   onValueChange,
 }: ModelSelectorProps) {
   const { t } = useTranslation()
+  const visibleModels = [...apiKeyModels, ...oauthModels, ...localModels]
+  const shouldShowSelectedFallback =
+    defaultModelName !== "" &&
+    !visibleModels.some((model) => model.model_name === defaultModelName)
+  const hasGroupedModels = visibleModels.length > 0
 
   return (
     <Select value={defaultModelName} onValueChange={onValueChange}>
@@ -38,6 +43,17 @@ export function ModelSelector({
         <SelectValue placeholder={t("chat.noModel")} />
       </SelectTrigger>
       <SelectContent position="popper" align="start">
+        {shouldShowSelectedFallback && (
+          <>
+            <SelectGroup>
+              <SelectItem value={defaultModelName}>
+                {defaultModelName}
+              </SelectItem>
+            </SelectGroup>
+            {hasGroupedModels && <SelectSeparator />}
+          </>
+        )}
+
         {apiKeyModels.length > 0 && (
           <SelectGroup>
             <SelectLabel>{t("chat.modelGroup.apikey")}</SelectLabel>

@@ -68,6 +68,18 @@ func (s *UserStore) CreatePlatformAdmin(ctx context.Context, email, bcryptHash s
 		INSERT INTO users (email, bcrypt_hash, status, platform_role)
 		VALUES ($1, $2, 'active', 'platform_admin')
 		ON CONFLICT (email) DO UPDATE
+		SET bcrypt_hash = COALESCE(users.bcrypt_hash, excluded.bcrypt_hash),
+		    status = 'active',
+		    platform_role = 'platform_admin'
+		RETURNING id, email, bcrypt_hash, status, platform_role, created_at, last_login`
+	return scanUser(s.DB.Pool.QueryRow(ctx, q, NormalizeEmail(email), bcryptHash))
+}
+
+func (s *UserStore) ResetPlatformAdminPassword(ctx context.Context, email, bcryptHash string) (*User, error) {
+	const q = `
+		INSERT INTO users (email, bcrypt_hash, status, platform_role)
+		VALUES ($1, $2, 'active', 'platform_admin')
+		ON CONFLICT (email) DO UPDATE
 		SET bcrypt_hash = excluded.bcrypt_hash,
 		    status = 'active',
 		    platform_role = 'platform_admin'

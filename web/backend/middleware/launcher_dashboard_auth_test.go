@@ -47,6 +47,8 @@ func TestLauncherDashboardAuth_AllowsPublicPaths(t *testing.T) {
 		{http.MethodGet, "/launcher-login", http.StatusTeapot},
 		{http.MethodGet, "/launcher-setup", http.StatusTeapot},
 		{http.MethodGet, "/assets/index.js", http.StatusTeapot},
+		{http.MethodGet, "/site.webmanifest", http.StatusTeapot},
+		{http.MethodHead, "/web-app-manifest-192x192.png", http.StatusTeapot},
 		{http.MethodPost, "/api/auth/login", http.StatusTeapot},
 		{http.MethodGet, "/api/auth/status", http.StatusTeapot},
 		{http.MethodPost, "/api/auth/setup", http.StatusTeapot},
@@ -60,6 +62,31 @@ func TestLauncherDashboardAuth_AllowsPublicPaths(t *testing.T) {
 		h.ServeHTTP(rec, req)
 		if rec.Code != tc.want {
 			t.Fatalf("%s %s: status = %d, want %d", tc.method, tc.path, rec.Code, tc.want)
+		}
+	}
+}
+
+func TestLauncherDashboardAuth_TrustedGatewayAllowsPublicStatic(t *testing.T) {
+	cfg := LauncherDashboardAuthConfig{
+		AuthMode:             "trusted_gateway",
+		TrustedGatewaySecret: "secret",
+	}
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})
+	h := LauncherDashboardAuth(cfg, next)
+
+	for _, path := range []string{
+		"/assets/index.js",
+		"/site.webmanifest",
+		"/web-app-manifest-192x192.png",
+		"/logo_with_text.png",
+	} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusTeapot {
+			t.Fatalf("GET %s: status = %d, want %d", path, rec.Code, http.StatusTeapot)
 		}
 	}
 }

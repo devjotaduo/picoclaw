@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -66,6 +67,12 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		return
 	}
 
+	target, _ := url.Parse(fmt.Sprintf("http://tenant-%s:18800", t.ID))
+	if isPublicTenantRoute(r.Method, r.URL.Path) {
+		h.proxyTenantRequest(w, r, target, nil)
+		return
+	}
+
 	user, role, ok := h.authenticateTenantRequest(w, r, t.ID)
 	if !ok {
 		return
@@ -93,7 +100,17 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		return
 	}
 
-	target, _ := url.Parse(fmt.Sprintf("http://tenant-%s:18800", t.ID))
+	h.proxyTenantRequest(w, r, target, func(req *http.Request) {
+		gatewayauth.AnnotateRequest(req, h.Cfg.GatewaySharedSecret, gatewayauth.Claims{
+			TenantID:  t.ID,
+			UserID:    strconv.FormatInt(user.ID, 10),
+			UserEmail: user.Email,
+			Role:      role,
+		}, time.Now())
+	})
+}
+
+func (h *Handler) proxyTenantRequest(w http.ResponseWriter, r *http.Request, target *url.URL, annotate func(*http.Request)) {
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	origDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {
@@ -101,12 +118,9 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		req.Host = target.Host
 		req.Header.Set("X-Forwarded-Host", r.Host)
 		req.Header.Set("X-Forwarded-Proto", forwardedProto(r))
-		gatewayauth.AnnotateRequest(req, h.Cfg.GatewaySharedSecret, gatewayauth.Claims{
-			TenantID:  t.ID,
-			UserID:    strconv.FormatInt(user.ID, 10),
-			UserEmail: user.Email,
-			Role:      role,
-		}, time.Now())
+		if annotate != nil {
+			annotate(req)
+		}
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
 		writeError(w, http.StatusBadGateway, "tenant gateway error: "+err.Error())
@@ -144,8 +158,47 @@ func tenantDashboardAllowed(role string, rolePolicy policy.RolePolicy, method, p
 	return policy.Allowed(role, rolePolicy, feature, required)
 }
 
+func isPublicTenantRoute(method, rawPath string) bool {
+	if isPublicTenantStatic(method, rawPath) {
+		return true
+	}
+	if method != http.MethodGet && method != http.MethodHead {
+		return false
+	}
+	p := path.Clean("/" + strings.TrimPrefix(rawPath, "/"))
+	return p == "/launcher-login" || p == "/launcher-setup"
+}
+
+func isPublicTenantStatic(method, rawPath string) bool {
+	if method != http.MethodGet && method != http.MethodHead {
+		return false
+	}
+	p := path.Clean("/" + strings.TrimPrefix(rawPath, "/"))
+	if strings.HasPrefix(p, "/assets/") {
+		return true
+	}
+	switch p {
+	case "/apple-touch-icon.png",
+		"/favicon-96x96.png",
+		"/favicon.ico",
+		"/favicon.svg",
+		"/lark.svg",
+		"/logo_with_text.png",
+		"/logo_with_text_dark.png",
+		"/logo_with_text_light.png",
+		"/robots.txt",
+		"/site.webmanifest",
+		"/web-app-manifest-192x192.png",
+		"/web-app-manifest-512x512.png":
+		return true
+	default:
+		return false
+	}
+}
+
 func rejectTenantGatewayAuth(w http.ResponseWriter, r *http.Request, baseDomain string) {
-	if strings.HasPrefix(r.URL.Path, "/api/") || strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+	p := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
+	if strings.HasPrefix(p, "/api/") || p == "/pico/ws" || strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}

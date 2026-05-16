@@ -23,6 +23,11 @@ export function NewTenant() {
   const [copied, setCopied] = useState(false);
   const profilesQ = useQuery({ queryKey: ["launcher-profiles"], queryFn: listLauncherProfiles });
   const profiles = profilesQ.data?.profiles ?? [];
+  const defaultProfile = profiles.find((profile) => profile.is_default);
+  const alternateProfiles = profiles.filter((profile) => !profile.is_default);
+  const defaultProfileLabel = defaultProfile
+    ? `Use current default: ${defaultProfile.name} · v${defaultProfile.version}`
+    : "Use current default";
 
   const m = useMutation({
     mutationFn: (input: CreateTenantInput) => createTenant(input),
@@ -115,10 +120,10 @@ export function NewTenant() {
             onChange={(e) => setForm({ ...form, launcher_profile_id: e.target.value || undefined })}
             className="flex h-9 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1 text-sm text-zinc-100"
           >
-            <option value="">Default profile</option>
-            {profiles.map((profile) => (
+            <option value="">{defaultProfileLabel}</option>
+            {alternateProfiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
-                {profile.name}{profile.is_default ? " (default)" : ""} · v{profile.version}
+                {profile.name} · v{profile.version}
               </option>
             ))}
           </select>

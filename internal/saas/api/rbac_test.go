@@ -75,3 +75,58 @@ func TestRejectTenantGatewayAuthRedirectsToAdmHost(t *testing.T) {
 		t.Fatalf("Location = %q", got)
 	}
 }
+
+func TestRejectTenantGatewayAuthWebSocketPathReturnsUnauthorized(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "https://carlao.jotaduo.com/pico/ws?session_id=test", nil)
+	rec := httptest.NewRecorder()
+
+	rejectTenantGatewayAuth(rec, req, "jotaduo.com")
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+	if got := rec.Header().Get("Location"); got != "" {
+		t.Fatalf("Location = %q, want empty", got)
+	}
+}
+
+func TestPublicTenantStatic(t *testing.T) {
+	cases := []struct {
+		method string
+		path   string
+		want   bool
+	}{
+		{http.MethodGet, "/site.webmanifest", true},
+		{http.MethodHead, "/favicon.ico", true},
+		{http.MethodGet, "/assets/index.js", true},
+		{http.MethodPost, "/site.webmanifest", false},
+		{http.MethodGet, "/", false},
+		{http.MethodGet, "/pico/ws", false},
+		{http.MethodGet, "/api/auth/status", false},
+	}
+	for _, tc := range cases {
+		if got := isPublicTenantStatic(tc.method, tc.path); got != tc.want {
+			t.Fatalf("isPublicTenantStatic(%q, %q) = %v, want %v", tc.method, tc.path, got, tc.want)
+		}
+	}
+}
+
+func TestPublicTenantRouteAllowsLauncherPages(t *testing.T) {
+	cases := []struct {
+		method string
+		path   string
+		want   bool
+	}{
+		{http.MethodGet, "/launcher-login", true},
+		{http.MethodHead, "/launcher-setup", true},
+		{http.MethodPost, "/launcher-login", false},
+		{http.MethodGet, "/launcher-login/../api/config", false},
+		{http.MethodGet, "/api/auth/status", false},
+		{http.MethodGet, "/pico/ws", false},
+	}
+	for _, tc := range cases {
+		if got := isPublicTenantRoute(tc.method, tc.path); got != tc.want {
+			t.Fatalf("isPublicTenantRoute(%q, %q) = %v, want %v", tc.method, tc.path, got, tc.want)
+		}
+	}
+}

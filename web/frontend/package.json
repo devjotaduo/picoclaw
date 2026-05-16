@@ -9,6 +9,8 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:api": "node ./scripts/dev-with-api.mjs",
+    "dev:full": "node ./scripts/dev-with-api.mjs",
     "build": "tsc -b && vite build",
     "build:backend": "tsc -b && vite build --outDir ../backend/dist --emptyOutDir && node ./scripts/ensure-backend-gitkeep.cjs",
     "lint": "eslint .",

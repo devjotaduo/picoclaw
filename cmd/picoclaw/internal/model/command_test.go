@@ -245,8 +245,13 @@ func TestSetDefaultModel_ModelWithoutAPIKey(t *testing.T) {
 }
 
 func TestSetDefaultModel_SaveConfigError(t *testing.T) {
-	// Use an invalid path to trigger save error
-	invalidPath := "/nonexistent/directory/config.json"
+	// Use a regular file as a path component to trigger save error even as root
+	// (os.MkdirAll cannot create a directory where a regular file already exists).
+	blockFile := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(blockFile, []byte{}, 0o644); err != nil {
+		t.Fatalf("create block file: %v", err)
+	}
+	invalidPath := filepath.Join(blockFile, "config.json")
 
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{

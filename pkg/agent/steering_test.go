@@ -933,13 +933,25 @@ func TestAgentLoop_Run_QueuedVoiceMessageIsTranscribedBeforeSteering(t *testing.
 
 	close(provider.releaseFirstCall)
 
+	// Wait for "continued response" — the output of the second LLM call.
+	// In the steering path (Scenario A), only this response is published.
+	// In the new-turn path (Scenario B, race), "first response" arrives first;
+	// we drain it and keep waiting so that either way we know the second call
+	// completed and secondCallMessages is populated before we cancel.
 	subCtx, subCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer subCancel()
-	select {
-	case <-msgBus.OutboundChan():
-	case <-subCtx.Done():
-		t.Fatal("expected outbound response")
+	for {
+		select {
+		case out := <-msgBus.OutboundChan():
+			if out.Content == "continued response" {
+				goto done
+			}
+			// "first response" in Scenario B — keep draining
+		case <-subCtx.Done():
+			t.Fatal("timeout waiting for continued response outbound")
+		}
 	}
+done:
 
 	cancelRun()
 	select {

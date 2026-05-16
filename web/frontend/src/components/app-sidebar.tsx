@@ -520,7 +520,7 @@ function AgentSelectorNavItem({
                 type="button"
                 aria-label={`Select agent: ${selectedAgent.label}`}
                 className={cn(
-                  "relative flex size-8 items-center justify-center rounded-md text-[10px] font-semibold ring-1 transition-colors hover:bg-background/70 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden",
+                  "hover:bg-background/70 focus-visible:ring-ring relative flex size-8 items-center justify-center rounded-md text-[10px] font-semibold ring-1 transition-colors focus-visible:ring-2 focus-visible:outline-hidden",
                   selectedAgent.accentClassName,
                 )}
                 data-testid="agent-selector-trigger"
@@ -560,7 +560,7 @@ function AgentSelectorNavItem({
             </DropdownMenuContent>
           </DropdownMenu>
           <span
-            className="bg-background/70 max-w-9 rounded px-1 text-[9px] leading-4 font-medium text-foreground/70 ring-1 ring-border/50 group-data-[collapsible=icon]:hidden"
+            className="bg-background/70 text-foreground/70 ring-border/50 max-w-9 rounded px-1 text-[9px] leading-4 font-medium ring-1 group-data-[collapsible=icon]:hidden"
             data-testid="selected-agent-badge"
           >
             {selectedAgent.shortLabel}
@@ -579,7 +579,7 @@ function AgentSelectorNavItem({
           >
             {title}
           </span>
-          <span className="block truncate text-[11px] leading-4 text-muted-foreground/70">
+          <span className="text-muted-foreground/70 block truncate text-[11px] leading-4">
             {selectedAgent.label}
           </span>
         </Link>

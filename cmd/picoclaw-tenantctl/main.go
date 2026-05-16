@@ -51,8 +51,9 @@ func usage() {
 	fmt.Fprint(os.Stderr, `picoclaw-tenantctl — Picoclaw SaaS control-plane CLI
 
 Commands:
-  bootstrap-admin --email <email> --password <password>
-        Create or replace the platform_admin account. One-shot bootstrap; do not expose via HTTP.
+  bootstrap-admin --email <email> --password <password> [--reset]
+        Create/promote the platform_admin account without changing an existing
+        password. Use --reset to intentionally replace the password.
 
   apply-profile --profile <launcher-profile-id> [--recreate] <tenant-id> [<tenant-id> ...]
         Safely merge a launcher profile seed into existing tenant volumes,
@@ -170,6 +171,7 @@ func cmdBootstrapAdmin(args []string) error {
 	fs := flag.NewFlagSet("bootstrap-admin", flag.ExitOnError)
 	email := fs.String("email", "", "admin email")
 	password := fs.String("password", "", "admin password (plaintext, will be bcrypted)")
+	reset := fs.Bool("reset", false, "replace password if the admin already exists")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -198,10 +200,19 @@ func cmdBootstrapAdmin(args []string) error {
 		return err
 	}
 	users := &store.UserStore{DB: db}
-	u, err := users.CreatePlatformAdmin(ctx, *email, hash)
+	var u *store.User
+	if *reset {
+		u, err = users.ResetPlatformAdminPassword(ctx, *email, hash)
+	} else {
+		u, err = users.CreatePlatformAdmin(ctx, *email, hash)
+	}
 	if err != nil {
 		return fmt.Errorf("create platform admin: %w", err)
 	}
-	fmt.Printf("platform admin bootstrapped: id=%d email=%s\n", u.ID, u.Email)
+	if *reset {
+		fmt.Printf("platform admin password reset: id=%d email=%s\n", u.ID, u.Email)
+		return nil
+	}
+	fmt.Printf("platform admin bootstrapped: id=%d email=%s (existing password preserved if present)\n", u.ID, u.Email)
 	return nil
 }

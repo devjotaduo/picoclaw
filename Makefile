@@ -1,4 +1,4 @@
-.PHONY: all build install uninstall clean help test build-all lint-docs \
+.PHONY: all build install uninstall clean help test cover build-all lint-docs \
 	saas-dev-sync saas-dev-controlplane saas-dev-tenants saas-dev-admin-ui saas-dev-tenant-ui
 
 # Build variables
@@ -397,6 +397,12 @@ vet: generate
 test: generate
 	@$(GO) test $(GOFLAGS) $$($(GO) list $(GOFLAGS) ./... | grep -v github.com/sipeed/picoclaw/web/)
 	@cd web && make test
+
+## cover: Run tests with coverage and generate HTML report
+cover: generate
+	@$(GO) test -tags $(GO_BUILD_TAGS) -coverprofile=coverage.out $$($(GO) list $(GOFLAGS) ./... | grep -v github.com/sipeed/picoclaw/web/)
+	@$(GO) tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report: coverage.html"
 
 ## fmt: Format Go code
 fmt:

@@ -10,6 +10,12 @@ interface UseChatModelsOptions {
   isConnected: boolean
 }
 
+const FALLBACK_DEFAULT_MODEL_NAME = "default"
+
+function isDefaultSelectableModel(model: ModelInfo): boolean {
+  return model.default_model_allowed !== false && model.is_virtual !== true
+}
+
 function isLocalModel(model: ModelInfo): boolean {
   const isLocalHostBase = Boolean(
     model.api_base?.includes("localhost") ||
@@ -21,6 +27,32 @@ function isLocalModel(model: ModelInfo): boolean {
   )
 }
 
+function resolveDefaultModelName(models: ModelInfo[], defaultModel: string) {
+  const configuredDefault = defaultModel.trim()
+  if (
+    configuredDefault &&
+    models.some(
+      (m) => m.model_name === configuredDefault && isDefaultSelectableModel(m),
+    )
+  ) {
+    return configuredDefault
+  }
+
+  const flaggedDefault = models.find(
+    (m) => m.is_default && isDefaultSelectableModel(m),
+  )
+  if (flaggedDefault) {
+    return flaggedDefault.model_name
+  }
+
+  const fallbackDefault = models.find(
+    (m) =>
+      m.model_name === FALLBACK_DEFAULT_MODEL_NAME &&
+      isDefaultSelectableModel(m),
+  )
+  return fallbackDefault?.model_name ?? ""
+}
+
 export function useChatModels({ isConnected }: UseChatModelsOptions) {
   const { t } = useTranslation()
   const [modelList, setModelList] = useState<ModelInfo[]>([])
@@ -30,11 +62,7 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
 
   const syncDefaultModelName = useCallback(
     (models: ModelInfo[], defaultModel: string) => {
-      if (models.some((m) => m.model_name === defaultModel)) {
-        setDefaultModelName(defaultModel)
-        return
-      }
-      setDefaultModelName("")
+      setDefaultModelName(resolveDefaultModelName(models, defaultModel))
     },
     [],
   )
@@ -92,10 +120,7 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
   )
 
   const defaultSelectableModels = useMemo(
-    () =>
-      modelList.filter(
-        (m) => m.default_model_allowed !== false && m.is_virtual !== true,
-      ),
+    () => modelList.filter(isDefaultSelectableModel),
     [modelList],
   )
 
