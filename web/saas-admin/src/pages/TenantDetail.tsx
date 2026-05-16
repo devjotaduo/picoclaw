@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Copy, Check, Sparkles, Bot, ExternalLink, PlusCircle } from "lucide-react";
+import { ArrowLeft, Copy, Check, Sparkles, Bot, ExternalLink, PlusCircle, ScrollText } from "lucide-react";
 import {
   getTenant,
   getUsage,
@@ -11,6 +11,8 @@ import {
   applyLauncherProfile,
   rotatePassword,
   setCRMLinks,
+  listMembers,
+  createInvite,
 } from "@/api/tenants";
 import { listLauncherProfiles } from "@/api/launcher-profiles";
 import {
@@ -25,17 +27,38 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
-import { formatInt, formatUSD, relativeTime } from "@/lib/utils";
+import { CopyText } from "@/components/ui/copy-text";
+import { SkeletonCard } from "@/components/ui/skeleton";
+import { formatDate, formatInt, formatUSD, relativeTime } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/components/ui/toast";
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function firstOfMonthISO() {
+  const d = new Date();
+  d.setDate(1);
+  return d.toISOString().slice(0, 10);
+}
 
 export function TenantDetail() {
   const { id = "" } = useParams();
   const nav = useNavigate();
   const qc = useQueryClient();
   const { status } = useAuth();
+  const { toast } = useToast();
+
+  const [usageFrom, setUsageFrom] = useState(firstOfMonthISO);
+  const [usageTo, setUsageTo] = useState(todayISO);
 
   const t = useQuery({ queryKey: ["tenant", id], queryFn: () => getTenant(id), refetchInterval: 10_000 });
-  const u = useQuery({ queryKey: ["usage", id], queryFn: () => getUsage(id), refetchInterval: 60_000 });
+  const u = useQuery({
+    queryKey: ["usage", id, usageFrom, usageTo],
+    queryFn: () => getUsage(id, usageFrom, usageTo),
+    refetchInterval: 60_000,
+  });
   const profilesQ = useQuery({
     queryKey: ["launcher-profiles"],
     queryFn: listLauncherProfiles,
@@ -44,35 +67,61 @@ export function TenantDetail() {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [rotatedPwd, setRotatedPwd] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [pwdCopied, setPwdCopied] = useState(false);
   const [applyProfileId, setApplyProfileId] = useState("");
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["tenant", id] });
 
-  const suspendM = useMutation({ mutationFn: () => suspendTenant(id), onSuccess: invalidate });
-  const resumeM  = useMutation({ mutationFn: () => resumeTenant(id),  onSuccess: invalidate });
-  const deleteM  = useMutation({ mutationFn: () => deleteTenant(id),  onSuccess: () => nav("/tenants") });
-  const rotateM  = useMutation({
+  const suspendM = useMutation({
+    mutationFn: () => suspendTenant(id),
+    onSuccess: () => { invalidate(); toast({ type: "info", message: "Tenant suspended." }); },
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to suspend." }),
+  });
+  const resumeM = useMutation({
+    mutationFn: () => resumeTenant(id),
+    onSuccess: () => { invalidate(); toast({ type: "success", message: "Tenant resumed." }); },
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to resume." }),
+  });
+  const deleteM = useMutation({
+    mutationFn: () => deleteTenant(id),
+    onSuccess: () => nav("/tenants"),
+  });
+  const rotateM = useMutation({
     mutationFn: () => rotatePassword(id),
     onSuccess: (r) => setRotatedPwd(r.initial_password),
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to rotate password." }),
   });
   const applyProfileM = useMutation({
     mutationFn: (profileId: string) => applyLauncherProfile(id, profileId),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["tenant", id] });
       await qc.invalidateQueries({ queryKey: ["launcher-profiles"] });
+      toast({ type: "success", message: "Profile applied." });
     },
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to apply profile." }),
   });
 
   const copyPwd = async () => {
     if (!rotatedPwd) return;
     await navigator.clipboard.writeText(rotatedPwd);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    setPwdCopied(true);
+    setTimeout(() => setPwdCopied(false), 1500);
   };
 
-  if (t.isLoading) return <div className="p-6 text-sm text-zinc-500">Loading…</div>;
+  if (t.isLoading) {
+    return (
+      <div className="mx-auto max-w-5xl p-6">
+        <div className="mb-6 h-7 w-48 animate-pulse rounded bg-zinc-800" />
+        <div className="grid grid-cols-3 gap-4">
+          <Card><SkeletonCard rows={3} /></Card>
+          <Card><SkeletonCard rows={4} /></Card>
+          <Card><SkeletonCard rows={4} /></Card>
+        </div>
+      </div>
+    );
+  }
   if (t.isError || !t.data) return <div className="p-6 text-sm text-red-300">Failed to load tenant.</div>;
+
   const tenant = t.data;
   const isPlatformAdmin =
     status.state === "authenticated" && status.me.platform_role === "platform_admin";
@@ -85,6 +134,14 @@ export function TenantDetail() {
   const currentProfile = profiles.find((profile) => profile.id === tenant.launcher_profile_id);
   const selectedProfileId =
     applyProfileId || tenant.launcher_profile_id || profiles.find((profile) => profile.is_default)?.id || "";
+
+  // Budget bar
+  const spent = u.data?.summary?.cost_usd ?? 0;
+  const budget = tenant.monthly_budget_usd ?? 0;
+  const budgetRatio = budget > 0 ? Math.min(spent / budget, 1) : 0;
+  const budgetPct = Math.round(budgetRatio * 100);
+  const budgetColor =
+    budgetPct >= 90 ? "bg-red-500" : budgetPct >= 70 ? "bg-amber-500" : "bg-zinc-600";
 
   return (
     <div className="mx-auto max-w-5xl p-6">
@@ -102,7 +159,7 @@ export function TenantDetail() {
             <span className="text-zinc-500">{tenant.owner_email}</span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           {canEditConfig && (
             <>
               <Link to={`/tenants/${tenant.id}/settings`}>
@@ -116,6 +173,13 @@ export function TenantDetail() {
                 </Button>
               </Link>
             </>
+          )}
+          {isPlatformAdmin && (
+            <Link to={`/tenants/${tenant.id}/logs`}>
+              <Button variant="outline" size="sm">
+                <ScrollText className="h-4 w-4" /> Logs
+              </Button>
+            </Link>
           )}
           {isPlatformAdmin && tenant.status === "active" && (
             <Button variant="outline" size="sm" onClick={() => suspendM.mutate()} disabled={suspendM.isPending}>
@@ -148,7 +212,12 @@ export function TenantDetail() {
         <Card>
           <CardHeader><CardTitle>Container</CardTitle></CardHeader>
           <CardContent className="text-xs">
-            <Row label="ID" value={tenant.container_id ?? "—"} mono />
+            <div className="mb-1.5 flex items-center justify-between gap-3">
+              <span className="text-zinc-500">ID</span>
+              {tenant.container_id
+                ? <CopyText value={tenant.container_id} display={tenant.container_id.slice(0, 12)} />
+                : <span className="text-zinc-300">—</span>}
+            </div>
             <Row label="Memory" value={`${tenant.mem_limit_mb} MB`} />
             <Row label="CPU" value={String(tenant.cpu_quota)} />
           </CardContent>
@@ -160,6 +229,22 @@ export function TenantDetail() {
             {u.data && (
               <>
                 <Row label="Spent this period" value={formatUSD(u.data.summary.cost_usd)} />
+                {budget > 0 && (
+                  <div className="mt-2">
+                    <div className="mb-1 flex justify-between text-[10px] text-zinc-500">
+                      <span>Budget used</span>
+                      <span className={budgetPct >= 90 ? "text-red-400" : budgetPct >= 70 ? "text-amber-400" : ""}>
+                        {budgetPct}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-zinc-800">
+                      <div
+                        className={`h-1.5 rounded-full transition-all ${budgetColor}`}
+                        style={{ width: `${budgetPct}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
                 <Row label="Tokens (prompt)" value={formatInt(u.data.summary.prompt_tokens)} />
                 <Row label="Tokens (completion)" value={formatInt(u.data.summary.completion_tokens)} />
               </>
@@ -176,11 +261,7 @@ export function TenantDetail() {
               label="CRM"
               value={
                 tenant.crm_contact_id != null ? (
-                  <a
-                    href={`/crm/`}
-                    className="text-brand-500 hover:underline"
-                    title={`contact #${tenant.crm_contact_id}`}
-                  >
+                  <a href={`/crm/`} className="text-brand-500 hover:underline" title={`contact #${tenant.crm_contact_id}`}>
                     #{tenant.crm_contact_id}
                   </a>
                 ) : (
@@ -229,37 +310,61 @@ export function TenantDetail() {
         <CRMSection tenantId={id} tenant={tenant} onLinked={() => qc.invalidateQueries({ queryKey: ["tenant", id] })} />
       )}
 
-      <h2 className="mb-2 mt-6 text-sm font-semibold text-zinc-300">Recent usage</h2>
-      <div className="overflow-hidden rounded-lg border border-zinc-800">
-        <table className="w-full text-xs">
-          <thead className="bg-zinc-900/80 text-left text-[10px] uppercase tracking-wide text-zinc-500">
-            <tr>
-              <th className="px-3 py-2 font-medium">When</th>
-              <th className="px-3 py-2 font-medium">Model</th>
-              <th className="px-3 py-2 font-medium">Provider</th>
-              <th className="px-3 py-2 font-medium text-right">Prompt</th>
-              <th className="px-3 py-2 font-medium text-right">Completion</th>
-              <th className="px-3 py-2 font-medium text-right">Cost</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800/60">
-            {(u.data?.recent ?? []).map((r) => (
-              <tr key={r.ID} className="hover:bg-zinc-900/40">
-                <td className="px-3 py-1.5 text-zinc-400">{relativeTime(r.Timestamp)}</td>
-                <td className="px-3 py-1.5 font-mono text-zinc-200">{r.Model}</td>
-                <td className="px-3 py-1.5 text-zinc-500">{r.Provider}</td>
-                <td className="px-3 py-1.5 text-right">{formatInt(r.PromptTokens)}</td>
-                <td className="px-3 py-1.5 text-right">{formatInt(r.CompletionTokens)}</td>
-                <td className="px-3 py-1.5 text-right">{formatUSD(r.CostUSD)}</td>
-              </tr>
-            ))}
-            {(u.data?.recent?.length ?? 0) === 0 && (
+      {/* Members section */}
+      <MembersSection tenantId={id} canManage={isPlatformAdmin || role === "tenant_owner"} />
+
+      {/* Recent usage */}
+      <div className="mt-6">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-zinc-300">Recent usage</h2>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-zinc-500">From</label>
+            <input
+              type="date"
+              value={usageFrom}
+              onChange={(e) => setUsageFrom(e.target.value)}
+              className="h-7 rounded border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-100 focus:border-brand-500 focus:outline-none"
+            />
+            <label className="text-xs text-zinc-500">To</label>
+            <input
+              type="date"
+              value={usageTo}
+              onChange={(e) => setUsageTo(e.target.value)}
+              className="h-7 rounded border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-100 focus:border-brand-500 focus:outline-none"
+            />
+          </div>
+        </div>
+        <div className="overflow-hidden rounded-lg border border-zinc-800">
+          <table className="w-full text-xs">
+            <thead className="bg-zinc-900/80 text-left text-[10px] uppercase tracking-wide text-zinc-500">
               <tr>
-                <td colSpan={6} className="px-3 py-4 text-center text-zinc-500">No usage yet.</td>
+                <th className="px-3 py-2 font-medium">When</th>
+                <th className="px-3 py-2 font-medium">Model</th>
+                <th className="px-3 py-2 font-medium">Provider</th>
+                <th className="px-3 py-2 font-medium text-right">Prompt</th>
+                <th className="px-3 py-2 font-medium text-right">Completion</th>
+                <th className="px-3 py-2 font-medium text-right">Cost</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/60">
+              {(u.data?.recent ?? []).map((r) => (
+                <tr key={r.ID} className="hover:bg-zinc-900/40">
+                  <td className="px-3 py-1.5 text-zinc-400">{relativeTime(r.Timestamp)}</td>
+                  <td className="px-3 py-1.5 font-mono text-zinc-200">{r.Model}</td>
+                  <td className="px-3 py-1.5 text-zinc-500">{r.Provider}</td>
+                  <td className="px-3 py-1.5 text-right">{formatInt(r.PromptTokens)}</td>
+                  <td className="px-3 py-1.5 text-right">{formatInt(r.CompletionTokens)}</td>
+                  <td className="px-3 py-1.5 text-right">{formatUSD(r.CostUSD)}</td>
+                </tr>
+              ))}
+              {(u.data?.recent?.length ?? 0) === 0 && !u.isLoading && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-4 text-center text-zinc-500">No usage yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete tenant?" size="sm">
@@ -284,7 +389,7 @@ export function TenantDetail() {
                 {rotatedPwd}
               </code>
               <Button variant="secondary" size="icon" onClick={copyPwd}>
-                {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                {pwdCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
             <div className="flex justify-end pt-2">
@@ -297,7 +402,119 @@ export function TenantDetail() {
   );
 }
 
-// ── CRM Section ────────────────────────────────────────────────────────────
+// ── Members Section ──────────────────────────────────────────────────────────
+
+type MemberRole = "tenant_owner" | "tenant_admin" | "operator" | "viewer";
+const ROLE_OPTIONS: MemberRole[] = ["tenant_owner", "tenant_admin", "operator", "viewer"];
+
+function MembersSection({ tenantId, canManage }: { tenantId: string; canManage: boolean }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const membersQ = useQuery({
+    queryKey: ["members", tenantId],
+    queryFn: () => listMembers(tenantId),
+    enabled: canManage,
+  });
+
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<MemberRole>("operator");
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [tokenCopied, setTokenCopied] = useState(false);
+
+  const inviteM = useMutation({
+    mutationFn: () => createInvite(tenantId, email.trim(), role),
+    onSuccess: (r) => {
+      setInviteToken(r.token);
+      setEmail("");
+      qc.invalidateQueries({ queryKey: ["members", tenantId] });
+    },
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to create invite." }),
+  });
+
+  const copyToken = async () => {
+    if (!inviteToken) return;
+    await navigator.clipboard.writeText(inviteToken);
+    setTokenCopied(true);
+    setTimeout(() => setTokenCopied(false), 1500);
+  };
+
+  if (!canManage) return null;
+
+  const members = membersQ.data?.members ?? [];
+
+  return (
+    <div className="mt-6">
+      <h2 className="mb-2 text-sm font-semibold text-zinc-300">Members</h2>
+      <div className="overflow-hidden rounded-lg border border-zinc-800">
+        <table className="w-full text-xs">
+          <thead className="bg-zinc-900/80 text-left text-[10px] uppercase tracking-wide text-zinc-500">
+            <tr>
+              <th className="px-3 py-2 font-medium">Email</th>
+              <th className="px-3 py-2 font-medium">Role</th>
+              <th className="px-3 py-2 font-medium">Since</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-800/60">
+            {membersQ.isLoading && (
+              <tr><td colSpan={3} className="px-3 py-3 text-center text-zinc-600">Loading…</td></tr>
+            )}
+            {members.map((m) => (
+              <tr key={m.user_id} className="hover:bg-zinc-900/40">
+                <td className="px-3 py-1.5 text-zinc-300">{m.email}</td>
+                <td className="px-3 py-1.5 text-zinc-500">{m.role}</td>
+                <td className="px-3 py-1.5 text-zinc-600">{relativeTime(m.created_at)}</td>
+              </tr>
+            ))}
+            {!membersQ.isLoading && members.length === 0 && (
+              <tr><td colSpan={3} className="px-3 py-3 text-center text-zinc-600">No members yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+        <div className="border-t border-zinc-800 bg-zinc-950/40 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="email@example.com"
+              className="flex-1 h-7 rounded border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-brand-500 focus:outline-none"
+            />
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as MemberRole)}
+              className="h-7 rounded border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-100 focus:outline-none"
+            >
+              {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <Button size="sm" onClick={() => inviteM.mutate()} disabled={!email.trim() || inviteM.isPending}>
+              {inviteM.isPending ? "Inviting…" : "Invite"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={!!inviteToken} onClose={() => setInviteToken(null)} title="Invite link" size="md" closable={false}>
+        <div className="space-y-3 text-sm">
+          <p className="text-amber-300">Share this token once — it won't be shown again.</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
+              {inviteToken}
+            </code>
+            <Button variant="secondary" size="icon" onClick={copyToken}>
+              {tokenCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button onClick={() => setInviteToken(null)}>Done</Button>
+          </div>
+        </div>
+      </Dialog>
+    </div>
+  );
+}
+
+// ── CRM Section ──────────────────────────────────────────────────────────────
 
 type CRMSectionProps = {
   tenantId: string;
@@ -307,6 +524,7 @@ type CRMSectionProps = {
 
 function CRMSection({ tenantId, tenant, onLinked }: CRMSectionProps) {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const contactId = tenant.crm_contact_id ?? null;
 
   const contactQ = useQuery({
@@ -338,7 +556,9 @@ function CRMSection({ tenantId, tenant, onLinked }: CRMSectionProps) {
     onSuccess: () => {
       onLinked();
       qc.invalidateQueries({ queryKey: ["crm-contact"] });
+      toast({ type: "success", message: "CRM contact created and linked." });
     },
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to create CRM contact." }),
   });
 
   const dealM = useMutation({
@@ -355,6 +575,7 @@ function CRMSection({ tenantId, tenant, onLinked }: CRMSectionProps) {
       setDealValue("");
       setDealStage("prospect");
       qc.invalidateQueries({ queryKey: ["crm-deals", contactId] });
+      toast({ type: "success", message: "Deal created." });
     },
   });
 
@@ -374,26 +595,14 @@ function CRMSection({ tenantId, tenant, onLinked }: CRMSectionProps) {
       {contactId == null ? (
         <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-4">
           <span className="flex-1 text-sm text-zinc-500">No CRM contact linked to this tenant.</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => linkM.mutate()}
-            disabled={linkM.isPending}
-          >
+          <Button variant="outline" size="sm" onClick={() => linkM.mutate()} disabled={linkM.isPending}>
             {linkM.isPending ? "Creating…" : "Create CRM contact"}
           </Button>
-          {linkM.isError && (
-            <span className="text-xs text-red-400">
-              {(linkM.error as { error?: string })?.error ?? "Failed"}
-            </span>
-          )}
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Contact</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Contact</CardTitle></CardHeader>
             <CardContent className="text-xs">
               {contactQ.isLoading && <span className="text-zinc-500">Loading…</span>}
               {contact && (
@@ -443,7 +652,7 @@ function CRMSection({ tenantId, tenant, onLinked }: CRMSectionProps) {
                         {STAGE_LABEL[d.stage] ?? d.stage}
                       </td>
                       <td className="px-3 py-1.5 text-right">{d.value ? formatUSD(d.value) : "—"}</td>
-                      <td className="px-3 py-1.5 text-zinc-500">{d.close_date ? d.close_date.slice(0, 10) : "—"}</td>
+                      <td className="px-3 py-1.5 text-zinc-500">{formatDate(d.close_date)}</td>
                     </tr>
                   ))}
                   {deals.length === 0 && !dealsQ.isLoading && (
@@ -496,10 +705,7 @@ function CRMSection({ tenantId, tenant, onLinked }: CRMSectionProps) {
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={() => setNewDeal(false)}>Cancel</Button>
-            <Button
-              onClick={() => dealM.mutate()}
-              disabled={!dealName.trim() || dealM.isPending}
-            >
+            <Button onClick={() => dealM.mutate()} disabled={!dealName.trim() || dealM.isPending}>
               {dealM.isPending ? "Saving…" : "Create"}
             </Button>
           </div>
@@ -509,11 +715,11 @@ function CRMSection({ tenantId, tenant, onLinked }: CRMSectionProps) {
   );
 }
 
-function Row({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="mb-1.5 flex items-center justify-between gap-3">
       <span className="text-zinc-500">{label}</span>
-      <span className={mono ? "font-mono text-[10px] text-zinc-300" : "text-zinc-300"}>{value}</span>
+      <span className="text-zinc-300">{value}</span>
     </div>
   );
 }

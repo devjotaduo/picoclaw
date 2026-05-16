@@ -4,9 +4,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
+	"os"
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/config"
@@ -243,6 +245,25 @@ func (h *Handler) handleRegenPicoToken(w http.ResponseWriter, r *http.Request) {
 // EnsurePicoChannel enables the Pico channel with sane defaults if it isn't
 // already configured. Returns true when the config was modified.
 func (h *Handler) EnsurePicoChannel() (bool, error) {
+	if !isChannelNameAllowed(config.ChannelPico) {
+		if _, err := os.Stat(h.configPath); errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		} else if err != nil {
+			return false, fmt.Errorf("failed to stat config: %w", err)
+		}
+		cfg, err := config.LoadConfig(h.configPath)
+		if err != nil {
+			return false, fmt.Errorf("failed to load config: %w", err)
+		}
+		changed := enforceAllowedChannelsConfig(cfg)
+		if changed {
+			if err := config.SaveConfig(h.configPath, cfg); err != nil {
+				return false, fmt.Errorf("failed to save config: %w", err)
+			}
+		}
+		return changed, nil
+	}
+
 	cfg, err := config.LoadConfig(h.configPath)
 	if err != nil {
 		return false, fmt.Errorf("failed to load config: %w", err)

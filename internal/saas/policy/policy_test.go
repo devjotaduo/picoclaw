@@ -13,7 +13,7 @@ func TestDefaultRolePolicyRequestPermissions(t *testing.T) {
 	}{
 		{RoleOperator, "POST", "/api/whatsapp/inbox/messages/send", true},
 		{RoleOperator, "PUT", "/api/config", false},
-		{RoleViewer, "GET", "/api/models", true},
+		{RoleViewer, "GET", "/api/models", false},
 		{RoleViewer, "GET", "/api/config", false},
 		{RoleTenantAdmin, "PUT", "/api/models/0", true},
 		{RoleTenantAdmin, "POST", "/api/agents", true},

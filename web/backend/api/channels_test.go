@@ -193,3 +193,54 @@ func TestHandleGetChannelConfig_ReturnsDefaultShapeForMissingChannel(t *testing.
 		t.Fatalf("config.enabled = %#v, want false", got)
 	}
 }
+
+func TestChannelCatalogHonorsAllowedChannels(t *testing.T) {
+	t.Setenv(allowedChannelsEnv, "whatsapp_native")
+
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/channels/catalog", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/channels/catalog status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp struct {
+		Channels []channelCatalogItem `json:"channels"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if len(resp.Channels) != 1 {
+		t.Fatalf("len(channels) = %d, want 1: %#v", len(resp.Channels), resp.Channels)
+	}
+	if got := resp.Channels[0].Name; got != "whatsapp_native" {
+		t.Fatalf("channel name = %q, want whatsapp_native", got)
+	}
+}
+
+func TestHandleGetChannelConfigRejectsChannelsOutsideAllowedCatalog(t *testing.T) {
+	t.Setenv(allowedChannelsEnv, "whatsapp_native")
+
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/channels/telegram/config", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET /api/channels/telegram/config status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}

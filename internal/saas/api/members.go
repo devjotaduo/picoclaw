@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -80,6 +81,37 @@ func (h *Handler) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 		"token":   token,
 		"warning": "Save/send this invite token now; it is not stored in plaintext.",
 	})
+}
+
+func (h *Handler) handleListInvites(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	invites, err := h.Invites.ListForTenant(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"invites": invites})
+}
+
+func (h *Handler) handleRevokeInvite(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	invIDStr := chi.URLParam(r, "invId")
+	var invID int64
+	if _, err := fmt.Sscanf(invIDStr, "%d", &invID); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid invite id")
+		return
+	}
+	if err := h.Invites.Delete(r.Context(), invID, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	actor, _ := userFromContext(r.Context())
+	var actorID *int64
+	if actor != nil {
+		actorID = &actor.ID
+	}
+	_ = h.Audit.Insert(r.Context(), actorID, &id, "tenant.invite.revoke", "invite", invIDStr)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) handleListAudit(w http.ResponseWriter, r *http.Request) {

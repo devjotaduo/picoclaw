@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Input, Label } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
+import { SkeletonRow } from "@/components/ui/skeleton";
 
 export function SkillsList() {
   const { id = "" } = useParams();
@@ -83,8 +84,21 @@ export function SkillsList() {
         </Button>
       </header>
 
-      {q.isLoading && <div className="text-sm text-zinc-500">Loading…</div>}
       {q.isError && <div className="text-sm text-red-300">Failed to load skills.</div>}
+
+      {q.isLoading && (
+        <Card>
+          <CardContent className="px-0 py-0">
+            <table className="w-full">
+              <tbody className="divide-y divide-zinc-800/60">
+                <SkeletonRow cols={4} />
+                <SkeletonRow cols={4} />
+                <SkeletonRow cols={4} />
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
 
       {q.data && q.data.skills.length === 0 && (
         <Card>

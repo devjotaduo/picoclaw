@@ -48,7 +48,8 @@ const (
 // credential into LiteLLM model entries. A profile-selected default model is
 // kept only when it resolves to a tenant-safe usable model; sanitized profiles
 // with a provider default but no credential fall back to the per-tenant LiteLLM
-// model so the gateway can start in production.
+// model so the gateway can start in production. Tenant channels are constrained
+// to WhatsApp native by default.
 func SeedPicoConfig(_ context.Context, volumeDir, litellmBase, llmKey string) error {
 	if llmKey == "" {
 		return nil
@@ -114,9 +115,13 @@ func defaultPicoConfig(litellmBase string) map[string]any {
 			},
 		},
 		"channel_list": map[string]any{
-			"pico": map[string]any{
+			"whatsapp": map[string]any{
 				"enabled": true,
-				"type":    "pico",
+				"type":    "whatsapp_native",
+				"settings": map[string]any{
+					"use_native": true,
+					"bridge_url": "",
+				},
 			},
 		},
 		"gateway": map[string]any{
@@ -178,10 +183,7 @@ func mergeLiteLLMCredential(cfg map[string]any, litellmBase string) {
 	cfg["model_list"] = list
 	ensureUsableDefaultModel(defaults, list, fallbackModelName)
 
-	channels := ensureMap(cfg, "channel_list")
-	if _, ok := channels["pico"]; !ok {
-		channels["pico"] = map[string]any{"enabled": true, "type": "pico"}
-	}
+	ensureWhatsAppNativeOnlyChannels(cfg)
 	gateway := ensureMap(cfg, "gateway")
 	if _, ok := gateway["host"]; !ok {
 		gateway["host"] = "localhost"
@@ -189,6 +191,25 @@ func mergeLiteLLMCredential(cfg map[string]any, litellmBase string) {
 	if _, ok := gateway["port"]; !ok {
 		gateway["port"] = 18790
 	}
+}
+
+func ensureWhatsAppNativeOnlyChannels(cfg map[string]any) {
+	channels := ensureMap(cfg, "channel_list")
+	for _, raw := range channels {
+		if ch, ok := raw.(map[string]any); ok {
+			ch["enabled"] = false
+		}
+	}
+	whatsapp, _ := channels["whatsapp"].(map[string]any)
+	if whatsapp == nil {
+		whatsapp = map[string]any{}
+		channels["whatsapp"] = whatsapp
+	}
+	whatsapp["enabled"] = true
+	whatsapp["type"] = "whatsapp_native"
+	settings := ensureMap(whatsapp, "settings")
+	settings["use_native"] = true
+	settings["bridge_url"] = ""
 }
 
 func isLiteLLMModel(m map[string]any) bool {

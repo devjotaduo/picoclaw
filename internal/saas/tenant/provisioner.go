@@ -285,6 +285,7 @@ func (p *Provisioner) buildSpec(t *store.Tenant) ContainerSpec {
 		"PICOCLAW_GATEWAY_HOST":           "0.0.0.0",
 		"PICOCLAW_AUTH_MODE":              "trusted_gateway",
 		"PICOCLAW_TRUSTED_GATEWAY_SECRET": p.Cfg.GatewaySharedSecret,
+		"PICOCLAW_ALLOWED_CHANNELS":       "whatsapp_native",
 	}
 
 	return ContainerSpec{

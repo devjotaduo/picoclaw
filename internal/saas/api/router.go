@@ -101,7 +101,12 @@ func (h *Handler) Routes() http.Handler {
 				r.Delete("/tenants/{id}", h.handleDeleteTenant)
 				r.Post("/tenants/{id}/mark-delivered", h.handleMarkPasswordDelivered)
 				r.Put("/tenants/{id}/crm", h.handleSetCRMLinks)
+				r.Get("/tenants/{id}/logs", h.handleGetLogs)
 				r.Get("/audit", h.handleListAudit)
+				r.Get("/platform/stats", h.handlePlatformStats)
+				r.Get("/platform/usage-timeseries", h.handlePlatformTimeseries)
+				r.Get("/users", h.handleListUsers)
+				r.Post("/platform/invite-admin", h.handleInvitePlatformAdmin)
 			})
 
 			r.Group(func(r chi.Router) {
@@ -130,6 +135,8 @@ func (h *Handler) Routes() http.Handler {
 				r.Use(h.requireTenantRole(store.RoleTenantOwner))
 				r.Post("/tenants/{id}/members", h.handleUpsertMember)
 				r.Post("/tenants/{id}/invites", h.handleCreateInvite)
+				r.Get("/tenants/{id}/invites", h.handleListInvites)
+				r.Delete("/tenants/{id}/invites/{invId}", h.handleRevokeInvite)
 			})
 		})
 	})

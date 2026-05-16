@@ -1,4 +1,5 @@
-.PHONY: all build install uninstall clean help test build-all lint-docs
+.PHONY: all build install uninstall clean help test build-all lint-docs \
+	saas-dev-sync saas-dev-controlplane saas-dev-tenants saas-dev-admin-ui saas-dev-tenant-ui
 
 # Build variables
 BINARY_NAME=picoclaw
@@ -49,6 +50,24 @@ empty:=
 space:=$(empty) $(empty)
 GO_BUILD_TAGS_NO_GOOLM:=$(subst $(space),$(comma),$(strip $(filter-out goolm,$(subst $(comma),$(space),$(GO_BUILD_TAGS)))))
 GOFLAGS_NO_GOOLM?=-v -tags $(GO_BUILD_TAGS_NO_GOOLM)
+
+SAAS_DEV_SYNC?=docker/saas/scripts/dev-sync.sh
+TENANTS?=
+
+saas-dev-sync:
+	@$(SAAS_DEV_SYNC) all $(TENANTS)
+
+saas-dev-controlplane:
+	@$(SAAS_DEV_SYNC) controlplane
+
+saas-dev-tenants:
+	@$(SAAS_DEV_SYNC) tenants $(TENANTS)
+
+saas-dev-admin-ui:
+	@$(SAAS_DEV_SYNC) controlplane --admin-ui
+
+saas-dev-tenant-ui:
+	@$(SAAS_DEV_SYNC) tenants $(TENANTS) --tenant-ui
 
 # Patch MIPS LE ELF e_flags (offset 36) for NaN2008-only kernels (e.g. Ingenic X2600).
 #

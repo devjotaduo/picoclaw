@@ -15,7 +15,9 @@ function ChannelsLayout() {
   })
 
   if (pathname === "/channels") {
-    return <Navigate to="/channels/$name" params={{ name: "pico" }} />
+    return (
+      <Navigate to="/channels/$name" params={{ name: "whatsapp_native" }} />
+    )
   }
 
   return <Outlet />

@@ -59,7 +59,7 @@ func shouldSkipTemplatePath(rel string) bool {
 		}
 	}
 	for _, suf := range templateSkipSuffix {
-		if strings.HasSuffix(rel, suf) {
+		if strings.HasSuffix(rel, suf) && !isSharedTemplateKeyPath(rel) {
 			return true
 		}
 	}
@@ -69,6 +69,16 @@ func shouldSkipTemplatePath(rel string) bool {
 		return true
 	}
 	return false
+}
+
+func isSharedTemplateKeyPath(rel string) bool {
+	rel = filepath.ToSlash(strings.TrimSpace(rel))
+	switch rel {
+	case "openrouter.key", "workspace/openrouter.key":
+		return true
+	}
+	parts := strings.Split(rel, "/")
+	return len(parts) == 3 && parts[0] == "agents" && parts[2] == "openrouter.key" && parts[1] != ""
 }
 
 // CopyTemplate copies templateDir → dstDir, applying the blocklist above.

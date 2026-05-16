@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
+import { Dialog } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 
-// Models picoclaw understands out of the box (matches deploy/litellm/config.yaml).
-// Free-text is still allowed via the input below.
 const MODEL_PRESETS = [
   "gpt-4o-mini",
   "gpt-4o",
@@ -28,6 +28,7 @@ export function AgentSettings() {
   const { id = "" } = useParams();
   const nav = useNavigate();
   const qc = useQueryClient();
+  const { toast } = useToast();
 
   const q = useQuery({
     queryKey: ["agent-info", id],
@@ -40,8 +41,9 @@ export function AgentSettings() {
 
   const [form, setForm] = useState<AgentInfo>(EMPTY);
   const [dirty, setDirty] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
 
-  // Only push server state into the form when the user hasn't started editing.
   useEffect(() => {
     if (q.data && !dirty) {
       setForm({
@@ -64,12 +66,22 @@ export function AgentSettings() {
       qc.invalidateQueries({ queryKey: ["agent-info", id] });
       qc.invalidateQueries({ queryKey: ["agent", id] });
       qc.invalidateQueries({ queryKey: ["skills", id] });
+      toast({ type: "success", message: "Agent settings saved." });
+    },
+    onError: (e: { error?: string }) => {
+      toast({ type: "error", message: `Save failed: ${e?.error ?? "unknown error"}` });
     },
   });
 
   const restartM = useMutation({
     mutationFn: () => restartTenant(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tenant", id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tenant", id] });
+      toast({ type: "success", message: "Restart requested — agent will be back shortly." });
+    },
+    onError: (e: { error?: string }) => {
+      toast({ type: "error", message: `Restart failed: ${e?.error ?? "unknown error"}` });
+    },
   });
 
   if (q.isLoading) return <div className="p-6 text-sm text-zinc-500">Loading…</div>;
@@ -81,7 +93,7 @@ export function AgentSettings() {
   };
 
   const handleBack = () => {
-    if (dirty && !confirm("Discard unsaved changes?")) return;
+    if (dirty) { setConfirmDiscard(true); return; }
     nav(`/tenants/${id}`);
   };
 
@@ -114,11 +126,7 @@ export function AgentSettings() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => {
-              if (dirty && !confirm("You have unsaved changes. Restart anyway?")) return;
-              if (!confirm("Restart the tenant container? The agent will be briefly offline (~5s).")) return;
-              restartM.mutate();
-            }}
+            onClick={() => setConfirmRestart(true)}
             disabled={restartM.isPending}
           >
             <RotateCw className={restartM.isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
@@ -130,17 +138,6 @@ export function AgentSettings() {
           </Button>
         </div>
       </header>
-
-      {saveM.isError && (
-        <div className="mb-3 rounded bg-red-950/40 px-3 py-2 text-xs text-red-300">
-          Save failed: {(saveM.error as { error?: string })?.error ?? "unknown error"}
-        </div>
-      )}
-      {restartM.isSuccess && !restartM.isPending && (
-        <div className="mb-3 rounded bg-emerald-950/40 px-3 py-2 text-xs text-emerald-300">
-          Restart requested.
-        </div>
-      )}
 
       <Card className="mb-4">
         <CardHeader>
@@ -261,6 +258,29 @@ export function AgentSettings() {
         are preserved. After saving, click <strong>Restart</strong> to make picoclaw reload the
         template.
       </p>
+
+      <Dialog open={confirmDiscard} onClose={() => setConfirmDiscard(false)} title="Discard changes?" size="sm">
+        <p className="text-sm text-zinc-300">You have unsaved changes. Leave without saving?</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setConfirmDiscard(false)}>Keep editing</Button>
+          <Button variant="danger" onClick={() => { setConfirmDiscard(false); nav(`/tenants/${id}`); }}>
+            Discard
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog open={confirmRestart} onClose={() => setConfirmRestart(false)} title="Restart agent?" size="sm">
+        <p className="text-sm text-zinc-300">
+          The tenant container will be restarted. The agent will be briefly offline (~5s).
+          {dirty && <span className="mt-1 block text-amber-300">You have unsaved changes that won't be applied.</span>}
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setConfirmRestart(false)}>Cancel</Button>
+          <Button onClick={() => { setConfirmRestart(false); restartM.mutate(); }} disabled={restartM.isPending}>
+            Restart
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

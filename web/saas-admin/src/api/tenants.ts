@@ -126,6 +126,39 @@ export async function setCRMLinks(
   });
 }
 
+export type TenantMembership = {
+  user_id: number;
+  tenant_id: string;
+  role: string;
+  created_at: string;
+  email: string;
+};
+
+export async function listMembers(id: string) {
+  return api<{ members: TenantMembership[] }>(`/api/v1/tenants/${id}/members`);
+}
+
+export async function createInvite(id: string, email: string, role: string) {
+  return api<{ token: string; expires_at: string }>(`/api/v1/tenants/${id}/invites`, {
+    method: "POST",
+    body: JSON.stringify({ email, role }),
+  });
+}
+
+export async function listInvites(id: string) {
+  return api<{ invites: { id: number; email: string; role: string; expires_at: string; accepted_at: string | null }[] }>(
+    `/api/v1/tenants/${id}/invites`,
+  );
+}
+
+export async function revokeInvite(tenantId: string, inviteId: number) {
+  return api<void>(`/api/v1/tenants/${tenantId}/invites/${inviteId}`, { method: "DELETE" });
+}
+
+export async function getTenantLogs(id: string, tail = 200) {
+  return api<{ lines: string[] }>(`/api/v1/tenants/${id}/logs?tail=${tail}`);
+}
+
 export async function getUsage(id: string, from?: string, to?: string) {
   const q = new URLSearchParams();
   if (from) q.set("from", from);

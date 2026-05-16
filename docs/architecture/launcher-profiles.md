@@ -8,6 +8,8 @@ Launcher profiles define the reusable base `$PICOCLAW_HOME` that the SaaS contro
 - A profile affects new tenants automatically only when selected during tenant creation or when it is the default profile.
 - Existing tenants are never changed implicitly. They receive profile updates only through the explicit `Apply profile` action.
 - Applying a profile is a managed merge, not a raw volume replacement.
+- Tenant launcher containers are constrained to the WhatsApp native channel with `PICOCLAW_ALLOWED_CHANNELS=whatsapp_native`.
+- Tenant model and credential configuration is centrally seeded; only owner/admin roles should access those settings.
 
 ## Stored Data
 
@@ -39,13 +41,16 @@ Allowed seed files include:
 Skipped or preserved live state includes:
 
 - `launcher-auth.db`, `dashboardauth.db`, and other `*.db`
-- `*.key`, including tenant `litellm.key`
+- `*.key`, including tenant `litellm.key`, except approved shared seed keys such as `openrouter.key`
 - `auth.json`
 - sessions, memory, logs, PID/socket files
 - WhatsApp, Matrix, and channel runtime state
 - `runtime-user-env`
 
 `SeedPicoConfig` still writes a tenant-specific LiteLLM key after the profile seed is copied.
+Shared provider keys that are intentionally part of a launcher profile should be stored as files
+and referenced with `file://`, for example `api_keys: ["file://openrouter.key"]`, rather than
+embedding plaintext tokens in `config.json`.
 
 ## Skill Policy
 
@@ -65,3 +70,5 @@ Role policy uses stable feature IDs:
 Access levels are `none`, `read`, and `write`.
 
 The SaaS gateway enforces this policy before proxying to `tenant-<id>:18800`. The launcher enforces it again after validating trusted gateway headers. The frontend only uses `/api/launcher/policy` to hide sidebar items and guide the UI.
+
+Default business roles keep `models` and `credentials` writable for `tenant_owner` and `tenant_admin`, and hidden from `operator` and `viewer`.

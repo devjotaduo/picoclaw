@@ -1,0 +1,23 @@
+[openai]
+# api_key pode ficar vazio se OPENAI_API_KEY estiver no ambiente
+api_key = ""
+# gpt-4.5, o4-mini, o3, gpt-4o, etc.
+model = "gpt-5.5"
+
+[claude]
+opus_model   = "claude-opus-4-7"
+sonnet_model = "claude-sonnet-4-6"
+# diretório do projeto alvo (sobrescrito por --dir no CLI)
+project_dir  = ".."   # raiz do repositório picoclaw
+# tentativas antes de marcar tarefa como falha
+max_retries  = 3
+
+[limits]
+# tokens máx para GPT (plano e revisão devem ser compactos)
+max_tokens_gpt    = 600
+# tokens máx para Claude executar (mais espaço para fazer o trabalho)
+max_tokens_claude = 6000
+# tokens máx para revisão pontual do GPT
+max_tokens_review = 150
+# tokens máx para Claude rodar testes
+max_tokens_test   = 2000

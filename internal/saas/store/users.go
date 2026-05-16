@@ -125,6 +125,29 @@ func (s *UserStore) MarkLogin(ctx context.Context, id int64) error {
 	return err
 }
 
+// ListAll returns all users ordered by creation date, for platform admin use.
+func (s *UserStore) ListAll(ctx context.Context) ([]*User, error) {
+	const q = `
+		SELECT id, email, bcrypt_hash, status, platform_role, created_at, last_login
+		FROM users
+		ORDER BY created_at DESC
+		LIMIT 200`
+	rows, err := s.DB.Pool.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*User
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
 func scanUser(row pgx.Row) (*User, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.Email, &u.BcryptHash, &u.Status, &u.PlatformRole, &u.CreatedAt, &u.LastLogin)

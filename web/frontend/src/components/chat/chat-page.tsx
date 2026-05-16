@@ -139,6 +139,8 @@ export function ChatPage() {
     handleSetDefault,
   } = useChatModels({ isConnected: isGatewayRunning })
   const hasDefaultModel = Boolean(defaultModelName)
+  const canChooseModel =
+    apiKeyModels.length > 0 || oauthModels.length > 0 || localModels.length > 0
   const inputDisabledReason = resolveChatInputDisabledReason({
     hasDefaultModel,
     connectionState,
@@ -260,7 +262,7 @@ export function ChatPage() {
           hasScrolled ? "shadow-xs" : "shadow-none"
         }`}
         titleExtra={
-          hasAvailableModels && (
+          canChooseModel && (
             <ModelSelector
               defaultModelName={defaultModelName}
               apiKeyModels={apiKeyModels}

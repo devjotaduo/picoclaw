@@ -278,8 +278,7 @@ func sanitizeConfigJSON(b []byte) ([]byte, error) {
 	if list, ok := cfg["model_list"].([]any); ok {
 		for _, item := range list {
 			if m, ok := item.(map[string]any); ok {
-				delete(m, "api_key")
-				delete(m, "api_keys")
+				sanitizeModelAPISecrets(m)
 			}
 		}
 	}
@@ -328,6 +327,19 @@ func preserveConfigSecrets(next, old map[string]any) {
 				nextMap[key] = oldVal
 			}
 		}
+	}
+}
+
+func sanitizeModelAPISecrets(m map[string]any) {
+	if val, ok := sanitizedSharedAPISecret("api_key", m["api_key"]); ok {
+		m["api_key"] = val
+	} else {
+		delete(m, "api_key")
+	}
+	if val, ok := sanitizedSharedAPISecret("api_keys", m["api_keys"]); ok {
+		m["api_keys"] = val
+	} else {
+		delete(m, "api_keys")
 	}
 }
 
@@ -384,7 +396,11 @@ func stripSecretsRecursive(v any) {
 	case map[string]any:
 		for key, child := range node {
 			if isSecretKey(key) {
-				delete(node, key)
+				if val, ok := sanitizedSharedAPISecret(key, child); ok {
+					node[key] = val
+				} else {
+					delete(node, key)
+				}
 				continue
 			}
 			stripSecretsRecursive(child)
@@ -392,7 +408,11 @@ func stripSecretsRecursive(v any) {
 	case map[any]any:
 		for key, child := range node {
 			if s, ok := key.(string); ok && isSecretKey(s) {
-				delete(node, key)
+				if val, ok := sanitizedSharedAPISecret(s, child); ok {
+					node[key] = val
+				} else {
+					delete(node, key)
+				}
 				continue
 			}
 			stripSecretsRecursive(child)
@@ -402,6 +422,46 @@ func stripSecretsRecursive(v any) {
 			stripSecretsRecursive(child)
 		}
 	}
+}
+
+func sanitizedSharedAPISecret(key string, val any) (any, bool) {
+	key = strings.ToLower(strings.TrimSpace(key))
+	switch key {
+	case "api_key":
+		if s, ok := val.(string); ok && isAllowedSharedAPIKeyRef(s) {
+			return s, true
+		}
+	case "api_keys":
+		out := make([]string, 0)
+		switch vv := val.(type) {
+		case []any:
+			for _, item := range vv {
+				if s, ok := item.(string); ok && isAllowedSharedAPIKeyRef(s) {
+					out = append(out, s)
+				}
+			}
+		case []string:
+			for _, s := range vv {
+				if isAllowedSharedAPIKeyRef(s) {
+					out = append(out, s)
+				}
+			}
+		}
+		if len(out) > 0 {
+			return out, true
+		}
+	}
+	return nil, false
+}
+
+func isAllowedSharedAPIKeyRef(s string) bool {
+	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "file://") {
+		return false
+	}
+	ref := strings.TrimPrefix(s, "file://")
+	ref = strings.TrimPrefix(filepath.ToSlash(ref), "/root/.picoclaw/")
+	return isSharedTemplateKeyPath(ref)
 }
 
 func preserveSecretsRecursive(next, old any) {

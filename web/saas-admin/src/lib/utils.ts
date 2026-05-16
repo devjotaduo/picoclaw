@@ -25,3 +25,8 @@ export function formatInt(n?: number | null) {
   if (n == null) return "—";
   return new Intl.NumberFormat("en-US").format(n);
 }
+
+export function formatDate(iso?: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}

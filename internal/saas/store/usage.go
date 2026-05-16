@@ -113,6 +113,73 @@ func (s *UsageStore) Recent(ctx context.Context, tenantID string, limit int) ([]
 	return out, rows.Err()
 }
 
+// PlatformStats aggregates tenant counts and current-month usage across all non-deleted tenants.
+type PlatformStats struct {
+	ActiveTenants    int     `json:"active_tenants"`
+	SuspendedTenants int     `json:"suspended_tenants"`
+	ErrorTenants     int     `json:"error_tenants"`
+	TotalCostUSD     float64 `json:"total_cost_usd"`
+	TotalTokens      int64   `json:"total_tokens"`
+}
+
+func (s *UsageStore) PlatformSummary(ctx context.Context) (*PlatformStats, error) {
+	const q = `
+		SELECT
+			COUNT(*) FILTER (WHERE t.status = 'active')    AS active,
+			COUNT(*) FILTER (WHERE t.status = 'suspended') AS suspended,
+			COUNT(*) FILTER (WHERE t.status = 'error')     AS error_count,
+			COALESCE(SUM(u.cost_usd), 0)::FLOAT8           AS total_cost,
+			COALESCE(SUM(u.prompt_tokens + u.completion_tokens), 0)::BIGINT AS total_tokens
+		FROM tenants t
+		LEFT JOIN usage_logs u ON u.tenant_id = t.id
+			AND u.ts >= date_trunc('month', now())
+		WHERE t.deleted_at IS NULL`
+	var s2 PlatformStats
+	err := s.DB.Pool.QueryRow(ctx, q).Scan(
+		&s2.ActiveTenants, &s2.SuspendedTenants, &s2.ErrorTenants,
+		&s2.TotalCostUSD, &s2.TotalTokens,
+	)
+	return &s2, err
+}
+
+// TimeseriesPoint is a daily cost aggregation.
+type TimeseriesPoint struct {
+	Day     string  `json:"day"`
+	CostUSD float64 `json:"cost_usd"`
+	Tokens  int64   `json:"tokens"`
+}
+
+func (s *UsageStore) Timeseries(ctx context.Context, days int) ([]TimeseriesPoint, error) {
+	if days <= 0 || days > 365 {
+		days = 30
+	}
+	const q = `
+		SELECT
+			to_char(date_trunc('day', u.ts), 'YYYY-MM-DD') AS day,
+			COALESCE(SUM(u.cost_usd), 0)::FLOAT8           AS cost,
+			COALESCE(SUM(u.prompt_tokens + u.completion_tokens), 0)::BIGINT AS tokens
+		FROM usage_logs u
+		JOIN tenants t ON t.id = u.tenant_id
+		WHERE t.deleted_at IS NULL
+		  AND u.ts >= now() - ($1 * interval '1 day')
+		GROUP BY 1
+		ORDER BY 1`
+	rows, err := s.DB.Pool.Query(ctx, q, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TimeseriesPoint
+	for rows.Next() {
+		var p TimeseriesPoint
+		if err := rows.Scan(&p.Day, &p.CostUSD, &p.Tokens); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // LastTimestamp returns the most recent ts seen for the tenant, or zero if none.
 // Used by the poller to bound the next /spend/logs query.
 func (s *UsageStore) LastTimestamp(ctx context.Context, tenantID string) (time.Time, error) {

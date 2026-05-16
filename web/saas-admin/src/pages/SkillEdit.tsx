@@ -11,11 +11,14 @@ import {
 } from "@/api/skills";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
+import { Dialog } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 
 export function SkillEdit() {
   const { id = "", name = "" } = useParams();
   const nav = useNavigate();
   const qc = useQueryClient();
+  const { toast } = useToast();
 
   const q = useQuery({
     queryKey: ["skill", id, name],
@@ -24,9 +27,8 @@ export function SkillEdit() {
 
   const [content, setContent] = useState<string>("");
   const [dirty, setDirty] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
-  // Only push server content into the editor when there are no unsaved edits,
-  // otherwise a background refetch could clobber the user's in-progress draft.
   useEffect(() => {
     if (q.data && !dirty) {
       setContent(q.data.content);
@@ -40,14 +42,19 @@ export function SkillEdit() {
       setDirty(false);
       qc.invalidateQueries({ queryKey: ["skill", id, name] });
       qc.invalidateQueries({ queryKey: ["skills", id] });
+      toast({ type: "success", message: "Skill saved." });
+    },
+    onError: (e: { error?: string }) => {
+      toast({ type: "error", message: `Save failed: ${e?.error ?? "unknown error"}` });
     },
   });
 
   const activeM = useMutation({
     mutationFn: (active: boolean) => setSkillActive(id, name, active),
-    onSuccess: () => {
+    onSuccess: (_, active) => {
       qc.invalidateQueries({ queryKey: ["skill", id, name] });
       qc.invalidateQueries({ queryKey: ["skills", id] });
+      toast({ type: "info", message: active ? "Skill activated in agent." : "Skill deactivated." });
     },
   });
 
@@ -63,7 +70,7 @@ export function SkillEdit() {
   if (q.isError || !q.data) return <div className="p-6 text-sm text-red-300">Failed to load skill.</div>;
 
   const handleBack = () => {
-    if (dirty && !confirm("Discard unsaved changes?")) return;
+    if (dirty) { setConfirmDiscard(true); return; }
     nav(`/tenants/${id}/skills`);
   };
 
@@ -114,12 +121,6 @@ export function SkillEdit() {
         </div>
       </div>
 
-      {saveM.isError && (
-        <div className="mb-3 rounded bg-red-950/40 px-3 py-2 text-xs text-red-300">
-          Save failed: {(saveM.error as { error?: string })?.error ?? "unknown error"}
-        </div>
-      )}
-
       <div className="rounded-lg border border-zinc-800 bg-zinc-950" data-color-mode="dark">
         <MDEditor
           value={content}
@@ -137,6 +138,16 @@ export function SkillEdit() {
         The file is saved verbatim, frontmatter included. The activation and visibility toggles edit
         AGENT.md and the SKILL.md <code>metadata.visible</code> flag respectively.
       </p>
+
+      <Dialog open={confirmDiscard} onClose={() => setConfirmDiscard(false)} title="Discard changes?" size="sm">
+        <p className="text-sm text-zinc-300">You have unsaved changes. Leave without saving?</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setConfirmDiscard(false)}>Keep editing</Button>
+          <Button variant="danger" onClick={() => { setConfirmDiscard(false); nav(`/tenants/${id}/skills`); }}>
+            Discard
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

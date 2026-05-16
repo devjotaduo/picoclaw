@@ -3,9 +3,13 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/sipeed/picoclaw/pkg/config"
 )
+
+const allowedChannelsEnv = "PICOCLAW_ALLOWED_CHANNELS"
 
 type channelCatalogItem struct {
 	Name      string `json:"name"`
@@ -60,7 +64,7 @@ func (h *Handler) registerChannelRoutes(mux *http.ServeMux) {
 func (h *Handler) handleListChannelCatalog(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"channels": channelCatalog,
+		"channels": effectiveChannelCatalog(),
 	})
 }
 
@@ -70,8 +74,9 @@ func (h *Handler) handleListChannelStatus(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Failed to load config", http.StatusInternalServerError)
 		return
 	}
-	items := make([]channelStatusItem, 0, len(channelCatalog))
-	for _, item := range channelCatalog {
+	catalog := effectiveChannelCatalog()
+	items := make([]channelStatusItem, 0, len(catalog))
+	for _, item := range catalog {
 		items = append(items, channelStatusItem{
 			Name:      item.Name,
 			ConfigKey: item.ConfigKey,
@@ -109,12 +114,51 @@ func (h *Handler) handleGetChannelConfig(w http.ResponseWriter, r *http.Request)
 }
 
 func findChannelCatalogItem(name string) (channelCatalogItem, bool) {
-	for _, item := range channelCatalog {
+	for _, item := range effectiveChannelCatalog() {
 		if item.Name == name {
 			return item, true
 		}
 	}
 	return channelCatalogItem{}, false
+}
+
+func effectiveChannelCatalog() []channelCatalogItem {
+	allowed, restricted := allowedChannelNames()
+	if !restricted {
+		return channelCatalog
+	}
+	items := make([]channelCatalogItem, 0, len(allowed))
+	for _, item := range channelCatalog {
+		if _, ok := allowed[item.Name]; ok {
+			items = append(items, item)
+		}
+	}
+	return items
+}
+
+func allowedChannelNames() (map[string]struct{}, bool) {
+	raw := strings.TrimSpace(os.Getenv(allowedChannelsEnv))
+	if raw == "" || raw == "*" {
+		return nil, false
+	}
+	allowed := map[string]struct{}{}
+	for _, part := range strings.Split(raw, ",") {
+		name := strings.TrimSpace(part)
+		if name == "" {
+			continue
+		}
+		allowed[name] = struct{}{}
+	}
+	return allowed, true
+}
+
+func isChannelNameAllowed(name string) bool {
+	allowed, restricted := allowedChannelNames()
+	if !restricted {
+		return true
+	}
+	_, ok := allowed[name]
+	return ok
 }
 
 var channelSecretFieldMap = map[string][]string{

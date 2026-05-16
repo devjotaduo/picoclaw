@@ -132,6 +132,21 @@ func TestSeedPicoConfigPreservesProfileDefaultModel(t *testing.T) {
 	if _, ok := dev["api_keys"]; ok {
 		t.Fatalf("non-LiteLLM model should not receive tenant litellm key: %#v", dev)
 	}
+	channels := cfg["channel_list"].(map[string]any)
+	whatsapp := channels["whatsapp"].(map[string]any)
+	if got := whatsapp["enabled"]; got != true {
+		t.Fatalf("whatsapp enabled = %#v, want true", got)
+	}
+	if got := whatsapp["type"]; got != "whatsapp_native" {
+		t.Fatalf("whatsapp type = %#v, want whatsapp_native", got)
+	}
+	settings := whatsapp["settings"].(map[string]any)
+	if got := settings["use_native"]; got != true {
+		t.Fatalf("whatsapp use_native = %#v, want true", got)
+	}
+	if got := settings["bridge_url"]; got != "" {
+		t.Fatalf("whatsapp bridge_url = %#v, want empty", got)
+	}
 }
 
 func TestSeedPicoConfigFallsBackWhenProfileDefaultHasNoCredential(t *testing.T) {

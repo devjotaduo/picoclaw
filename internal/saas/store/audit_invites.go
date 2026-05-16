@@ -66,6 +66,35 @@ func (s *InviteStore) MarkAccepted(ctx context.Context, id int64) error {
 	return err
 }
 
+// ListForTenant returns all invites for a tenant, most recent first.
+func (s *InviteStore) ListForTenant(ctx context.Context, tenantID string) ([]Invite, error) {
+	const q = `
+		SELECT id, tenant_id, email, role, created_at, expires_at, accepted_at
+		FROM invites
+		WHERE tenant_id = $1
+		ORDER BY created_at DESC`
+	rows, err := s.DB.Pool.Query(ctx, q, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Invite
+	for rows.Next() {
+		var inv Invite
+		if err := rows.Scan(&inv.ID, &inv.TenantID, &inv.Email, &inv.Role, &inv.CreatedAt, &inv.ExpiresAt, &inv.AcceptedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, inv)
+	}
+	return out, rows.Err()
+}
+
+// Delete removes an invite by id + tenant (prevents cross-tenant deletion).
+func (s *InviteStore) Delete(ctx context.Context, id int64, tenantID string) error {
+	_, err := s.DB.Pool.Exec(ctx, `DELETE FROM invites WHERE id = $1 AND tenant_id = $2`, id, tenantID)
+	return err
+}
+
 type AuditStore struct{ DB *DB }
 
 func (s *AuditStore) Insert(ctx context.Context, actorID *int64, tenantID *string, action, targetType, targetID string) error {

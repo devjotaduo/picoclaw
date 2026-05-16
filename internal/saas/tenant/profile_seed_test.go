@@ -114,6 +114,76 @@ safe:
 `)
 }
 
+func TestSanitizeSeedPreservesOpenRouterSharedKeyRefs(t *testing.T) {
+	seed := t.TempDir()
+	mustWrite(t, filepath.Join(seed, "openrouter.key"), []byte("sk-or-shared"), 0o600)
+	mustWrite(t, filepath.Join(seed, "litellm.key"), []byte("tenant-specific"), 0o600)
+	mustWrite(t, filepath.Join(seed, "agents", "marketing", "openrouter.key"), []byte("sk-or-shared"), 0o600)
+	mustWrite(t, filepath.Join(seed, "agents", "marketing", "other.key"), []byte("remove-me"), 0o600)
+	mustWrite(t, filepath.Join(seed, "config.json"), []byte(`{
+	  "model_list": [
+	    {
+	      "model_name": "openrouter-sonnet",
+	      "provider": "openrouter",
+	      "api_keys": ["file://openrouter.key", "sk-plain-should-go"]
+	    },
+	    {
+	      "model_name": "plain",
+	      "provider": "openai",
+	      "api_key": "sk-plain-should-go"
+	    }
+	  ]
+	}`), 0o600)
+	mustWrite(t, filepath.Join(seed, ".security.yml"), []byte(`model_list:
+  openrouter-sonnet:
+    api_keys:
+      - file://openrouter.key
+      - sk-plain-should-go
+channels:
+  telegram:
+    token: seed-security-token
+`), 0o600)
+
+	if err := SanitizeSeed(seed); err != nil {
+		t.Fatalf("SanitizeSeed: %v", err)
+	}
+
+	assertFile(t, filepath.Join(seed, "openrouter.key"), "sk-or-shared")
+	assertFile(t, filepath.Join(seed, "agents", "marketing", "openrouter.key"), "sk-or-shared")
+	if _, err := os.Stat(filepath.Join(seed, "litellm.key")); !os.IsNotExist(err) {
+		t.Fatalf("litellm.key should be removed, stat err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(seed, "agents", "marketing", "other.key")); !os.IsNotExist(err) {
+		t.Fatalf("other.key should be removed, stat err = %v", err)
+	}
+
+	var cfg map[string]any
+	b, err := os.ReadFile(filepath.Join(seed, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	models := cfg["model_list"].([]any)
+	openrouter := models[0].(map[string]any)
+	keys := openrouter["api_keys"].([]any)
+	if len(keys) != 1 || keys[0] != "file://openrouter.key" {
+		t.Fatalf("openrouter api_keys = %#v, want only file://openrouter.key", keys)
+	}
+	plain := models[1].(map[string]any)
+	if _, ok := plain["api_key"]; ok {
+		t.Fatalf("plain api_key should be removed, got %#v", plain["api_key"])
+	}
+	assertFile(t, filepath.Join(seed, ".security.yml"), `channels:
+    telegram: {}
+model_list:
+    openrouter-sonnet:
+        api_keys:
+            - file://openrouter.key
+`)
+}
+
 func mustWrite(t *testing.T, path string, b []byte, mode os.FileMode) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

@@ -12,6 +12,10 @@ import { AgentSettings } from "@/pages/AgentSettings";
 import { CrmPage } from "@/pages/CrmPage";
 import { AcceptInvite } from "@/pages/AcceptInvite";
 import { LauncherProfiles } from "@/pages/LauncherProfiles";
+import { AuditLog } from "@/pages/AuditLog";
+import { TenantLogs } from "@/pages/TenantLogs";
+import { UserManagement } from "@/pages/UserManagement";
+import { PlatformDashboard } from "@/pages/PlatformDashboard";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { status } = useAuth();
@@ -55,7 +59,11 @@ export default function App() {
         <Route path="/tenants/:id/agent" element={<AgentEdit />} />
         <Route path="/tenants/:id/skills" element={<SkillsList />} />
         <Route path="/tenants/:id/skills/:name" element={<SkillEdit />} />
+        <Route path="/tenants/:id/logs" element={<RequirePlatform><TenantLogs /></RequirePlatform>} />
         <Route path="/launcher-profiles" element={<RequirePlatform><LauncherProfiles /></RequirePlatform>} />
+        <Route path="/audit" element={<RequirePlatform><AuditLog /></RequirePlatform>} />
+        <Route path="/users" element={<RequirePlatform><UserManagement /></RequirePlatform>} />
+        <Route path="/dashboard" element={<RequirePlatform><PlatformDashboard /></RequirePlatform>} />
         <Route path="/crm" element={<RequirePlatform><Navigate to="/crm/contacts" replace /></RequirePlatform>} />
         <Route path="/crm/:view" element={<RequirePlatform><CrmPage /></RequirePlatform>} />
         <Route path="/" element={<Navigate to="/tenants" replace />} />

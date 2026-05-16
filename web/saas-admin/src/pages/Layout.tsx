@@ -1,7 +1,8 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, SlidersHorizontal } from "lucide-react";
+import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, SlidersHorizontal, ClipboardList, UserCog, LayoutDashboard } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 export type CrmView = "contacts" | "companies" | "deals";
 
@@ -27,6 +28,11 @@ export function Layout() {
           <div className="text-xs text-zinc-500">control plane</div>
         </div>
         <nav className="flex-1 py-2">
+          {isPlatformAdmin && (
+            <SideLink to="/dashboard" icon={<LayoutDashboard className="h-4 w-4" />} active={loc.pathname === "/dashboard"}>
+              Dashboard
+            </SideLink>
+          )}
           <SideLink to="/tenants" icon={<Users className="h-4 w-4" />} active={loc.pathname.startsWith("/tenants")}>
             Tenants
           </SideLink>
@@ -36,6 +42,18 @@ export function Layout() {
               Launcher profiles
             </SideLink>
           )}
+          {isPlatformAdmin && (
+            <SideLink to="/audit" icon={<ClipboardList className="h-4 w-4" />} active={loc.pathname === "/audit"}>
+              Audit log
+            </SideLink>
+          )}
+          {isPlatformAdmin && (
+            <SideLink to="/users" icon={<UserCog className="h-4 w-4" />} active={loc.pathname === "/users"}>
+              Users
+            </SideLink>
+          )}
+
+          {isPlatformAdmin && <div className="mx-4 my-1 h-px bg-zinc-800" />}
 
           {isPlatformAdmin && (
             <SideLink to="/crm/contacts" icon={<Briefcase className="h-4 w-4" />} active={inCrm}>
@@ -80,7 +98,9 @@ export function Layout() {
         </div>
       </aside>
       <main className="flex-1 overflow-hidden">
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

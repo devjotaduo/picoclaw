@@ -173,6 +173,52 @@ func (d *DockerClient) ListManaged(ctx context.Context) ([]ManagedContainer, err
 	return out, nil
 }
 
+// Logs fetches up to tail lines from the container's stdout+stderr.
+// The Docker log stream has an 8-byte multiplexing header per chunk which is stripped.
+func (d *DockerClient) Logs(ctx context.Context, containerID string, tail int) ([]string, error) {
+	if tail <= 0 || tail > 1000 {
+		tail = 200
+	}
+	opts := container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       fmt.Sprintf("%d", tail),
+		Timestamps: true,
+	}
+	rc, err := d.cli.ContainerLogs(ctx, containerID, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+
+	var lines []string
+	buf := make([]byte, 8)
+	payloadBuf := make([]byte, 0, 4096)
+	for {
+		// Each Docker log frame: 8-byte header + payload
+		if _, err := rc.Read(buf); err != nil {
+			break // EOF or context done
+		}
+		// Bytes 4-7 (big-endian uint32) = payload length
+		size := int(buf[4])<<24 | int(buf[5])<<16 | int(buf[6])<<8 | int(buf[7])
+		if size <= 0 {
+			continue
+		}
+		if cap(payloadBuf) < size {
+			payloadBuf = make([]byte, size)
+		}
+		payload := payloadBuf[:size]
+		if _, err := rc.Read(payload); err != nil {
+			break
+		}
+		line := strings.TrimRight(string(payload), "\n\r")
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines, nil
+}
+
 var ErrContainerNotFound = fmt.Errorf("container not found")
 
 func isNotFound(err error) bool {

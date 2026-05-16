@@ -104,6 +104,7 @@ func (h *Handler) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Invalid channel array field: %v", err), http.StatusBadRequest)
 		return
 	}
+	enforceAllowedChannels(raw)
 	normalizedBody, err := json.Marshal(raw)
 	if err != nil {
 		http.Error(w, "Failed to normalize config payload", http.StatusBadRequest)
@@ -207,6 +208,7 @@ func (h *Handler) handlePatchConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Invalid channel array field: %v", err), http.StatusBadRequest)
 		return
 	}
+	enforceAllowedChannels(base)
 
 	// Convert merged map back to Config struct
 	merged, err := json.Marshal(base)
@@ -515,6 +517,166 @@ func normalizeChannelArrayFields(raw map[string]any) error {
 		}
 	}
 	return nil
+}
+
+func enforceAllowedChannels(raw map[string]any) {
+	if _, restricted := allowedChannelNames(); !restricted {
+		return
+	}
+	catalog := effectiveChannelCatalog()
+	channelsMap, hasChannels := asMapField(raw, "channel_list")
+	if !hasChannels {
+		channelsMap = map[string]any{}
+		raw["channel_list"] = channelsMap
+	}
+
+	allowedByConfigKey := make(map[string]channelCatalogItem, len(catalog))
+	for _, item := range catalog {
+		allowedByConfigKey[item.ConfigKey] = item
+	}
+
+	for channelName, rawChannel := range channelsMap {
+		chMap, ok := rawChannel.(map[string]any)
+		if !ok {
+			chMap = map[string]any{}
+			channelsMap[channelName] = chMap
+		}
+		item, ok := allowedByConfigKey[channelName]
+		if !ok {
+			chMap["enabled"] = false
+			continue
+		}
+		configureAllowedChannel(chMap, item)
+	}
+
+	for _, item := range catalog {
+		if _, ok := channelsMap[item.ConfigKey]; ok {
+			continue
+		}
+		chMap := map[string]any{}
+		configureAllowedChannel(chMap, item)
+		channelsMap[item.ConfigKey] = chMap
+	}
+}
+
+func enforceAllowedChannelsConfig(cfg *config.Config) bool {
+	if _, restricted := allowedChannelNames(); !restricted || cfg == nil {
+		return false
+	}
+	changed := false
+	if cfg.Channels == nil {
+		cfg.Channels = config.ChannelsConfig{}
+		changed = true
+	}
+
+	catalog := effectiveChannelCatalog()
+	allowedByConfigKey := make(map[string]channelCatalogItem, len(catalog))
+	for _, item := range catalog {
+		allowedByConfigKey[item.ConfigKey] = item
+	}
+
+	for channelName, ch := range cfg.Channels {
+		if _, ok := allowedByConfigKey[channelName]; ok || ch == nil {
+			continue
+		}
+		if ch.Enabled {
+			ch.Enabled = false
+			changed = true
+		}
+	}
+
+	for _, item := range catalog {
+		ch := cfg.Channels[item.ConfigKey]
+		if ch == nil {
+			ch = &config.Channel{}
+			cfg.Channels[item.ConfigKey] = ch
+			changed = true
+		}
+		if configureAllowedChannelConfig(ch, item) {
+			changed = true
+		}
+	}
+	return changed
+}
+
+func configureAllowedChannel(chMap map[string]any, item channelCatalogItem) {
+	chMap["enabled"] = true
+	if item.Name != "" {
+		chMap["type"] = item.Name
+	} else {
+		chMap["type"] = item.ConfigKey
+	}
+
+	if item.Name != "whatsapp" && item.Name != "whatsapp_native" {
+		return
+	}
+	settings := map[string]any{}
+	if existing, ok := chMap["settings"].(map[string]any); ok {
+		settings = existing
+	}
+	if item.Name == "whatsapp_native" {
+		settings["use_native"] = true
+		settings["bridge_url"] = ""
+	} else {
+		settings["use_native"] = false
+	}
+	chMap["settings"] = settings
+}
+
+func configureAllowedChannelConfig(ch *config.Channel, item channelCatalogItem) bool {
+	changed := false
+	if !ch.Enabled {
+		ch.Enabled = true
+		changed = true
+	}
+
+	wantType := item.Name
+	if wantType == "" {
+		wantType = item.ConfigKey
+	}
+	if ch.Type != wantType {
+		ch.Type = wantType
+		changed = true
+	}
+
+	if item.Name != config.ChannelWhatsApp && item.Name != config.ChannelWhatsAppNative {
+		return changed
+	}
+	decoded, err := ch.GetDecoded()
+	if err == nil {
+		if settings, ok := decoded.(*config.WhatsAppSettings); ok {
+			wantNative := item.Name == config.ChannelWhatsAppNative
+			if settings.UseNative != wantNative {
+				settings.UseNative = wantNative
+				changed = true
+			}
+			if wantNative && settings.BridgeURL != "" {
+				settings.BridgeURL = ""
+				changed = true
+			}
+			return changed
+		}
+	}
+
+	settings := map[string]any{}
+	if len(ch.Settings) > 0 {
+		_ = json.Unmarshal(ch.Settings, &settings)
+	}
+	wantNative := item.Name == config.ChannelWhatsAppNative
+	if settings["use_native"] != wantNative {
+		settings["use_native"] = wantNative
+		changed = true
+	}
+	if wantNative && settings["bridge_url"] != "" {
+		settings["bridge_url"] = ""
+		changed = true
+	}
+	if changed {
+		if raw, err := json.Marshal(settings); err == nil {
+			ch.Settings = config.RawNode(raw)
+		}
+	}
+	return changed
 }
 
 func channelSettingsType(

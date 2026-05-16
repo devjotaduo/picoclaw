@@ -25,6 +25,7 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
   const { t } = useTranslation()
   const [modelList, setModelList] = useState<ModelInfo[]>([])
   const [defaultModelName, setDefaultModelName] = useState("")
+  const [modelAccessRestricted, setModelAccessRestricted] = useState(false)
   const setDefaultRequestIdRef = useRef(0)
 
   const syncDefaultModelName = useCallback(
@@ -42,9 +43,14 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
     try {
       const data = await getModels()
       setModelList(data.models)
+      setModelAccessRestricted(false)
       syncDefaultModelName(data.models, data.default_model)
-    } catch {
-      // silently fail
+    } catch (err) {
+      if (isForbiddenModelAccessError(err)) {
+        setModelList([])
+        setDefaultModelName("default")
+        setModelAccessRestricted(true)
+      }
     }
   }, [syncDefaultModelName])
 
@@ -94,8 +100,9 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
   )
 
   const hasAvailableModels = useMemo(
-    () => defaultSelectableModels.some((m) => m.available),
-    [defaultSelectableModels],
+    () =>
+      modelAccessRestricted || defaultSelectableModels.some((m) => m.available),
+    [defaultSelectableModels, modelAccessRestricted],
   )
 
   const oauthModels = useMemo(
@@ -122,9 +129,23 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
   return {
     defaultModelName,
     hasAvailableModels,
+    modelAccessRestricted,
     apiKeyModels,
     oauthModels,
     localModels,
     handleSetDefault,
   }
+}
+
+function isForbiddenModelAccessError(err: unknown): boolean {
+  if (!(err instanceof Error)) {
+    return false
+  }
+  const message = err.message.toLowerCase()
+  return (
+    message.includes("403") ||
+    message.includes("forbidden") ||
+    message.includes("role policy") ||
+    message.includes("tenant role does not allow")
+  )
 }

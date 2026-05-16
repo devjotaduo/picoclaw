@@ -179,12 +179,12 @@ export function NewTenant() {
             {isProvisioning && (
               <div className="flex items-center gap-2 rounded bg-zinc-800/60 px-3 py-2 text-xs text-zinc-400">
                 <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
-                Aguardando o container iniciar…
+                Waiting for container to start…
               </div>
             )}
             {hasError && (
               <div className="rounded bg-red-950/50 px-3 py-2 text-xs text-red-300">
-                Erro ao provisionar: {statusQuery.data?.last_error ?? "verifique os logs"}
+                Provisioning error: {statusQuery.data?.last_error ?? "check server logs"}
               </div>
             )}
 

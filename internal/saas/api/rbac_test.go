@@ -33,8 +33,8 @@ func TestTenantRoleAllowsHierarchy(t *testing.T) {
 
 func TestTenantDashboardAllowed(t *testing.T) {
 	rolePolicy := policy.DefaultRolePolicy()
-	if !tenantDashboardAllowed(string(store.RoleViewer), rolePolicy, "GET", "/api/models") {
-		t.Fatal("viewer should be able to read")
+	if tenantDashboardAllowed(string(store.RoleViewer), rolePolicy, "GET", "/api/models") {
+		t.Fatal("viewer should not be able to read model configuration")
 	}
 	if tenantDashboardAllowed(string(store.RoleViewer), rolePolicy, "PUT", "/api/config") {
 		t.Fatal("viewer should not be able to mutate config")

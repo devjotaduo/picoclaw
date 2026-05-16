@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -79,6 +80,59 @@ func TestHandleUpdateConfig_PreservesExecAllowRemoteDefaultWhenOmitted(t *testin
 	}
 	if !cfg.Tools.Exec.AllowRemote {
 		t.Fatal("tools.exec.allow_remote should remain true when omitted from PUT /api/config")
+	}
+}
+
+func TestHandlePatchConfig_EnforcesAllowedChannels(t *testing.T) {
+	t.Setenv(allowedChannelsEnv, "whatsapp_native")
+
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
+		"channel_list": {
+			"telegram": {"enabled": true, "type": "telegram", "settings": {"token": "secret"}},
+			"whatsapp": {"enabled": false, "type": "whatsapp", "settings": {"use_native": false, "bridge_url": "http://bridge"}}
+		}
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH /api/config status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if got := cfg.Channels.Get("telegram").Enabled; got {
+		t.Fatal("telegram channel should be disabled by allowed channel policy")
+	}
+	whatsapp := cfg.Channels.Get("whatsapp")
+	if whatsapp == nil {
+		t.Fatal("missing whatsapp channel")
+	}
+	if !whatsapp.Enabled {
+		t.Fatal("whatsapp channel should be enabled by allowed channel policy")
+	}
+	if got := whatsapp.Type; got != "whatsapp_native" {
+		t.Fatalf("whatsapp type = %q, want whatsapp_native", got)
+	}
+	var settings map[string]any
+	if err := json.Unmarshal(whatsapp.Settings, &settings); err != nil {
+		t.Fatalf("unmarshal whatsapp settings: %v", err)
+	}
+	if got := settings["use_native"]; got != true {
+		t.Fatalf("use_native = %#v, want true", got)
+	}
+	if got := settings["bridge_url"]; got != "" {
+		t.Fatalf("bridge_url = %#v, want empty string", got)
 	}
 }
 

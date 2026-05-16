@@ -6,6 +6,8 @@ import MDEditor from "@uiw/react-md-editor";
 import { getAgent, saveAgent } from "@/api/skills";
 import { restartTenant } from "@/api/tenants";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 
 const DEFAULT_TEMPLATE = `---
 name: pico
@@ -28,6 +30,7 @@ export function AgentEdit() {
   const { id = "" } = useParams();
   const nav = useNavigate();
   const qc = useQueryClient();
+  const { toast } = useToast();
 
   const q = useQuery({
     queryKey: ["agent", id],
@@ -36,10 +39,9 @@ export function AgentEdit() {
 
   const [content, setContent] = useState<string>("");
   const [dirty, setDirty] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
 
-  // Push server state into the editor only when the user has no unsaved edits.
-  // After save we explicitly reset dirty=false, so the next refetch flows in;
-  // mid-edit refetches (e.g. window focus) won't clobber the draft.
   useEffect(() => {
     if (q.data && !dirty) {
       setContent(q.data.exists ? q.data.content : DEFAULT_TEMPLATE);
@@ -54,12 +56,22 @@ export function AgentEdit() {
       setDirty(false);
       qc.invalidateQueries({ queryKey: ["agent", id] });
       qc.invalidateQueries({ queryKey: ["skills", id] });
+      toast({ type: "success", message: "Agent template saved." });
+    },
+    onError: (e: { error?: string }) => {
+      toast({ type: "error", message: `Save failed: ${e?.error ?? "unknown error"}` });
     },
   });
 
   const restartM = useMutation({
     mutationFn: () => restartTenant(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tenant", id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tenant", id] });
+      toast({ type: "success", message: "Restart requested — the agent will be back online shortly." });
+    },
+    onError: (e: { error?: string }) => {
+      toast({ type: "error", message: `Restart failed: ${e?.error ?? "unknown error"}` });
+    },
   });
 
   if (q.isLoading) return <div className="p-6 text-sm text-zinc-500">Loading…</div>;
@@ -67,8 +79,12 @@ export function AgentEdit() {
     return <div className="p-6 text-sm text-red-300">Failed to load agent template.</div>;
 
   const handleBack = () => {
-    if (dirty && !confirm("Discard unsaved changes?")) return;
+    if (dirty) { setConfirmDiscard(true); return; }
     nav(`/tenants/${id}`);
+  };
+
+  const handleRestartClick = () => {
+    setConfirmRestart(true);
   };
 
   return (
@@ -95,11 +111,7 @@ export function AgentEdit() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => {
-              if (dirty && !confirm("You have unsaved changes. Restart anyway?")) return;
-              if (!confirm("Restart the tenant container? The agent will be briefly offline (~5s).")) return;
-              restartM.mutate();
-            }}
+            onClick={handleRestartClick}
             disabled={restartM.isPending}
             title="Restart the tenant container so picoclaw reloads AGENT.md and skills"
           >
@@ -112,23 +124,6 @@ export function AgentEdit() {
           </Button>
         </div>
       </header>
-
-      {restartM.isError && (
-        <div className="mb-3 rounded bg-red-950/40 px-3 py-2 text-xs text-red-300">
-          Restart failed: {(restartM.error as { error?: string })?.error ?? "unknown error"}
-        </div>
-      )}
-      {restartM.isSuccess && !restartM.isPending && (
-        <div className="mb-3 rounded bg-emerald-950/40 px-3 py-2 text-xs text-emerald-300">
-          Restart requested — the agent should be back online shortly.
-        </div>
-      )}
-
-      {saveM.isError && (
-        <div className="mb-3 rounded bg-red-950/40 px-3 py-2 text-xs text-red-300">
-          Save failed: {(saveM.error as { error?: string })?.error ?? "unknown error"}
-        </div>
-      )}
 
       <div className="rounded-lg border border-zinc-800 bg-zinc-950" data-color-mode="dark">
         <MDEditor
@@ -148,6 +143,29 @@ export function AgentEdit() {
         body is the agent's system prompt. Skills enabled in the <code>skills:</code> array become
         available to the agent.
       </p>
+
+      <Dialog open={confirmDiscard} onClose={() => setConfirmDiscard(false)} title="Discard changes?" size="sm">
+        <p className="text-sm text-zinc-300">You have unsaved changes. Leave without saving?</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setConfirmDiscard(false)}>Keep editing</Button>
+          <Button variant="danger" onClick={() => { setConfirmDiscard(false); nav(`/tenants/${id}`); }}>
+            Discard
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog open={confirmRestart} onClose={() => setConfirmRestart(false)} title="Restart agent?" size="sm">
+        <p className="text-sm text-zinc-300">
+          The tenant container will be restarted. The agent will be briefly offline (~5s).
+          {dirty && <span className="mt-1 block text-amber-300">You have unsaved changes that won't be applied.</span>}
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setConfirmRestart(false)}>Cancel</Button>
+          <Button onClick={() => { setConfirmRestart(false); restartM.mutate(); }} disabled={restartM.isPending}>
+            Restart
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

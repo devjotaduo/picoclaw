@@ -82,6 +82,7 @@ func DefaultRolePolicy() RolePolicy {
 	for _, feature := range FeatureIDs {
 		viewer[feature] = AccessRead
 	}
+	viewer[FeatureModels] = AccessNone
 	viewer[FeatureCredentials] = AccessNone
 	viewer[FeatureRawConfig] = AccessNone
 

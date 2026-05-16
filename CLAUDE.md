@@ -34,6 +34,14 @@ cd web/frontend && pnpm dev          # Vite dev server with hot reload
 cd web/frontend && pnpm build:backend  # builds + copies dist into web/backend/dist for embed
 ```
 
+SaaS dev mode preference: when working on SaaS/controlplane/tenant launcher
+code in dev mode, use the `make saas-dev-*` targets or
+`docker/saas/scripts/dev-sync.sh` to build local binaries, copy them into the
+running containers, and restart only those containers. Avoid Docker image
+rebuilds for this loop unless Dockerfiles, base image layers, OS packages,
+image-only assets, or durable production image validation are part of the task.
+See `docs/operations/saas-dev-mode.md`.
+
 Pre-PR: **`make check`** must pass locally. See `.golangci.yaml` for enabled linters.
 
 ## Build tags
