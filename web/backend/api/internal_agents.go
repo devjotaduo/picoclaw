@@ -39,6 +39,7 @@ type internalAgentSummary struct {
 type internalAgentsResponse struct {
 	Role              string                 `json:"role"`
 	Agents            []internalAgentSummary `json:"agents"`
+	MainAgentID       string                 `json:"main_agent_id"`
 	MainAllowAgents   []string               `json:"main_allow_agents"`
 	AdminWhatsAppJIDs []string               `json:"admin_whatsapp_jids"`
 }
@@ -63,6 +64,7 @@ type internalAgentTurnGatewayResponse struct {
 }
 
 type updateOrchestrationRequest struct {
+	MainAgentID       string                              `json:"main_agent_id,omitempty"`
 	MainAllowAgents   []string                            `json:"main_allow_agents"`
 	AdminWhatsAppJIDs []string                            `json:"admin_whatsapp_jids"`
 	AgentAccess       map[string]config.AgentAccessConfig `json:"agent_access,omitempty"`
@@ -95,20 +97,28 @@ func (h *Handler) handleUpdateInternalAgentOrchestration(w http.ResponseWriter, 
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	orchestrator.SetMainAllowAgents(cfg, body.MainAllowAgents)
+	if strings.TrimSpace(body.MainAgentID) != "" && !orchestrator.SetMainAgent(cfg, body.MainAgentID) {
+		writeJSONError(w, http.StatusBadRequest, "main agent not found")
+		return
+	}
 	for i := range cfg.Agents.List {
 		id := routing.NormalizeAgentID(cfg.Agents.List[i].ID)
-		if id == orchestrator.AgentMain {
-			if cfg.Agents.List[i].Access == nil {
-				cfg.Agents.List[i].Access = &config.AgentAccessConfig{}
-			}
-			cfg.Agents.List[i].Access.WhatsAppAllowedSenders = append([]string(nil), body.AdminWhatsAppJIDs...)
-		}
 		if next, ok := body.AgentAccess[id]; ok {
 			cp := next
 			cfg.Agents.List[i].Access = &cp
 		}
 	}
+	mainID := orchestrator.MainAgentID(cfg)
+	for i := range cfg.Agents.List {
+		if routing.NormalizeAgentID(cfg.Agents.List[i].ID) != mainID {
+			continue
+		}
+		if cfg.Agents.List[i].Access == nil {
+			cfg.Agents.List[i].Access = &config.AgentAccessConfig{}
+		}
+		cfg.Agents.List[i].Access.WhatsAppAllowedSenders = append([]string(nil), body.AdminWhatsAppJIDs...)
+	}
+	orchestrator.SetMainAllowAgents(cfg, body.MainAllowAgents)
 	orchestrator.EnsureSpecialistConfig(cfg)
 	if err := config.SaveConfig(h.configPath, cfg); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
@@ -269,9 +279,10 @@ func (h *Handler) loadOrchestrationConfig() (*config.Config, error) {
 func (h *Handler) internalAgentsResponse(cfg *config.Config, role string) internalAgentsResponse {
 	agents := make([]internalAgentSummary, 0, len(cfg.Agents.List))
 	adminJIDs := []string{}
+	mainID := orchestrator.MainAgentID(cfg)
 	for i := range cfg.Agents.List {
 		agent := cfg.Agents.List[i]
-		if routing.NormalizeAgentID(agent.ID) == orchestrator.AgentMain && agent.Access != nil {
+		if routing.NormalizeAgentID(agent.ID) == mainID && agent.Access != nil {
 			adminJIDs = append([]string(nil), agent.Access.WhatsAppAllowedSenders...)
 		}
 		allowed := orchestrator.PanelAllowed(agent, role)
@@ -291,6 +302,7 @@ func (h *Handler) internalAgentsResponse(cfg *config.Config, role string) intern
 	return internalAgentsResponse{
 		Role:              role,
 		Agents:            agents,
+		MainAgentID:       mainID,
 		MainAllowAgents:   orchestrator.MainAllowAgents(cfg),
 		AdminWhatsAppJIDs: adminJIDs,
 	}

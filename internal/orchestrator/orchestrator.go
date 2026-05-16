@@ -186,15 +186,19 @@ func SetMainAgent(cfg *config.Config, agentID string) bool {
 	}
 	found := false
 	for i := range cfg.Agents.List {
-		id := normalizeConfiguredAgentID(cfg.Agents.List[i].ID)
-		if id != target {
-			cfg.Agents.List[i].Default = false
-			continue
+		if normalizeConfiguredAgentID(cfg.Agents.List[i].ID) == target {
+			found = true
+			break
 		}
-		cfg.Agents.List[i].Default = true
-		found = true
 	}
-	return found
+	if !found {
+		return false
+	}
+	for i := range cfg.Agents.List {
+		id := normalizeConfiguredAgentID(cfg.Agents.List[i].ID)
+		cfg.Agents.List[i].Default = id == target
+	}
+	return true
 }
 
 func ensureDefaultAgent(cfg *config.Config) bool {

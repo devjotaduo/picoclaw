@@ -31,6 +31,46 @@ func TestEnsureSpecialistConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestSelectedMainAgentDrivesFallbackRoutingAndSettings(t *testing.T) {
+	cfg := config.DefaultConfig()
+	EnsureSpecialistConfig(cfg)
+
+	if !SetMainAgent(cfg, AgentMarketing) {
+		t.Fatal("expected marketing to be selectable as main agent")
+	}
+	SetMainAllowAgents(cfg, []string{AgentManager})
+	for i := range cfg.Agents.List {
+		if cfg.Agents.List[i].ID == AgentMarketing {
+			if cfg.Agents.List[i].Access == nil {
+				cfg.Agents.List[i].Access = &config.AgentAccessConfig{}
+			}
+			cfg.Agents.List[i].Access.WhatsAppAllowedSenders = []string{"whatsapp:55118888@s.whatsapp.net"}
+		}
+	}
+
+	EnsureSpecialistConfig(cfg)
+
+	if got := MainAgentID(cfg); got != AgentMarketing {
+		t.Fatalf("main agent = %q, want %q", got, AgentMarketing)
+	}
+	if got := MainAllowAgents(cfg); len(got) != 1 || got[0] != AgentManager {
+		t.Fatalf("main allow agents = %#v, want [gerente]", got)
+	}
+	if !WhatsAppAdminSenderAllowed(cfg, "55118888@s.whatsapp.net") {
+		t.Fatal("expected configured sender to be allowed for selected main")
+	}
+
+	route := routing.NewRouteResolver(cfg).ResolveRoute(bus.InboundContext{
+		Channel:  "whatsapp",
+		ChatID:   "5511999999999@s.whatsapp.net",
+		ChatType: "direct",
+		SenderID: "5511999999999@s.whatsapp.net",
+	})
+	if route.AgentID != AgentMarketing {
+		t.Fatalf("public whatsapp route = %q, want marketing", route.AgentID)
+	}
+}
+
 func TestPanelAllowedBlocksOperatorAndViewerForSensitiveAgents(t *testing.T) {
 	cfg := config.DefaultConfig()
 	EnsureSpecialistConfig(cfg)

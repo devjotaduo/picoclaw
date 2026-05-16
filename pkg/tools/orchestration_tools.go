@@ -234,8 +234,9 @@ func (t *TenantManagerTool) Execute(ctx context.Context, args map[string]any) *T
 	case "set_main_subagents":
 		orchestrator.SetMainAllowAgents(cfg, stringSliceArg(args["allow_agents"]))
 	case "set_admin_whatsapp_senders":
+		mainID := orchestrator.MainAgentID(cfg)
 		for i := range cfg.Agents.List {
-			if cfg.Agents.List[i].ID != orchestrator.AgentMain {
+			if cfg.Agents.List[i].ID != mainID {
 				continue
 			}
 			if cfg.Agents.List[i].Access == nil {
