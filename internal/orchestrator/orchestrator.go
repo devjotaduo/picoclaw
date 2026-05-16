@@ -89,7 +89,7 @@ func EnsureSpecialistConfig(cfg *config.Config) bool {
 		changed = true
 	}
 
-	if ensureMainIsDefault(cfg) {
+	if ensureDefaultAgent(cfg) {
 		changed = true
 	}
 	if rebuildGeneratedDispatchRules(cfg) {
@@ -150,13 +150,61 @@ func mergeAgentDefaults(agent *config.AgentConfig, def config.AgentConfig) bool 
 	return changed
 }
 
-func ensureMainIsDefault(cfg *config.Config) bool {
-	changed := false
-	foundMain := false
+// MainAgentID returns the configured primary agent. The legacy ID remains
+// "main", but the primary role is now driven by the agent marked default.
+func MainAgentID(cfg *config.Config) string {
+	if cfg == nil {
+		return AgentMain
+	}
+	for _, agent := range cfg.Agents.List {
+		if !agent.Default {
+			continue
+		}
+		if id := normalizeConfiguredAgentID(agent.ID); id != "" {
+			return id
+		}
+	}
+	for _, agent := range cfg.Agents.List {
+		if normalizeConfiguredAgentID(agent.ID) == AgentMain {
+			return AgentMain
+		}
+	}
+	for _, agent := range cfg.Agents.List {
+		if id := normalizeConfiguredAgentID(agent.ID); id != "" {
+			return id
+		}
+	}
+	return AgentMain
+}
+
+// SetMainAgent marks exactly one configured agent as the primary/default
+// agent. It returns false when the requested agent does not exist.
+func SetMainAgent(cfg *config.Config, agentID string) bool {
+	target := normalizeConfiguredAgentID(agentID)
+	if cfg == nil || target == "" {
+		return false
+	}
+	found := false
 	for i := range cfg.Agents.List {
-		id := routing.NormalizeAgentID(cfg.Agents.List[i].ID)
-		if id == AgentMain {
-			foundMain = true
+		id := normalizeConfiguredAgentID(cfg.Agents.List[i].ID)
+		if id != target {
+			cfg.Agents.List[i].Default = false
+			continue
+		}
+		cfg.Agents.List[i].Default = true
+		found = true
+	}
+	return found
+}
+
+func ensureDefaultAgent(cfg *config.Config) bool {
+	changed := false
+	mainID := MainAgentID(cfg)
+	defaultSet := false
+	for i := range cfg.Agents.List {
+		id := normalizeConfiguredAgentID(cfg.Agents.List[i].ID)
+		if id == mainID && !defaultSet {
+			defaultSet = true
 			if !cfg.Agents.List[i].Default {
 				cfg.Agents.List[i].Default = true
 				changed = true
@@ -168,7 +216,14 @@ func ensureMainIsDefault(cfg *config.Config) bool {
 			changed = true
 		}
 	}
-	return changed || !foundMain
+	return changed
+}
+
+func normalizeConfiguredAgentID(agentID string) string {
+	if strings.TrimSpace(agentID) == "" {
+		return ""
+	}
+	return routing.NormalizeAgentID(agentID)
 }
 
 func rebuildGeneratedDispatchRules(cfg *config.Config) bool {
@@ -195,12 +250,13 @@ func rebuildGeneratedDispatchRules(cfg *config.Config) bool {
 
 func buildGeneratedDispatchRules(cfg *config.Config) []config.DispatchRule {
 	rules := make([]config.DispatchRule, 0, len(cfg.Agents.List)+4)
+	mainID := MainAgentID(cfg)
 	for _, agent := range cfg.Agents.List {
 		id := routing.NormalizeAgentID(agent.ID)
 		if id == "" || agent.Access == nil || !agent.Access.WhatsAppDirectEnabled {
 			continue
 		}
-		if id == AgentMain {
+		if id == mainID {
 			continue
 		}
 		for _, sender := range normalizedWhatsAppSenders(agent.Access.WhatsAppAllowedSenders) {
@@ -218,7 +274,7 @@ func buildGeneratedDispatchRules(cfg *config.Config) []config.DispatchRule {
 
 	rules = append(rules, config.DispatchRule{
 		Name:  generatedRulePrefix + "whatsapp:main",
-		Agent: AgentMain,
+		Agent: mainID,
 		When: config.DispatchSelector{
 			Channel: "whatsapp",
 		},
@@ -267,8 +323,9 @@ func WhatsAppAdminSenderAllowed(cfg *config.Config, senderID string) bool {
 	if cfg == nil {
 		return false
 	}
+	mainID := MainAgentID(cfg)
 	for _, agent := range cfg.Agents.List {
-		if routing.NormalizeAgentID(agent.ID) != AgentMain || agent.Access == nil {
+		if routing.NormalizeAgentID(agent.ID) != mainID || agent.Access == nil {
 			continue
 		}
 		return senderInWhatsAppList(senderID, agent.Access.WhatsAppAllowedSenders)
@@ -364,8 +421,9 @@ func PanelAllowed(agent config.AgentConfig, role string) bool {
 }
 
 func MainAllowAgents(cfg *config.Config) []string {
+	mainID := MainAgentID(cfg)
 	for _, agent := range cfg.Agents.List {
-		if routing.NormalizeAgentID(agent.ID) != AgentMain || agent.Subagents == nil {
+		if routing.NormalizeAgentID(agent.ID) != mainID || agent.Subagents == nil {
 			continue
 		}
 		return append([]string(nil), agent.Subagents.AllowAgents...)
@@ -374,8 +432,9 @@ func MainAllowAgents(cfg *config.Config) []string {
 }
 
 func SetMainAllowAgents(cfg *config.Config, allow []string) {
+	mainID := MainAgentID(cfg)
 	for i := range cfg.Agents.List {
-		if routing.NormalizeAgentID(cfg.Agents.List[i].ID) != AgentMain {
+		if routing.NormalizeAgentID(cfg.Agents.List[i].ID) != mainID {
 			continue
 		}
 		if cfg.Agents.List[i].Subagents == nil {
