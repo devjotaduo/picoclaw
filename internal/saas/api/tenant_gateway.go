@@ -18,6 +18,7 @@ import (
 )
 
 func (h *Handler) withTenantGateway(admin http.Handler) http.Handler {
+	h.adminRoutes = admin
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sub, ok := h.tenantSubdomain(r.Host)
 		if !ok {
@@ -85,6 +86,12 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 	if r.URL.Path == "/api/auth/logout" && r.Method == http.MethodPost {
 		h.clearSessionCookie(w, r)
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/v1/tenants/me/") && h.adminRoutes != nil {
+		rewritten := r.Clone(r.Context())
+		rewritten.URL.Path = "/api/v1/tenants/" + t.ID + strings.TrimPrefix(r.URL.Path, "/api/v1/tenants/me")
+		h.adminRoutes.ServeHTTP(w, rewritten)
 		return
 	}
 	if r.URL.Path == "/launcher-login" || r.URL.Path == "/launcher-setup" {

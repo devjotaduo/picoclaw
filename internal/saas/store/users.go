@@ -220,6 +220,18 @@ func (s *MembershipStore) ListForTenant(ctx context.Context, tenantID string) ([
 	return out, rows.Err()
 }
 
+func (s *MembershipStore) Delete(ctx context.Context, userID int64, tenantID string) error {
+	const q = `DELETE FROM tenant_memberships WHERE user_id = $1 AND tenant_id = $2`
+	tag, err := s.DB.Pool.Exec(ctx, q, userID, tenantID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrMembershipNotFound
+	}
+	return nil
+}
+
 func (s *MembershipStore) ListForUser(ctx context.Context, userID int64) ([]TenantMembership, error) {
 	const q = `
 		SELECT user_id, tenant_id, role, created_at, '' AS email

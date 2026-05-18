@@ -34,9 +34,9 @@ export type CreateTenantInput = {
 export type CreateTenantResponse = {
   tenant_id: string;
   url: string;
-  initial_password: string;
   owner_invite_token?: string;
-  warning: string;
+  warning?: string;
+  info?: string;
 };
 
 export type UsageSummary = {

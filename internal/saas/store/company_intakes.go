@@ -34,6 +34,7 @@ type CompanyIntake struct {
 	AudioTranscript   string              `json:"audio_transcript"`
 	ReportJSON        json.RawMessage     `json:"report"`
 	PublicSummaryJSON json.RawMessage     `json:"public_summary"`
+	ChatMessagesJSON  json.RawMessage     `json:"chat_messages"`
 	LinkedTenantID    *string             `json:"linked_tenant_id"`
 	CRMContactID      *int64              `json:"crm_contact_id"`
 	CRMCompanyID      *int64              `json:"crm_company_id"`
@@ -44,7 +45,16 @@ type CompanyIntake struct {
 	SubmittedAt       *time.Time          `json:"submitted_at"`
 	ReviewedAt        *time.Time          `json:"reviewed_at"`
 	LinkedAt          *time.Time          `json:"linked_at"`
+	QualifiedAt       *time.Time          `json:"qualified_at"`
 }
+
+// companyIntakeReturning is the canonical column list used in every RETURNING
+// clause and SELECT projection for company_intakes. Order must match
+// scanCompanyIntakeInto exactly.
+const companyIntakeReturning = `id, status, company_name, contact_name, contact_email, contact_whatsapp,
+	answers_json, attachments_json, audio_transcript, report_json, public_summary_json,
+	chat_messages, linked_tenant_id, crm_contact_id, crm_company_id, crm_deal_id, source,
+	created_at, updated_at, submitted_at, reviewed_at, linked_at, qualified_at`
 
 type CompanyIntakeStore struct{ DB *DB }
 
@@ -70,10 +80,7 @@ func (s *CompanyIntakeStore) Create(ctx context.Context, intake *CompanyIntake, 
 			(id, resume_token_hash, status, answers_json, attachments_json, report_json, public_summary_json, source, ip_hash, user_agent)
 		VALUES
 			($1, $2, $3, COALESCE($4, '{}'::jsonb), COALESCE($5, '[]'::jsonb), '{}'::jsonb, '{}'::jsonb, $6, $7, $8)
-		RETURNING id, status, company_name, contact_name, contact_email, contact_whatsapp,
-			answers_json, attachments_json, audio_transcript, report_json, public_summary_json,
-			linked_tenant_id, crm_contact_id, crm_company_id, crm_deal_id, source,
-			created_at, updated_at, submitted_at, reviewed_at, linked_at`
+		RETURNING ` + companyIntakeReturning
 	if intake.Status == "" {
 		intake.Status = CompanyIntakeDraft
 	}
@@ -100,10 +107,7 @@ func (s *CompanyIntakeStore) Create(ctx context.Context, intake *CompanyIntake, 
 
 func (s *CompanyIntakeStore) Get(ctx context.Context, id string) (*CompanyIntake, error) {
 	const q = `
-		SELECT id, status, company_name, contact_name, contact_email, contact_whatsapp,
-			answers_json, attachments_json, audio_transcript, report_json, public_summary_json,
-			linked_tenant_id, crm_contact_id, crm_company_id, crm_deal_id, source,
-			created_at, updated_at, submitted_at, reviewed_at, linked_at
+		SELECT ` + companyIntakeReturning + `
 		FROM company_intakes
 		WHERE id = $1`
 	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id))
@@ -111,10 +115,7 @@ func (s *CompanyIntakeStore) Get(ctx context.Context, id string) (*CompanyIntake
 
 func (s *CompanyIntakeStore) GetByToken(ctx context.Context, id, resumeTokenHash string) (*CompanyIntake, error) {
 	const q = `
-		SELECT id, status, company_name, contact_name, contact_email, contact_whatsapp,
-			answers_json, attachments_json, audio_transcript, report_json, public_summary_json,
-			linked_tenant_id, crm_contact_id, crm_company_id, crm_deal_id, source,
-			created_at, updated_at, submitted_at, reviewed_at, linked_at
+		SELECT ` + companyIntakeReturning + `
 		FROM company_intakes
 		WHERE id = $1 AND resume_token_hash = $2`
 	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, resumeTokenHash))
@@ -131,10 +132,7 @@ func (s *CompanyIntakeStore) SaveDraft(ctx context.Context, id, resumeTokenHash,
 			audio_transcript = $8,
 			updated_at = now()
 		WHERE id = $1 AND resume_token_hash = $2 AND status IN ('draft', 'report_ready')
-		RETURNING id, status, company_name, contact_name, contact_email, contact_whatsapp,
-			answers_json, attachments_json, audio_transcript, report_json, public_summary_json,
-			linked_tenant_id, crm_contact_id, crm_company_id, crm_deal_id, source,
-			created_at, updated_at, submitted_at, reviewed_at, linked_at`
+		RETURNING ` + companyIntakeReturning
 	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, resumeTokenHash, companyName, contactName, contactEmail, contactWhatsApp, answers, audioTranscript))
 }
 
@@ -143,10 +141,7 @@ func (s *CompanyIntakeStore) SaveAttachments(ctx context.Context, id, resumeToke
 		UPDATE company_intakes
 		SET attachments_json = COALESCE($3, '[]'::jsonb), updated_at = now()
 		WHERE id = $1 AND resume_token_hash = $2 AND status IN ('draft', 'report_ready')
-		RETURNING id, status, company_name, contact_name, contact_email, contact_whatsapp,
-			answers_json, attachments_json, audio_transcript, report_json, public_summary_json,
-			linked_tenant_id, crm_contact_id, crm_company_id, crm_deal_id, source,
-			created_at, updated_at, submitted_at, reviewed_at, linked_at`
+		RETURNING ` + companyIntakeReturning
 	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, resumeTokenHash, attachments))
 }
 
@@ -158,10 +153,7 @@ func (s *CompanyIntakeStore) SaveReport(ctx context.Context, id, resumeTokenHash
 			status = CASE WHEN status = 'draft' THEN 'report_ready' ELSE status END,
 			updated_at = now()
 		WHERE id = $1 AND resume_token_hash = $2 AND status IN ('draft', 'report_ready')
-		RETURNING id, status, company_name, contact_name, contact_email, contact_whatsapp,
-			answers_json, attachments_json, audio_transcript, report_json, public_summary_json,
-			linked_tenant_id, crm_contact_id, crm_company_id, crm_deal_id, source,
-			created_at, updated_at, submitted_at, reviewed_at, linked_at`
+		RETURNING ` + companyIntakeReturning
 	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, resumeTokenHash, report, publicSummary))
 }
 
@@ -170,10 +162,7 @@ func (s *CompanyIntakeStore) Submit(ctx context.Context, id, resumeTokenHash str
 		UPDATE company_intakes
 		SET status = 'submitted', submitted_at = COALESCE(submitted_at, now()), updated_at = now()
 		WHERE id = $1 AND resume_token_hash = $2 AND status IN ('draft', 'report_ready')
-		RETURNING id, status, company_name, contact_name, contact_email, contact_whatsapp,
-			answers_json, attachments_json, audio_transcript, report_json, public_summary_json,
-			linked_tenant_id, crm_contact_id, crm_company_id, crm_deal_id, source,
-			created_at, updated_at, submitted_at, reviewed_at, linked_at`
+		RETURNING ` + companyIntakeReturning
 	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, resumeTokenHash))
 }
 
@@ -182,10 +171,7 @@ func (s *CompanyIntakeStore) List(ctx context.Context, status string, limit int)
 		limit = 100
 	}
 	q := `
-		SELECT id, status, company_name, contact_name, contact_email, contact_whatsapp,
-			answers_json, attachments_json, audio_transcript, report_json, public_summary_json,
-			linked_tenant_id, crm_contact_id, crm_company_id, crm_deal_id, source,
-			created_at, updated_at, submitted_at, reviewed_at, linked_at
+		SELECT ` + companyIntakeReturning + `
 		FROM company_intakes`
 	args := []any{}
 	if status != "" && status != "all" {
@@ -217,10 +203,7 @@ func (s *CompanyIntakeStore) SetStatus(ctx context.Context, id string, status Co
 			reviewed_at = CASE WHEN $2 = 'reviewed' THEN COALESCE(reviewed_at, now()) ELSE reviewed_at END,
 			updated_at = now()
 		WHERE id = $1
-		RETURNING id, status, company_name, contact_name, contact_email, contact_whatsapp,
-			answers_json, attachments_json, audio_transcript, report_json, public_summary_json,
-			linked_tenant_id, crm_contact_id, crm_company_id, crm_deal_id, source,
-			created_at, updated_at, submitted_at, reviewed_at, linked_at`
+		RETURNING ` + companyIntakeReturning
 	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, status))
 }
 
@@ -229,10 +212,7 @@ func (s *CompanyIntakeStore) LinkTenant(ctx context.Context, id, tenantID string
 		UPDATE company_intakes
 		SET linked_tenant_id = $2, status = 'linked', linked_at = COALESCE(linked_at, now()), updated_at = now()
 		WHERE id = $1
-		RETURNING id, status, company_name, contact_name, contact_email, contact_whatsapp,
-			answers_json, attachments_json, audio_transcript, report_json, public_summary_json,
-			linked_tenant_id, crm_contact_id, crm_company_id, crm_deal_id, source,
-			created_at, updated_at, submitted_at, reviewed_at, linked_at`
+		RETURNING ` + companyIntakeReturning
 	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, tenantID))
 }
 
@@ -258,6 +238,7 @@ func scanCompanyIntakeInto(intake *CompanyIntake, row pgx.Row) error {
 		&intake.AudioTranscript,
 		&intake.ReportJSON,
 		&intake.PublicSummaryJSON,
+		&intake.ChatMessagesJSON,
 		&intake.LinkedTenantID,
 		&intake.CRMContactID,
 		&intake.CRMCompanyID,
@@ -268,5 +249,39 @@ func scanCompanyIntakeInto(intake *CompanyIntake, row pgx.Row) error {
 		&intake.SubmittedAt,
 		&intake.ReviewedAt,
 		&intake.LinkedAt,
+		&intake.QualifiedAt,
 	)
+}
+
+// AppendChatMessage appends one JSONB message object to chat_messages and
+// returns the full updated intake row. Used by the Clara agent endpoint to
+// persist each turn before/after the LLM call so the transcript survives a
+// dropped SSE connection. The token check matches the SaveDraft policy: only
+// active intakes (draft/report_ready) may be appended to.
+func (s *CompanyIntakeStore) AppendChatMessage(
+	ctx context.Context, id, resumeTokenHash string, message json.RawMessage,
+) (*CompanyIntake, error) {
+	const q = `
+		UPDATE company_intakes
+		SET chat_messages = chat_messages || $3::jsonb, updated_at = now()
+		WHERE id = $1 AND resume_token_hash = $2 AND status IN ('draft', 'report_ready')
+		RETURNING ` + companyIntakeReturning
+	// Single-element JSONB array wrapper so the `||` concat operator merges
+	// arrays instead of objects.
+	wrapped := append(append([]byte{'['}, message...), ']')
+	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, resumeTokenHash, wrapped))
+}
+
+// MarkQualified sets qualified_at the first time the agent calls the
+// `mark_qualified` tool. Idempotent: subsequent calls keep the original
+// timestamp so analytics know when qualification first happened.
+func (s *CompanyIntakeStore) MarkQualified(
+	ctx context.Context, id, resumeTokenHash string,
+) (*CompanyIntake, error) {
+	const q = `
+		UPDATE company_intakes
+		SET qualified_at = COALESCE(qualified_at, now()), updated_at = now()
+		WHERE id = $1 AND resume_token_hash = $2 AND status IN ('draft', 'report_ready')
+		RETURNING ` + companyIntakeReturning
+	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, resumeTokenHash))
 }
