@@ -100,16 +100,33 @@ import { LabelWithTooltip } from "./label-with-tooltip"
 import { ProgressChecklist } from "./progress-checklist"
 import { SaveBar } from "./save-bar"
 import {
-  type StepID,
   isReadyToActivate,
   validateChecklist,
 } from "./schemas"
+import {
+  type AgentEditorTab,
+  TabsNav,
+} from "./tabs-nav"
 import { useDirtyGuard, useSaveShortcut } from "./use-dirty-guard"
+import { useTabSync } from "./use-tab-sync"
 import type { SaveState } from "@/store/agent-editor"
 import { jidToPhone } from "./whatsapp-format"
 import { WhatsAppGroupList } from "./whatsapp-group-list"
 import { WhatsAppPhoneList } from "./whatsapp-phone-list"
 import { WorkspaceDisplay } from "./workspace-display"
+import { ColorPicker, DEFAULT_FG_PRESETS } from "./color-picker"
+import { IconPicker } from "./icon-picker"
+import { TagInput } from "./tag-input"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { IconCopy, IconDotsVertical } from "@tabler/icons-react"
+import { AgentWizard, type WizardDraft } from "./agent-wizard"
 
 // ─── tab type ────────────────────────────────────────────────────────────────
 
@@ -191,6 +208,16 @@ function normalizeAgentIDPreview(input: string): string {
     .replace(/-+$/, "")
     .slice(0, 64)
   return normalized || "main"
+}
+
+function uniqueAgentID(seed: string, existing: string[]): string {
+  const base = normalizeAgentIDPreview(seed)
+  if (!existing.includes(base)) return base
+  for (let i = 2; i < 100; i++) {
+    const candidate = normalizeAgentIDPreview(`${base}-${i}`)
+    if (!existing.includes(candidate)) return candidate
+  }
+  return `${base}-${Date.now()}`
 }
 
 function agentInitials(agent: AgentSummary): string {
@@ -823,10 +850,8 @@ export function AgentEditorPage() {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<TemplateApplyPayload | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
-  const [newAgentName, setNewAgentName] = useState("")
-  const [newAgentID, setNewAgentID] = useState("")
-  const [newAgentTemplateID, setNewAgentTemplateID] = useState(AGENT_TEMPLATES[0]?.id ?? "")
   const [rawOpen, setRawOpen] = useState(false)
+  const [activeTab, setActiveTab] = useTabSync("identity")
   const [rawDraft, setRawDraft] = useState("")
   const [rawError, setRawError] = useState<string | null>(null)
 
@@ -888,29 +913,52 @@ export function AgentEditorPage() {
     },
   })
 
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      const name = newAgentName.trim()
-      const rawID = newAgentID.trim() || name
-      const tmpl = getTemplateById(newAgentTemplateID) ?? AGENT_TEMPLATES[0] ?? null
-      if (!tmpl) throw new Error("No agent template available.")
-      const created = await createAgent({ id: rawID, name })
-      return { created, template: tmpl }
+  const wizardMutation = useMutation({
+    mutationFn: async ({
+      draft,
+      payload,
+      openAfter,
+    }: {
+      draft: WizardDraft
+      payload: TemplateApplyPayload
+      openAfter?: boolean
+    }) => {
+      const id = payload.agent_id ?? draft.agentID ?? draft.name
+      const created = await createAgent({
+        id,
+        name: payload.name,
+        avatar: {
+          type: "preset",
+          icon: draft.iconID,
+          background: draft.background,
+          foreground: draft.foreground,
+        },
+      })
+      await applyAgentTemplate(
+        substituteAgentPlaceholders({ ...payload, agent_id: created.id }),
+      )
+      return { created, openAfter: openAfter ?? false }
     },
-    onSuccess: ({ created, template: tmpl }) => {
+    onSuccess: ({ created, openAfter }) => {
       toast.success(t("pages.agent.editor.create_success", "Agente criado."))
-      setCreateOpen(false)
       setSelectedAgentId(created.id)
-      const nextDraft = templateToDraft(tmpl, defaultTemplateSkillConfigs(tmpl, installedSkills))
-      setDraft({ ...nextDraft, agent_id: created.id, name: created.name || nextDraft.name })
-      setEditing(true)
-      setNewAgentName("")
-      setNewAgentID("")
       void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })
       void queryClient.invalidateQueries({ queryKey: ["agents"] })
+      void queryClient.invalidateQueries({ queryKey: ["agent-config", created.id] })
+      void queryClient.invalidateQueries({ queryKey: ["config"] })
+      if (openAfter) {
+        setActiveTab("test")
+      } else {
+        setActiveTab("identity")
+      }
+      setCreateOpen(false)
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : t("pages.agent.editor.create_error", "Não foi possível criar o agente."))
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t("pages.agent.editor.create_error", "Não foi possível criar o agente."),
+      )
     },
   })
 
@@ -1039,9 +1087,6 @@ export function AgentEditorPage() {
   }
 
   function handleCreateOpen() {
-    setNewAgentName("")
-    setNewAgentID("")
-    setNewAgentTemplateID(AGENT_TEMPLATES[0]?.id ?? "")
     setCreateOpen(true)
   }
 
@@ -1077,6 +1122,50 @@ export function AgentEditorPage() {
       { agentId: selectedAgent.id, active: false },
       { onSettled: () => setDeactivateOpen(false) },
     )
+  }
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (source: AgentEditorAgent) => {
+      const base = source.id.replace(/-(copia|copy|copia-\d+)$/i, "")
+      const newID = uniqueAgentID(`${base}-copia`, agents.map((a) => a.id))
+      const newName = `${source.name || source.id} (cópia)`
+      const created = await createAgent({ id: newID, name: newName })
+      const payload = source.prompt?.payload
+      if (payload) {
+        try {
+          await applyAgentTemplate({
+            ...JSON.parse(JSON.stringify(payload)),
+            agent_id: created.id,
+            name: newName,
+          })
+        } catch {
+          // even if the prompt apply fails the agent record is created
+        }
+      }
+      return { created, payload }
+    },
+    onSuccess: ({ created }) => {
+      toast.success(
+        t("pages.agent.editor.duplicate_success", "Agente duplicado."),
+      )
+      setSelectedAgentId(created.id)
+      void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })
+      void queryClient.invalidateQueries({ queryKey: ["agents"] })
+    },
+    onError: (err) => {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t(
+              "pages.agent.editor.duplicate_error",
+              "Não foi possível duplicar o agente.",
+            ),
+      )
+    },
+  })
+
+  function handleDuplicateAgent(source: AgentEditorAgent) {
+    duplicateMutation.mutate(source)
   }
 
   function handleSheetOpenChange(open: boolean) {
@@ -1127,8 +1216,6 @@ export function AgentEditorPage() {
     return substituteAgentPlaceholders(payload)
   }, [configData.payload])
 
-  const isCreateDisabled = newAgentName.trim() === "" || createMutation.isPending
-  const previewAgentID = normalizeAgentIDPreview(newAgentID || newAgentName)
 
   const filteredAgents = useMemo(() => {
     if (!searchQuery.trim()) return agents
@@ -1278,10 +1365,6 @@ export function AgentEditorPage() {
     enabled: deactivateOpen,
   })
 
-  function handleStepClick(id: StepID) {
-    const target = document.getElementById(`section-${id}`)
-    target?.scrollIntoView({ behavior: "smooth", block: "start" })
-  }
 
   return (
     <div className="flex h-full flex-col">
@@ -1346,34 +1429,89 @@ export function AgentEditorPage() {
                     const isSelected = agent.id === selectedAgentId
                     const isActive = agent.active !== false
                     return (
-                      <button
+                      <div
                         key={agent.id}
-                        type="button"
-                        aria-pressed={isSelected}
-                        aria-current={isSelected ? "true" : undefined}
-                        onClick={() => setSelectedAgentId(agent.id)}
-                        className={`group focus-visible:ring-ring relative flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-150 focus-visible:ring-2 focus-visible:outline-none ${
-                          isSelected ? "bg-primary/8 ring-primary/20 ring-1" : "hover:bg-muted/60"
+                        className={`group focus-within:ring-ring relative flex min-w-0 items-center gap-1 rounded-xl pr-1 transition-all duration-150 focus-within:ring-2 ${
+                          isSelected
+                            ? "bg-primary/8 ring-primary/20 ring-1"
+                            : "hover:bg-muted/60"
                         }`}
                       >
                         {isSelected && (
                           <span className="bg-primary absolute top-1/2 left-0 h-5 w-[3px] -translate-y-1/2 rounded-r-full" />
                         )}
-                        <AgentAvatar agent={agent} size="sm" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`truncate text-sm font-medium ${isSelected ? "text-foreground" : "text-foreground/80 group-hover:text-foreground"}`}>
-                              {agent.name || agent.id}
-                            </span>
-                            {!isActive && <span className="size-1.5 shrink-0 rounded-full bg-red-400" />}
+                        <button
+                          type="button"
+                          aria-pressed={isSelected}
+                          aria-current={isSelected ? "true" : undefined}
+                          onClick={() => setSelectedAgentId(agent.id)}
+                          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left focus:outline-none"
+                        >
+                          <AgentAvatar agent={agent} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`truncate text-sm font-medium ${
+                                  isSelected
+                                    ? "text-foreground"
+                                    : "text-foreground/80 group-hover:text-foreground"
+                                }`}
+                              >
+                                {agent.name || agent.id}
+                              </span>
+                              {!isActive && (
+                                <span className="size-1.5 shrink-0 rounded-full bg-red-400" />
+                              )}
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                              {agent.default && <DefaultBadge />}
+                              <ReadyStatusBadges agent={agent} compact />
+                            </div>
+                            <p className="text-muted-foreground/70 mt-1 truncate text-[11px]">
+                              {agentRoleLabel(agent)}
+                            </p>
                           </div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                            {agent.default && <DefaultBadge />}
-                            <ReadyStatusBadges agent={agent} compact />
-                          </div>
-                          <p className="text-muted-foreground/70 mt-1 truncate text-[11px]">{agentRoleLabel(agent)}</p>
-                        </div>
-                      </button>
+                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label={`Mais ações para ${agent.name || agent.id}`}
+                              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring focus-visible:ring-offset-background inline-flex size-7 shrink-0 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                            >
+                              <IconDotsVertical className="size-4" aria-hidden="true" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem
+                              onClick={() => setSelectedAgentId(agent.id)}
+                            >
+                              <IconEdit className="size-3.5" />
+                              Selecionar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleDuplicateAgent(agent)}
+                              disabled={duplicateMutation.isPending}
+                            >
+                              <IconCopy className="size-3.5" />
+                              Duplicar agente
+                            </DropdownMenuItem>
+                            {agent.id !== "main" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleDeleteAgent(agent)}
+                                  disabled={deleteMutation.isPending}
+                                  className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/40"
+                                >
+                                  <IconTrash className="size-3.5" />
+                                  Remover
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     )
                   })}
                 </div>
@@ -1428,7 +1566,8 @@ export function AgentEditorPage() {
                   saveErrorMsg={saveErrorMsg}
                   onSave={handleManualSave}
                   onDiscard={handleDiscardOrchestration}
-                  onStepClick={handleStepClick}
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
                   messages={chatMessages}
                   chatInput={chatInput}
                   isSending={sendingChat}
@@ -1474,60 +1613,16 @@ export function AgentEditorPage() {
       </div>
 
       {/* ── dialogs ───────────────────────────────────────────────── */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("pages.agent.editor.create_title", "Novo agente")}</DialogTitle>
-            <DialogDescription>
-              {t("pages.agent.editor.create_description", "Crie um agente e escolha o template para seus arquivos iniciais de workspace.")}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="agent-name">{t("pages.agent.editor.agent_name", "Nome do agente")}</Label>
-              <Input
-                id="agent-name"
-                value={newAgentName}
-                onChange={(e) => setNewAgentName(e.target.value)}
-                placeholder={t("pages.agent.editor.agent_name_placeholder", "Assistente de vendas")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="agent-id">{t("pages.agent.editor.agent_id", "ID do agente")}</Label>
-              <Input
-                id="agent-id"
-                value={newAgentID}
-                onChange={(e) => setNewAgentID(e.target.value)}
-                placeholder={previewAgentID}
-              />
-              <p className="text-muted-foreground text-xs">
-                {t("pages.agent.editor.agent_id_hint", "ID de runtime:")}{" "}
-                <code className="font-mono">{previewAgentID}</code>
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label>{t("pages.agent.editor.starting_template", "Template inicial")}</Label>
-              <Select value={newAgentTemplateID} onValueChange={setNewAgentTemplateID}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {AGENT_TEMPLATES.map((tmpl) => (
-                    <SelectItem key={tmpl.id} value={tmpl.id}>{tmpl.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createMutation.isPending}>
-              {t("pages.agent.templates.cancel")}
-            </Button>
-            <Button onClick={() => createMutation.mutate()} disabled={isCreateDisabled}>
-              {createMutation.isPending ? <IconLoader2 className="size-4 animate-spin" /> : <IconPlus className="size-4" />}
-              {t("pages.agent.editor.create_agent", "Criar agente")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AgentWizard
+        open={createOpen}
+        existingIDs={agents.map((a) => a.id)}
+        isSubmitting={wizardMutation.isPending}
+        onSubmit={(draft, payload) => wizardMutation.mutate({ draft, payload })}
+        onTest={(draft, payload) =>
+          wizardMutation.mutate({ draft, payload, openAfter: true })
+        }
+        onCancel={() => setCreateOpen(false)}
+      />
 
       <Dialog open={rawOpen} onOpenChange={handleRawOpenChange}>
         <DialogContent className="flex h-[min(86vh,760px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
@@ -1680,7 +1775,8 @@ function UnifiedAgentEditor({
   saveErrorMsg,
   onSave,
   onDiscard,
-  onStepClick,
+  activeTab,
+  onTabChange,
 }: {
   agent: AgentEditorAgent
   configured: boolean
@@ -1731,90 +1827,114 @@ function UnifiedAgentEditor({
   saveErrorMsg: string | null
   onSave: () => void
   onDiscard: () => void
-  onStepClick: (id: StepID) => void
+  activeTab: AgentEditorTab
+  onTabChange: (tab: AgentEditorTab) => void
 }) {
   void ready
   return (
     <div className="animate-in fade-in-0 slide-in-from-bottom-2 flex flex-col gap-6 pb-0 duration-300">
       <ProgressChecklist
         steps={checklistSteps}
-        onStepClick={onStepClick}
+        activeTab={activeTab}
+        onStepClick={onTabChange}
       />
 
-      <div id="section-identity">
-        <IdentityProfileSection
-          agent={agent}
-          selectedProfile={selectedProfile}
-          isTogglingActive={isTogglingActive}
-          isDeleting={isDeleting}
-          onUpdateProfile={onUpdateProfile}
-          onToggleActive={onToggleActive}
-          onDelete={onDelete}
-        />
-      </div>
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => onTabChange(v as AgentEditorTab)}
+        className="gap-4"
+      >
+        <TabsNav steps={checklistSteps} />
 
-      <div id="section-role">
-        <OperationalRoleSection
-          selectedAgentId={selectedAgentId}
-          selectedRoleConfig={selectedRoleConfig}
-          selectedRoleConfigDraft={selectedRoleConfigDraft}
-          onUpdateRoleConfig={onUpdateRoleConfig}
-          onRoleConfigDraftChange={onRoleConfigDraftChange}
-        />
-      </div>
+        <TabsContent value="identity" id="section-identity">
+          <IdentityProfileSection
+            agent={agent}
+            selectedProfile={selectedProfile}
+            isTogglingActive={isTogglingActive}
+            isDeleting={isDeleting}
+            onUpdateProfile={onUpdateProfile}
+            onToggleActive={onToggleActive}
+            onDelete={onDelete}
+          />
+        </TabsContent>
 
-      <div id="section-prompt">
-        <PromptWorkspaceSection
-          agent={agent}
-          configured={configured}
-          configData={configData}
-          resolvedPayload={resolvedPayload}
-          template={template}
-          onCreate={onCreate}
-          onConfigure={onConfigure}
-          onEditPrompt={onEditPrompt}
-          onOpenRawEditor={onOpenRawEditor}
-        />
-      </div>
+        <TabsContent value="role" id="section-role">
+          <OperationalRoleSection
+            selectedAgentId={selectedAgentId}
+            selectedRoleConfig={selectedRoleConfig}
+            selectedRoleConfigDraft={selectedRoleConfigDraft}
+            onUpdateRoleConfig={onUpdateRoleConfig}
+            onRoleConfigDraftChange={onRoleConfigDraftChange}
+          />
+        </TabsContent>
 
-      <div id="section-knowledge" aria-hidden="true" />
+        <TabsContent value="prompt" id="section-prompt">
+          <PromptWorkspaceSection
+            agent={agent}
+            configured={configured}
+            configData={configData}
+            resolvedPayload={resolvedPayload}
+            template={template}
+            onCreate={onCreate}
+            onConfigure={onConfigure}
+            onEditPrompt={onEditPrompt}
+            onOpenRawEditor={onOpenRawEditor}
+          />
+        </TabsContent>
 
-      <div id="section-routing">
-        <AccessRoutingSection
-          selectedAgentId={selectedAgentId}
-          agent={agent}
-          mainAgentID={mainAgentID}
-          mainAllowAgents={mainAllowAgents}
-          assistantJIDs={assistantJIDs}
-          assistantChats={assistantChats}
-          internalAgents={internalAgents}
-          isSaving={isSavingOrchestration}
-          isLoading={isLoadingOrchestration}
-          onMainAgentChange={onMainAgentChange}
-          onToggleMainAllow={onToggleMainAllow}
-          onAssistantJIDsChange={onAssistantJIDsChange}
-          onAssistantChatsChange={onAssistantChatsChange}
-          onSave={onSaveOrchestration}
-          onRefresh={onRefreshOrchestration}
-        />
-      </div>
+        <TabsContent value="knowledge" id="section-knowledge">
+          <PromptWorkspaceSection
+            agent={agent}
+            configured={configured}
+            configData={configData}
+            resolvedPayload={resolvedPayload}
+            template={template}
+            onCreate={onCreate}
+            onConfigure={onConfigure}
+            onEditPrompt={onEditPrompt}
+            onOpenRawEditor={onOpenRawEditor}
+          />
+        </TabsContent>
 
-      <section id="agent-chat-section" className="space-y-3">
-        <SectionHeader title="Chat de teste" icon={IconMessageCircle} />
-        <ChatTab
-          selectedAgentId={selectedAgentId}
-          selectedProfile={selectedProfile}
-          messages={messages}
-          chatInput={chatInput}
-          isSending={isSending}
-          proposals={proposals}
-          quickPrompts={quickPrompts}
-          onChatInputChange={onChatInputChange}
-          onSend={onSendChat}
-          onPromptSelect={onPromptSelect}
-          onProposalInspect={onProposalInspect}
-        />
-      </section>
+        <TabsContent value="routing" id="section-routing">
+          <AccessRoutingSection
+            selectedAgentId={selectedAgentId}
+            agent={agent}
+            mainAgentID={mainAgentID}
+            mainAllowAgents={mainAllowAgents}
+            assistantJIDs={assistantJIDs}
+            assistantChats={assistantChats}
+            internalAgents={internalAgents}
+            isSaving={isSavingOrchestration}
+            isLoading={isLoadingOrchestration}
+            onMainAgentChange={onMainAgentChange}
+            onToggleMainAllow={onToggleMainAllow}
+            onAssistantJIDsChange={onAssistantJIDsChange}
+            onAssistantChatsChange={onAssistantChatsChange}
+            onSave={onSaveOrchestration}
+            onRefresh={onRefreshOrchestration}
+          />
+        </TabsContent>
+
+        <TabsContent value="test" id="section-test">
+          <section id="agent-chat-section" className="space-y-3">
+            <SectionHeader title="Chat de teste" icon={IconMessageCircle} />
+            <ChatTab
+              selectedAgentId={selectedAgentId}
+              selectedProfile={selectedProfile}
+              messages={messages}
+              chatInput={chatInput}
+              isSending={isSending}
+              proposals={proposals}
+              quickPrompts={quickPrompts}
+              onChatInputChange={onChatInputChange}
+              onSend={onSendChat}
+              onPromptSelect={onPromptSelect}
+              onProposalInspect={onProposalInspect}
+            />
+          </section>
+        </TabsContent>
+      </Tabs>
 
       <SaveBar
         saveState={saveState}
@@ -1914,18 +2034,14 @@ function IdentityProfileSection({
                 <Label className="text-xs">Imagem URL</Label>
                 <Input value={selectedProfile.imageURL} onChange={(e) => onUpdateProfile({ imageURL: e.target.value })} placeholder="https://..." />
               </div>
-              <div className="space-y-1.5">
-                <LabelWithTooltip
-                  htmlFor={`${agent.id}-icon`}
-                  tooltip="Símbolo mostrado no avatar quando não houver imagem. Aceita: headset, target, sparkles, robot, assistant, world."
-                >
-                  Ícone
-                </LabelWithTooltip>
-                <Input
+              <div className="space-y-1.5 sm:col-span-2">
+                <IconPicker
                   id={`${agent.id}-icon`}
+                  label="Ícone"
                   value={selectedProfile.icon}
-                  onChange={(e) => onUpdateProfile({ icon: e.target.value })}
-                  placeholder="headset, target, sparkles…"
+                  onChange={(v) => onUpdateProfile({ icon: v })}
+                  background={selectedProfile.background}
+                  foreground={selectedProfile.foreground}
                 />
               </div>
               <div className="space-y-1.5">
@@ -1943,18 +2059,25 @@ function IdentityProfileSection({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Cor de fundo</Label>
-                <div className="flex items-center gap-2">
-                  <input type="color" value={selectedProfile.background} onChange={(e) => onUpdateProfile({ background: e.target.value })} className="size-8 cursor-pointer rounded border border-border/60 bg-transparent p-0.5" />
-                  <Input value={selectedProfile.background} onChange={(e) => onUpdateProfile({ background: e.target.value })} className="font-mono text-xs" />
-                </div>
+                <ColorPicker
+                  id={`${agent.id}-background`}
+                  label="Cor de fundo"
+                  value={selectedProfile.background}
+                  onChange={(hex) => onUpdateProfile({ background: hex })}
+                  contrastAgainst={selectedProfile.foreground}
+                  ariaDescription="Validação WCAG contra a cor do texto"
+                />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Cor do texto</Label>
-                <div className="flex items-center gap-2">
-                  <input type="color" value={selectedProfile.foreground} onChange={(e) => onUpdateProfile({ foreground: e.target.value })} className="size-8 cursor-pointer rounded border border-border/60 bg-transparent p-0.5" />
-                  <Input value={selectedProfile.foreground} onChange={(e) => onUpdateProfile({ foreground: e.target.value })} className="font-mono text-xs" />
-                </div>
+                <ColorPicker
+                  id={`${agent.id}-foreground`}
+                  label="Cor do texto"
+                  value={selectedProfile.foreground}
+                  onChange={(hex) => onUpdateProfile({ foreground: hex })}
+                  presets={DEFAULT_FG_PRESETS}
+                  contrastAgainst={selectedProfile.background}
+                  ariaDescription="Validação WCAG contra a cor de fundo"
+                />
               </div>
             </div>
           </div>
@@ -3126,11 +3249,40 @@ function AssistantRoleConfigEditor({
   )
 }
 
-function TextListField({ label, value, placeholder, onChange }: { label: string; value: string; placeholder?: string; onChange: (v: string) => void }) {
+function TextListField({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string
+  value: string
+  placeholder?: string
+  onChange: (v: string) => void
+}) {
+  const tags = value
+    ? value
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : []
+  const suggestions = placeholder
+    ? placeholder
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : undefined
+  const hint = tags.length === 0 ? placeholder?.split(/\r?\n/)[0] ?? undefined : undefined
   return (
     <div className="space-y-1.5">
       <div className="text-muted-foreground text-xs font-medium">{label}</div>
-      <Textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="min-h-20 resize-none text-sm" />
+      <TagInput
+        value={tags}
+        onChange={(next) => onChange(next.join("\n"))}
+        placeholder={hint ? `Ex.: ${hint}` : "Digite e pressione Enter"}
+        ariaLabel={label}
+        suggestions={suggestions}
+      />
     </div>
   )
 }
