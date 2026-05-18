@@ -185,6 +185,164 @@ func (p *Provisioner) runProvision(ctx context.Context, t *store.Tenant, passwor
 	return nil
 }
 
+// CloneInput parameters for CloneFromTenant. SourceTenantID is the existing
+// tenant whose volume gets copied verbatim into the new tenant. All other
+// fields mirror CreateInput.
+type CloneInput struct {
+	SourceTenantID   string
+	DisplayName      string
+	OwnerEmail       string
+	Subdomain        string
+	MonthlyBudgetUSD *float64
+	MemLimitMB       int
+	CPUQuota         float64
+}
+
+// CloneFromTenant provisions a new tenant whose $PICOCLAW_HOME is a raw
+// byte-for-byte copy of an existing tenant's volume (segredos, OAuth tokens,
+// dashboardauth.db, sessions, memory — everything except runtime locks).
+//
+// Differences vs Create():
+//   - skips CopyTemplate (profile-based seeding); uses CopyVolumeRaw on
+//     src.VolumePath instead.
+//   - skips SeedDashboardPassword: the copied dashboardauth.db is reused, so
+//     the cloned tenant accepts the source's existing password. Operators can
+//     run RotatePassword from the admin UI afterwards.
+//   - skips template SyncTemplateSkills (the cloned volume already carries
+//     the source's full workspace/skills).
+//   - LiteLLM key is generated fresh because the source's litellm.key is for
+//     a different key_alias and the cost ledger needs a separate scope.
+func (p *Provisioner) CloneFromTenant(ctx context.Context, in CloneInput) (*CreateOutput, error) {
+	if in.MemLimitMB <= 0 {
+		in.MemLimitMB = 512
+	}
+	if in.CPUQuota <= 0 {
+		in.CPUQuota = 0.5
+	}
+	if strings.TrimSpace(in.SourceTenantID) == "" {
+		return nil, fmt.Errorf("source_tenant_id is required")
+	}
+
+	src, err := p.Tenants.Get(ctx, in.SourceTenantID)
+	if err != nil {
+		return nil, fmt.Errorf("load source tenant: %w", err)
+	}
+	if src.VolumePath == "" {
+		return nil, fmt.Errorf("source tenant has empty volume path")
+	}
+	if _, err := os.Stat(src.VolumePath); err != nil {
+		return nil, fmt.Errorf("source tenant volume not accessible: %w", err)
+	}
+
+	id, err := GenerateID(in.Subdomain)
+	if err != nil {
+		return nil, fmt.Errorf("id: %w", err)
+	}
+
+	volumePath := filepath.Join(p.Cfg.TenantHostDataDir, id)
+
+	t := &store.Tenant{
+		ID:               id,
+		DisplayName:      in.DisplayName,
+		OwnerEmail:       in.OwnerEmail,
+		Subdomain:        in.Subdomain,
+		Status:           store.StatusProvisioning,
+		ContainerImage:   p.Cfg.TenantImage,
+		VolumePath:       volumePath,
+		MonthlyBudgetUSD: in.MonthlyBudgetUSD,
+		MemLimitMB:       in.MemLimitMB,
+		CPUQuota:         in.CPUQuota,
+	}
+	// Preserve the source's launcher_profile_id so the new tenant inherits the
+	// same RBAC matrix and shows up grouped with its sibling in admin UIs.
+	if src.LauncherProfileID != nil {
+		pid := *src.LauncherProfileID
+		t.LauncherProfileID = &pid
+	}
+	if src.LauncherProfileVersionApplied != nil {
+		v := *src.LauncherProfileVersionApplied
+		t.LauncherProfileVersionApplied = &v
+	}
+
+	if err := p.Tenants.Insert(ctx, t); err != nil {
+		return nil, fmt.Errorf("insert tenant: %w", err)
+	}
+
+	if err := p.runProvisionClone(ctx, t, src); err != nil {
+		msg := err.Error()
+		_ = p.Tenants.SetStatus(ctx, id, store.StatusError, &msg)
+		return nil, err
+	}
+
+	return &CreateOutput{
+		TenantID: id,
+		URL:      fmt.Sprintf("https://%s.%s", in.Subdomain, p.Cfg.TenantBaseDomain),
+		// Empty: the cloned tenant keeps the source's existing dashboard
+		// password. The admin UI surfaces a "Rotate password" action.
+		InitialPassword: "",
+	}, nil
+}
+
+func (p *Provisioner) runProvisionClone(ctx context.Context, t *store.Tenant, src *store.Tenant) error {
+	if err := os.MkdirAll(t.VolumePath, 0o755); err != nil {
+		return fmt.Errorf("mkdir volume: %w", err)
+	}
+	if err := CopyVolumeRaw(src.VolumePath, t.VolumePath); err != nil {
+		return fmt.Errorf("copy volume raw: %w", err)
+	}
+
+	// Re-derive launcher_policy.json from the source tenant's applied profile
+	// (if any). The raw copy already pulled it across; this just refreshes it
+	// in case the source had local edits we don't want to inherit.
+	if src.LauncherProfileID != nil && p.Profiles != nil {
+		if profile, err := p.Profiles.Get(ctx, *src.LauncherProfileID); err == nil && profile != nil {
+			if err := WriteLauncherPolicy(t.VolumePath, profile.RolePolicy()); err != nil {
+				return fmt.Errorf("write launcher policy: %w", err)
+			}
+		}
+	}
+
+	// Generate a fresh LiteLLM key for the new tenant. The source's
+	// litellm.key is for src.ID, so writing it into this volume would let the
+	// new tenant burn the source's budget. Overwrite it with the new key.
+	llmKey := ""
+	if p.LiteLLM != nil {
+		out, err := p.LiteLLM.GenerateKey(ctx, litellm.GenerateKeyInput{
+			TenantID:         t.ID,
+			MonthlyBudgetUSD: t.MonthlyBudgetUSD,
+		})
+		if err != nil {
+			return fmt.Errorf("litellm key: %w", err)
+		}
+		llmKey = out.Key
+		h := sha256.Sum256([]byte(out.Key))
+		if err := p.Tenants.SetLiteLLMKey(ctx, t.ID, out.KeyName, hex.EncodeToString(h[:])); err != nil {
+			_ = p.LiteLLM.DeleteKey(ctx, t.ID)
+			return fmt.Errorf("save litellm key: %w", err)
+		}
+	}
+
+	if err := SeedPicoConfig(ctx, t.VolumePath, p.Cfg.LiteLLMURL, llmKey); err != nil {
+		return fmt.Errorf("seed picoclaw config: %w", err)
+	}
+
+	spec := p.buildSpec(t)
+	containerID, err := p.Docker.CreateAndStart(ctx, spec)
+	if err != nil {
+		return fmt.Errorf("docker create: %w", err)
+	}
+	if err := p.Tenants.SetContainer(ctx, t.ID, containerID); err != nil {
+		return fmt.Errorf("set container: %w", err)
+	}
+	if err := p.Docker.WaitRunning(ctx, containerID, 60*time.Second); err != nil {
+		return fmt.Errorf("wait running: %w", err)
+	}
+	if err := p.Tenants.SetStatus(ctx, t.ID, store.StatusActive, nil); err != nil {
+		return fmt.Errorf("set active: %w", err)
+	}
+	return nil
+}
+
 func (p *Provisioner) resolveProfile(ctx context.Context, profileID string) (*store.LauncherProfile, error) {
 	if p.Profiles == nil {
 		return nil, nil

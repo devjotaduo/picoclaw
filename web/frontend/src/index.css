@@ -440,6 +440,30 @@
   height: calc(100svh - 3.5rem);
 }
 
+/* Re-enable a thin, visible scrollbar on the sidebar content.
+   Shadcn's `no-scrollbar` utility hides it by default, but with 15+ nav
+   items the user has no visual cue that scrolling is possible. */
+[data-sidebar="content"] {
+  scrollbar-width: thin !important;
+  -ms-overflow-style: auto !important;
+  scrollbar-color: color-mix(in oklab, var(--muted-foreground) 35%, transparent)
+    transparent;
+}
+[data-sidebar="content"]::-webkit-scrollbar {
+  display: block !important;
+  width: 6px;
+}
+[data-sidebar="content"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-sidebar="content"]::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--muted-foreground) 35%, transparent);
+  border-radius: 3px;
+}
+[data-sidebar="content"]:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
+}
+
 /* Typing indicator animations */
 @keyframes shimmer {
   0% {

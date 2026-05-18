@@ -18,6 +18,7 @@ import { Route as ConfigRouteImport } from './routes/config'
 import { Route as AgentRouteImport } from './routes/agent'
 import { Route as ChannelsRouteRouteImport } from './routes/channels/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as ConfigRawRouteImport } from './routes/config.raw'
 import { Route as ChannelsNameRouteImport } from './routes/channels/$name'
 import { Route as AgentWhatsappReportsRouteImport } from './routes/agent/whatsapp-reports'
@@ -30,6 +31,10 @@ import { Route as AgentSkillEditorRouteImport } from './routes/agent/skill-edito
 import { Route as AgentOrchestrationRouteImport } from './routes/agent/orchestration'
 import { Route as AgentHubRouteImport } from './routes/agent/hub'
 import { Route as AgentEditorRouteImport } from './routes/agent/editor'
+import { Route as AdminCloneRouteImport } from './routes/admin/clone'
+import { Route as AdminTenantsIndexRouteImport } from './routes/admin/tenants/index'
+import { Route as AdminTenantsNewRouteImport } from './routes/admin/tenants/new'
+import { Route as AdminTenantsIdRouteImport } from './routes/admin/tenants/$id'
 
 const ModelsRoute = ModelsRouteImport.update({
   id: '/models',
@@ -74,6 +79,11 @@ const ChannelsRouteRoute = ChannelsRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConfigRawRoute = ConfigRawRouteImport.update({
@@ -136,6 +146,26 @@ const AgentEditorRoute = AgentEditorRouteImport.update({
   path: '/editor',
   getParentRoute: () => AgentRoute,
 } as any)
+const AdminCloneRoute = AdminCloneRouteImport.update({
+  id: '/admin/clone',
+  path: '/admin/clone',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminTenantsIndexRoute = AdminTenantsIndexRouteImport.update({
+  id: '/admin/tenants/',
+  path: '/admin/tenants/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminTenantsNewRoute = AdminTenantsNewRouteImport.update({
+  id: '/admin/tenants/new',
+  path: '/admin/tenants/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminTenantsIdRoute = AdminTenantsIdRouteImport.update({
+  id: '/admin/tenants/$id',
+  path: '/admin/tenants/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -147,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
   '/models': typeof ModelsRoute
+  '/admin/clone': typeof AdminCloneRoute
   '/agent/editor': typeof AgentEditorRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/orchestration': typeof AgentOrchestrationRoute
@@ -159,6 +190,10 @@ export interface FileRoutesByFullPath {
   '/agent/whatsapp-reports': typeof AgentWhatsappReportsRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
+  '/admin/': typeof AdminIndexRoute
+  '/admin/tenants/$id': typeof AdminTenantsIdRoute
+  '/admin/tenants/new': typeof AdminTenantsNewRoute
+  '/admin/tenants/': typeof AdminTenantsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -170,6 +205,7 @@ export interface FileRoutesByTo {
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
   '/models': typeof ModelsRoute
+  '/admin/clone': typeof AdminCloneRoute
   '/agent/editor': typeof AgentEditorRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/orchestration': typeof AgentOrchestrationRoute
@@ -182,6 +218,10 @@ export interface FileRoutesByTo {
   '/agent/whatsapp-reports': typeof AgentWhatsappReportsRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
+  '/admin': typeof AdminIndexRoute
+  '/admin/tenants/$id': typeof AdminTenantsIdRoute
+  '/admin/tenants/new': typeof AdminTenantsNewRoute
+  '/admin/tenants': typeof AdminTenantsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -194,6 +234,7 @@ export interface FileRoutesById {
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
   '/models': typeof ModelsRoute
+  '/admin/clone': typeof AdminCloneRoute
   '/agent/editor': typeof AgentEditorRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/orchestration': typeof AgentOrchestrationRoute
@@ -206,6 +247,10 @@ export interface FileRoutesById {
   '/agent/whatsapp-reports': typeof AgentWhatsappReportsRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
+  '/admin/': typeof AdminIndexRoute
+  '/admin/tenants/$id': typeof AdminTenantsIdRoute
+  '/admin/tenants/new': typeof AdminTenantsNewRoute
+  '/admin/tenants/': typeof AdminTenantsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -219,6 +264,7 @@ export interface FileRouteTypes {
     | '/launcher-setup'
     | '/logs'
     | '/models'
+    | '/admin/clone'
     | '/agent/editor'
     | '/agent/hub'
     | '/agent/orchestration'
@@ -231,6 +277,10 @@ export interface FileRouteTypes {
     | '/agent/whatsapp-reports'
     | '/channels/$name'
     | '/config/raw'
+    | '/admin/'
+    | '/admin/tenants/$id'
+    | '/admin/tenants/new'
+    | '/admin/tenants/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -242,6 +292,7 @@ export interface FileRouteTypes {
     | '/launcher-setup'
     | '/logs'
     | '/models'
+    | '/admin/clone'
     | '/agent/editor'
     | '/agent/hub'
     | '/agent/orchestration'
@@ -254,6 +305,10 @@ export interface FileRouteTypes {
     | '/agent/whatsapp-reports'
     | '/channels/$name'
     | '/config/raw'
+    | '/admin'
+    | '/admin/tenants/$id'
+    | '/admin/tenants/new'
+    | '/admin/tenants'
   id:
     | '__root__'
     | '/'
@@ -265,6 +320,7 @@ export interface FileRouteTypes {
     | '/launcher-setup'
     | '/logs'
     | '/models'
+    | '/admin/clone'
     | '/agent/editor'
     | '/agent/hub'
     | '/agent/orchestration'
@@ -277,6 +333,10 @@ export interface FileRouteTypes {
     | '/agent/whatsapp-reports'
     | '/channels/$name'
     | '/config/raw'
+    | '/admin/'
+    | '/admin/tenants/$id'
+    | '/admin/tenants/new'
+    | '/admin/tenants/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -289,6 +349,11 @@ export interface RootRouteChildren {
   LauncherSetupRoute: typeof LauncherSetupRoute
   LogsRoute: typeof LogsRoute
   ModelsRoute: typeof ModelsRoute
+  AdminCloneRoute: typeof AdminCloneRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+  AdminTenantsIdRoute: typeof AdminTenantsIdRoute
+  AdminTenantsNewRoute: typeof AdminTenantsNewRoute
+  AdminTenantsIndexRoute: typeof AdminTenantsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -354,6 +419,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/config/raw': {
@@ -440,6 +512,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentEditorRouteImport
       parentRoute: typeof AgentRoute
     }
+    '/admin/clone': {
+      id: '/admin/clone'
+      path: '/admin/clone'
+      fullPath: '/admin/clone'
+      preLoaderRoute: typeof AdminCloneRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/tenants/': {
+      id: '/admin/tenants/'
+      path: '/admin/tenants'
+      fullPath: '/admin/tenants/'
+      preLoaderRoute: typeof AdminTenantsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/tenants/new': {
+      id: '/admin/tenants/new'
+      path: '/admin/tenants/new'
+      fullPath: '/admin/tenants/new'
+      preLoaderRoute: typeof AdminTenantsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/tenants/$id': {
+      id: '/admin/tenants/$id'
+      path: '/admin/tenants/$id'
+      fullPath: '/admin/tenants/$id'
+      preLoaderRoute: typeof AdminTenantsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -504,6 +604,11 @@ const rootRouteChildren: RootRouteChildren = {
   LauncherSetupRoute: LauncherSetupRoute,
   LogsRoute: LogsRoute,
   ModelsRoute: ModelsRoute,
+  AdminCloneRoute: AdminCloneRoute,
+  AdminIndexRoute: AdminIndexRoute,
+  AdminTenantsIdRoute: AdminTenantsIdRoute,
+  AdminTenantsNewRoute: AdminTenantsNewRoute,
+  AdminTenantsIndexRoute: AdminTenantsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

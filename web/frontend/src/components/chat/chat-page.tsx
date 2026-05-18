@@ -14,18 +14,12 @@ import {
 } from "@/components/chat/chat-composer"
 import { ChatEmptyState } from "@/components/chat/chat-empty-state"
 import { ModelSelector } from "@/components/chat/model-selector"
+import { PendingHandoffsSidebar } from "@/components/chat/pending-handoffs-sidebar"
 import { SessionHistoryMenu } from "@/components/chat/session-history-menu"
 import { TypingIndicator } from "@/components/chat/typing-indicator"
 import { UserMessage } from "@/components/chat/user-message"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useChatModels } from "@/hooks/use-chat-models"
 import { useGateway } from "@/hooks/use-gateway"
@@ -124,9 +118,8 @@ export function ChatPage() {
   const [hasScrolled, setHasScrolled] = useState(false)
   const [input, setInput] = useState("")
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
-  const [chatAgents, setChatAgents] = useState<AgentSummary[]>([])
+  const [mainAgent, setMainAgent] = useState<AgentSummary | null>(null)
   const [mainAgentID, setMainAgentID] = useState("main")
-  const [chatAgentID, setChatAgentID] = useState("")
   const [showAssistantDetails, setShowAssistantDetails] = useAtom(
     showAssistantDetailsAtom,
   )
@@ -147,7 +140,7 @@ export function ChatPage() {
     newChat,
   } = usePicoChat()
 
-  const selectedAgentID = chatAgentID || mainAgentID
+  const selectedAgentID = mainAgentID
 
   const { state: gwState } = useGateway()
   const isGatewayRunning = gwState === "running"
@@ -174,8 +167,12 @@ export function ChatPage() {
   const canShowModelSelector =
     launcherPolicyQ.isSuccess &&
     launcherPolicyQ.data.ui?.show_model_selector !== false
-  const hasChatHeaderControls =
-    chatAgents.length > 0 || (canChooseModel && canShowModelSelector)
+  const chatIntro =
+    launcherPolicyQ.data?.ui?.chat_intro?.trim() || ""
+  const quickTasks = (launcherPolicyQ.data?.ui?.quick_tasks ?? []).filter(
+    (task) => task.label.trim() && task.prompt.trim(),
+  )
+  const hasChatHeaderControls = canChooseModel && canShowModelSelector
   const inputDisabledReason = resolveChatInputDisabledReason({
     hasDefaultModel,
     connectionState,
@@ -218,12 +215,9 @@ export function ChatPage() {
           next.main_agent_id ||
           next.agents.find((agent) => agent.default)?.id ||
           "main"
-        setChatAgents(next.agents || [])
         setMainAgentID(nextMainAgentID)
-        setChatAgentID((current) =>
-          current && next.agents.some((agent) => agent.id === current)
-            ? current
-            : nextMainAgentID,
+        setMainAgent(
+          next.agents.find((agent) => agent.id === nextMainAgentID) || null,
         )
       })
       .catch((error) => {
@@ -242,15 +236,6 @@ export function ChatPage() {
       syncScrollState(scrollRef.current)
     }
   }, [messages, isTyping, isAtBottom])
-
-  const handleAgentChange = (agentID: string) => {
-    if (agentID === selectedAgentID) {
-      return
-    }
-    setChatAgentID(agentID)
-    setAttachments([])
-    void newChat()
-  }
 
   const handleSend = () => {
     if ((!input.trim() && attachments.length === 0) || !canInput) return
@@ -328,7 +313,8 @@ export function ChatPage() {
     canInput && (Boolean(input.trim()) || attachments.length > 0)
 
   return (
-    <div className="bg-background/95 flex h-full flex-col">
+    <div className="bg-background/95 flex h-full">
+      <div className="flex min-w-0 flex-1 flex-col">
       <PageHeader
         title={t("navigation.chat")}
         className={`transition-shadow ${
@@ -337,38 +323,13 @@ export function ChatPage() {
         titleExtra={
           hasChatHeaderControls && (
             <div className="flex min-w-0 items-center gap-2">
-              {chatAgents.length > 0 && (
-                <Select
-                  value={selectedAgentID}
-                  onValueChange={handleAgentChange}
-                >
-                  <SelectTrigger
-                    size="sm"
-                    className="max-w-44 min-w-28"
-                    aria-label={t("chat.agentSelector")}
-                  >
-                    <SelectValue
-                      placeholder={t("chat.agentSelectorPlaceholder")}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {chatAgents.map((agent) => (
-                      <SelectItem key={agent.id} value={agent.id}>
-                        <AgentSelectLabel agent={agent} />
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {canChooseModel && canShowModelSelector && (
-                <ModelSelector
-                  defaultModelName={defaultModelName}
-                  apiKeyModels={apiKeyModels}
-                  oauthModels={oauthModels}
-                  localModels={localModels}
-                  onValueChange={handleSetDefault}
-                />
-              )}
+              <ModelSelector
+                defaultModelName={defaultModelName}
+                apiKeyModels={apiKeyModels}
+                oauthModels={oauthModels}
+                localModels={localModels}
+                onValueChange={handleSetDefault}
+              />
             </div>
           )
         }
@@ -425,6 +386,23 @@ export function ChatPage() {
               hasAvailableModels={hasAvailableModels}
               defaultModelName={defaultModelName}
               isConnected={isGatewayRunning}
+              agent={mainAgent}
+              chatIntro={chatIntro}
+              quickTasks={quickTasks}
+              disabled={!canInput}
+              onQuickTask={(prompt) => {
+                if (!canInput) return
+                if (
+                  sendMessage({
+                    content: prompt,
+                    attachments: [],
+                    agentID: selectedAgentID,
+                  })
+                ) {
+                  setInput("")
+                  setAttachments([])
+                }
+              }}
             />
           )}
 
@@ -497,33 +475,9 @@ export function ChatPage() {
         canSend={canSubmit}
         contextUsage={contextUsage}
       />
+      </div>
+      <PendingHandoffsSidebar className="hidden xl:flex" />
     </div>
   )
 }
 
-function AgentSelectLabel({ agent }: { agent: AgentSummary }) {
-  const initials =
-    agent.avatar?.initials || (agent.name || agent.id).slice(0, 2).toUpperCase()
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <span
-        className="ring-border/50 flex size-5 shrink-0 items-center justify-center overflow-hidden rounded text-[9px] font-semibold ring-1"
-        style={{
-          backgroundColor: agent.avatar?.background || "#475569",
-          color: agent.avatar?.foreground || "#ffffff",
-        }}
-      >
-        {agent.avatar?.image_url ? (
-          <img
-            src={agent.avatar.image_url}
-            alt=""
-            className="size-full object-cover"
-          />
-        ) : (
-          initials
-        )}
-      </span>
-      <span className="truncate">{agent.name || agent.id}</span>
-    </span>
-  )
-}

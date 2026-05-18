@@ -75,6 +75,7 @@ func (h *Handler) Routes() http.Handler {
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(h.tenantCORS)
 		r.Post("/auth/login", h.handleLogin)
 		r.Post("/auth/accept-invite", h.handleAcceptInvite)
 		r.Post("/admin/login", h.handleLogin)
@@ -110,6 +111,8 @@ func (h *Handler) Routes() http.Handler {
 				r.Put("/launcher-profiles/{id}/seed", h.handlePutLauncherProfileSeed)
 				r.Post("/launcher-profiles/{id}/import-standalone", h.handleImportStandaloneLauncherProfile)
 				r.Post("/tenants/{id}/apply-profile", h.handleApplyLauncherProfile)
+				r.Post("/tenants/{id}/clone", h.handleCloneTenant)
+				r.Get("/tenants/{id}/sanity", h.handleTenantSanity)
 				r.Post("/tenants/{id}/suspend", h.handleSuspendTenant)
 				r.Post("/tenants/{id}/resume", h.handleResumeTenant)
 				r.Post("/tenants/{id}/restart", h.handleRestartTenant)

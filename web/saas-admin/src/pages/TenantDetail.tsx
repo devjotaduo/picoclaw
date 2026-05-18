@@ -140,7 +140,7 @@ export function TenantDetail() {
     status.state === "authenticated" && status.me.platform_role === "platform_admin";
   const role =
     status.state === "authenticated"
-      ? status.me.memberships.find((m) => m.tenant_id === tenant.id)?.role
+      ? status.me.memberships?.find((m) => m.tenant_id === tenant.id)?.role
       : undefined;
   const canEditConfig = isPlatformAdmin || role === "tenant_owner" || role === "tenant_admin";
   const profiles = profilesQ.data?.profiles ?? [];

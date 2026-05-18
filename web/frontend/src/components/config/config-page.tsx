@@ -231,10 +231,10 @@ export function ConfigPage() {
         const dmScope = form.dmScope.trim()
 
         if (!workspace) {
-          throw new Error("Workspace path is required.")
+          throw new Error(t("pages.config.workspace_required"))
         }
         if (!dmScope) {
-          throw new Error("Session scope is required.")
+          throw new Error(t("pages.config.session_scope_required"))
         }
 
         if (
@@ -243,9 +243,7 @@ export function ConfigPage() {
           !form.mcpDiscoveryUseBM25 &&
           !form.mcpDiscoveryUseRegex
         ) {
-          throw new Error(
-            "MCP discovery requires at least one search method (BM25 or regex).",
-          )
+          throw new Error(t("pages.config.mcp_discovery_method_required"))
         }
 
         const maxTokens = parseIntField(form.maxTokens, "Max tokens", {
@@ -353,7 +351,9 @@ export function ConfigPage() {
 
           if (duplicateNames.length > 0) {
             throw new Error(
-              `MCP server names must be unique. Duplicates: ${duplicateNames.join(", ")}.`,
+              t("pages.config.mcp_servers_unique", {
+                names: duplicateNames.join(", "),
+              }),
             )
           }
 
@@ -382,7 +382,11 @@ export function ConfigPage() {
 
             if (server.type !== "stdio") {
               if (shouldValidateServer && server.url === "") {
-                throw new Error(`MCP server ${server.name} requires a URL.`)
+                throw new Error(
+                  t("pages.config.mcp_server_url_required", {
+                    name: server.name,
+                  }),
+                )
               }
 
               if (shouldValidateServer) {
@@ -396,7 +400,9 @@ export function ConfigPage() {
                   }
                 } catch {
                   throw new Error(
-                    `MCP server ${server.name} requires a valid HTTP(S) URL.`,
+                    t("pages.config.mcp_server_url_invalid", {
+                      name: server.name,
+                    }),
                   )
                 }
               }
@@ -433,7 +439,11 @@ export function ConfigPage() {
             }
 
             if (shouldValidateServer && server.command === "") {
-              throw new Error(`MCP server ${server.name} requires a command.`)
+              throw new Error(
+                t("pages.config.mcp_server_command_required", {
+                  name: server.name,
+                }),
+              )
             }
 
             const baselineEnv = baselineServer
@@ -492,11 +502,20 @@ export function ConfigPage() {
           }
         }
 
+        const quickTasksPatch = form.quickTasks
+          .map((task) => ({
+            label: task.label.trim(),
+            prompt: task.prompt.trim(),
+          }))
+          .filter((task) => task.label !== "" && task.prompt !== "")
+
         await patchAppConfig({
           ui: {
             show_reasoning: form.showReasoning,
             show_tool_calls: form.showToolCalls,
             show_model_selector: form.showModelSelector,
+            chat_intro: form.chatIntro.trim(),
+            quick_tasks: quickTasksPatch,
           },
           agents: {
             defaults: {

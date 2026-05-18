@@ -57,12 +57,21 @@ func TestHandleGetLauncherPolicy_NoFile(t *testing.T) {
 		t.Fatalf("role = %q, want %q", role, "platform_admin")
 	}
 
-	var ui map[string]bool
+	var ui struct {
+		ShowReasoning     bool             `json:"show_reasoning"`
+		ShowToolCalls     bool             `json:"show_tool_calls"`
+		ShowModelSelector bool             `json:"show_model_selector"`
+		ChatIntro         string           `json:"chat_intro"`
+		QuickTasks        []map[string]any `json:"quick_tasks"`
+	}
 	if err := json.Unmarshal(resp["ui"], &ui); err != nil {
 		t.Fatalf("unmarshal ui: %v", err)
 	}
-	if !ui["show_reasoning"] || !ui["show_tool_calls"] || !ui["show_model_selector"] {
+	if !ui.ShowReasoning || !ui.ShowToolCalls || !ui.ShowModelSelector {
 		t.Fatalf("ui = %#v, want UI flags enabled by default", ui)
+	}
+	if len(ui.QuickTasks) != 0 {
+		t.Fatalf("quick_tasks = %#v, want empty by default", ui.QuickTasks)
 	}
 }
 
@@ -164,19 +173,77 @@ func TestHandleGetLauncherPolicy_IncludesUIConfig(t *testing.T) {
 	}
 
 	var resp struct {
-		UI map[string]bool `json:"ui"`
+		UI struct {
+			ShowReasoning     bool `json:"show_reasoning"`
+			ShowToolCalls     bool `json:"show_tool_calls"`
+			ShowModelSelector bool `json:"show_model_selector"`
+		} `json:"ui"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.UI["show_reasoning"] {
+	if resp.UI.ShowReasoning {
 		t.Fatalf("show_reasoning = true, want false")
 	}
-	if !resp.UI["show_tool_calls"] {
+	if !resp.UI.ShowToolCalls {
 		t.Fatalf("show_tool_calls = false, want true")
 	}
-	if resp.UI["show_model_selector"] {
+	if resp.UI.ShowModelSelector {
 		t.Fatalf("show_model_selector = true, want false")
+	}
+}
+
+func TestHandleGetLauncherPolicy_QuickTasks(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	cfg.UI.ChatIntro = "Sou seu agente"
+	cfg.UI.QuickTasks = []config.QuickTaskItem{
+		{Label: "Resumo do dia", Prompt: "Me dê um resumo das tarefas do dia"},
+		{Label: "  ", Prompt: "ignored"},
+		{Label: "ignored", Prompt: "   "},
+		{Label: "Status financeiro", Prompt: "Quais cobranças venceram hoje?", Icon: "wallet"},
+	}
+	if err := config.SaveConfig(configPath, cfg); err != nil {
+		t.Fatalf("SaveConfig: %v", err)
+	}
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/launcher/policy", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		UI struct {
+			ChatIntro  string              `json:"chat_intro"`
+			QuickTasks []map[string]string `json:"quick_tasks"`
+		} `json:"ui"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.UI.ChatIntro != "Sou seu agente" {
+		t.Fatalf("chat_intro = %q, want %q", resp.UI.ChatIntro, "Sou seu agente")
+	}
+	if len(resp.UI.QuickTasks) != 2 {
+		t.Fatalf("quick_tasks len = %d, want 2 (blanks filtered)", len(resp.UI.QuickTasks))
+	}
+	if resp.UI.QuickTasks[0]["label"] != "Resumo do dia" {
+		t.Fatalf("quick_tasks[0].label = %q", resp.UI.QuickTasks[0]["label"])
+	}
+	if resp.UI.QuickTasks[1]["icon"] != "wallet" {
+		t.Fatalf("quick_tasks[1].icon = %q, want wallet", resp.UI.QuickTasks[1]["icon"])
 	}
 }
 

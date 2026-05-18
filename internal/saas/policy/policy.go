@@ -43,6 +43,11 @@ const (
 	FeatureLogs            = "logs"
 	FeatureWhatsAppInbox   = "whatsapp_inbox"
 	FeatureWhatsAppReports = "whatsapp_reports"
+	// FeatureAdminPanel gates the in-launcher admin SPA (/admin/*).
+	// Only platform_admin can read/write it; for every other role this is
+	// pinned to AccessNone in DefaultRolePolicy so the sidebar entry hides
+	// itself and any future server-side gating refuses the request.
+	FeatureAdminPanel = "admin_panel"
 )
 
 var baseFeatureIDs = []string{
@@ -63,6 +68,7 @@ var baseFeatureIDs = []string{
 	FeatureLogs,
 	FeatureWhatsAppInbox,
 	FeatureWhatsAppReports,
+	FeatureAdminPanel,
 }
 
 type RolePolicy map[string]map[string]Access
@@ -155,6 +161,14 @@ func DefaultRolePolicy() RolePolicy {
 	viewer[FeatureCredentials] = AccessNone
 	viewer[FeatureRawConfig] = AccessNone
 	viewer[FeatureInternalAgents] = AccessNone
+
+	// admin_panel is reserved for platform_admin (special-cased in
+	// EffectiveFeatures). Every tenant-scoped role must default to None so the
+	// /admin/* sidebar entry and any future API gating stay invisible.
+	writeAll[FeatureAdminPanel] = AccessNone
+	admin[FeatureAdminPanel] = AccessNone
+	operator[FeatureAdminPanel] = AccessNone
+	viewer[FeatureAdminPanel] = AccessNone
 
 	return RolePolicy{
 		RoleTenantOwner: writeAll,
@@ -458,6 +472,7 @@ func policyCatalogFeatures() []FeatureCatalogItem {
 		FeatureCatalogItem{ID: FeatureRawConfig, Label: "Configuracao raw", Description: "Leitura direta do config.json.", Group: "configuration"},
 		FeatureCatalogItem{ID: FeatureLogs, Label: "Logs", Description: "Logs e status de runtime.", Group: "audit"},
 		FeatureCatalogItem{ID: FeatureInternalAgents, Label: "Agentes internos", Description: "Painel e chamadas dos agentes internos.", Group: "audit"},
+		FeatureCatalogItem{ID: FeatureAdminPanel, Label: "Painel admin", Description: "Painel /admin/* embutido no launcher; exclusivo de platform_admin.", Group: "audit"},
 	)
 	return features
 }

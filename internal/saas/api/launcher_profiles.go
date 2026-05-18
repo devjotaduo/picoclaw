@@ -168,11 +168,9 @@ func (h *Handler) handlePutLauncherProfileSeed(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if p.IsDefault {
-		if _, err := tenant.NormalizeDefaultLauncherProfileSeed(p.SeedPath); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
+	if _, err := tenant.NormalizeDefaultLauncherProfileSeed(p.SeedPath); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	if err := h.Profiles.Update(r.Context(), p); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -190,11 +188,9 @@ func (h *Handler) handleImportStandaloneLauncherProfile(w http.ResponseWriter, r
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if p.IsDefault {
-		if _, err := tenant.NormalizeDefaultLauncherProfileSeed(p.SeedPath); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
+	if _, err := tenant.NormalizeDefaultLauncherProfileSeed(p.SeedPath); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	if err := h.Profiles.Update(r.Context(), p); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

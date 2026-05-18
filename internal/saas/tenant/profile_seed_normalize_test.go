@@ -186,6 +186,38 @@ func TestNormalizeDefaultLauncherProfileSeedDoesNotTouchTenantVolume(t *testing.
 	assertFile(t, filepath.Join(tenantVolume, "config.json"), `{"agents":{"list":[{"id":"programador"}]}}`)
 }
 
+// TestNormalizeDefaultLauncherProfileSeedHealsEmptyConfig covers the field
+// scenario where a non-default profile had its seed truncated (PUT /seed with
+// an empty/partial body before the fix removed the IsDefault gate). Normalize
+// must materialise config.json with the four official agents from scratch.
+func TestNormalizeDefaultLauncherProfileSeedHealsEmptyConfig(t *testing.T) {
+	seed := t.TempDir()
+	// Simulate a profile that has workspace/skills but no config.json — exactly
+	// the state observed for novo-perfil-1778944842130-8a1fd0 in production.
+	mustWrite(t, filepath.Join(seed, "workspace", "skills", "faq-answering", "SKILL.md"), []byte("---\nname: faq-answering\n---\n"), 0o644)
+
+	changed, err := NormalizeDefaultLauncherProfileSeed(seed)
+	if err != nil {
+		t.Fatalf("NormalizeDefaultLauncherProfileSeed: %v", err)
+	}
+	if !changed {
+		t.Fatal("expected normalize to create config.json from scratch")
+	}
+	root := readSeedConfig(t, seed)
+	agents := root["agents"].(map[string]any)
+	list := agents["list"].([]any)
+	if len(list) != 4 {
+		t.Fatalf("agents.list len = %d, want 4 official agents", len(list))
+	}
+	want := []string{"main", "vendas", "marketing", "assistente"}
+	for i, item := range list {
+		got := item.(map[string]any)["id"]
+		if got != want[i] {
+			t.Fatalf("agents.list[%d].id = %v, want %v", i, got, want[i])
+		}
+	}
+}
+
 func readSeedConfig(t *testing.T, seed string) map[string]any {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(seed, "config.json"))

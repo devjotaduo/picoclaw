@@ -172,6 +172,9 @@ func (h *Handler) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	memberships, _ := h.Memberships.ListForUser(r.Context(), user.ID)
+	if memberships == nil {
+		memberships = []store.TenantMembership{}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id":            user.ID,
 		"email":         user.Email,

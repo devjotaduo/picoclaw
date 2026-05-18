@@ -19,7 +19,11 @@
     "show_more_channels": "更多",
     "show_less_channels": "收起",
     "config": "配置",
-    "logs": "日志"
+    "logs": "日志",
+    "admin_group": "管理",
+    "admin_tenants": "租户",
+    "admin_new_tenant": "新建租户",
+    "admin_clone": "克隆租户"
   },
   "launcherLogin": {
     "title": "登录",
@@ -29,6 +33,13 @@
     "submit": "登录",
     "errorInvalid": "密码错误，请重试。",
     "errorNetwork": "网络错误，请重试。"
+  },
+  "rootLayout": {
+    "authErrorPrefix": "认证服务错误",
+    "authErrorFallback": "认证服务不可用。请重置仪表盘密码存储并重启应用。"
+  },
+  "codeEditor": {
+    "loading": "正在加载编辑器..."
   },
   "launcherSetup": {
     "title": "设置控制台密码",
@@ -43,6 +54,7 @@
   },
   "chat": {
     "welcome": "今天我能为您做些什么？",
+    "welcomeWithAgent": "你好！我是 {{name}}，需要我帮什么忙？",
     "welcomeDesc": "您可以询问我天气、设置或其他任何任务，我随时为您效劳。",
     "placeholder": "输入新消息...",
     "disabledPlaceholder": {
@@ -112,6 +124,12 @@
       "apikey": "API Key",
       "oauth": "OAuth",
       "local": "本地模型"
+    },
+    "pendingHandoffs": {
+      "title": "等待人工接管",
+      "loading": "正在加载会话...",
+      "empty": "暂无等待人工接管的会话。",
+      "unread": "{{count}} 条未读"
     }
   },
   "header": {
@@ -129,12 +147,14 @@
       "action": {
         "start": "启动服务",
         "stop": "停止服务",
-        "restart": "重启服务"
+        "restart": "重启服务",
+        "running": "网关运行中"
       },
       "status": {
         "starting": "服务启动中...",
         "restarting": "服务重启中...",
-        "stopping": "服务停止中..."
+        "stopping": "服务停止中...",
+        "running": "网关在线"
       },
       "restartRequired": "配置变更后需要重启服务才能生效。"
     }
@@ -146,6 +166,10 @@
     "saving": "保存中...",
     "reset": "重置",
     "confirm": "确认",
+    "dismiss": "关闭",
+    "language": "语言",
+    "lightMode": "浅色模式",
+    "darkMode": "深色模式",
     "saveChangesTitle": "有未保存的配置更改",
     "restartRequiredTitle": "需要重启服务",
     "restartRequiredDesc": "{{name}} 的最新配置已保存。重启服务后才能正式生效。",
@@ -1094,6 +1118,17 @@
       "show_tool_calls_hint": "允许聊天和历史记录显示已调用的工具、参数和说明",
       "show_model_selector": "显示模型选择器",
       "show_model_selector_hint": "在聊天页面顶部显示模型选择器",
+      "chat_intro": "聊天欢迎语",
+      "chat_intro_hint": "在聊天空状态中显示在助手名称下方的文本。留空则使用默认值。",
+      "chat_intro_placeholder": "例如：我是您的助手，需要时可以调用其他专业代理。",
+      "quick_tasks_label": "快捷任务",
+      "quick_tasks_hint": "聊天空状态显示的可点击按钮。点击后将把配置的提示词发送给主助手。",
+      "quick_tasks_empty": "尚未配置快捷任务。在下方添加以向用户推荐操作。",
+      "quick_task_index": "任务 {{index}}",
+      "quick_task_remove": "移除任务",
+      "quick_task_add": "添加任务",
+      "quick_task_label_placeholder": "标签（例如：今日摘要）",
+      "quick_task_prompt_placeholder": "点击按钮时发送给助手的提示词",
       "tool_feedback_enabled": "工具反馈",
       "tool_feedback_enabled_hint": "在每次执行工具前，先向当前会话发送一条简短的执行说明",
       "tool_feedback_separate_messages": "分开发送反馈消息",
@@ -1169,6 +1204,13 @@
       "dashboard_password_required": "请输入并确认新的登录密码",
       "dashboard_password_mismatch": "两次输入的登录密码不一致",
       "dashboard_password_min_length": "登录密码至少需要 8 个字符",
+      "workspace_required": "工作区路径不能为空。",
+      "session_scope_required": "会话范围不能为空。",
+      "mcp_discovery_method_required": "MCP 发现需要至少一种搜索方法（BM25 或正则表达式）。",
+      "mcp_servers_unique": "MCP 服务器名称必须唯一。重复项：{{names}}。",
+      "mcp_server_url_required": "MCP 服务器 {{name}} 需要一个 URL。",
+      "mcp_server_url_invalid": "MCP 服务器 {{name}} 需要一个有效的 HTTP(S) URL。",
+      "mcp_server_command_required": "MCP 服务器 {{name}} 需要一个命令。",
       "lan_access": "启用局域网访问",
       "lan_access_hint": "允许局域网中的其他设备访问当前服务",
       "allowed_cidrs": "允许访问网段",

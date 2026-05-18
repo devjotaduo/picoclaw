@@ -104,6 +104,17 @@ func tenantRoleAllows(role, min store.TenantRole) bool {
 	return rank[role] >= rank[min]
 }
 
+func (h *Handler) sessionCookieSameSite() http.SameSite {
+	// With a cookie domain set (e.g. .jotaduo.com in prod), the launcher SPA
+	// running on a tenant subdomain calls the controlplane via fetch and the
+	// browser needs SameSite=None + Secure to forward the cookie. Without a
+	// cookie domain (dev) Lax is fine and avoids the Secure requirement.
+	if h.Cfg.CookieDomain != "" && h.Cfg.CookieSecure {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteLaxMode
+}
+
 func (h *Handler) setSessionCookie(w http.ResponseWriter, token string) {
 	c := &http.Cookie{
 		Name:     sessionCookieName,
@@ -111,7 +122,7 @@ func (h *Handler) setSessionCookie(w http.ResponseWriter, token string) {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   h.Cfg.CookieSecure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: h.sessionCookieSameSite(),
 		MaxAge:   int(h.Cfg.SessionTTL.Seconds()),
 	}
 	if h.Cfg.CookieDomain != "" {
@@ -130,7 +141,7 @@ func (h *Handler) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   h.Cfg.CookieSecure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: h.sessionCookieSameSite(),
 		MaxAge:   -1,
 	}
 	if h.Cfg.CookieDomain != "" {

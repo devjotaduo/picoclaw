@@ -42,6 +42,16 @@ rebuilds for this loop unless Dockerfiles, base image layers, OS packages,
 image-only assets, or durable production image validation are part of the task.
 See `docs/operations/saas-dev-mode.md`.
 
+Host runtime for `ia.jotaduo.com` launcher: a single persistent systemd unit
+`picoclaw-main-dev.service` in `/etc/systemd/system/` runs `pnpm dev:api` from
+the repo working tree. Frontend changes hot-reload via Vite without restart.
+Backend Go changes need `systemctl restart picoclaw-main-dev.service` (~30s to
+recompile + open :18800). The legacy `picoclaw-launcher.service` (binary in
+`/usr/local/bin/`) was removed in 2026-05-18 — there is no second binary in
+parallel. SaaS controlplane is in container `controlplane` (:18801); sync new
+code into it with `make saas-dev-controlplane`. See
+`docs/operations/saas-dev-mode.md` for the full SaaS loop.
+
 Pre-PR: **`make check`** must pass locally. See `.golangci.yaml` for enabled linters.
 
 ## Build tags
@@ -130,6 +140,17 @@ Current production routing state as of `2026-05-16`:
 - Current default launcher profile is `default-business`, stored at `/srv/saas/controlplane/data/launcher-profiles/default-business/seed` inside the host volume and mounted in the controlplane at `/var/lib/picoclaw-saas/launcher-profiles/default-business/seed`.
 - Existing production tenants `carlao`, `clonev2`, `demo`, `eduardo`, `mysa2`, and `teste` have profile `default-business` version `1` applied, per-tenant `litellm.key` restored, default model set to tenant LiteLLM (`provider=litellm`, `model_name=default`), and healthy `/health` + `/ready`.
 - Production backup before the migration: `/root/.picoclaw/backups/production-20260516T020839Z`.
+
+### Admin panel embutido em `web/frontend`
+
+O caminho essencial de operação de tenants (list, create, clone, suspend/resume/restart, rotate password) vive embutido no `picoclaw-launcher` em `web/frontend/src/routes/admin/*`. Ele NÃO substitui `web/saas-admin` — fluxos periféricos (audit, users, intakes públicos, CRM, AgentEdit, SkillsList, AgentSettings, AcceptInvite, ServerHealth, LauncherProfiles) seguem em `adm.<dominio>`.
+
+- **Sem login separado.** O admin entra pelo `/launcher-login` do próprio launcher (mesmo cookie de dashboard). As rotas `/admin/*` ficam dentro do `AppLayout` normal (sidebar + header). Não há `/admin/login`, `AdminGuard` cross-subdomain, cookie de controlplane no browser, ou CORS.
+- **Proxy backend**: `web/backend/api/saas_proxy.go` registra `/api/admin/saas/*` no launcher, que repassa para `<PICOCLAW_SAAS_BASE_URL>/api/v1/*` no controlplane usando credenciais armazenadas em arquivo 600 (`/etc/picoclaw/saas-admin.env`). Login é lazy + retry em 401 (`saas_client.go`).
+- **Gating**: `GET /api/launcher/policy` retorna `is_saas_admin: true` quando o launcher tem `PICOCLAW_SAAS_ADMIN_MODE=true` + base/email/password + role efetivo é `platform_admin`. O sidebar mostra o grupo "Administração" apenas quando essa flag é verdadeira, e `AdminGuard` (`web/frontend/src/components/admin/AdminGuard.tsx`) confirma localmente sem qualquer chamada externa.
+- **Clone tenant -> tenant**: `POST /api/v1/tenants/{id}/clone` -> `Provisioner.CloneFromTenant`. Cópia raw da volume via `CopyVolumeRaw` em `internal/saas/tenant/template.go` (blocklist mínimo: `*.pid`, `*.sock`, `*.lock`, `*.db-wal`, `*.db-shm`, `*.db-journal`, `logs/`, `runtime-user-env/`). Preserva segredos, OAuth, dashboardauth.db, sessions, memory. Pula `SeedDashboardPassword` (senha do origem viaja junto). LiteLLM key é regenerada porque o `key_alias` é o tenant id. Sanity checks pós-clone via `Provisioner.RunPostCloneChecks` em `internal/saas/tenant/sanity.go`.
+- **Endpoints controlplane**: `POST /api/v1/tenants/{id}/clone` e `GET /api/v1/tenants/{id}/sanity` (ambos `requirePlatformAdmin`).
+- Contrato detalhado em `docs/architecture/admin-in-launcher.md`.
 
 ## Configuration
 

@@ -71,7 +71,7 @@ const RootLayout = () => {
     return (
       <>
         <Outlet />
-        {import.meta.env.DEV ? <TanStackRouterDevtools /> : null}
+        {import.meta.env.DEV ? <TanStackRouterDevtools position="bottom-right" /> : null}
       </>
     )
   }
@@ -92,7 +92,7 @@ const RootLayout = () => {
       )}
       <AppLayout>
         <Outlet />
-        {import.meta.env.DEV ? <TanStackRouterDevtools /> : null}
+        {import.meta.env.DEV ? <TanStackRouterDevtools position="bottom-right" /> : null}
       </AppLayout>
     </>
   )

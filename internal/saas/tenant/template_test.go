@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestSyncTemplateSkillsOverlaysMainTemplateSkills(t *testing.T) {
+func TestSyncTemplateSkillsFillsMissingSkillsWithoutClobberingProfile(t *testing.T) {
 	templateDir := t.TempDir()
 	tenantDir := t.TempDir()
 
@@ -17,12 +17,12 @@ func TestSyncTemplateSkillsOverlaysMainTemplateSkills(t *testing.T) {
 	)
 	mustWriteFile(t,
 		filepath.Join(templateDir, "workspace", "skills", "shared-skill", "SKILL.md"),
-		"fresh skill from main template",
+		"operator version of shared skill",
 		0o644,
 	)
 	mustWriteFile(t,
 		filepath.Join(tenantDir, "workspace", "skills", "shared-skill", "SKILL.md"),
-		"stale profile skill",
+		"profile-customised version",
 		0o644,
 	)
 	mustWriteFile(t,
@@ -39,9 +39,10 @@ func TestSyncTemplateSkillsOverlaysMainTemplateSkills(t *testing.T) {
 		filepath.Join(tenantDir, "workspace", "skills", "new-skill", "SKILL.md"),
 		"new skill from main template",
 	)
+	// Profile-customised skill must survive — operator template is fallback only.
 	assertFileContent(t,
 		filepath.Join(tenantDir, "workspace", "skills", "shared-skill", "SKILL.md"),
-		"fresh skill from main template",
+		"profile-customised version",
 	)
 	assertFileContent(t,
 		filepath.Join(tenantDir, "workspace", "skills", "profile-only", "SKILL.md"),

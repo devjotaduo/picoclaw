@@ -308,6 +308,18 @@ func isPublicLauncherDashboardStatic(method, p string) bool {
 	if strings.HasPrefix(p, "/public/marketing/") {
 		return true
 	}
+	// Vite dev server module paths. The launcher reverse-proxies these to the
+	// Vite dev server when PICOCLAW_VITE_DEV_URL is set (see web/backend/embed.go);
+	// in production these prefixes don't exist on disk so allowing them only
+	// affects the dev loop.
+	if strings.HasPrefix(p, "/@vite/") ||
+		strings.HasPrefix(p, "/@react-refresh") ||
+		strings.HasPrefix(p, "/@fs/") ||
+		strings.HasPrefix(p, "/@id/") ||
+		strings.HasPrefix(p, "/src/") ||
+		strings.HasPrefix(p, "/node_modules/") {
+		return true
+	}
 	switch p {
 	case "/favicon.ico", "/favicon.svg", "/favicon-96x96.png",
 		"/apple-touch-icon.png", "/lark.svg",
