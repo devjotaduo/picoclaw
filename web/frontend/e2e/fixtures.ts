@@ -6,9 +6,10 @@ import { type Page, expect, test as base } from "@playwright/test"
  * so a default `pnpm test:e2e` run is safe to run anywhere.
  */
 export function destructive(name: string, fn: (page: Page) => Promise<void>) {
-  const condition = process.env.E2E_DESTRUCTIVE === "1"
-  test.skip(!condition, "destructive — set E2E_DESTRUCTIVE=1 to run")
-  test(name, async ({ page }) => fn(page))
+  test(name, async ({ page }) => {
+    test.skip(process.env.E2E_DESTRUCTIVE !== "1", "destructive — set E2E_DESTRUCTIVE=1 to run")
+    await fn(page)
+  })
 }
 
 export const test = base.extend<{ editor: Page }>({
