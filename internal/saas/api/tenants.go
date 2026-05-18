@@ -72,12 +72,19 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var ownerInviteToken string
+	var ownerInviteExpiresAt time.Time
 	if actor, ok := userFromContext(r.Context()); ok {
-		if _, token, err := h.Invites.Create(r.Context(), out.TenantID, req.OwnerEmail, store.RoleTenantOwner, actor.ID, 7*24*time.Hour); err == nil {
+		if inv, token, err := h.Invites.Create(r.Context(), out.TenantID, req.OwnerEmail, store.RoleTenantOwner, actor.ID, 7*24*time.Hour); err == nil {
 			ownerInviteToken = token
+			ownerInviteExpiresAt = inv.ExpiresAt
 		} else {
 			log.Printf("invite: owner invite failed for tenant %s: %v", out.TenantID, err)
 		}
+	}
+
+	if ownerInviteToken != "" && h.Mailer != nil && h.Mailer.Enabled() {
+		inviteURL := h.Mailer.AdminBaseURL() + "/accept-invite?token=" + ownerInviteToken
+		go h.Mailer.SendInviteEmail(req.OwnerEmail, req.DisplayName, string(store.RoleTenantOwner), inviteURL, ownerInviteExpiresAt)
 	}
 
 	// Best-effort: mirror the new tenant as a Contact in open-crm. Failures
@@ -92,13 +99,17 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]any{
+	resp := map[string]any{
 		"tenant_id":          out.TenantID,
 		"url":                out.URL,
-		"initial_password":   out.InitialPassword,
 		"owner_invite_token": ownerInviteToken,
-		"warning":            "Save this password now — it will not be shown again.",
-	})
+	}
+	if h.Mailer == nil || !h.Mailer.Enabled() {
+		resp["warning"] = "SMTP is not configured — share the invite token manually."
+	} else {
+		resp["info"] = "Invite email was sent to the owner. The token is included as a delivery fallback."
+	}
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 func splitName(displayName string) (first, last string) {

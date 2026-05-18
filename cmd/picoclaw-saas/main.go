@@ -14,6 +14,7 @@ import (
 	"github.com/sipeed/picoclaw/internal/saas/api"
 	"github.com/sipeed/picoclaw/internal/saas/config"
 	"github.com/sipeed/picoclaw/internal/saas/litellm"
+	"github.com/sipeed/picoclaw/internal/saas/mailer"
 	"github.com/sipeed/picoclaw/internal/saas/reconciler"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 	"github.com/sipeed/picoclaw/internal/saas/tenant"
@@ -60,7 +61,14 @@ func run() error {
 	}
 
 	prov := tenant.NewProvisioner(cfg, db, dk, llm)
-	h := api.NewHandler(cfg, db, prov)
+	mlr := mailer.New(mailer.FromEnv(
+		cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword,
+		cfg.AlertFrom, cfg.MailerFrom, cfg.MailerAdminURL,
+	))
+	if !mlr.Enabled() {
+		log.Println("mailer: SMTP not configured — invite emails will be no-op")
+	}
+	h := api.NewHandler(cfg, db, prov, mlr)
 
 	if llm != nil {
 		poller := &reconciler.UsagePoller{DB: db, LiteLLM: llm, Interval: 5 * time.Minute}

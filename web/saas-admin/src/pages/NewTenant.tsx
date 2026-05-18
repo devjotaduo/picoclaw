@@ -80,9 +80,9 @@ export function NewTenant() {
     m.mutate(form);
   };
 
-  const copyPwd = async () => {
-    if (!result) return;
-    await navigator.clipboard.writeText(result.initial_password);
+  const copyToken = async () => {
+    if (!result?.owner_invite_token) return;
+    await navigator.clipboard.writeText(result.owner_invite_token);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -239,24 +239,26 @@ export function NewTenant() {
               </div>
             </div>
 
-            <div>
-              <Label>Launcher fallback password</Label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
-                  {result.initial_password}
-                </code>
-                <Button type="button" variant="secondary" size="icon" onClick={copyPwd}>
-                  {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-                </Button>
+            {result.info && (
+              <div className="rounded bg-emerald-950/40 px-3 py-2 text-xs text-emerald-300">
+                {result.info}
               </div>
-            </div>
+            )}
 
             {result.owner_invite_token && (
               <div>
-                <Label>Owner invite token</Label>
-                <code className="block break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
-                  {result.owner_invite_token}
-                </code>
+                <Label>Owner invite token (fallback)</Label>
+                <p className="mb-1 text-xs text-zinc-500">
+                  Kept for manual delivery if email failed.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
+                    {result.owner_invite_token}
+                  </code>
+                  <Button type="button" variant="secondary" size="icon" onClick={copyToken}>
+                    {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -264,7 +266,7 @@ export function NewTenant() {
               <Button onClick={markDelivered} disabled={isProvisioning}>
                 {isProvisioning
                   ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Provisionando…</>
-                  : "I've delivered this — open tenant"}
+                  : "Open tenant"}
               </Button>
             </div>
           </div>

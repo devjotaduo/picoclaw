@@ -23,6 +23,21 @@ type Config struct {
 	LiteLLMMasterKey string
 	IntakeLLMModel   string
 
+	// ClaraModel is the LiteLLM model name used by the conversational agent
+	// on /api/v1/public/company-intakes/{id}/chat. Defaults to claude-sonnet-4.6
+	// because it handles casual Portuguese best; overridable via env.
+	ClaraModel string
+	// ClaraMaxTurns hard-caps a single intake's chat history to prevent runaway
+	// token spend. Default 16 (≈ 8 user + 8 assistant turns).
+	ClaraMaxTurns int
+	// ClaraRateLimitPerIP / ClaraRateWindow set the per-IP rate limit for the
+	// chat endpoint (messages per window). Default 30 / 10min.
+	ClaraRateLimitPerIP int
+	ClaraRateWindow     time.Duration
+	// ClaraEnabled flips the public chat endpoint on. The legacy script-driven
+	// flow stays available regardless so we can A/B compare.
+	ClaraEnabled bool
+
 	TenantImage        string
 	TenantBaseDomain   string
 	TenantHostDataDir  string
@@ -46,6 +61,9 @@ type Config struct {
 	AlertFrom             string
 	AlertTo               string
 	AlertDiskThresholdPct float64
+
+	MailerFrom     string
+	MailerAdminURL string
 }
 
 func Load() (*Config, error) {
@@ -58,6 +76,14 @@ func Load() (*Config, error) {
 		LiteLLMURL:          os.Getenv("LITELLM_URL"),
 		LiteLLMMasterKey:    os.Getenv("LITELLM_MASTER_KEY"),
 		IntakeLLMModel:      os.Getenv("COMPANY_INTAKE_LLM_MODEL"),
+		// Default to a model already registered in the production LiteLLM config
+		// (claude-sonnet-4-5 is mapped to openrouter/anthropic/claude-sonnet-4.5
+		// in deploy/litellm/config.yaml). Override via env when bumping the upstream.
+		ClaraModel:          envOr("CLARA_MODEL", "claude-sonnet-4-5"),
+		ClaraMaxTurns:       envInt("CLARA_MAX_TURNS", 16),
+		ClaraRateLimitPerIP: envInt("CLARA_RATE_LIMIT_PER_IP", 30),
+		ClaraRateWindow:     time.Duration(envInt("CLARA_RATE_WINDOW_SECONDS", 600)) * time.Second,
+		ClaraEnabled:        envBool("CLARA_ENABLED", true),
 		TenantImage:         envOr("TENANT_IMAGE", "picoclaw-launcher:latest"),
 		TenantBaseDomain:    os.Getenv("TENANT_BASE_DOMAIN"),
 		TenantHostDataDir:   envOr("TENANT_HOST_DATA_DIR", "/srv/saas/tenants"),
@@ -89,6 +115,12 @@ func Load() (*Config, error) {
 	c.AlertFrom = os.Getenv("ALERT_FROM")
 	c.AlertTo = os.Getenv("ALERT_TO")
 	c.AlertDiskThresholdPct = float64(envInt("ALERT_DISK_THRESHOLD_PCT", 85))
+
+	c.MailerFrom = os.Getenv("MAILER_FROM")
+	c.MailerAdminURL = os.Getenv("MAILER_ADMIN_URL")
+	if c.MailerAdminURL == "" && c.TenantBaseDomain != "" {
+		c.MailerAdminURL = "https://adm." + c.TenantBaseDomain
+	}
 
 	if c.PGDSN == "" {
 		return nil, fmt.Errorf("PG_DSN is required")

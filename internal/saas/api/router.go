@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/sipeed/picoclaw/internal/saas/config"
+	"github.com/sipeed/picoclaw/internal/saas/mailer"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 	"github.com/sipeed/picoclaw/internal/saas/tenant"
 )
@@ -24,10 +25,13 @@ type Handler struct {
 	Usage          *store.UsageStore
 	Provisioner    *tenant.Provisioner
 	LoginAttempts  *loginAttempts
+	ClaraRateLimit *rateLimiter
 	CRM            *crmClient
+	Mailer         *mailer.Mailer
+	adminRoutes    http.Handler
 }
 
-func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner) *Handler {
+func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr *mailer.Mailer) *Handler {
 	h := &Handler{
 		Cfg:            cfg,
 		Users:          &store.UserStore{DB: db},
@@ -41,6 +45,8 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner) *Han
 		Usage:          &store.UsageStore{DB: db},
 		Provisioner:    prov,
 		LoginAttempts:  newLoginAttempts(),
+		ClaraRateLimit: newRateLimiter(cfg.ClaraRateLimitPerIP, cfg.ClaraRateWindow),
+		Mailer:         mlr,
 	}
 	if cfg.OpenCRMURL != "" {
 		h.CRM = newCRMClient(cfg.OpenCRMURL)
@@ -79,6 +85,7 @@ func (h *Handler) Routes() http.Handler {
 		r.Post("/public/company-intakes/{id}/audio-transcript", h.handleSaveCompanyIntakeAudioTranscript)
 		r.Post("/public/company-intakes/{id}/report", h.handleGenerateCompanyIntakeReport)
 		r.Post("/public/company-intakes/{id}/submit", h.handleSubmitCompanyIntake)
+		r.Post("/public/company-intakes/{id}/chat", h.handleCompanyIntakeChat)
 
 		r.Group(func(r chi.Router) {
 			r.Use(h.requireAuth)
@@ -146,8 +153,9 @@ func (h *Handler) Routes() http.Handler {
 			})
 
 			r.Group(func(r chi.Router) {
-				r.Use(h.requireTenantRole(store.RoleTenantOwner))
+				r.Use(h.requireTenantRole(store.RoleTenantAdmin))
 				r.Post("/tenants/{id}/members", h.handleUpsertMember)
+				r.Delete("/tenants/{id}/members/{userId}", h.handleRemoveMember)
 				r.Post("/tenants/{id}/invites", h.handleCreateInvite)
 				r.Get("/tenants/{id}/invites", h.handleListInvites)
 				r.Delete("/tenants/{id}/invites/{invId}", h.handleRevokeInvite)

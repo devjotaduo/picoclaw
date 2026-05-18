@@ -2,8 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -76,11 +79,54 @@ func (h *Handler) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = h.Audit.Insert(r.Context(), &actor.ID, &id, "tenant.invite.create", "invite", req.Email)
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"invite":  inv,
-		"token":   token,
-		"warning": "Save/send this invite token now; it is not stored in plaintext.",
-	})
+
+	if h.Mailer != nil && h.Mailer.Enabled() {
+		tenantName := id
+		if t, terr := h.Tenants.Get(r.Context(), id); terr == nil && t != nil {
+			tenantName = t.DisplayName
+		}
+		inviteURL := h.Mailer.AdminBaseURL() + "/accept-invite?token=" + token
+		go h.Mailer.SendInviteEmail(req.Email, tenantName, string(req.Role), inviteURL, inv.ExpiresAt)
+	} else {
+		log.Printf("invite: mailer disabled, token must be delivered manually to %s", req.Email)
+	}
+
+	resp := map[string]any{"invite": inv, "token": token}
+	if h.Mailer == nil || !h.Mailer.Enabled() {
+		resp["warning"] = "SMTP not configured — share the invite token manually."
+	} else {
+		resp["info"] = "Invite email sent. Token included as a delivery fallback."
+	}
+	writeJSON(w, http.StatusCreated, resp)
+}
+
+func (h *Handler) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
+	tenantID := chi.URLParam(r, "id")
+	userIDStr := chi.URLParam(r, "userId")
+	userID, err := strconv.ParseInt(userIDStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	actor, _ := userFromContext(r.Context())
+	if actor == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if actor.ID == userID {
+		writeError(w, http.StatusBadRequest, "cannot remove yourself; transfer ownership first")
+		return
+	}
+	if err := h.Memberships.Delete(r.Context(), userID, tenantID); err != nil {
+		if errors.Is(err, store.ErrMembershipNotFound) {
+			writeError(w, http.StatusNotFound, "membership not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	_ = h.Audit.Insert(r.Context(), &actor.ID, &tenantID, "tenant.member.remove", "user", userIDStr)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) handleListInvites(w http.ResponseWriter, r *http.Request) {
