@@ -46,6 +46,7 @@ import {
   sendInternalAgentTurn,
   updateInternalAgentOrchestration,
 } from "@/api/internal-agents"
+import { getLauncherPolicy } from "@/api/launcher-policy"
 import { getSkills } from "@/api/skills"
 import { listWhatsAppChats } from "@/api/whatsapp"
 import { CodeEditor } from "@/components/code-editor"
@@ -889,6 +890,13 @@ export function AgentEditorPage() {
   )
   const skillsQuery = useQuery({ queryKey: ["skills"], queryFn: getSkills })
   const installedSkills = useMemo(() => skillsQuery.data?.skills ?? [], [skillsQuery.data?.skills])
+  const launcherPolicyQuery = useQuery({
+    queryKey: ["launcher-policy"],
+    queryFn: getLauncherPolicy,
+  })
+  const canCreateAgents =
+    launcherPolicyQuery.data?.features.agent_creation === "write" ||
+    launcherPolicyQuery.isError
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<TemplateApplyPayload | null>(null)
@@ -900,6 +908,12 @@ export function AgentEditorPage() {
   const [advancedJsonMode, setAdvancedJsonMode] = useState(false)
   const [rawDraft, setRawDraft] = useState("")
   const [rawError, setRawError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!canCreateAgents && createOpen) {
+      setCreateOpen(false)
+    }
+  }, [canCreateAgents, createOpen])
 
   const template = useMemo<AgentTemplate | null>(() => {
     const id = draft?.template_id ?? selectedPrompt?.payload?.template_id ?? selectedPrompt?.template_id
@@ -947,11 +961,15 @@ export function AgentEditorPage() {
     onSuccess: (_result, appliedDraft) => {
       const agentId = appliedDraft.agent_id ?? selectedAgentId
       toast.success(t("pages.agent.editor.save_success"))
-      appendVersion(
+      void appendVersion(
         agentId,
         appliedDraft,
         `Aplicado em ${new Date().toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`,
-      )
+      ).then(() => {
+        void queryClient.invalidateQueries({
+          queryKey: ["agent-versions", agentId],
+        })
+      })
       setEditing(false)
       setDraft(null)
       void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })
@@ -1138,6 +1156,10 @@ export function AgentEditorPage() {
   }
 
   function handleCreateOpen() {
+    if (!canCreateAgents) {
+      toast.warning("A criação de novos agentes está desativada pelo administrador.")
+      return
+    }
     setCreateOpen(true)
   }
 
@@ -1216,6 +1238,10 @@ export function AgentEditorPage() {
   })
 
   function handleDuplicateAgent(source: AgentEditorAgent) {
+    if (!canCreateAgents) {
+      toast.warning("A criação de novos agentes está desativada pelo administrador.")
+      return
+    }
     duplicateMutation.mutate(source)
   }
 
@@ -1477,10 +1503,12 @@ export function AgentEditorPage() {
                   </span>
                 )}
               </div>
-              <Button size="sm" onClick={handleCreateOpen} className="h-7 gap-1 px-2.5 text-xs">
-                <IconPlus className="size-3.5" />
-                {t("pages.agent.editor.new_agent", "Novo agente")}
-              </Button>
+              {canCreateAgents && (
+                <Button size="sm" onClick={handleCreateOpen} className="h-7 gap-1 px-2.5 text-xs">
+                  <IconPlus className="size-3.5" />
+                  {t("pages.agent.editor.new_agent", "Novo agente")}
+                </Button>
+              )}
             </div>
 
             <div className="border-border/40 space-y-2 border-b px-3 py-2.5">
@@ -1631,7 +1659,10 @@ export function AgentEditorPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => handleDuplicateAgent(agent)}
-                              disabled={duplicateMutation.isPending}
+                              disabled={
+                                duplicateMutation.isPending ||
+                                !canCreateAgents
+                              }
                             >
                               <IconCopy className="size-3.5" />
                               Duplicar agente
@@ -1671,14 +1702,16 @@ export function AgentEditorPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button size="sm" onClick={handleCreateOpen} className="h-8"><IconPlus className="size-3.5" /></Button>
+              {canCreateAgents && (
+                <Button size="sm" onClick={handleCreateOpen} className="h-8"><IconPlus className="size-3.5" /></Button>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-6">
               {isLoadingMain ? (
                 <LoadingSkeleton />
               ) : !selectedAgent ? (
-                <EmptyState onCreate={handleCreateOpen} />
+                <EmptyState onCreate={handleCreateOpen} canCreate={canCreateAgents} />
               ) : (
                 <UnifiedAgentEditor
                   agent={selectedAgent}
@@ -1715,6 +1748,7 @@ export function AgentEditorPage() {
                   isSending={sendingChat}
                   proposals={proposals}
                   quickPrompts={quickPrompts}
+                  canCreate={canCreateAgents}
                   onCreate={handleCreateOpen}
                   onConfigure={handleConfigureSelectedAgent}
                   onEditPrompt={handleEdit}
@@ -1756,7 +1790,7 @@ export function AgentEditorPage() {
 
       {/* ── dialogs ───────────────────────────────────────────────── */}
       <AgentWizard
-        open={createOpen}
+        open={createOpen && canCreateAgents}
         existingIDs={agents.map((a) => a.id)}
         isSubmitting={wizardMutation.isPending}
         onSubmit={(draft, payload) => wizardMutation.mutate({ draft, payload })}
@@ -1927,6 +1961,7 @@ function UnifiedAgentEditor({
   isSending,
   proposals,
   quickPrompts,
+  canCreate,
   onCreate,
   onConfigure,
   onEditPrompt,
@@ -1981,6 +2016,7 @@ function UnifiedAgentEditor({
   isSending: boolean
   proposals: unknown[]
   quickPrompts: Array<{ icon: React.ElementType; label: string; prompt: string }>
+  canCreate: boolean
   onCreate: () => void
   onConfigure: () => void
   onEditPrompt: () => void
@@ -2060,6 +2096,7 @@ function UnifiedAgentEditor({
               configData={configData}
               resolvedPayload={resolvedPayload}
               template={template}
+              canCreate={canCreate}
               onCreate={onCreate}
               onConfigure={onConfigure}
               onEditPrompt={onEditPrompt}
@@ -2076,6 +2113,7 @@ function UnifiedAgentEditor({
             configData={configData}
             resolvedPayload={resolvedPayload}
             template={template}
+            canCreate={canCreate}
             onCreate={onCreate}
             onConfigure={onConfigure}
             onEditPrompt={onEditPrompt}
@@ -2442,6 +2480,7 @@ function PromptWorkspaceSection({
   configData,
   resolvedPayload,
   template,
+  canCreate,
   onCreate,
   onConfigure,
   onEditPrompt,
@@ -2452,6 +2491,7 @@ function PromptWorkspaceSection({
   configData: AgentConfigResponse
   resolvedPayload: TemplateApplyPayload | null
   template: AgentTemplate | null
+  canCreate: boolean
   onCreate: () => void
   onConfigure: () => void
   onEditPrompt: () => void
@@ -2491,11 +2531,16 @@ function PromptWorkspaceSection({
                 JSON bruto do prompt
               </Button>
             )}
-            {!configured && (
+            {!configured && canCreate && (
               <Button variant="outline" onClick={onCreate} size="default" className="gap-2">
                 <IconPlus className="size-4" />
                 Novo agente
               </Button>
+            )}
+            {!configured && !canCreate && (
+              <p className="text-muted-foreground max-w-52 text-right text-xs leading-relaxed">
+                Criação de novos agentes desativada pelo administrador.
+              </p>
             )}
           </div>
         </div>
@@ -3642,7 +3687,13 @@ function LoadingSkeleton() {
 
 // ─── empty / unconfigured states ──────────────────────────────────────────────
 
-function EmptyState({ onCreate }: { onCreate: () => void }) {
+function EmptyState({
+  onCreate,
+  canCreate,
+}: {
+  onCreate: () => void
+  canCreate: boolean
+}) {
   const { t } = useTranslation()
   return (
     <div
@@ -3675,10 +3726,16 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
           )}
         </p>
       </div>
-      <Button onClick={onCreate} className="gap-2">
-        <IconPlus className="size-4" aria-hidden="true" />
-        {t("pages.agent.editor.new_agent", "Novo agente")}
-      </Button>
+      {canCreate ? (
+        <Button onClick={onCreate} className="gap-2">
+          <IconPlus className="size-4" aria-hidden="true" />
+          {t("pages.agent.editor.new_agent", "Novo agente")}
+        </Button>
+      ) : (
+        <p className="text-muted-foreground max-w-sm text-xs leading-relaxed">
+          A criação de novos agentes está desativada pelo administrador.
+        </p>
+      )}
     </div>
   )
 }

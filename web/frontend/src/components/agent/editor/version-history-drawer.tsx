@@ -1,4 +1,5 @@
 import { IconHistory, IconRotate, IconTrash } from "@tabler/icons-react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -14,7 +15,6 @@ import { cn } from "@/lib/utils"
 import type { TemplateApplyPayload } from "@/components/agent/templates/types"
 
 import {
-  type AgentVersion,
   type DiffLine,
   deleteVersion,
   diffPayload,
@@ -36,15 +36,30 @@ export function VersionHistoryDrawer({
   onRestore,
   onOpenChange,
 }: VersionHistoryDrawerProps) {
-  const [versions, setVersions] = useState<AgentVersion[]>([])
+  const queryClient = useQueryClient()
   const [selectedID, setSelectedID] = useState<string | null>(null)
+
+  const versionsQuery = useQuery({
+    queryKey: ["agent-versions", agentID],
+    queryFn: () => loadVersions(agentID),
+    enabled: open && Boolean(agentID),
+    staleTime: 30_000,
+  })
+
+  const versions = useMemo(
+    () => versionsQuery.data ?? [],
+    [versionsQuery.data],
+  )
 
   useEffect(() => {
     if (!open) return
-    const list = loadVersions(agentID)
-    setVersions(list)
-    setSelectedID(list[0]?.id ?? null)
-  }, [open, agentID])
+    if (versions.length > 0 && (selectedID === null || !versions.some((v) => v.id === selectedID))) {
+      setSelectedID(versions[0]!.id)
+    }
+    if (versions.length === 0 && selectedID !== null) {
+      setSelectedID(null)
+    }
+  }, [open, versions, selectedID])
 
   const selected = useMemo(
     () => versions.find((v) => v.id === selectedID) ?? null,
@@ -56,11 +71,16 @@ export function VersionHistoryDrawer({
     [selected, currentPayload],
   )
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteVersion(agentID, id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["agent-versions", agentID] })
+    },
+  })
+
   function handleDelete(id: string) {
-    deleteVersion(agentID, id)
-    const next = versions.filter((v) => v.id !== id)
-    setVersions(next)
-    if (selectedID === id) setSelectedID(next[0]?.id ?? null)
+    if (selectedID === id) setSelectedID(null)
+    deleteMutation.mutate(id)
   }
 
   return (
@@ -75,13 +95,17 @@ export function VersionHistoryDrawer({
             Histórico de versões
           </SheetTitle>
           <SheetDescription>
-            Versões salvas localmente neste navegador. As mais recentes
-            ficam no topo. Apenas as últimas 20 são mantidas.
+            Sincronizado com o launcher; até 20 versões por agente. Recentes
+            no topo.
           </SheetDescription>
         </SheetHeader>
         <div className="grid min-h-0 flex-1 grid-cols-1 sm:grid-cols-[200px_1fr]">
           <aside className="border-border/40 min-h-0 overflow-y-auto border-b sm:border-r sm:border-b-0">
-            {versions.length === 0 ? (
+            {versionsQuery.isLoading ? (
+              <p className="text-muted-foreground p-4 text-xs" role="status">
+                Carregando versões…
+              </p>
+            ) : versions.length === 0 ? (
               <p className="text-muted-foreground p-4 text-xs">
                 Nenhuma versão salva ainda. Versões são criadas
                 automaticamente a cada salvamento bem-sucedido do prompt.
