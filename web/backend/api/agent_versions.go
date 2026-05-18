@@ -237,18 +237,82 @@ func appendAgentVersion(workspace string, v agentVersion) error {
 	return nil
 }
 
+// listAgentVersionIDsForPrune returns all version IDs for the given agent
+// from disk without applying the API cap, ordered newest-first.
+func listAgentVersionIDsForPrune(workspace, agentID string) ([]string, error) {
+	dir := agentVersionsDir(workspace)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	type versionFile struct {
+		id      string
+		modTime time.Time
+	}
+
+	files := make([]versionFile, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+
+		id := strings.TrimSuffix(entry.Name(), ".json")
+		if !isSafeVersionID(id) {
+			continue
+		}
+
+		path := filepath.Join(dir, entry.Name())
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+
+		var v agentVersion
+		if err := json.Unmarshal(raw, &v); err != nil {
+			continue
+		}
+		if v.AgentID != agentID {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		files = append(files, versionFile{
+			id:      id,
+			modTime: info.ModTime(),
+		})
+	}
+
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].modTime.Equal(files[j].modTime) {
+			return files[i].id > files[j].id
+		}
+		return files[i].modTime.After(files[j].modTime)
+	})
+
+	ids := make([]string, 0, len(files))
+	for _, file := range files {
+		ids = append(ids, file.id)
+	}
+	return ids, nil
+}
+
 // pruneAgentVersions drops oldest files past the cap. Errors are
 // swallowed because pruning is best-effort: the next write retries.
 func pruneAgentVersions(workspace, agentID string) {
-	versions, err := loadAgentVersions(workspace, agentID)
-	if err != nil || len(versions) <= agentVersionMaxPerAgent {
+	versionIDs, err := listAgentVersionIDsForPrune(workspace, agentID)
+	if err != nil || len(versionIDs) <= agentVersionMaxPerAgent {
 		return
 	}
-	for _, drop := range versions[agentVersionMaxPerAgent:] {
-		if !isSafeVersionID(drop.ID) {
+	for _, dropID := range versionIDs[agentVersionMaxPerAgent:] {
+		if !isSafeVersionID(dropID) {
 			continue
 		}
-		_ = os.Remove(filepath.Join(agentVersionsDir(workspace), drop.ID+".json"))
+		_ = os.Remove(filepath.Join(agentVersionsDir(workspace), dropID+".json"))
 	}
 }
 
