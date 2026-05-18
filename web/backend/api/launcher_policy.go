@@ -75,8 +75,9 @@ func (h *Handler) launcherUIConfig() config.UIConfig {
 
 func launcherUIResponse(ui config.UIConfig) map[string]bool {
 	return map[string]bool{
-		"show_reasoning":  ui.ShowReasoning,
-		"show_tool_calls": ui.ShowToolCalls,
+		"show_reasoning":      ui.ShowReasoning,
+		"show_tool_calls":     ui.ShowToolCalls,
+		"show_model_selector": ui.ShowModelSelector,
 	}
 }
 

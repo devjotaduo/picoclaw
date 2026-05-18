@@ -73,6 +73,9 @@ func TestNormalizeDefaultLauncherProfileSeedRepairsLegacyAgents(t *testing.T) {
 	if got := ui["show_tool_calls"]; got != true {
 		t.Fatalf("ui.show_tool_calls = %v, want true default", got)
 	}
+	if got := ui["show_model_selector"]; got != true {
+		t.Fatalf("ui.show_model_selector = %v, want true default", got)
+	}
 	if _, ok := root["model_list"]; !ok {
 		t.Fatal("model_list should be preserved")
 	}

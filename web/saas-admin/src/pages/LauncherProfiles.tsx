@@ -938,6 +938,7 @@ function LauncherDisplayOptions({
   state: {
     showReasoning: boolean;
     showToolCalls: boolean;
+    showModelSelector: boolean;
     error: string | null;
   };
   onChange: (key: LauncherDisplayKey, value: boolean) => void;
@@ -968,6 +969,13 @@ function LauncherDisplayOptions({
           disabled={disabled}
           onChange={(checked) => onChange("show_tool_calls", checked)}
         />
+        <DisplayCheckbox
+          label="Mostrar seletor de modelo"
+          description="Exibe o seletor de modelo no topo da página inicial do chat."
+          checked={state.showModelSelector}
+          disabled={disabled}
+          onChange={(checked) => onChange("show_model_selector", checked)}
+        />
       </div>
       {state.error ? (
         <p className="mt-3 text-xs text-red-300">
@@ -976,8 +984,13 @@ function LauncherDisplayOptions({
       ) : (
         <p className="mt-3 text-xs text-zinc-500">
           Salvo em{" "}
-          <code className="rounded bg-zinc-900 px-1">ui.show_reasoning</code> e{" "}
-          <code className="rounded bg-zinc-900 px-1">ui.show_tool_calls</code>.
+          <code className="rounded bg-zinc-900 px-1">ui.show_reasoning</code>,{" "}
+          <code className="rounded bg-zinc-900 px-1">ui.show_tool_calls</code>{" "}
+          e{" "}
+          <code className="rounded bg-zinc-900 px-1">
+            ui.show_model_selector
+          </code>
+          .
         </p>
       )}
     </section>

@@ -91,6 +91,16 @@ export function InterfaceSection({
         checked={form.showToolCalls}
         onCheckedChange={(checked) => onFieldChange("showToolCalls", checked)}
       />
+
+      <SwitchCardField
+        label={t("pages.config.show_model_selector")}
+        hint={t("pages.config.show_model_selector_hint")}
+        layout="setting-row"
+        checked={form.showModelSelector}
+        onCheckedChange={(checked) =>
+          onFieldChange("showModelSelector", checked)
+        }
+      />
     </ConfigSectionCard>
   )
 }

@@ -9,6 +9,7 @@ export interface LauncherPolicyResponse {
   ui?: {
     show_reasoning?: boolean
     show_tool_calls?: boolean
+    show_model_selector?: boolean
   }
 }
 

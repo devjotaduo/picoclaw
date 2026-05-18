@@ -1,14 +1,19 @@
-export type LauncherDisplayKey = "show_reasoning" | "show_tool_calls";
+export type LauncherDisplayKey =
+  | "show_reasoning"
+  | "show_tool_calls"
+  | "show_model_selector";
 
 export interface LauncherDisplayState {
   showReasoning: boolean;
   showToolCalls: boolean;
+  showModelSelector: boolean;
   error: string | null;
 }
 
 const defaultDisplayState: LauncherDisplayState = {
   showReasoning: true,
   showToolCalls: true,
+  showModelSelector: true,
   error: null,
 };
 
@@ -42,6 +47,10 @@ export function parseLauncherDisplayConfig(
         typeof ui.show_tool_calls === "boolean"
           ? ui.show_tool_calls
           : defaultDisplayState.showToolCalls,
+      showModelSelector:
+        typeof ui.show_model_selector === "boolean"
+          ? ui.show_model_selector
+          : defaultDisplayState.showModelSelector,
       error: null,
     };
   } catch (error) {

@@ -148,6 +148,9 @@ func ensureDefaultLauncherUI(root map[string]any) {
 	if _, ok := ui["show_tool_calls"].(bool); !ok {
 		ui["show_tool_calls"] = true
 	}
+	if _, ok := ui["show_model_selector"].(bool); !ok {
+		ui["show_model_selector"] = true
+	}
 }
 
 func indexDefaultProfileAgents(raw any) map[string]map[string]any {

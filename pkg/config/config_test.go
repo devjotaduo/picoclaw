@@ -1091,6 +1091,9 @@ func TestDefaultConfig_UIAssistantDetailsEnabled(t *testing.T) {
 	if !cfg.UI.ShowToolCalls {
 		t.Fatal("DefaultConfig().UI.ShowToolCalls should be true")
 	}
+	if !cfg.UI.ShowModelSelector {
+		t.Fatal("DefaultConfig().UI.ShowModelSelector should be true")
+	}
 }
 
 func TestLoadConfig_UIPartialDefaults(t *testing.T) {
@@ -1110,6 +1113,9 @@ func TestLoadConfig_UIPartialDefaults(t *testing.T) {
 	}
 	if !cfg.UI.ShowToolCalls {
 		t.Fatal("UI.ShowToolCalls should keep default true when omitted")
+	}
+	if !cfg.UI.ShowModelSelector {
+		t.Fatal("UI.ShowModelSelector should keep default true when omitted")
 	}
 }
 

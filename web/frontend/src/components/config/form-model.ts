@@ -6,6 +6,7 @@ export interface CoreConfigForm {
   splitOnMarker: boolean
   showReasoning: boolean
   showToolCalls: boolean
+  showModelSelector: boolean
   toolFeedbackEnabled: boolean
   toolFeedbackMaxArgsLength: string
   toolFeedbackSeparateMessages: boolean
@@ -104,6 +105,7 @@ export const EMPTY_FORM: CoreConfigForm = {
   splitOnMarker: false,
   showReasoning: true,
   showToolCalls: true,
+  showModelSelector: true,
   toolFeedbackEnabled: false,
   toolFeedbackMaxArgsLength: "300",
   toolFeedbackSeparateMessages: false,
@@ -260,6 +262,10 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
       ui.show_tool_calls === undefined
         ? EMPTY_FORM.showToolCalls
         : asBool(ui.show_tool_calls),
+    showModelSelector:
+      ui.show_model_selector === undefined
+        ? EMPTY_FORM.showModelSelector
+        : asBool(ui.show_model_selector),
     toolFeedbackEnabled:
       toolFeedback.enabled === undefined
         ? EMPTY_FORM.toolFeedbackEnabled
