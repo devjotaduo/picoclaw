@@ -48,7 +48,7 @@ Cada spec recebe esse storage state via `use.storageState` no `playwright.config
 
 Para invalidar a sessão, basta apagar `e2e/.auth/`.
 
-## Cobertura (15 testes em 4 arquivos)
+## Cobertura (15 testes em 6 arquivos)
 
 | Spec                                       | Tipo        | Cobre |
 |--------------------------------------------|-------------|---|
