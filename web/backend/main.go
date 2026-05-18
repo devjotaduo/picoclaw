@@ -598,12 +598,16 @@ func main() {
 
 	policyMux := apiHandler.PolicyMiddleware(accessControlledMux)
 
+	// AuditLogger wraps policyMux so it runs AFTER LauncherDashboardAuth
+	// populates the trusted-gateway claims context.
+	auditedMux := middleware.AuditLogger(policyMux)
+
 	dashAuth := middleware.LauncherDashboardAuth(middleware.LauncherDashboardAuthConfig{
 		ExpectedCookie:       dashboardSessionCookie,
 		AuthMode:             os.Getenv("PICOCLAW_AUTH_MODE"),
 		TrustedGatewaySecret: os.Getenv("PICOCLAW_TRUSTED_GATEWAY_SECRET"),
 		LocalAutoLogin:       localAutoLogin,
-	}, policyMux)
+	}, auditedMux)
 
 	// Apply middleware stack
 	handler := middleware.Recoverer(
