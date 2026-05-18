@@ -37,8 +37,9 @@ export function ClaraDone({ contactName }: ClaraDoneProps) {
 				</div>
 				<h1 className="mt-4 text-xl font-semibold text-zinc-900">{greeting}</h1>
 				<p className="mt-2 text-sm text-zinc-600">
-					Recebi tudo aqui. Vou desenhar uma proposta inicial e nosso time entra em
-					contato pelo seu canal preferido em pouco tempo.
+					Já salvei o resuminho aqui. A <strong>Sofia</strong> vai te chamar no
+					WhatsApp em breve pra alinhar os detalhes técnicos (preços, integrações,
+					esses pormenores). Não precisa fazer mais nada agora.
 				</p>
 
 				<button

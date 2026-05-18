@@ -16,13 +16,19 @@ var SystemPrompt string
 type ToolName string
 
 const (
-	ToolSetIdentity     ToolName = "set_identity"
-	ToolSetBusiness     ToolName = "set_business"
-	ToolSetPain         ToolName = "set_pain"
-	ToolSetChannels     ToolName = "set_channels"
-	ToolSetSystems      ToolName = "set_systems"
-	ToolMarkQualified   ToolName = "mark_qualified"
-	ToolRequestHandoff  ToolName = "request_handoff"
+	ToolSetIdentity      ToolName = "set_identity"
+	ToolSetBusiness      ToolName = "set_business"
+	ToolSetPain          ToolName = "set_pain"
+	ToolSetChannels      ToolName = "set_channels"
+	ToolSetSystems       ToolName = "set_systems"
+	ToolSetWebPresence   ToolName = "set_web_presence"
+	ToolSetCRM           ToolName = "set_crm"
+	ToolSetQuoting       ToolName = "set_quoting"
+	ToolSetProblemArea   ToolName = "set_problem_area"
+	ToolSetSalesMode     ToolName = "set_sales_mode"
+	ToolSetAgentPriority ToolName = "set_agent_priority"
+	ToolMarkQualified    ToolName = "mark_qualified"
+	ToolRequestHandoff   ToolName = "request_handoff"
 )
 
 // ToolSpec is the OpenAI-compatible function specification. LiteLLM accepts
@@ -153,6 +159,143 @@ func Tools() []ToolSpec {
 		{
 			Type: "function",
 			Function: ToolFunction{
+				Name: string(ToolSetWebPresence),
+				Description: "Presença web da empresa: site e Instagram. " +
+					"Salve sempre que a pessoa citar URL, @ do Instagram ou disser que não tem.",
+				Parameters: json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"website": {
+							"type": "string",
+							"description": "URL ou domínio (ex.: 'acme.com.br'). Vazio se a pessoa disser que não tem."
+						},
+						"instagram": {
+							"type": "string",
+							"description": "@perfil ou URL do Instagram. Vazio se não tem."
+						}
+					}
+				}`),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name: string(ToolSetCRM),
+				Description: "Sistema usado pra gerenciar clientes/leads (CRM, agenda, planilha). " +
+					"Não pergunte 'qual CRM?' diretamente — pergunte 'usa algum sistema pra gerenciar clientes?'.",
+				Parameters: json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"name": {
+							"type": "string",
+							"description": "Nome informal do sistema (ex.: 'planilha', 'rd station', 'hubspot', 'whatsapp business', 'agenda do google'). Vazio se não usa."
+						},
+						"notes": {
+							"type": "string",
+							"description": "Contexto extra se a pessoa der (ex.: 'planilha bem desorganizada')"
+						}
+					}
+				}`),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name: string(ToolSetQuoting),
+				Description: "Se a empresa faz orçamento personalizado pra cada cliente (ex.: móveis sob medida, " +
+					"obras, eventos). Importante pra Leo (Consultor de Vendas) saber.",
+				Parameters: json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"personalized": {
+							"type": "boolean",
+							"description": "true se cada orçamento é único; false se tem tabela fixa de preços"
+						},
+						"notes": {
+							"type": "string",
+							"description": "1 frase resumindo o que muda o preço (m², horas, complexidade, urgência…)"
+						}
+					},
+					"required": ["personalized"]
+				}`),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name: string(ToolSetProblemArea),
+				Description: "Onde DÓI hoje — a NATUREZA do gargalo (não o canal). " +
+					"Chame quando a pessoa der pistas claras do tipo de problema. " +
+					"Use junto com set_pain (que fica com a descrição em texto livre).",
+				Parameters: json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"area": {
+							"type": "string",
+							"enum": ["vendas", "atendimento", "suporte", "agendamento", "marketing", "gestao"],
+							"description": "vendas=fechar negócio/orçamento; atendimento=responder cliente; suporte=pós-venda/dúvida técnica; agendamento=marcar/lembrar consulta/horário; marketing=presença, conteúdo, atrair; gestao=organização interna, follow-up, relatórios"
+						},
+						"note": {
+							"type": "string",
+							"description": "1 frase com o detalhe específico do gargalo (ex.: 'perde lead porque demora 1h pra responder no Instagram')"
+						}
+					},
+					"required": ["area"]
+				}`),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name: string(ToolSetSalesMode),
+				Description: "Como a empresa vende: vende online ou só presencial, e que tipo de produto/serviço entrega. " +
+					"Chame quando a pessoa indicar o modelo de venda — especialmente lojas, restaurantes e produtos.",
+				Parameters: json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"online": {
+							"type": "boolean",
+							"description": "true se vende online (site próprio, marketplace, redes); false se é só presencial/local"
+						},
+						"product_type": {
+							"type": "string",
+							"description": "tipo do que entrega — sugerido: 'físico', 'digital', 'serviço', 'agendamento', 'misto'. Pode escrever livre."
+						},
+						"note": {
+							"type": "string",
+							"description": "1 frase com o que ela vende em concreto (ex.: 'roupas femininas, vende no Insta e na loja')"
+						}
+					},
+					"required": ["online"]
+				}`),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name: string(ToolSetAgentPriority),
+				Description: "Qual dos 4 agentes (Ana atendente, Leo vendas, Maya marketing, Sofia secretária do dono) " +
+					"a pessoa mais quer focar agora. Chame UMA vez quando descobrir.",
+				Parameters: json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"agent": {
+							"type": "string",
+							"enum": ["ana", "leo", "maya", "sofia"],
+							"description": "ana=atendimento, leo=vendas, maya=marketing, sofia=assistente do dono"
+						},
+						"reason": {
+							"type": "string",
+							"description": "1 frase do porquê (ex.: 'perde leads no insta sem responder rápido')"
+						}
+					},
+					"required": ["agent"]
+				}`),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
 				Name: string(ToolMarkQualified),
 				Description: "Indica que a Clara já tem informação suficiente para gerar uma proposta " +
 					"(negócio + ao menos uma dor + ao menos um canal). Chame apenas UMA vez por sessão.",
@@ -228,4 +371,41 @@ type ToolInputMarkQualified struct {
 // ToolInputRequestHandoff matches request_handoff.
 type ToolInputRequestHandoff struct {
 	Reason string `json:"reason"`
+}
+
+// ToolInputWebPresence matches set_web_presence.
+type ToolInputWebPresence struct {
+	Website   string `json:"website,omitempty"`
+	Instagram string `json:"instagram,omitempty"`
+}
+
+// ToolInputCRM matches set_crm.
+type ToolInputCRM struct {
+	Name  string `json:"name,omitempty"`
+	Notes string `json:"notes,omitempty"`
+}
+
+// ToolInputQuoting matches set_quoting.
+type ToolInputQuoting struct {
+	Personalized bool   `json:"personalized"`
+	Notes        string `json:"notes,omitempty"`
+}
+
+// ToolInputAgentPriority matches set_agent_priority.
+type ToolInputAgentPriority struct {
+	Agent  string `json:"agent"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// ToolInputProblemArea matches set_problem_area.
+type ToolInputProblemArea struct {
+	Area string `json:"area"`
+	Note string `json:"note,omitempty"`
+}
+
+// ToolInputSalesMode matches set_sales_mode.
+type ToolInputSalesMode struct {
+	Online      bool   `json:"online"`
+	ProductType string `json:"product_type,omitempty"`
+	Note        string `json:"note,omitempty"`
 }

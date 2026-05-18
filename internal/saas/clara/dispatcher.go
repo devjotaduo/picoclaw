@@ -11,14 +11,39 @@ import (
 // preserved via the Extra map so existing answers (collected by the legacy
 // script-driven flow on the same intake) are never dropped.
 type Answers struct {
-	Offer          string         `json:"offer,omitempty"`
-	Segments       []string       `json:"segments,omitempty"`
-	BusinessModels []string       `json:"business_models,omitempty"`
-	Channels       []string       `json:"channels,omitempty"`
-	Systems        []string       `json:"systems,omitempty"`
-	SystemNotes    string         `json:"system_notes,omitempty"`
-	Pains          []string       `json:"pains,omitempty"`
-	Extra          map[string]any `json:"-"`
+	Offer          string   `json:"offer,omitempty"`
+	Segments       []string `json:"segments,omitempty"`
+	BusinessModels []string `json:"business_models,omitempty"`
+	Channels       []string `json:"channels,omitempty"`
+	Systems        []string `json:"systems,omitempty"`
+	SystemNotes    string   `json:"system_notes,omitempty"`
+	Pains          []string `json:"pains,omitempty"`
+
+	// Light-onboarding fields collected by Clara to seed the 4 default
+	// agents (Ana, Leo, Maya, Sofia). All optional — Clara only sets a field
+	// when the visitor mentions it explicitly. Technical follow-up (prices,
+	// CRM credentials, etc.) happens later via Sofia on WhatsApp.
+	Website             string `json:"website,omitempty"`
+	Instagram           string `json:"instagram,omitempty"`
+	CRMName             string `json:"crm_name,omitempty"`
+	CRMNotes            string `json:"crm_notes,omitempty"`
+	QuotingPersonalized *bool  `json:"quoting_personalized,omitempty"`
+	QuotingNotes        string `json:"quoting_notes,omitempty"`
+	PriorityAgent       string `json:"priority_agent,omitempty"`
+	PriorityReason      string `json:"priority_reason,omitempty"`
+
+	// Structured pain tagging. ProblemArea is the *type* of bottleneck
+	// (vendas / atendimento / suporte / agendamento / marketing / gestao);
+	// the human-readable description still lives in Pains. SalesOnline +
+	// ProductType tell us how the visitor sells today so the finalize
+	// screen can render agent recommendations grounded in their reality.
+	ProblemArea     string `json:"problem_area,omitempty"`
+	ProblemAreaNote string `json:"problem_area_note,omitempty"`
+	SalesOnline     *bool  `json:"sales_online,omitempty"`
+	ProductType     string `json:"product_type,omitempty"`
+	SalesNote       string `json:"sales_note,omitempty"`
+
+	Extra map[string]any `json:"-"`
 }
 
 // ParseAnswers decodes the JSONB blob without losing keys we don't model.
@@ -44,6 +69,19 @@ func ParseAnswers(raw json.RawMessage) (*Answers, error) {
 	consume("systems", &a.Systems)
 	consume("system_notes", &a.SystemNotes)
 	consume("pains", &a.Pains)
+	consume("website", &a.Website)
+	consume("instagram", &a.Instagram)
+	consume("crm_name", &a.CRMName)
+	consume("crm_notes", &a.CRMNotes)
+	consume("quoting_personalized", &a.QuotingPersonalized)
+	consume("quoting_notes", &a.QuotingNotes)
+	consume("priority_agent", &a.PriorityAgent)
+	consume("priority_reason", &a.PriorityReason)
+	consume("problem_area", &a.ProblemArea)
+	consume("problem_area_note", &a.ProblemAreaNote)
+	consume("sales_online", &a.SalesOnline)
+	consume("product_type", &a.ProductType)
+	consume("sales_note", &a.SalesNote)
 	for k, v := range loose {
 		var x any
 		_ = json.Unmarshal(v, &x)
@@ -78,6 +116,45 @@ func (a *Answers) Marshal() (json.RawMessage, error) {
 	}
 	if len(a.Pains) > 0 {
 		out["pains"] = a.Pains
+	}
+	if a.Website != "" {
+		out["website"] = a.Website
+	}
+	if a.Instagram != "" {
+		out["instagram"] = a.Instagram
+	}
+	if a.CRMName != "" {
+		out["crm_name"] = a.CRMName
+	}
+	if a.CRMNotes != "" {
+		out["crm_notes"] = a.CRMNotes
+	}
+	if a.QuotingPersonalized != nil {
+		out["quoting_personalized"] = *a.QuotingPersonalized
+	}
+	if a.QuotingNotes != "" {
+		out["quoting_notes"] = a.QuotingNotes
+	}
+	if a.PriorityAgent != "" {
+		out["priority_agent"] = a.PriorityAgent
+	}
+	if a.PriorityReason != "" {
+		out["priority_reason"] = a.PriorityReason
+	}
+	if a.ProblemArea != "" {
+		out["problem_area"] = a.ProblemArea
+	}
+	if a.ProblemAreaNote != "" {
+		out["problem_area_note"] = a.ProblemAreaNote
+	}
+	if a.SalesOnline != nil {
+		out["sales_online"] = *a.SalesOnline
+	}
+	if a.ProductType != "" {
+		out["product_type"] = a.ProductType
+	}
+	if a.SalesNote != "" {
+		out["sales_note"] = a.SalesNote
 	}
 	return json.Marshal(out)
 }
@@ -168,6 +245,95 @@ func Apply(name string, rawArgs json.RawMessage, current *Answers) (*IntakeMutat
 		}
 		m.AnswersDelta = current
 
+	case ToolSetWebPresence:
+		var in ToolInputWebPresence
+		if err := json.Unmarshal(rawArgs, &in); err != nil {
+			return nil, err
+		}
+		if w := strings.TrimSpace(in.Website); w != "" {
+			current.Website = normalizeURL(w)
+		}
+		if ig := strings.TrimSpace(in.Instagram); ig != "" {
+			current.Instagram = normalizeHandle(ig)
+		}
+		m.AnswersDelta = current
+
+	case ToolSetCRM:
+		var in ToolInputCRM
+		if err := json.Unmarshal(rawArgs, &in); err != nil {
+			return nil, err
+		}
+		if n := strings.TrimSpace(in.Name); n != "" {
+			current.CRMName = n
+			// Mirror to systems[] so the legacy summary view also surfaces it.
+			current.Systems = mergeUnique(current.Systems, []string{n})
+		}
+		if notes := strings.TrimSpace(in.Notes); notes != "" {
+			current.CRMNotes = notes
+		}
+		m.AnswersDelta = current
+
+	case ToolSetQuoting:
+		var in ToolInputQuoting
+		if err := json.Unmarshal(rawArgs, &in); err != nil {
+			return nil, err
+		}
+		v := in.Personalized
+		current.QuotingPersonalized = &v
+		if n := strings.TrimSpace(in.Notes); n != "" {
+			current.QuotingNotes = n
+		}
+		m.AnswersDelta = current
+
+	case ToolSetAgentPriority:
+		var in ToolInputAgentPriority
+		if err := json.Unmarshal(rawArgs, &in); err != nil {
+			return nil, err
+		}
+		agent := strings.ToLower(strings.TrimSpace(in.Agent))
+		switch agent {
+		case "ana", "leo", "maya", "sofia":
+			current.PriorityAgent = agent
+			if r := strings.TrimSpace(in.Reason); r != "" {
+				current.PriorityReason = r
+			}
+			m.AnswersDelta = current
+		default:
+			return nil, fmt.Errorf("priority agent must be one of ana|leo|maya|sofia, got %q", in.Agent)
+		}
+
+	case ToolSetProblemArea:
+		var in ToolInputProblemArea
+		if err := json.Unmarshal(rawArgs, &in); err != nil {
+			return nil, err
+		}
+		area := strings.ToLower(strings.TrimSpace(in.Area))
+		switch area {
+		case "vendas", "atendimento", "suporte", "agendamento", "marketing", "gestao":
+			current.ProblemArea = area
+			if n := strings.TrimSpace(in.Note); n != "" {
+				current.ProblemAreaNote = n
+			}
+			m.AnswersDelta = current
+		default:
+			return nil, fmt.Errorf("problem area must be one of vendas|atendimento|suporte|agendamento|marketing|gestao, got %q", in.Area)
+		}
+
+	case ToolSetSalesMode:
+		var in ToolInputSalesMode
+		if err := json.Unmarshal(rawArgs, &in); err != nil {
+			return nil, err
+		}
+		v := in.Online
+		current.SalesOnline = &v
+		if pt := strings.TrimSpace(in.ProductType); pt != "" {
+			current.ProductType = strings.ToLower(pt)
+		}
+		if n := strings.TrimSpace(in.Note); n != "" {
+			current.SalesNote = n
+		}
+		m.AnswersDelta = current
+
 	case ToolMarkQualified:
 		var in ToolInputMarkQualified
 		if err := json.Unmarshal(rawArgs, &in); err != nil {
@@ -219,6 +385,41 @@ func mergeUnique(base, add []string) []string {
 		out = append(out, v)
 	}
 	return out
+}
+
+// normalizeURL strips trailing slashes/spaces and prefixes https:// when the
+// visitor pasted a bare domain. We deliberately don't validate further — the
+// goal is to keep what the person actually typed, not gatekeep on the form.
+func normalizeURL(raw string) string {
+	v := strings.TrimSpace(raw)
+	v = strings.TrimRight(v, "/")
+	lower := strings.ToLower(v)
+	if lower == "" {
+		return ""
+	}
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return v
+	}
+	return "https://" + v
+}
+
+// normalizeHandle keeps Instagram identifiers in a consistent "@user" form,
+// accepting both URLs ("instagram.com/foo") and bare handles ("foo" / "@foo").
+func normalizeHandle(raw string) string {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return ""
+	}
+	if strings.Contains(v, "instagram.com/") {
+		idx := strings.Index(v, "instagram.com/")
+		v = v[idx+len("instagram.com/"):]
+		v = strings.Trim(v, "/")
+	}
+	v = strings.TrimPrefix(v, "@")
+	if v == "" {
+		return ""
+	}
+	return "@" + v
 }
 
 // pickBusinessType collapses set_business inputs to the single-value

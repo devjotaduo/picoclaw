@@ -163,9 +163,11 @@ func (h *Handler) handleCompanyIntakeChat(w http.ResponseWriter, r *http.Request
 	// Function/tool calling round-trip: the first LLM call may answer only with
 	// tool_calls (no text) and end with finish_reason=tool_calls. We then have
 	// to append the tool results back into the message list and call the LLM
-	// again so it can produce the actual user-facing reply. Cap the loop to a
-	// small bound so a misbehaving model can't burn the token budget.
-	const maxToolRoundTrips = 3
+	// again so it can produce the actual user-facing reply. Empirically Claude
+	// via LiteLLM/OpenRouter often spreads a single visitor utterance into 3-5
+	// sequential tool calls (one per Clara tool) before composing the reply,
+	// so we allow up to 8 round-trips before forcing the loop to break.
+	const maxToolRoundTrips = 8
 
 	var (
 		qualifiedReason string
@@ -236,14 +238,29 @@ func (h *Handler) handleCompanyIntakeChat(w http.ResponseWriter, r *http.Request
 			latest, lerr := h.CompanyIntakes.GetByToken(ctx, id, tokenHash)
 			if lerr == nil && latest != nil {
 				snap := answersSnapshot(latest)
-				emit("extracted", map[string]any{
+				payload := map[string]any{
 					"company_name": latest.CompanyName,
 					"contact_name": latest.ContactName,
 					"segments":     snap.segments,
 					"channels":     snap.channels,
 					"pains":        snap.pains,
 					"systems":      snap.systems,
-				})
+					"offer":        snap.offer,
+					"website":      snap.website,
+					"instagram":    snap.instagram,
+					"crm_name":     snap.crmName,
+					"crm_notes":    snap.crmNotes,
+					"quoting_personalized": snap.quotingPersonalized,
+					"quoting_notes":        snap.quotingNotes,
+					"priority_agent":       snap.priorityAgent,
+					"priority_reason":      snap.priorityReason,
+					"problem_area":         snap.problemArea,
+					"problem_area_note":    snap.problemAreaNote,
+					"sales_online":         snap.salesOnline,
+					"product_type":         snap.productType,
+					"sales_note":           snap.salesNote,
+				}
+				emit("extracted", payload)
 			}
 
 			toolResults = append(toolResults, chatStoredMessage{
@@ -269,11 +286,14 @@ func (h *Handler) handleCompanyIntakeChat(w http.ResponseWriter, r *http.Request
 			history = append(history, tr)
 		}
 
-		// If the model didn't call any tool, the turn is complete and `text`
-		// already streamed to the client. Done.
-		// If it did and finish_reason was tool_calls, loop back: feed the
-		// tool results and let the model continue (typically yielding text).
-		if len(toolCalls) == 0 || finish != "tool_calls" {
+		// Loop again whenever the model used any tool. We don't trust
+		// finish_reason here because LiteLLM proxying to OpenRouter often
+		// rewrites it to "stop" even when the upstream Anthropic call ended
+		// with tool_use — leaving us with tools applied but no follow-up
+		// text. Forcing a second round lets the model see the tool results
+		// and produce the conversational reply that closes the loop.
+		_ = finish
+		if len(toolCalls) == 0 {
 			break
 		}
 	}
@@ -282,7 +302,17 @@ func (h *Handler) handleCompanyIntakeChat(w http.ResponseWriter, r *http.Request
 		if _, err := h.CompanyIntakes.MarkQualified(ctx, id, tokenHash); err != nil {
 			emit("error", map[string]any{"message": "mark qualified: " + err.Error()})
 		} else {
-			emit("qualified", map[string]any{"reason": qualifiedReason})
+			// Flag the intake for Sofia's WhatsApp follow-up. We store both a
+			// boolean (for fast admin filters) and a list of topics that still
+			// need clarification — derived from what Clara *didn't* capture.
+			if err := h.markIntakeForFollowup(ctx, id, tokenHash); err == nil {
+				emit("qualified", map[string]any{
+					"reason":                  qualifiedReason,
+					"needs_whatsapp_followup": true,
+				})
+			} else {
+				emit("qualified", map[string]any{"reason": qualifiedReason})
+			}
 		}
 	}
 
@@ -354,6 +384,70 @@ func streamOneTurn(
 	return text, toolCalls, finish, err
 }
 
+// markIntakeForFollowup tags answers.needs_whatsapp_followup=true plus a list
+// of topics that Clara intentionally left for Sofia (preços, integrações,
+// detalhes técnicos). The admin UI filters submitted intakes by this flag
+// when prioritising who Sofia must call back.
+func (h *Handler) markIntakeForFollowup(ctx context.Context, id, tokenHash string) error {
+	intake, err := h.CompanyIntakes.GetByToken(ctx, id, tokenHash)
+	if err != nil {
+		return err
+	}
+	parsed, err := clara.ParseAnswers(intake.AnswersJSON)
+	if err != nil || parsed == nil {
+		return err
+	}
+	if parsed.Extra == nil {
+		parsed.Extra = map[string]any{}
+	}
+	parsed.Extra["needs_whatsapp_followup"] = true
+	parsed.Extra["followup_topics"] = followupTopicsFor(parsed)
+
+	raw, err := parsed.Marshal()
+	if err != nil {
+		return err
+	}
+	_, err = h.CompanyIntakes.SaveDraft(ctx, id, tokenHash,
+		intake.CompanyName, intake.ContactName,
+		intake.ContactEmail, intake.ContactWhatsApp,
+		raw, intake.AudioTranscript)
+	return err
+}
+
+// followupTopicsFor enumerates what Sofia still needs to clarify on WhatsApp
+// based on what Clara did NOT manage to capture. Stays high-level — actual
+// data collection is Sofia's job, this list just primes her conversation.
+func followupTopicsFor(a *clara.Answers) []string {
+	topics := []string{}
+	if a.QuotingPersonalized != nil && *a.QuotingPersonalized {
+		topics = append(topics, "variáveis e tabela de preços do orçamento")
+	}
+	if a.CRMName != "" {
+		topics = append(topics, "credenciais e dados de integração do "+a.CRMName)
+	}
+	if a.SalesOnline != nil && *a.SalesOnline {
+		topics = append(topics, "plataformas/marketplace onde vende online")
+	}
+	switch a.ProblemArea {
+	case "agendamento":
+		topics = append(topics, "ferramenta de agenda atual e janela típica de horários")
+	case "vendas":
+		topics = append(topics, "ticket médio e ciclo de venda")
+	case "suporte":
+		topics = append(topics, "principais reclamações e prazo médio de resposta")
+	case "marketing":
+		topics = append(topics, "linha editorial do Instagram e frequência de posts")
+	case "gestao":
+		topics = append(topics, "quais relatórios o dono olha hoje (se algum)")
+	}
+	topics = append(topics,
+		"horários de atendimento detalhados",
+		"3 a 5 FAQs mais comuns",
+		"diretrizes de marca e tom de voz",
+	)
+	return topics
+}
+
 // extractedSnapshot is the typed shape we forward to the browser in the
 // `extracted` SSE event. The keys mirror clara.Answers so the front-end can
 // merge them into its existing ClaraExtracted state without a translation.
@@ -362,6 +456,25 @@ type extractedSnapshot struct {
 	channels []string
 	pains    []string
 	systems  []string
+
+	offer     string
+	website   string
+	instagram string
+	crmName   string
+	crmNotes  string
+
+	// nil = unanswered, non-nil = explicit yes/no from the visitor
+	quotingPersonalized *bool
+	quotingNotes        string
+
+	priorityAgent  string
+	priorityReason string
+
+	problemArea     string
+	problemAreaNote string
+	salesOnline     *bool
+	productType     string
+	salesNote       string
 }
 
 func answersSnapshot(intake *store.CompanyIntake) extractedSnapshot {
@@ -370,10 +483,24 @@ func answersSnapshot(intake *store.CompanyIntake) extractedSnapshot {
 		return extractedSnapshot{}
 	}
 	return extractedSnapshot{
-		segments: nonNilStrings(parsed.Segments),
-		channels: nonNilStrings(parsed.Channels),
-		pains:    nonNilStrings(parsed.Pains),
-		systems:  nonNilStrings(parsed.Systems),
+		segments:            nonNilStrings(parsed.Segments),
+		channels:            nonNilStrings(parsed.Channels),
+		pains:               nonNilStrings(parsed.Pains),
+		systems:             nonNilStrings(parsed.Systems),
+		offer:               parsed.Offer,
+		website:             parsed.Website,
+		instagram:           parsed.Instagram,
+		crmName:             parsed.CRMName,
+		crmNotes:            parsed.CRMNotes,
+		quotingPersonalized: parsed.QuotingPersonalized,
+		quotingNotes:        parsed.QuotingNotes,
+		priorityAgent:       parsed.PriorityAgent,
+		priorityReason:      parsed.PriorityReason,
+		problemArea:         parsed.ProblemArea,
+		problemAreaNote:     parsed.ProblemAreaNote,
+		salesOnline:         parsed.SalesOnline,
+		productType:         parsed.ProductType,
+		salesNote:           parsed.SalesNote,
 	}
 }
 
@@ -422,7 +549,7 @@ func buildClaraRequest(model, intakeID string, history []chatStoredMessage) *lit
 		Messages:    messages,
 		Tools:       tools,
 		Temperature: 0.6,
-		MaxTokens:   600,
+		MaxTokens:   1200, // headroom: 3-5 tool calls + a conversational reply
 		User:        intakeID,
 	}
 }
