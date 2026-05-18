@@ -247,16 +247,11 @@ func (h *inboxHTTPHandler) sendManual(w http.ResponseWriter, r *http.Request, ji
 }
 
 func operatorFromRequest(r *http.Request) Operator {
-	const (
-		headerUserID    = "X-Picoclaw-Gateway-User"
-		headerUserEmail = "X-Picoclaw-Gateway-Email"
-	)
-	id := strings.TrimSpace(r.Header.Get(headerUserID))
-	email := strings.TrimSpace(r.Header.Get(headerUserEmail))
-	if id == "" && email == "" {
-		return Operator{}
-	}
-	return Operator{ID: id, Name: email}
+	// Do not trust operator identity from raw request headers on this shared
+	// channels HTTP server. If verified operator claims are made available here
+	// in the future (for example via authenticated middleware injecting them into
+	// context), extract them from that verified source instead.
+	return Operator{}
 }
 
 // POST /whatsapp_native/inbox/chats/{jid}/read
