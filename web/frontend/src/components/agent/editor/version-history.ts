@@ -1,3 +1,9 @@
+import {
+  type AgentVersion as ApiAgentVersion,
+  createAgentVersion,
+  deleteAgentVersion,
+  listAgentVersions,
+} from "@/api/agent-versions"
 import type { TemplateApplyPayload } from "@/components/agent/templates/types"
 
 export interface AgentVersion {
@@ -20,7 +26,21 @@ function safeStorage(): Storage | null {
   }
 }
 
-export function loadVersions(agentID: string): AgentVersion[] {
+function fromApi(v: ApiAgentVersion): AgentVersion {
+  return {
+    id: v.id,
+    agentID: v.agent_id,
+    createdAt: v.created_at,
+    label: v.label ?? "",
+    payload: v.payload,
+  }
+}
+
+/**
+ * loadVersionsLocal reads the localStorage cache. Used as fallback
+ * when the server endpoint is unavailable or the operator is offline.
+ */
+export function loadVersionsLocal(agentID: string): AgentVersion[] {
   const storage = safeStorage()
   if (!storage) return []
   try {
@@ -33,7 +53,42 @@ export function loadVersions(agentID: string): AgentVersion[] {
   }
 }
 
-export function appendVersion(
+/**
+ * loadVersions tries the server first; on any failure falls back to
+ * localStorage. Callers should NOT bail out on network errors because
+ * the offline experience must remain functional.
+ */
+export async function loadVersions(agentID: string): Promise<AgentVersion[]> {
+  try {
+    const remote = await listAgentVersions(agentID)
+    return remote.map(fromApi)
+  } catch {
+    return loadVersionsLocal(agentID)
+  }
+}
+
+/**
+ * appendVersion persists a new version. Best-effort: writes to the
+ * server, falls back to localStorage on any failure (offline,
+ * launcher unauthenticated, transient 5xx), and always returns the
+ * version the caller can render immediately. Network outcome is
+ * silent on purpose — saving a version is a side effect of "Aplicar",
+ * not a primary user action, so we never surface its failure to the UI.
+ */
+export async function appendVersion(
+  agentID: string,
+  payload: TemplateApplyPayload,
+  label: string,
+): Promise<AgentVersion> {
+  try {
+    const created = await createAgentVersion(agentID, { label, payload })
+    return fromApi(created)
+  } catch {
+    return appendVersionLocal(agentID, payload, label)
+  }
+}
+
+function appendVersionLocal(
   agentID: string,
   payload: TemplateApplyPayload,
   label: string,
@@ -62,7 +117,24 @@ export function appendVersion(
   return version
 }
 
-export function deleteVersion(agentID: string, versionID: string): void {
+/**
+ * deleteVersion removes from the server when possible, and also
+ * cleans up the localStorage cache so the UI is consistent if the
+ * frontend reloads against an offline launcher.
+ */
+export async function deleteVersion(
+  agentID: string,
+  versionID: string,
+): Promise<void> {
+  try {
+    await deleteAgentVersion(agentID, versionID)
+  } catch {
+    // ignore — fall through to the local cleanup
+  }
+  deleteVersionLocal(agentID, versionID)
+}
+
+function deleteVersionLocal(agentID: string, versionID: string): void {
   const storage = safeStorage()
   if (!storage) return
   try {

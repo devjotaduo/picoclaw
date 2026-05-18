@@ -89,47 +89,50 @@ function fakePayload(overrides: Partial<TemplateApplyPayload> = {}): TemplateApp
   }
 }
 
-describe("appendVersion + loadVersions", () => {
-  it("stores and reads back a version", () => {
-    appendVersion("ana", fakePayload(), "Label A")
-    const list = loadVersions("ana")
+describe("appendVersion + loadVersions (fallback localStorage path)", () => {
+  // The server endpoint is unreachable in the unit test environment;
+  // appendVersion/loadVersions silently fall back to localStorage.
+  it("stores and reads back a version", async () => {
+    await appendVersion("ana", fakePayload(), "Label A")
+    const list = await loadVersions("ana")
     expect(list).toHaveLength(1)
     expect(list[0]?.label).toBe("Label A")
   })
 
-  it("returns newest first", () => {
-    appendVersion("ana", fakePayload({ name: "v1" }), "first")
-    appendVersion("ana", fakePayload({ name: "v2" }), "second")
-    const list = loadVersions("ana")
+  it("returns newest first", async () => {
+    await appendVersion("ana", fakePayload({ name: "v1" }), "first")
+    await appendVersion("ana", fakePayload({ name: "v2" }), "second")
+    const list = await loadVersions("ana")
     expect(list[0]?.label).toBe("second")
     expect(list[1]?.label).toBe("first")
   })
 
-  it("caps at 20 versions per agent", () => {
+  it("caps at 20 versions per agent", async () => {
     for (let i = 0; i < 25; i++) {
-      appendVersion("ana", fakePayload({ name: `v${i}` }), `label-${i}`)
+      await appendVersion("ana", fakePayload({ name: `v${i}` }), `label-${i}`)
     }
-    expect(loadVersions("ana")).toHaveLength(20)
+    const list = await loadVersions("ana")
+    expect(list).toHaveLength(20)
   })
 
-  it("isolates versions per agent", () => {
-    appendVersion("ana", fakePayload(), "Ana label")
-    appendVersion("leo", fakePayload(), "Leo label")
-    expect(loadVersions("ana")).toHaveLength(1)
-    expect(loadVersions("leo")).toHaveLength(1)
-    expect(loadVersions("ana")[0]?.label).toBe("Ana label")
+  it("isolates versions per agent", async () => {
+    await appendVersion("ana", fakePayload(), "Ana label")
+    await appendVersion("leo", fakePayload(), "Leo label")
+    expect(await loadVersions("ana")).toHaveLength(1)
+    expect(await loadVersions("leo")).toHaveLength(1)
+    expect((await loadVersions("ana"))[0]?.label).toBe("Ana label")
   })
 })
 
 describe("deleteVersion", () => {
-  it("removes a version by id", () => {
-    const created = appendVersion("ana", fakePayload(), "to delete")
-    deleteVersion("ana", created.id)
-    expect(loadVersions("ana")).toHaveLength(0)
+  it("removes a version by id", async () => {
+    const created = await appendVersion("ana", fakePayload(), "to delete")
+    await deleteVersion("ana", created.id)
+    expect(await loadVersions("ana")).toHaveLength(0)
   })
 
-  it("does nothing for unknown agent", () => {
-    expect(() => deleteVersion("ghost", "x")).not.toThrow()
+  it("does nothing for unknown agent", async () => {
+    await expect(deleteVersion("ghost", "x")).resolves.toBeUndefined()
   })
 })
 
