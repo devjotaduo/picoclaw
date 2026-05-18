@@ -13,6 +13,14 @@ export interface WhatsAppChat {
   paused: boolean
   unread_count: number
   updated_at: number
+  /**
+   * Optional epoch (ms or seconds) of the contact's most recent typing event.
+   * When `Date.now() - typing_at < 5s`, the dashboard renders a "digitando…"
+   * indicator. Emitted by the gateway when a presence/composing event is
+   * observed — until that lands server-side, this stays undefined and the
+   * indicator is simply hidden.
+   */
+  typing_at?: number
 }
 
 // Delivery status for outbound messages. Matches the four-state model used by

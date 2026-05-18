@@ -44,8 +44,21 @@ export function useAgentAutoPause({
   const [autoPaused, setAutoPaused] = useState(false)
   const debounceRef = useRef<number | null>(null)
   const idleRef = useRef<number | null>(null)
+
+  // Mirror prop/state into refs from effects, so timer callbacks read fresh
+  // values without retriggering all the useCallback deps each render.
   const pausedRef = useRef(paused)
-  pausedRef.current = paused
+  const autoPausedRef = useRef(autoPaused)
+  const onChangeRef = useRef(onChange)
+  useEffect(() => {
+    pausedRef.current = paused
+  }, [paused])
+  useEffect(() => {
+    autoPausedRef.current = autoPaused
+  }, [autoPaused])
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
 
   const clearTimers = useCallback(() => {
     if (debounceRef.current != null) {
@@ -75,7 +88,7 @@ export function useAgentAutoPause({
     debounceRef.current = window.setTimeout(() => {
       if (!pausedRef.current) {
         setAutoPaused(true)
-        onChange(true, "typing")
+        onChangeRef.current(true, "typing")
       }
     }, typingDebounceMs)
 
@@ -84,20 +97,16 @@ export function useAgentAutoPause({
       // by the operator stays sticky until they resume manually.
       if (pausedRef.current && autoPausedRef.current) {
         setAutoPaused(false)
-        onChange(false, "idle-resume")
+        onChangeRef.current(false, "idle-resume")
       }
     }, idleResumeMs)
-  }, [enabled, idleResumeMs, onChange, typingDebounceMs])
-
-  // Mirror autoPaused into a ref the idle timer can read without re-binding.
-  const autoPausedRef = useRef(false)
-  autoPausedRef.current = autoPaused
+  }, [enabled, idleResumeMs, typingDebounceMs])
 
   const resumeNow = useCallback(() => {
     clearTimers()
     setAutoPaused(false)
-    if (pausedRef.current) onChange(false, "manual")
-  }, [clearTimers, onChange])
+    if (pausedRef.current) onChangeRef.current(false, "manual")
+  }, [clearTimers])
 
   return { autoPaused, notifyTyping, resumeNow }
 }
