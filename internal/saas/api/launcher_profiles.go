@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -59,7 +58,7 @@ func (h *Handler) handleCreateLauncherProfile(w http.ResponseWriter, r *http.Req
 	}
 	id := slug + "-" + randomHex(3)
 	seedPath := filepath.Join(h.Cfg.TenantProfileDir, id, "seed")
-	if err := os.MkdirAll(seedPath, 0o755); err != nil {
+	if err := tenant.InitializeDefaultLauncherProfileSeed(h.Cfg.TenantTemplateDir, seedPath); err != nil {
 		writeError(w, http.StatusInternalServerError, "seed dir error")
 		return
 	}
@@ -169,6 +168,12 @@ func (h *Handler) handlePutLauncherProfileSeed(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if p.IsDefault {
+		if _, err := tenant.NormalizeDefaultLauncherProfileSeed(p.SeedPath); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 	if err := h.Profiles.Update(r.Context(), p); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -184,6 +189,12 @@ func (h *Handler) handleImportStandaloneLauncherProfile(w http.ResponseWriter, r
 	if err := tenant.ImportStandaloneProfile(h.Cfg.TenantTemplateDir, p.SeedPath); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if p.IsDefault {
+		if _, err := tenant.NormalizeDefaultLauncherProfileSeed(p.SeedPath); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 	if err := h.Profiles.Update(r.Context(), p); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

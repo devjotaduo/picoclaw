@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Save, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Plus,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   createLauncherProfile,
   deleteLauncherProfile,
@@ -35,6 +43,20 @@ import {
   setLauncherDisplayOption,
   type LauncherDisplayKey,
 } from "@/lib/launcher-display";
+import {
+  addJSONObjectProperty,
+  appendJSONArrayItem,
+  createJSONValue,
+  deleteJSONValueAtPath,
+  formatVisualJSON,
+  getJSONValueType,
+  parseJSONScalar,
+  parseJSONText,
+  setJSONValueAtPath,
+  type JSONPath,
+  type JSONValue,
+  type JSONValueType,
+} from "@/lib/json-visual-editor";
 
 export function LauncherProfiles() {
   const qc = useQueryClient();
@@ -182,6 +204,22 @@ function ProfileEditor({
     () => parseLauncherDisplayConfig(configText),
     [configText],
   );
+  const behaviorJSON = useMemo(
+    () => parseJSONText(behaviorText),
+    [behaviorText],
+  );
+  const behaviorRootError = behaviorJSON.error
+    ? behaviorJSON.error
+    : !behaviorJSON.value ||
+        typeof behaviorJSON.value !== "object" ||
+        Array.isArray(behaviorJSON.value)
+      ? "workspace/behavior.json precisa ser um objeto JSON"
+      : null;
+  const seedJSONError = launcherDisplay.error
+    ? `config.json: ${launcherDisplay.error}`
+    : behaviorRootError
+      ? `workspace/behavior.json: ${behaviorRootError}`
+      : null;
 
   useEffect(() => {
     setName(profile.name);
@@ -409,7 +447,7 @@ function ProfileEditor({
             state={launcherDisplay}
             onChange={handleLauncherDisplayChange}
           />
-          <Editor
+          <JsonEditor
             label="config.json"
             value={configText}
             onChange={setConfigText}
@@ -427,16 +465,19 @@ function ProfileEditor({
             onChange={setSoulText}
             height="h-44"
           />
-          <Editor
+          <JsonEditor
             label="workspace/behavior.json"
             value={behaviorText}
             onChange={setBehaviorText}
             height="h-44"
           />
+          {seedJSONError ? (
+            <p className="text-xs text-red-300">{seedJSONError}</p>
+          ) : null}
           <div className="flex justify-end">
             <Button
               onClick={() => saveSeedM.mutate()}
-              disabled={saveSeedM.isPending}
+              disabled={saveSeedM.isPending || seedJSONError !== null}
             >
               <Save className="h-4 w-4" /> Save seed files
             </Button>
@@ -468,6 +509,426 @@ function Editor({
       />
     </div>
   );
+}
+
+const jsonValueTypes: JSONValueType[] = [
+  "string",
+  "number",
+  "boolean",
+  "null",
+  "object",
+  "array",
+];
+
+const jsonValueTypeLabels: Record<JSONValueType, string> = {
+  string: "Texto",
+  number: "Numero",
+  boolean: "Booleano",
+  null: "Nulo",
+  object: "Objeto",
+  array: "Lista",
+};
+
+function JsonEditor({
+  label,
+  value,
+  onChange,
+  height,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  height: string;
+}) {
+  const [mode, setMode] = useState<"visual" | "json">("visual");
+  const parsed = useMemo(() => parseJSONText(value), [value]);
+
+  const updateRoot = (nextValue: JSONValue) => {
+    onChange(formatVisualJSON(nextValue));
+  };
+
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <Label className="mb-0">{label}</Label>
+        <div className="inline-flex rounded-md border border-zinc-800 bg-zinc-950 p-1">
+          <button
+            type="button"
+            onClick={() => setMode("visual")}
+            className={`rounded px-3 py-1.5 text-xs ${
+              mode === "visual"
+                ? "bg-zinc-800 text-zinc-100"
+                : "text-zinc-500 hover:text-zinc-200"
+            }`}
+          >
+            Visual
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("json")}
+            className={`rounded px-3 py-1.5 text-xs ${
+              mode === "json"
+                ? "bg-zinc-800 text-zinc-100"
+                : "text-zinc-500 hover:text-zinc-200"
+            }`}
+          >
+            JSON avancado
+          </button>
+        </div>
+      </div>
+
+      {mode === "visual" ? (
+        <div
+          className={`${height} overflow-auto rounded-md border ${
+            parsed.error ? "border-red-800" : "border-zinc-800"
+          } bg-zinc-950 p-3`}
+        >
+          {parsed.error === null ? (
+            <JsonNode
+              root={parsed.value as JSONValue}
+              value={parsed.value as JSONValue}
+              path={[]}
+              label="$"
+              isRoot
+              onRootChange={updateRoot}
+            />
+          ) : (
+            <div className="rounded-md border border-red-900/70 bg-red-950/20 px-3 py-2 text-xs text-red-300">
+              Corrija o JSON avancado antes de editar visualmente:{" "}
+              {parsed.error}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div>
+          <textarea
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            className={`${height} w-full rounded-md border ${
+              parsed.error ? "border-red-700" : "border-zinc-700"
+            } bg-zinc-950 p-3 font-mono text-xs text-zinc-100`}
+          />
+          {parsed.error ? (
+            <p className="mt-2 text-xs text-red-300">{parsed.error}</p>
+          ) : (
+            <p className="mt-2 text-xs text-zinc-500">
+              JSON valido fica sincronizado com o editor visual.
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function JsonNode({
+  root,
+  value,
+  path,
+  label,
+  isRoot = false,
+  depth = 0,
+  onRootChange,
+  onDelete,
+}: {
+  root: JSONValue;
+  value: JSONValue;
+  path: JSONPath;
+  label: string;
+  isRoot?: boolean;
+  depth?: number;
+  onRootChange: (value: JSONValue) => void;
+  onDelete?: () => void;
+}) {
+  const type = getJSONValueType(value);
+  const isBranch = type === "object" || type === "array";
+  const [expanded, setExpanded] = useState(isRoot || depth < 2);
+
+  const setSelf = (nextValue: JSONValue) => {
+    onRootChange(setJSONValueAtPath(root, path, nextValue));
+  };
+
+  const objectEntries =
+    type === "object" && value && typeof value === "object" && !Array.isArray(value)
+      ? Object.entries(value)
+      : [];
+  const arrayItems = Array.isArray(value) ? value : [];
+  const childCount = type === "object" ? objectEntries.length : arrayItems.length;
+
+  return (
+    <div className={isRoot ? "space-y-2" : "space-y-2"}>
+      <div className="flex min-w-[640px] items-center gap-2 rounded-md border border-zinc-900 bg-zinc-950/80 px-2 py-2">
+        {isBranch ? (
+          <button
+            type="button"
+            onClick={() => setExpanded((current) => !current)}
+            className="rounded p-1 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
+            aria-label={expanded ? "Recolher" : "Expandir"}
+          >
+            {expanded ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </button>
+        ) : (
+          <span className="h-6 w-6" />
+        )}
+
+        <span
+          className={`min-w-28 max-w-48 truncate font-mono text-xs ${
+            isRoot ? "text-brand-300" : "text-zinc-300"
+          }`}
+          title={label}
+        >
+          {label}
+        </span>
+
+        <JSONTypeSelect
+          value={type}
+          onChange={(nextType) => setSelf(createJSONValue(nextType))}
+        />
+
+        {isBranch ? (
+          <span className="rounded bg-zinc-900 px-2 py-1 text-[11px] text-zinc-500">
+            {childCount} {childCount === 1 ? "item" : "itens"}
+          </span>
+        ) : (
+          <JSONScalarInput
+            type={type}
+            value={value}
+            onChange={(nextValue) => setSelf(nextValue)}
+          />
+        )}
+
+        {!isRoot && onDelete ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="ml-auto rounded p-1 text-zinc-500 hover:bg-red-950/40 hover:text-red-300"
+            aria-label="Remover"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+
+      {isBranch && expanded ? (
+        <div className="ml-4 space-y-2 border-l border-zinc-800 pl-3">
+          {type === "object" ? (
+            <>
+              {objectEntries.length === 0 ? (
+                <div className="rounded-md border border-dashed border-zinc-800 px-3 py-2 text-xs text-zinc-600">
+                  Objeto vazio
+                </div>
+              ) : null}
+              {objectEntries.map(([key, item]) => (
+                <JsonNode
+                  key={`${pathKey(path)}.${key}`}
+                  root={root}
+                  value={item}
+                  path={[...path, key]}
+                  label={key}
+                  depth={depth + 1}
+                  onRootChange={onRootChange}
+                  onDelete={() =>
+                    onRootChange(deleteJSONValueAtPath(root, [...path, key]))
+                  }
+                />
+              ))}
+              <JSONAddObjectProperty
+                root={root}
+                path={path}
+                onRootChange={onRootChange}
+              />
+            </>
+          ) : (
+            <>
+              {arrayItems.length === 0 ? (
+                <div className="rounded-md border border-dashed border-zinc-800 px-3 py-2 text-xs text-zinc-600">
+                  Lista vazia
+                </div>
+              ) : null}
+              {arrayItems.map((item, index) => (
+                <JsonNode
+                  key={`${pathKey(path)}.${index}`}
+                  root={root}
+                  value={item}
+                  path={[...path, index]}
+                  label={`[${index}]`}
+                  depth={depth + 1}
+                  onRootChange={onRootChange}
+                  onDelete={() =>
+                    onRootChange(deleteJSONValueAtPath(root, [...path, index]))
+                  }
+                />
+              ))}
+              <JSONAppendArrayItem
+                root={root}
+                path={path}
+                onRootChange={onRootChange}
+              />
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function JSONScalarInput({
+  type,
+  value,
+  onChange,
+}: {
+  type: JSONValueType;
+  value: JSONValue;
+  onChange: (value: JSONValue) => void;
+}) {
+  if (type === "string") {
+    return (
+      <Input
+        value={typeof value === "string" ? value : ""}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-8 min-w-64 flex-1 font-mono text-xs"
+      />
+    );
+  }
+
+  if (type === "number") {
+    return (
+      <Input
+        type="number"
+        value={typeof value === "number" ? String(value) : "0"}
+        onChange={(event) => {
+          const parsed = parseJSONScalar(event.target.value, "number");
+          if (!parsed.error) onChange(parsed.value);
+        }}
+        className="h-8 min-w-40 flex-1 font-mono text-xs"
+      />
+    );
+  }
+
+  if (type === "boolean") {
+    return (
+      <select
+        value={value === true ? "true" : "false"}
+        onChange={(event) => {
+          const parsed = parseJSONScalar(event.target.value, "boolean");
+          onChange(parsed.value);
+        }}
+        className="h-8 min-w-32 rounded border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-200"
+      >
+        <option value="true">true</option>
+        <option value="false">false</option>
+      </select>
+    );
+  }
+
+  return (
+    <span className="rounded border border-zinc-800 px-2 py-1 text-xs text-zinc-500">
+      null
+    </span>
+  );
+}
+
+function JSONAddObjectProperty({
+  root,
+  path,
+  onRootChange,
+}: {
+  root: JSONValue;
+  path: JSONPath;
+  onRootChange: (value: JSONValue) => void;
+}) {
+  const [keyName, setKeyName] = useState("");
+  const [type, setType] = useState<JSONValueType>("string");
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <form
+      className="flex min-w-[640px] flex-wrap items-center gap-2 rounded-md border border-dashed border-zinc-800 px-2 py-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const result = addJSONObjectProperty(root, path, keyName, type);
+        setError(result.error);
+        if (!result.error) {
+          onRootChange(result.value);
+          setKeyName("");
+        }
+      }}
+    >
+      <Input
+        value={keyName}
+        onChange={(event) => setKeyName(event.target.value)}
+        placeholder="nova_chave"
+        className="h-8 w-52 font-mono text-xs"
+      />
+      <JSONTypeSelect value={type} onChange={setType} />
+      <Button type="submit" variant="outline" size="sm">
+        <Plus className="h-4 w-4" /> Adicionar
+      </Button>
+      {error ? <span className="text-xs text-red-300">{error}</span> : null}
+    </form>
+  );
+}
+
+function JSONAppendArrayItem({
+  root,
+  path,
+  onRootChange,
+}: {
+  root: JSONValue;
+  path: JSONPath;
+  onRootChange: (value: JSONValue) => void;
+}) {
+  const [type, setType] = useState<JSONValueType>("string");
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="flex min-w-[640px] flex-wrap items-center gap-2 rounded-md border border-dashed border-zinc-800 px-2 py-2">
+      <JSONTypeSelect value={type} onChange={setType} />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          const result = appendJSONArrayItem(root, path, type);
+          setError(result.error);
+          if (!result.error) onRootChange(result.value);
+        }}
+      >
+        <Plus className="h-4 w-4" /> Adicionar item
+      </Button>
+      {error ? <span className="text-xs text-red-300">{error}</span> : null}
+    </div>
+  );
+}
+
+function JSONTypeSelect({
+  value,
+  onChange,
+}: {
+  value: JSONValueType;
+  onChange: (value: JSONValueType) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value as JSONValueType)}
+      className="h-8 rounded border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-200"
+    >
+      {jsonValueTypes.map((type) => (
+        <option key={type} value={type}>
+          {jsonValueTypeLabels[type]}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function pathKey(path: JSONPath) {
+  return path.length === 0 ? "$" : path.map(String).join(".");
 }
 
 function LauncherDisplayOptions({
