@@ -270,6 +270,68 @@ export async function markWhatsAppChatRead(jid: string): Promise<void> {
   })
 }
 
+export async function markWhatsAppChatUnread(jid: string): Promise<void> {
+  const res = await launcherFetch(
+    `/api/whatsapp/chats/${encodeURIComponent(jid)}/unread`,
+    { method: "POST" },
+  )
+  if (!res.ok) {
+    throw new Error(`mark unread failed: ${res.status} ${res.statusText}`)
+  }
+}
+
+// ─── internal notes (dashboard-only annotations) ──────────────────────────────
+
+export interface WhatsAppInternalNote {
+  id: number
+  chat_jid: string
+  content: string
+  author: string
+  ts: number
+}
+
+export async function listWhatsAppNotes(
+  jid: string,
+  limit = 100,
+): Promise<WhatsAppInternalNote[]> {
+  const data = await getJSON<{ notes: WhatsAppInternalNote[] }>(
+    `/api/whatsapp/chats/${encodeURIComponent(jid)}/notes?limit=${limit}`,
+  )
+  return data.notes ?? []
+}
+
+export async function addWhatsAppNote(input: {
+  jid: string
+  content: string
+  author: string
+}): Promise<WhatsAppInternalNote> {
+  const res = await launcherFetch(
+    `/api/whatsapp/chats/${encodeURIComponent(input.jid)}/notes`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: input.content, author: input.author }),
+    },
+  )
+  if (!res.ok) {
+    throw new Error(`add note failed: ${res.status} ${res.statusText}`)
+  }
+  return res.json() as Promise<WhatsAppInternalNote>
+}
+
+export async function deleteWhatsAppNote(
+  jid: string,
+  id: number,
+): Promise<void> {
+  const res = await launcherFetch(
+    `/api/whatsapp/chats/${encodeURIComponent(jid)}/notes/${id}`,
+    { method: "DELETE" },
+  )
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`delete note failed: ${res.status} ${res.statusText}`)
+  }
+}
+
 export type InboxConnectionStatus = "connecting" | "online" | "reconnecting" | "offline"
 
 export interface OpenInboxStreamOptions {

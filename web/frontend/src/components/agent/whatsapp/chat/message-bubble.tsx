@@ -17,6 +17,8 @@ export interface MessageBubbleProps {
   searchQuery?: string
   /** True when this bubble is the current search-cursor target. */
   isCurrentMatch?: boolean
+  /** Optional operator/agent name to enrich the audit tooltip. */
+  authorName?: string
   onReply?: (message: WhatsAppMessage) => void
   onForward?: (message: WhatsAppMessage) => void
   onDeleteLocal?: (message: WhatsAppMessage) => void
@@ -128,6 +130,7 @@ export function MessageBubble({
   pendingIds,
   searchQuery = "",
   isCurrentMatch = false,
+  authorName,
   onReply,
   onForward,
   onDeleteLocal,
@@ -152,17 +155,17 @@ export function MessageBubble({
 
   const bubbleClass = isOut
     ? isHuman
-      ? "bg-sky-500/15 ring-1 ring-sky-300/30 dark:ring-sky-700/30 text-foreground"
-      : "bg-[#d9fdd3] text-gray-900 dark:bg-emerald-950/60 dark:text-emerald-50 ring-1 ring-emerald-200/60 dark:ring-emerald-800/40"
-    : "bg-card ring-1 ring-border/60 text-foreground"
+      ? "bg-wa-bubble-out-human ring-1 ring-sky-300/40 dark:ring-sky-700/40 text-foreground"
+      : "bg-wa-bubble-out text-wa-bubble-out-fg ring-1 ring-emerald-200/60 dark:ring-emerald-800/40"
+    : "bg-wa-bubble-in ring-1 ring-border/60 text-foreground"
 
   const senderTooltip = isOut
     ? isHuman
-      ? "Enviado manualmente pelo operador"
+      ? `Enviado por: ${authorName ?? "Operador"} (manual)`
       : isAgent
-        ? "Enviado pelo agente automático"
-        : "Enviado pelo sistema"
-    : "Recebido do contato"
+        ? `Enviado por: ${authorName ?? "Agente"} (auto)`
+        : `Enviado por: ${authorName ?? "Sistema"}`
+    : `Recebido de: ${authorName ?? "Contato"}`
 
   return (
     <div
@@ -208,7 +211,7 @@ export function MessageBubble({
                     : "border-sky-500/60 dark:border-sky-400/70"
                 } bg-black/5 dark:bg-white/5 -mx-1 rounded px-2 py-1`}
               >
-                <p className="text-foreground/55 text-[10px] font-semibold uppercase">
+                <p className="text-foreground/70 text-[10px] font-semibold uppercase">
                   <IconCornerDownLeft
                     className="mb-px mr-0.5 inline size-2.5"
                     aria-hidden="true"
@@ -236,7 +239,7 @@ export function MessageBubble({
                 dateTime={new Date(
                   message.ts < 1e10 ? message.ts * 1000 : message.ts,
                 ).toISOString()}
-                className="text-foreground/55 dark:text-foreground/65 text-[10px] tabular-nums"
+                className="text-foreground/70 text-[11px] tabular-nums"
               >
                 {formatClock(message.ts)}
               </time>

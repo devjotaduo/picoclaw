@@ -43,7 +43,7 @@ function UnreadBadge({ count }: { count: number }) {
   if (count <= 0) return null
   return (
     <span
-      className="flex min-w-[20px] items-center justify-center rounded-full bg-[#25d366] px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-white shadow-sm"
+      className="bg-wa-brand flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-white shadow-sm"
       aria-label={`${count} mensagens não lidas`}
     >
       {count > 99 ? "99+" : count}
@@ -128,8 +128,8 @@ export function ConversationListItem({
               <span
                 className={`shrink-0 text-[11px] tabular-nums ${
                   hasUnread
-                    ? "font-semibold text-[#25d366]"
-                    : "text-foreground/55"
+                    ? "text-wa-brand font-semibold"
+                    : "text-foreground/70"
                 }`}
               >
                 {ts}

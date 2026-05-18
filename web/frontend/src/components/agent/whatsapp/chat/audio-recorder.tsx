@@ -54,7 +54,11 @@ export function AudioRecorder({
       const barHeight = Math.max(2, value * height * 0.9)
       const x = i * barWidth + barWidth * 0.15
       const y = (height - barHeight) / 2
-      ctx.fillStyle = "#25d366"
+      // Read the live token so the waveform inherits theme (light/dark).
+      ctx.fillStyle =
+        getComputedStyle(canvas)
+          .getPropertyValue("--wa-brand")
+          .trim() || "#25d366"
       ctx.fillRect(x, y, barWidth * 0.7, barHeight)
     }
   }, [waveform])
@@ -119,7 +123,7 @@ export function AudioRecorder({
           <Button
             type="button"
             size="icon"
-            className="size-9 shrink-0 rounded-full bg-[#25d366] text-white hover:bg-[#1da851]"
+            className="size-9 shrink-0 rounded-full bg-wa-brand text-white hover:bg-wa-brand-hover"
             onClick={async () => {
               const clip = await stop()
               if (clip) onSend(clip)

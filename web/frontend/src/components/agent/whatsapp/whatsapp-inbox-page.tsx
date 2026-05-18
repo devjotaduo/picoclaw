@@ -9,6 +9,7 @@ import {
   IconLoader2,
   IconMapPin,
   IconMessageCircle,
+  IconNotes,
   IconPhone,
   IconSearch,
   IconTags,
@@ -32,6 +33,7 @@ import {
   listWhatsAppChats,
   listWhatsAppMessages,
   markWhatsAppChatRead,
+  markWhatsAppChatUnread,
   pauseWhatsAppChat,
   saveWhatsAppContactProfile,
   sendWhatsAppManual,
@@ -52,22 +54,37 @@ import { Textarea } from "@/components/ui/textarea"
 import { useConversationSearch } from "@/hooks/whatsapp/use-conversation-search"
 import { useDragDropFiles } from "@/hooks/whatsapp/use-drag-drop-files"
 import { useAgentAutoPause } from "@/hooks/whatsapp/use-agent-auto-pause"
+import { useGlobalShortcuts } from "@/hooks/whatsapp/use-global-shortcuts"
 import { useInboxConnection } from "@/hooks/whatsapp/use-inbox-connection"
+import { useInternalNotes } from "@/hooks/whatsapp/use-internal-notes"
 import { usePendingMessages } from "@/hooks/whatsapp/use-pending-messages"
 import { useTypingWindow } from "@/hooks/whatsapp/use-typing-window"
 import { attachmentPlaceholder } from "@/lib/whatsapp/attachment-placeholder"
+import {
+  type ConversationFilter,
+  type ConversationSort,
+  applyFilter,
+  applySort,
+  collectTags,
+} from "@/lib/whatsapp/conversation-filter"
 import { formatJID } from "@/lib/whatsapp/format"
 import { truncatePreview } from "@/lib/whatsapp/quote"
+import { computeSLA } from "@/lib/whatsapp/sla"
 
 import { ChatHeader } from "./chat/chat-header"
+import { CommandPalette } from "./chat/command-palette"
 import { ContactAvatar } from "./chat/contact-avatar"
+import { ConversationFilters } from "./chat/conversation-filters"
 import { ConversationListItem } from "./chat/conversation-list-item"
 import { ConversationSearch } from "./chat/conversation-search"
 import { DragDropOverlay } from "./chat/drag-drop-overlay"
+import { EmptyConversationIllustration } from "./chat/empty-conversation-illustration"
 import { InboxSettingsMenu } from "./chat/inbox-settings-menu"
-import { MessageInput } from "./chat/message-input"
+import { LifecycleMenu, type LifecycleAction } from "./chat/lifecycle-menu"
+import { MessageInput, type MessageInputHandle } from "./chat/message-input"
 import { MessageList } from "./chat/message-list"
 import { type ReplyTarget } from "./chat/reply-preview"
+import { SLABadge } from "./chat/sla-badge"
 import { TagList } from "./chat/tag-list"
 
 const CHATS_QUERY_KEY = ["whatsapp", "chats"]
@@ -82,6 +99,11 @@ export function WhatsAppInboxPage() {
   const [draft, setDraft] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [mobileView, setMobileView] = useState<"list" | "chat">("list")
+  const [filter, setFilter] = useState<ConversationFilter>("all")
+  const [sort, setSort] = useState<ConversationSort>("recent")
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const composerRef = useRef<MessageInputHandle | null>(null)
 
   const chatsQuery = useQuery({
     queryKey: CHATS_QUERY_KEY,
@@ -143,14 +165,39 @@ export function WhatsAppInboxPage() {
       .catch(() => {})
   }, [selectedJID, queryClient])
 
+  // Profile cache used by the filter/sort layer. Reads every cached profile
+  // out of TanStack Query so the filter chips reflect tags/priorities the
+  // operator already loaded (we don't pre-fetch profiles for the whole list).
+  // Recomputed on every chat-list update so newly opened profiles get picked
+  // up — keying off `chatsQuery.dataUpdatedAt` is intentional even though it
+  // looks unused.
+  const profilesByJid = useMemo(() => {
+    const map: Record<string, WhatsAppContactProfile | undefined> = {}
+    const all = queryClient.getQueriesData<WhatsAppContactProfile>({
+      queryKey: ["whatsapp", "profile"],
+    })
+    for (const [key, profile] of all) {
+      const jid = Array.isArray(key) ? (key[2] as string | undefined) : undefined
+      if (jid && profile) map[jid] = profile
+    }
+    return map
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryClient, chatsQuery.dataUpdatedAt])
+
+  const allChats = useMemo(() => chatsQuery.data ?? [], [chatsQuery.data])
+  const tagOptions = useMemo(() => collectTags(profilesByJid), [profilesByJid])
+
   const sortedChats = useMemo(() => {
-    const list = chatsQuery.data ?? []
-    return [...list].sort((a, b) => b.last_message_ts - a.last_message_ts)
-  }, [chatsQuery.data])
+    const filtered = applyFilter(allChats, filter, {
+      profilesByJid,
+      tag: selectedTag,
+    })
+    return applySort(filtered, sort, { profilesByJid })
+  }, [allChats, filter, profilesByJid, selectedTag, sort])
 
   const selectedChat = useMemo(
-    () => sortedChats.find((c) => c.jid === selectedJID) ?? null,
-    [sortedChats, selectedJID],
+    () => allChats.find((c) => c.jid === selectedJID) ?? null,
+    [allChats, selectedJID],
   )
 
   const pauseMutation = useMutation({
@@ -211,10 +258,10 @@ export function WhatsAppInboxPage() {
     },
   })
 
-  // Mark a chat unread on the dashboard only (the backend has no /unread
-  // endpoint yet — when it lands, swap this for a real mutation). Pinned in
-  // the chat cache so the green badge appears immediately and survives until
-  // the operator opens the chat (which auto-clears via markRead).
+  // Toggle read/unread on the dashboard. Both directions hit the backend
+  // (read uses /read, unread uses /unread which bumps unread_count to
+  // MAX(1, current) so multi-tab views stay in sync via the SSE chat_update
+  // we publish server-side).
   const handleToggleRead = useCallback(
     (chat: WhatsAppChat) => {
       const next = chat.unread_count > 0 ? 0 : 1
@@ -224,14 +271,25 @@ export function WhatsAppInboxPage() {
           c.jid === chat.jid ? { ...c, unread_count: next } : c,
         )
       })
-      if (next === 0) {
-        void markWhatsAppChatRead(chat.jid).catch(() => {
-          /* tolerate offline */
+      const op = next === 0 ? markWhatsAppChatRead : markWhatsAppChatUnread
+      op(chat.jid)
+        .then(() => {
+          toast.success(
+            next === 0
+              ? "Conversa marcada como lida"
+              : "Conversa marcada como não lida",
+          )
         })
-        toast.success("Conversa marcada como lida")
-      } else {
-        toast.success("Conversa marcada como não lida")
-      }
+        .catch((err: unknown) => {
+          // Roll back optimistic update and surface the failure.
+          queryClient.setQueryData<WhatsAppChat[]>(CHATS_QUERY_KEY, (prev) => {
+            if (!prev) return prev
+            return prev.map((c) =>
+              c.jid === chat.jid ? { ...c, unread_count: chat.unread_count } : c,
+            )
+          })
+          toast.error(err instanceof Error ? err.message : String(err))
+        })
     },
     [queryClient],
   )
@@ -281,13 +339,52 @@ export function WhatsAppInboxPage() {
     setMobileView("list")
   }
 
-  const unreadTotal = useMemo(
-    () => sortedChats.reduce((sum, c) => sum + (c.unread_count > 0 ? 1 : 0), 0),
-    [sortedChats],
+  const counts = useMemo(() => {
+    let unread = 0
+    let paused = 0
+    let mine = 0
+    for (const c of allChats) {
+      if (c.unread_count > 0) unread += 1
+      if (c.paused) paused += 1
+      if (profilesByJid[c.jid]?.assigned_to?.trim()) mine += 1
+    }
+    return { unread, paused, mine, total: allChats.length }
+  }, [allChats, profilesByJid])
+
+  // ↑/↓ navigates the filtered list; Enter opens current; / focuses composer;
+  // Ctrl+K opens the global palette.
+  const selectedIndex = useMemo(
+    () => (selectedJID ? sortedChats.findIndex((c) => c.jid === selectedJID) : -1),
+    [selectedJID, sortedChats],
   )
 
+  useGlobalShortcuts({
+    onPrevConversation: () => {
+      if (sortedChats.length === 0) return
+      const next = selectedIndex <= 0 ? sortedChats.length - 1 : selectedIndex - 1
+      const target = sortedChats[next]
+      if (target) handleSelectChat(target.jid)
+    },
+    onNextConversation: () => {
+      if (sortedChats.length === 0) return
+      const next = (selectedIndex + 1) % sortedChats.length
+      const target = sortedChats[next]
+      if (target) handleSelectChat(target.jid)
+    },
+    onOpenCurrent: () => {
+      if (sortedChats.length === 0) return
+      const target = sortedChats[Math.max(0, selectedIndex)]
+      if (target) handleSelectChat(target.jid)
+    },
+    onOpenCommandPalette: () => setPaletteOpen(true),
+    onFocusComposer: () => composerRef.current?.focus(),
+    onEscape: () => {
+      if (paletteOpen) setPaletteOpen(false)
+    },
+  })
+
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col" data-whatsapp-inbox>
       <PageHeader title={t("navigation.whatsapp_inbox", "Caixa WhatsApp")}>
         <InboxSettingsMenu
           onRefresh={() =>
@@ -306,9 +403,17 @@ export function WhatsAppInboxPage() {
             loading={chatsQuery.isLoading}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
-            unreadTotal={unreadTotal}
+            unreadTotal={counts.unread}
             onToggleRead={handleToggleRead}
             onTogglePause={handleTogglePauseFromList}
+            filter={filter}
+            onFilterChange={setFilter}
+            sort={sort}
+            onSortChange={setSort}
+            tagOptions={tagOptions}
+            selectedTag={selectedTag}
+            onSelectedTagChange={setSelectedTag}
+            counts={counts}
             hidden={mobileView === "chat"}
           />
 
@@ -316,6 +421,7 @@ export function WhatsAppInboxPage() {
             chat={selectedChat}
             messages={messagesQuery.data ?? []}
             loadingMessages={messagesQuery.isLoading}
+            composerRef={composerRef}
             draft={draft}
             onDraftChange={(v) => {
               setDraft(v)
@@ -345,6 +451,26 @@ export function WhatsAppInboxPage() {
           />
         </div>
       </div>
+
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        chats={allChats}
+        onOpenChat={(chat) => handleSelectChat(chat.jid)}
+        actions={[
+          {
+            id: "refresh",
+            label: "Atualizar conversas",
+            onSelect: () =>
+              void queryClient.invalidateQueries({ queryKey: CHATS_QUERY_KEY }),
+          },
+          {
+            id: "focus-composer",
+            label: "Focar campo de mensagem (/)",
+            onSelect: () => composerRef.current?.focus(),
+          },
+        ]}
+      />
     </div>
   )
 }
@@ -361,6 +487,14 @@ function ConversationList({
   unreadTotal,
   onToggleRead,
   onTogglePause,
+  filter,
+  onFilterChange,
+  sort,
+  onSortChange,
+  tagOptions,
+  selectedTag,
+  onSelectedTagChange,
+  counts,
   hidden,
 }: {
   chats: WhatsAppChat[]
@@ -372,6 +506,14 @@ function ConversationList({
   unreadTotal: number
   onToggleRead?: (chat: WhatsAppChat) => void
   onTogglePause?: (chat: WhatsAppChat) => void
+  filter: ConversationFilter
+  onFilterChange: (f: ConversationFilter) => void
+  sort: ConversationSort
+  onSortChange: (s: ConversationSort) => void
+  tagOptions: readonly string[]
+  selectedTag: string | null
+  onSelectedTagChange: (tag: string | null) => void
+  counts: { total: number; unread: number; paused: number; mine: number }
   hidden: boolean
 }) {
   const { t } = useTranslation()
@@ -449,13 +591,27 @@ function ConversationList({
           )}
         </div>
         {hasSearch && (
-          <p className="text-foreground/55 mt-1.5 px-1 text-[11px]">
+          <p className="text-foreground/70 mt-1.5 px-1 text-[11px]">
             {filteredChats.length === 0
               ? "Nenhum contato encontrado"
               : `${filteredChats.length} de ${chats.length} conversa${filteredChats.length !== 1 ? "s" : ""}`}
           </p>
         )}
       </div>
+
+      <ConversationFilters
+        filter={filter}
+        onFilterChange={onFilterChange}
+        sort={sort}
+        onSortChange={onSortChange}
+        tagOptions={tagOptions}
+        selectedTag={selectedTag}
+        onSelectedTagChange={onSelectedTagChange}
+        totalCount={counts.total}
+        unreadCount={counts.unread}
+        pausedCount={counts.paused}
+        mineCount={counts.mine}
+      />
 
       <div
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
@@ -493,6 +649,7 @@ function ConversationPanel(props: {
   chat: WhatsAppChat | null
   messages: WhatsAppMessage[]
   loadingMessages: boolean
+  composerRef: React.Ref<MessageInputHandle | null>
   draft: string
   onDraftChange: (v: string) => void
   onSend: (content: string) => void
@@ -526,6 +683,7 @@ function ConversationView({
   chat,
   messages,
   loadingMessages,
+  composerRef,
   draft,
   onDraftChange,
   onSend,
@@ -543,6 +701,7 @@ function ConversationView({
   chat: WhatsAppChat
   messages: WhatsAppMessage[]
   loadingMessages: boolean
+  composerRef: React.Ref<MessageInputHandle | null>
   draft: string
   onDraftChange: (v: string) => void
   onSend: (content: string) => void
@@ -562,6 +721,7 @@ function ConversationView({
   const [profileSheetOpen, setProfileSheetOpen] = useState(false)
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
+  const { notes, addNote, removeNote } = useInternalNotes(chat.jid)
 
   const displayName = chat.display_name || chat.push_name || formatJID(chat.jid)
   const orderedMessages = useMemo(() => [...messages].reverse(), [messages])
@@ -642,6 +802,80 @@ function ConversationView({
     return () => window.removeEventListener("keydown", onKey)
   }, [])
 
+  // SLA badge — re-computed every minute via state-driven tick so the timer
+  // stays fresh without relying on Date.now() during render (lint purity).
+  const [nowTick, setNowTick] = useState(() => Date.now())
+  useEffect(() => {
+    const handle = window.setInterval(() => setNowTick(Date.now()), 60_000)
+    return () => window.clearInterval(handle)
+  }, [])
+  const sla = useMemo(() => computeSLA({ chat, now: nowTick }), [chat, nowTick])
+
+  // Lifecycle handlers: encode "Resolver/Arquivar/Reabrir" onto the profile
+  // since the backend has no dedicated lifecycle field yet.
+  const saveProfileMutation = useMutation({
+    mutationFn: (next: WhatsAppContactProfile) =>
+      saveWhatsAppContactProfile(next),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(["whatsapp", "profile", chat.jid], saved)
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Falha ao salvar perfil"),
+  })
+
+  const handleLifecycle = useCallback(
+    (action: LifecycleAction) => {
+      const base = profileQuery.data
+      if (!base) {
+        toast.error("Perfil ainda não carregou")
+        return
+      }
+      const next: WhatsAppContactProfile = { ...base }
+      const tags = new Set((base.tags ?? []).map((t) => t.trim()).filter(Boolean))
+      if (action === "resolve") {
+        next.lead_stage = "closed"
+        tags.delete("archived")
+        toast.success("Conversa marcada como resolvida")
+      } else if (action === "archive") {
+        tags.add("archived")
+        toast.success("Conversa arquivada")
+      } else if (action === "reopen") {
+        next.lead_stage = "nurturing"
+        tags.delete("archived")
+        toast.success("Conversa reaberta")
+      }
+      next.tags = Array.from(tags)
+      saveProfileMutation.mutate(next)
+    },
+    [profileQuery.data, saveProfileMutation],
+  )
+
+  const handleAssign = useCallback(
+    (operator: string) => {
+      const base = profileQuery.data
+      if (!base) {
+        toast.error("Perfil ainda não carregou")
+        return
+      }
+      saveProfileMutation.mutate({ ...base, assigned_to: operator })
+    },
+    [profileQuery.data, saveProfileMutation],
+  )
+
+  // Operator suggestions: collect every assignee already seen in the cache.
+  const operatorSuggestions = useMemo(() => {
+    const set = new Set<string>()
+    const entries = queryClient.getQueriesData<WhatsAppContactProfile>({
+      queryKey: ["whatsapp", "profile"],
+    })
+    for (const [, profile] of entries) {
+      const assigned = profile?.assigned_to?.trim()
+      if (assigned) set.add(assigned)
+    }
+    return Array.from(set).sort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryClient, profileQuery.dataUpdatedAt])
+
   return (
     <section
       ref={rootRef}
@@ -701,6 +935,19 @@ function ConversationView({
         profile={profileQuery.data ?? null}
         insight={insightQuery.data ?? null}
         onOpenProfile={() => setProfileSheetOpen(true)}
+        rightSlot={
+          <>
+            <SLABadge status={sla} />
+            <div className="ml-auto flex items-center gap-1">
+              <LifecycleMenu
+                profile={profileQuery.data ?? null}
+                onAction={handleLifecycle}
+                onAssignTo={handleAssign}
+                operatorSuggestions={operatorSuggestions}
+              />
+            </div>
+          </>
+        }
       />
 
       {loadingMessages ? (
@@ -712,10 +959,12 @@ function ConversationView({
           messages={orderedMessages}
           resetKey={chat.jid}
           pendingIds={pendingIds}
+          notes={notes}
           searchQuery={searchOpen ? search.query : ""}
           currentMatchId={searchOpen ? search.currentMessageId : null}
           onReply={handleReply}
           onDeleteLocal={onDeleteLocal}
+          onRemoveNote={removeNote}
           empty={
             <div className="space-y-2 text-center">
               <IconMessageCircle className="text-muted-foreground/30 mx-auto size-10" />
@@ -737,6 +986,11 @@ function ConversationView({
         sending={sending}
         replyTarget={replyTarget}
         onCancelReply={() => setReplyTarget(null)}
+        onSaveNote={(body) =>
+          void addNote({ content: body, author: "Operador" })
+        }
+        contactName={displayName}
+        inputRef={composerRef}
       />
 
       <DragDropOverlay visible={isDragging} />
@@ -750,12 +1004,15 @@ function ContactContextBar({
   profile,
   insight,
   onOpenProfile,
+  rightSlot,
 }: {
   profile: WhatsAppContactProfile | null
   insight: WhatsAppConversationInsight | null
   onOpenProfile?: () => void
+  /** Optional right-aligned slot rendered next to the info icon (SLA + lifecycle menu). */
+  rightSlot?: React.ReactNode
 }) {
-  if (!profile && !insight) return null
+  if (!profile && !insight && !rightSlot) return null
 
   const leadStage = profile?.lead_stage || insight?.lead_stage
   const priority = profile?.priority || insight?.priority
@@ -772,8 +1029,9 @@ function ContactContextBar({
   }
   const priorityBg: Record<string, string> = {
     high: "bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/40 dark:text-red-400 dark:ring-red-800",
-    medium: "bg-orange-50 text-orange-700 ring-orange-200",
-    low: "bg-gray-50 text-gray-600 ring-gray-200",
+    medium:
+      "bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:ring-orange-800",
+    low: "bg-muted text-foreground/70 ring-border",
   }
   const stageClass = leadStage
     ? (stageBg[leadStage] ?? "bg-muted text-muted-foreground ring-border")
@@ -783,53 +1041,60 @@ function ContactContextBar({
     : ""
 
   return (
-    <button
-      type="button"
-      onClick={onOpenProfile}
-      className="border-border/40 bg-muted/20 hover:bg-muted/40 group w-full cursor-pointer border-b px-4 py-2 text-left transition-colors"
-      aria-label="Ver perfil completo do contato"
-    >
-      <div className="flex flex-wrap items-center gap-1.5">
-        {intent && (
-          <span className="bg-muted text-muted-foreground ring-border rounded-full px-2 py-0.5 text-[10px] font-medium ring-1">
-            {intent}
-          </span>
+    <div className="border-border/40 bg-muted/20 border-b">
+      <button
+        type="button"
+        onClick={onOpenProfile}
+        className="hover:bg-muted/40 group block w-full cursor-pointer px-4 py-2 text-left transition-colors"
+        aria-label="Ver perfil completo do contato"
+      >
+        <div className="flex flex-wrap items-center gap-1.5">
+          {intent && (
+            <span className="bg-muted text-muted-foreground ring-border rounded-full px-2 py-0.5 text-[10px] font-medium ring-1">
+              {intent}
+            </span>
+          )}
+          {leadStage && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${stageClass}`}
+            >
+              {leadStage}
+            </span>
+          )}
+          {priority && priority !== "none" && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${priorityClass}`}
+            >
+              {priority}
+            </span>
+          )}
+          <TagList tags={tags} limit={3} />
+          {insight?.needs_handoff && (
+            <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:ring-violet-800">
+              handoff
+            </span>
+          )}
+          <IconInfoCircle
+            className="text-muted-foreground/40 group-hover:text-muted-foreground ml-auto size-3 shrink-0 transition-colors"
+            aria-hidden="true"
+          />
+        </div>
+        {nextAction && (
+          <p className="text-foreground/60 mt-1 line-clamp-1 text-[11px]">
+            <span className="bg-muted text-foreground/75 mr-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+              <IconInfoCircle className="size-2.5" aria-hidden="true" />
+              Próximo
+            </span>
+            {nextAction}
+          </p>
         )}
-        {leadStage && (
-          <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${stageClass}`}
-          >
-            {leadStage}
-          </span>
-        )}
-        {priority && priority !== "none" && (
-          <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${priorityClass}`}
-          >
-            {priority}
-          </span>
-        )}
-        <TagList tags={tags} limit={3} />
-        {insight?.needs_handoff && (
-          <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:ring-violet-800">
-            handoff
-          </span>
-        )}
-        <IconInfoCircle
-          className="text-muted-foreground/40 group-hover:text-muted-foreground ml-auto size-3 shrink-0 transition-colors"
-          aria-hidden="true"
-        />
-      </div>
-      {nextAction && (
-        <p className="text-foreground/60 mt-1 line-clamp-1 text-[11px]">
-          <span className="bg-muted text-foreground/75 mr-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
-            <IconInfoCircle className="size-2.5" aria-hidden="true" />
-            Próximo
-          </span>
-          {nextAction}
-        </p>
+      </button>
+      {rightSlot && (
+        <div className="border-border/40 flex items-center gap-2 border-t px-4 py-1.5">
+          {rightSlot}
+        </div>
       )}
-    </button>
+    </div>
   )
 }
 
@@ -838,6 +1103,55 @@ function ContactContextBar({
 const LEAD_STAGES = ["new", "lead", "nurturing", "qualified", "closed", "lost"]
 const PRIORITIES = ["none", "low", "medium", "high"]
 const CONSENT_STATUSES = ["unknown", "opted_in", "opted_out"]
+
+function ProfileNotesSection({ chatJID }: { chatJID: string }) {
+  const { notes, removeNote } = useInternalNotes(chatJID)
+  if (notes.length === 0) return null
+  return (
+    <fieldset className="space-y-2 rounded-xl bg-amber-50/60 p-3 dark:bg-amber-950/30">
+      <legend className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-amber-800 uppercase dark:text-amber-300">
+        <IconNotes className="size-3.5" aria-hidden="true" />
+        Notas internas ({notes.length})
+      </legend>
+      <ul className="space-y-2">
+        {notes.slice(0, 8).map((note) => (
+          <li
+            key={note.id}
+            className="bg-background/70 ring-amber-200/60 rounded-lg p-2 ring-1 dark:ring-amber-800/40"
+          >
+            <p className="text-foreground/85 text-xs whitespace-pre-wrap">
+              {note.content}
+            </p>
+            <div className="text-foreground/60 mt-1 flex items-center justify-between text-[10px]">
+              <span>
+                {note.author} ·{" "}
+                {new Date(note.ts).toLocaleString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+              <button
+                type="button"
+                onClick={() => removeNote(note.id)}
+                className="text-foreground/55 hover:text-destructive transition-colors"
+                aria-label="Remover nota"
+              >
+                Remover
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {notes.length > 8 && (
+        <p className="text-foreground/60 text-[10px]">
+          + {notes.length - 8} notas mais antigas
+        </p>
+      )}
+    </fieldset>
+  )
+}
 
 function ContactProfileSheet({
   open,
@@ -1143,9 +1457,11 @@ function ContactProfileSheet({
                 </div>
               </fieldset>
 
+              <ProfileNotesSection chatJID={chat.jid} />
+
               {insight && (
                 <fieldset className="bg-muted/30 space-y-2 rounded-xl p-3">
-                  <legend className="text-foreground/60 text-xs font-semibold tracking-wide uppercase">
+                  <legend className="text-foreground/70 text-xs font-semibold tracking-wide uppercase">
                     Análise do Agente (somente leitura)
                   </legend>
                   {insight.summary && (
@@ -1238,41 +1554,44 @@ function ContactProfileSheet({
 
 function EmptyConversationState() {
   return (
-    <div className="animate-in fade-in-0 slide-in-from-bottom-2 flex max-w-sm flex-col items-center gap-4 px-6 text-center duration-300">
-      <div className="flex size-20 items-center justify-center rounded-2xl bg-[#25d366]/10">
-        <IconBrandWhatsapp className="size-10 text-[#25d366]" />
-      </div>
+    <div className="animate-in fade-in-0 slide-in-from-bottom-2 flex max-w-md flex-col items-center gap-5 px-6 text-center duration-300">
+      <EmptyConversationIllustration className="w-full max-w-[260px]" />
       <div className="space-y-1.5">
-        <h3 className="text-foreground text-base font-semibold">
+        <h3 className="text-foreground text-lg font-semibold">
           Selecione uma conversa para começar
         </h3>
-        <p className="text-foreground/60 text-sm leading-relaxed">
+        <p className="text-foreground/70 text-sm leading-relaxed">
           Escolha um contato na lista à esquerda para visualizar as mensagens
           e responder em tempo real.
         </p>
       </div>
       <div className="bg-muted/40 w-full space-y-2 rounded-xl p-4 text-left">
-        <p className="text-foreground/60 text-xs font-medium tracking-wide uppercase">
+        <p className="text-foreground/70 text-xs font-semibold tracking-wide uppercase">
           Dicas rápidas
         </p>
-        <div className="text-foreground/60 space-y-1.5 text-xs">
-          <div className="flex items-center gap-2">
-            <IconCircleOff className="size-3.5 shrink-0 text-amber-500" />
-            <span>
-              Comece a digitar e o agente é pausado automaticamente
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <IconCheck className="size-3.5 shrink-0 text-[#25d366]" />
+        <ul className="text-foreground/80 space-y-1.5 text-xs">
+          <li className="flex items-center gap-2">
+            <IconCircleOff
+              className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400"
+              aria-hidden="true"
+            />
+            <span>Comece a digitar e o agente é pausado automaticamente</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <IconCheck
+              className="text-wa-brand size-3.5 shrink-0"
+              aria-hidden="true"
+            />
             <span>Ctrl+Enter envia a mensagem manualmente</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <IconInbox className="text-primary size-3.5 shrink-0" />
-            <span>
-              Conversas com badge verde têm mensagens não lidas
-            </span>
-          </div>
-        </div>
+          </li>
+          <li className="flex items-center gap-2">
+            <IconInbox
+              className="text-primary size-3.5 shrink-0"
+              aria-hidden="true"
+            />
+            <span>Conversas com badge verde têm mensagens não lidas</span>
+          </li>
+        </ul>
       </div>
     </div>
   )

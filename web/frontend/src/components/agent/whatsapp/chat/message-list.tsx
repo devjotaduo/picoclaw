@@ -3,7 +3,9 @@ import { useEffect } from "react"
 
 import type { WhatsAppMessage } from "@/api/whatsapp"
 import { useAutoScroll } from "@/hooks/whatsapp/use-auto-scroll"
+import type { InternalNote } from "@/lib/whatsapp/internal-notes"
 
+import { InternalNoteBubble } from "./internal-note-bubble"
 import { MessageBubble } from "./message-bubble"
 
 export interface MessageListProps {
@@ -15,9 +17,12 @@ export interface MessageListProps {
   searchQuery?: string
   /** Message id at the search cursor; if set, scrolls into view on change. */
   currentMatchId?: number | null
+  /** Internal notes (dashboard-only) — intercalated by timestamp. */
+  notes?: readonly InternalNote[]
   onReply?: (m: WhatsAppMessage) => void
   onForward?: (m: WhatsAppMessage) => void
   onDeleteLocal?: (m: WhatsAppMessage) => void
+  onRemoveNote?: (id: string) => void
 }
 
 function toDate(ts: number): Date {
@@ -33,12 +38,32 @@ function DateSeparator({ ts }: { ts: number }) {
   return (
     <div className="flex items-center gap-3 py-3" role="separator">
       <div className="bg-border/50 h-px flex-1" />
-      <span className="text-foreground/55 text-[10px] font-medium capitalize">
+      <span className="text-foreground/70 text-[10px] font-medium capitalize">
         {label}
       </span>
       <div className="bg-border/50 h-px flex-1" />
     </div>
   )
+}
+
+type Item =
+  | { kind: "msg"; ts: number; msg: WhatsAppMessage }
+  | { kind: "note"; ts: number; note: InternalNote }
+
+function tsMs(ts: number): number {
+  return ts < 1e10 ? ts * 1000 : ts
+}
+
+function intercalate(
+  messages: readonly WhatsAppMessage[],
+  notes: readonly InternalNote[],
+): Item[] {
+  const items: Item[] = [
+    ...messages.map<Item>((msg) => ({ kind: "msg", ts: tsMs(msg.ts), msg })),
+    ...notes.map<Item>((note) => ({ kind: "note", ts: note.ts, note })),
+  ]
+  items.sort((a, b) => a.ts - b.ts)
+  return items
 }
 
 export function MessageList({
@@ -48,14 +73,17 @@ export function MessageList({
   empty,
   searchQuery = "",
   currentMatchId = null,
+  notes = [],
   onReply,
   onForward,
   onDeleteLocal,
+  onRemoveNote,
 }: MessageListProps) {
+  const items = intercalate(messages, notes)
   const { scrollRef, newMessagesCount, handleScroll, scrollToBottom } =
     useAutoScroll({
       resetKey: resetKey ?? "",
-      messageCount: messages.length,
+      messageCount: items.length,
     })
 
   // Whenever the search cursor moves, find the bubble in the DOM and scroll it
@@ -82,24 +110,38 @@ export function MessageList({
         aria-label="Mensagens da conversa"
         data-testid="message-list-scroll"
       >
-        {messages.length === 0 ? (
+        {items.length === 0 ? (
           <div className="flex h-full items-center justify-center">{empty}</div>
         ) : (
           <div className="flex flex-col gap-1.5">
-            {messages.map((msg, i) => {
-              const prev = messages[i - 1]
+            {items.map((item, i) => {
+              const prev = items[i - 1]
               const showDateSep =
                 i === 0 ||
                 (prev &&
-                  toDate(msg.ts).toDateString() !== toDate(prev.ts).toDateString())
+                  new Date(prev.ts).toDateString() !==
+                    new Date(item.ts).toDateString())
+              const sepTs =
+                item.kind === "msg" ? item.msg.ts : Math.floor(item.ts / 1000)
+              if (item.kind === "note") {
+                return (
+                  <div key={`note-${item.note.id}`}>
+                    {showDateSep && <DateSeparator ts={sepTs} />}
+                    <InternalNoteBubble
+                      note={item.note}
+                      onRemove={onRemoveNote}
+                    />
+                  </div>
+                )
+              }
               return (
-                <div key={msg.id}>
-                  {showDateSep && <DateSeparator ts={msg.ts} />}
+                <div key={`msg-${item.msg.id}`}>
+                  {showDateSep && <DateSeparator ts={sepTs} />}
                   <MessageBubble
-                    message={msg}
+                    message={item.msg}
                     pendingIds={pendingIds}
                     searchQuery={searchQuery}
-                    isCurrentMatch={msg.id === currentMatchId}
+                    isCurrentMatch={item.msg.id === currentMatchId}
                     onReply={onReply}
                     onForward={onForward}
                     onDeleteLocal={onDeleteLocal}

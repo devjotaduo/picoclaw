@@ -53,7 +53,7 @@ export function ReplyPreview({
       <button
         type="button"
         onClick={onCancel}
-        className="text-foreground/55 hover:text-foreground focus-visible:ring-ring flex size-6 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        className="text-foreground/70 hover:text-foreground focus-visible:ring-ring flex size-6 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
         aria-label="Cancelar resposta"
       >
         <IconX className="size-3.5" aria-hidden="true" />
