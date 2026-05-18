@@ -30,6 +30,7 @@ func (h *Handler) handleListMembers(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleUpsertMember(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	actorRole, _ := tenantRoleFromContext(r.Context())
 	var req memberReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
@@ -39,9 +40,22 @@ func (h *Handler) handleUpsertMember(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "email and valid role required")
 		return
 	}
+	if !canAssignTenantRole(actorRole, req.Role) {
+		writeError(w, http.StatusForbidden, "tenant_owner assignment requires tenant_owner role")
+		return
+	}
 	user, err := h.Users.EnsureInvited(r.Context(), req.Email)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "user error")
+		return
+	}
+	currentRole, err := h.Memberships.GetRole(r.Context(), user.ID, id)
+	if err != nil && !errors.Is(err, store.ErrMembershipNotFound) {
+		writeError(w, http.StatusInternalServerError, "membership error")
+		return
+	}
+	if !canChangeMemberRole(actorRole, currentRole, req.Role) {
+		writeError(w, http.StatusForbidden, "tenant_owner membership changes require tenant_owner role")
 		return
 	}
 	if err := h.Memberships.Upsert(r.Context(), user.ID, id, req.Role); err != nil {
@@ -59,6 +73,7 @@ func (h *Handler) handleUpsertMember(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	actorRole, _ := tenantRoleFromContext(r.Context())
 	var req memberReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
@@ -66,6 +81,10 @@ func (h *Handler) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Email = store.NormalizeEmail(req.Email); req.Email == "" || !validTenantRole(req.Role) {
 		writeError(w, http.StatusBadRequest, "email and valid role required")
+		return
+	}
+	if !canAssignTenantRole(actorRole, req.Role) {
+		writeError(w, http.StatusForbidden, "tenant_owner invite requires tenant_owner role")
 		return
 	}
 	actor, _ := userFromContext(r.Context())
@@ -102,6 +121,7 @@ func (h *Handler) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
 	tenantID := chi.URLParam(r, "id")
+	actorRole, _ := tenantRoleFromContext(r.Context())
 	userIDStr := chi.URLParam(r, "userId")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
@@ -116,6 +136,30 @@ func (h *Handler) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
 	if actor.ID == userID {
 		writeError(w, http.StatusBadRequest, "cannot remove yourself; transfer ownership first")
 		return
+	}
+	targetRole, err := h.Memberships.GetRole(r.Context(), userID, tenantID)
+	if err != nil {
+		if errors.Is(err, store.ErrMembershipNotFound) {
+			writeError(w, http.StatusNotFound, "membership not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	if !canRemoveMember(actorRole, targetRole) {
+		writeError(w, http.StatusForbidden, "removing tenant_owner requires tenant_owner role")
+		return
+	}
+	if targetRole == store.RoleTenantOwner {
+		members, err := h.Memberships.ListForTenant(r.Context(), tenantID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "db error")
+			return
+		}
+		if ownerCount(members) <= 1 {
+			writeError(w, http.StatusBadRequest, "cannot remove the last tenant owner")
+			return
+		}
 	}
 	if err := h.Memberships.Delete(r.Context(), userID, tenantID); err != nil {
 		if errors.Is(err, store.ErrMembershipNotFound) {
@@ -176,4 +220,29 @@ func validTenantRole(role store.TenantRole) bool {
 	default:
 		return false
 	}
+}
+
+func canAssignTenantRole(actorRole, requestedRole store.TenantRole) bool {
+	return requestedRole != store.RoleTenantOwner || actorRole == store.RoleTenantOwner
+}
+
+func canChangeMemberRole(actorRole, currentRole, requestedRole store.TenantRole) bool {
+	if currentRole != store.RoleTenantOwner {
+		return true
+	}
+	return actorRole == store.RoleTenantOwner && requestedRole == store.RoleTenantOwner
+}
+
+func canRemoveMember(actorRole, targetRole store.TenantRole) bool {
+	return targetRole != store.RoleTenantOwner || actorRole == store.RoleTenantOwner
+}
+
+func ownerCount(members []store.TenantMembership) int {
+	count := 0
+	for _, m := range members {
+		if m.Role == store.RoleTenantOwner {
+			count++
+		}
+	}
+	return count
 }
