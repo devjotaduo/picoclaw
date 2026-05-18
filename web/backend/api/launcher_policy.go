@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	saasPolicy "github.com/sipeed/picoclaw/internal/saas/policy"
+	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/web/backend/middleware"
 )
 
@@ -56,7 +57,27 @@ func (h *Handler) handleGetLauncherPolicy(w http.ResponseWriter, r *http.Request
 		"role":        role,
 		"feature_ids": saasPolicy.FeatureIDs,
 		"features":    saasPolicy.EffectiveFeatures(role, launcherPolicy.RolePolicy),
+		"ui":          launcherUIResponse(h.launcherUIConfig()),
 	})
+}
+
+func (h *Handler) launcherUIConfig() config.UIConfig {
+	ui := config.DefaultUIConfig()
+	if h.configPath == "" {
+		return ui
+	}
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		return ui
+	}
+	return cfg.UI
+}
+
+func launcherUIResponse(ui config.UIConfig) map[string]bool {
+	return map[string]bool{
+		"show_reasoning":  ui.ShowReasoning,
+		"show_tool_calls": ui.ShowToolCalls,
+	}
 }
 
 func (h *Handler) homeDir() string {

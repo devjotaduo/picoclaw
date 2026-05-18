@@ -142,10 +142,24 @@ const baseNavGroups: Omit<NavGroup, "items">[] = [
     defaultOpen: true,
   },
   {
-    label: "navigation.services",
+    label: "navigation.config",
     defaultOpen: true,
   },
 ]
+
+const featureFallbacks: Record<string, string> = {
+  agent_hub: "tools",
+  template_editor: "agent_templates",
+  skill_editor: "skills",
+  whatsapp_reports: "whatsapp_inbox",
+}
+
+function fallbackFeature(feature: string): string | undefined {
+  if (feature.startsWith("channel:")) {
+    return "channels"
+  }
+  return featureFallbacks[feature]
+}
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const routerState = useRouterState()
@@ -214,7 +228,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       if (!features) {
         return true
       }
-      const access = features[feature]
+      const access =
+        features[feature] ?? features[fallbackFeature(feature) ?? ""]
       return access === "read" || access === "write"
     },
     [features],
@@ -284,7 +299,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: item.title,
             url: item.url,
             icon: item.icon,
-            feature: "channels",
+            feature: `channel:${item.key}`,
             translateTitle: false,
           }))
           .filter((item) => canRead(item.feature)),
@@ -311,14 +326,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "navigation.whatsapp_reports",
             url: "/agent/whatsapp-reports",
             icon: IconChartBar,
-            feature: "whatsapp_inbox",
+            feature: "whatsapp_reports",
             translateTitle: true,
           },
           {
             title: "navigation.hub",
             url: "/agent/hub",
             icon: IconSearch,
-            feature: "tools",
+            feature: "agent_hub",
             translateTitle: true,
           },
           {
@@ -332,7 +347,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "navigation.template_editor",
             url: "/agent/template-editor",
             icon: IconListDetails,
-            feature: "agent_templates",
+            feature: "template_editor",
             translateTitle: true,
           },
           {
@@ -346,14 +361,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "navigation.skill_editor",
             url: "/agent/skill-editor",
             icon: IconListDetails,
-            feature: "skills",
-            translateTitle: true,
-          },
-          {
-            title: "navigation.tools",
-            url: "/agent/tools",
-            icon: IconTools,
-            feature: "tools",
+            feature: "skill_editor",
             translateTitle: true,
           },
         ],
@@ -361,6 +369,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {
         ...baseNavGroups[3],
         items: [
+          {
+            title: "navigation.tools",
+            url: "/agent/tools",
+            icon: IconTools,
+            feature: "tools",
+            translateTitle: true,
+          },
           {
             title: "navigation.config",
             url: "/config",

@@ -602,6 +602,79 @@ func TestHandleGetSession_ReconstructsThoughtFromAssistantReasoningContent(t *te
 	}
 }
 
+func TestHandleGetSession_HidesAssistantDetailsWhenUIDisabled(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	cfg.UI.ShowReasoning = false
+	cfg.UI.ShowToolCalls = false
+	if err := config.SaveConfig(configPath, cfg); err != nil {
+		t.Fatalf("SaveConfig() error = %v", err)
+	}
+
+	dir := sessionsTestDir(t, configPath)
+	store, err := memory.NewJSONLStore(dir)
+	if err != nil {
+		t.Fatalf("NewJSONLStore() error = %v", err)
+	}
+
+	sessionKey := picoSessionPrefix + "detail-ui-hidden"
+	for _, msg := range []providers.Message{
+		{Role: "user", Content: "hello"},
+		{
+			Role:             "assistant",
+			Content:          "final visible answer",
+			ReasoningContent: "internal chain of thought",
+			ToolCalls: []providers.ToolCall{{
+				ID:   "call_read_file",
+				Type: "function",
+				Function: &providers.FunctionCall{
+					Name:      "read_file",
+					Arguments: `{"path":"README.md"}`,
+				},
+			}},
+		},
+	} {
+		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+			t.Fatalf("AddFullMessage() error = %v", err)
+		}
+	}
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/sessions/detail-ui-hidden", nil)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp struct {
+		Messages []sessionChatMessage `json:"messages"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if len(resp.Messages) != 2 {
+		t.Fatalf("len(resp.Messages) = %d, want 2: %#v", len(resp.Messages), resp.Messages)
+	}
+	for _, msg := range resp.Messages {
+		if msg.Kind == "thought" || msg.Kind == "tool_calls" {
+			t.Fatalf("hidden assistant detail leaked: %#v", msg)
+		}
+	}
+	if resp.Messages[1].Content != "final visible answer" {
+		t.Fatalf("final message = %#v, want visible answer only", resp.Messages[1])
+	}
+}
+
 func TestHandleGetSession_ReconstructsRefreshMatrixForThoughtAndToolSummary(t *testing.T) {
 	configPath, cleanup := setupOAuthTestEnv(t)
 	defer cleanup()

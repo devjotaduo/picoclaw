@@ -7,6 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/sipeed/picoclaw/internal/saas/gatewayauth"
+	saasPolicy "github.com/sipeed/picoclaw/internal/saas/policy"
+	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/sipeed/picoclaw/web/backend/middleware"
 )
 
 // ---------------------------------------------------------------------------
@@ -36,7 +42,7 @@ func TestHandleGetLauncherPolicy_NoFile(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	for _, key := range []string{"role", "feature_ids", "features"} {
+	for _, key := range []string{"role", "feature_ids", "features", "ui"} {
 		if _, ok := resp[key]; !ok {
 			t.Fatalf("response missing field %q", key)
 		}
@@ -49,6 +55,14 @@ func TestHandleGetLauncherPolicy_NoFile(t *testing.T) {
 	}
 	if role != "platform_admin" {
 		t.Fatalf("role = %q, want %q", role, "platform_admin")
+	}
+
+	var ui map[string]bool
+	if err := json.Unmarshal(resp["ui"], &ui); err != nil {
+		t.Fatalf("unmarshal ui: %v", err)
+	}
+	if !ui["show_reasoning"] || !ui["show_tool_calls"] {
+		t.Fatalf("ui = %#v, want both assistant detail flags enabled by default", ui)
 	}
 }
 
@@ -83,6 +97,12 @@ func TestHandleGetLauncherPolicy_DefaultPolicyPermissive(t *testing.T) {
 			t.Fatalf("feature %q access = %q, want %q (platform_admin is fully permissive)", feature, access, "write")
 		}
 	}
+	if resp.Features[saasPolicy.FeatureAgentHub] != "write" {
+		t.Fatalf("agent_hub access = %q, want write", resp.Features[saasPolicy.FeatureAgentHub])
+	}
+	if resp.Features[saasPolicy.ChannelFeature("whatsapp_native")] != "write" {
+		t.Fatalf("channel:whatsapp_native access = %q, want write", resp.Features[saasPolicy.ChannelFeature("whatsapp_native")])
+	}
 }
 
 func TestHandleGetLauncherPolicy_WithPolicyFile(t *testing.T) {
@@ -113,6 +133,46 @@ func TestHandleGetLauncherPolicy_WithPolicyFile(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleGetLauncherPolicy_IncludesUIConfig(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	cfg.UI.ShowReasoning = false
+	cfg.UI.ShowToolCalls = true
+	if err := config.SaveConfig(configPath, cfg); err != nil {
+		t.Fatalf("SaveConfig: %v", err)
+	}
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/launcher/policy", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		UI map[string]bool `json:"ui"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.UI["show_reasoning"] {
+		t.Fatalf("show_reasoning = true, want false")
+	}
+	if !resp.UI["show_tool_calls"] {
+		t.Fatalf("show_tool_calls = false, want true")
 	}
 }
 
@@ -237,5 +297,47 @@ func TestPolicyMiddleware_AllowedFeature_PassesThrough(t *testing.T) {
 
 	if !called {
 		t.Fatal("expected inner handler to be called")
+	}
+}
+
+func TestPolicyMiddleware_TrustedGatewayBlocksFineFeature(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+
+	picoHome := os.Getenv("PICOCLAW_HOME")
+	policyJSON := `{"role_policy":{"viewer":{"tools":"none","agent_hub":"none"}}}`
+	if err := os.MkdirAll(picoHome, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(picoHome, "launcher_policy.json"), []byte(policyJSON), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	h := NewHandler(configPath)
+	called := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := middleware.LauncherDashboardAuth(middleware.LauncherDashboardAuthConfig{
+		AuthMode:             "trusted_gateway",
+		TrustedGatewaySecret: "secret",
+	}, h.PolicyMiddleware(inner))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/tools", nil)
+	gatewayauth.AnnotateRequest(req, "secret", gatewayauth.Claims{
+		TenantID:  "tenant-1",
+		UserID:    "user-1",
+		UserEmail: "viewer@example.com",
+		Role:      saasPolicy.RoleViewer,
+	}, time.Now())
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if called {
+		t.Fatal("inner handler should not be called when fine feature is blocked")
+	}
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
 	}
 }

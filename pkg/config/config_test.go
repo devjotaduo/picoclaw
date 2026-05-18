@@ -1083,6 +1083,36 @@ func TestDefaultConfig_WebPreferNativeEnabled(t *testing.T) {
 	}
 }
 
+func TestDefaultConfig_UIAssistantDetailsEnabled(t *testing.T) {
+	cfg := DefaultConfig()
+	if !cfg.UI.ShowReasoning {
+		t.Fatal("DefaultConfig().UI.ShowReasoning should be true")
+	}
+	if !cfg.UI.ShowToolCalls {
+		t.Fatal("DefaultConfig().UI.ShowToolCalls should be true")
+	}
+}
+
+func TestLoadConfig_UIPartialDefaults(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	raw := `{"version":3,"ui":{"show_reasoning":false}}`
+	if err := os.WriteFile(configPath, []byte(raw), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error: %v", err)
+	}
+	if cfg.UI.ShowReasoning {
+		t.Fatal("UI.ShowReasoning = true, want false")
+	}
+	if !cfg.UI.ShowToolCalls {
+		t.Fatal("UI.ShowToolCalls should keep default true when omitted")
+	}
+}
+
 func TestDefaultConfig_WebProviderIsAuto(t *testing.T) {
 	cfg := DefaultConfig()
 	if cfg.Tools.Web.Provider != "auto" {

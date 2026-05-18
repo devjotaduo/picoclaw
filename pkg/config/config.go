@@ -35,6 +35,7 @@ type Config struct {
 	// Config schema version for migration.
 	Version   int             `json:"version"             yaml:"-"`
 	Isolation IsolationConfig `json:"isolation,omitempty" yaml:"-"`
+	UI        UIConfig        `json:"ui,omitempty"        yaml:"-"`
 	Agents    AgentsConfig    `json:"agents"              yaml:"-"`
 	Session   SessionConfig   `json:"session,omitempty"   yaml:"-"`
 	Evolution EvolutionConfig `json:"evolution,omitempty" yaml:"-"`
@@ -52,6 +53,18 @@ type Config struct {
 
 	// cache for sensitive values and compiled regex (computed once)
 	sensitiveCache *SensitiveDataCache
+}
+
+type UIConfig struct {
+	ShowReasoning bool `json:"show_reasoning"`
+	ShowToolCalls bool `json:"show_tool_calls"`
+}
+
+func DefaultUIConfig() UIConfig {
+	return UIConfig{
+		ShowReasoning: true,
+		ShowToolCalls: true,
+	}
 }
 
 type EvolutionConfig struct {

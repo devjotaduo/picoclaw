@@ -30,6 +30,7 @@ func buildModelWithProtocol(protocol, model string) string {
 type legacyDiagnosticConfig struct {
 	Version     int                    `json:"version"`
 	Isolation   IsolationConfig        `json:"isolation,omitempty"`
+	UI          UIConfig               `json:"ui,omitempty"`
 	Agents      legacyDiagnosticAgents `json:"agents,omitempty"`
 	Session     SessionConfig          `json:"session,omitempty"`
 	Channels    map[string]any         `json:"channels,omitempty"`

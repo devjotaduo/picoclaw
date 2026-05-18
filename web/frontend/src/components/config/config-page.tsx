@@ -1,8 +1,4 @@
-import {
-  IconCode,
-  IconDeviceFloppy,
-  IconTag,
-} from "@tabler/icons-react"
+import { IconCode, IconDeviceFloppy, IconTag } from "@tabler/icons-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
@@ -26,6 +22,7 @@ import {
   DevicesSection,
   EvolutionSection,
   ExecSection,
+  InterfaceSection,
   LauncherSection,
   MCPSection,
   RuntimeSection,
@@ -496,6 +493,10 @@ export function ConfigPage() {
         }
 
         await patchAppConfig({
+          ui: {
+            show_reasoning: form.showReasoning,
+            show_tool_calls: form.showToolCalls,
+          },
           agents: {
             defaults: {
               workspace,
@@ -554,6 +555,7 @@ export function ConfigPage() {
 
         setBaseline(form)
         queryClient.invalidateQueries({ queryKey: ["config"] })
+        queryClient.invalidateQueries({ queryKey: ["launcher-policy"] })
       }
 
       let savedLauncherForm: LauncherForm | null = null
@@ -688,6 +690,8 @@ export function ConfigPage() {
               />
 
               <AgentDefaultsSection form={form} onFieldChange={updateField} />
+
+              <InterfaceSection form={form} onFieldChange={updateField} />
 
               <RuntimeSection form={form} onFieldChange={updateField} />
 
