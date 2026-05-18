@@ -52,7 +52,7 @@ export function MessageStatus({
       return (
         <StatusIcon label={LABEL.pending} className={className}>
           <IconClock
-            className="text-muted-foreground/70 size-3 animate-pulse"
+            className="text-muted-foreground/85 size-3 animate-pulse"
             aria-hidden="true"
           />
         </StatusIcon>
@@ -61,7 +61,7 @@ export function MessageStatus({
       return (
         <StatusIcon label={LABEL.sent} className={className}>
           <IconCheck
-            className="text-muted-foreground/70 size-3.5"
+            className="text-muted-foreground/85 size-3.5"
             aria-hidden="true"
           />
         </StatusIcon>
@@ -70,7 +70,7 @@ export function MessageStatus({
       return (
         <StatusIcon label={LABEL.delivered} className={className}>
           <IconChecks
-            className="text-muted-foreground/70 size-3.5"
+            className="text-muted-foreground/85 size-3.5"
             aria-hidden="true"
           />
         </StatusIcon>
@@ -78,7 +78,7 @@ export function MessageStatus({
     case "read":
       return (
         <StatusIcon label={LABEL.read} className={className}>
-          <IconChecks className="size-3.5 text-[#53bdeb]" aria-hidden="true" />
+          <IconChecks className="text-wa-check-read size-3.5" aria-hidden="true" />
         </StatusIcon>
       )
   }

@@ -70,7 +70,7 @@ export function ConversationSearch({
       role="search"
       aria-label="Buscar na conversa"
     >
-      <IconSearch className="text-foreground/55 size-4 shrink-0" aria-hidden="true" />
+      <IconSearch className="text-foreground/70 size-4 shrink-0" aria-hidden="true" />
       <Input
         ref={inputRef}
         type="search"

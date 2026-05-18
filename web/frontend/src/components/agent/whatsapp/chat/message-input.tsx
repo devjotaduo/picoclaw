@@ -1,9 +1,10 @@
-import { IconLoader2, IconSend } from "@tabler/icons-react"
+import { IconLoader2, IconNotes, IconSend } from "@tabler/icons-react"
 import {
   type ChangeEvent,
   type KeyboardEvent,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
 } from "react"
@@ -23,7 +24,12 @@ import {
 } from "./attachment-menu"
 import { AudioRecorder } from "./audio-recorder"
 import { EmojiPicker } from "./emoji-picker"
+import { QuickRepliesPopover } from "./quick-replies-popover"
 import { ReplyPreview, type ReplyTarget } from "./reply-preview"
+
+export interface MessageInputHandle {
+  focus: () => void
+}
 
 export interface MessageInputProps {
   value: string
@@ -36,6 +42,12 @@ export interface MessageInputProps {
   /** Reply target — when set, ReplyPreview is rendered above the textarea. */
   replyTarget?: ReplyTarget | null
   onCancelReply?: () => void
+  /** Saves an internal note for this chat instead of sending. */
+  onSaveNote?: (body: string) => void
+  /** Contact display name, used by the quick-reply renderer. */
+  contactName?: string
+  /** Imperative ref exposing `focus()` (used by global shortcuts). */
+  inputRef?: React.Ref<MessageInputHandle>
   placeholder?: string
   disabled?: boolean
 }
@@ -43,8 +55,10 @@ export interface MessageInputProps {
 /**
  * Full WhatsApp-Web–style composer:
  *  - reply banner (when `replyTarget`)
- *  - attachment menu (paperclip → image / video / doc / camera / contact / location)
+ *  - internal note toggle (yellow style; bypasses the gateway)
+ *  - quick replies via "/" (popover with arrow-key navigation)
  *  - emoji picker (and `:` shortcut)
+ *  - attachment menu (paperclip → image / video / doc / camera / contact / location)
  *  - audio recorder (microphone → live waveform + send)
  *  - autopause hook + Ctrl/⌘+Enter to send
  *
@@ -59,12 +73,32 @@ export function MessageInput({
   onTyping,
   replyTarget,
   onCancelReply,
+  onSaveNote,
+  contactName,
+  inputRef,
   placeholder = "Escreva uma mensagem… (Ctrl+Enter para enviar)",
   disabled = false,
 }: MessageInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [emojiOpen, setEmojiOpen] = useState(false)
+  const [noteMode, setNoteMode] = useState(false)
   const recorder = useAudioRecorder()
+
+  // Quick replies popover: opens when the operator types "/something" at
+  // the very start of the composer. Closes once they delete the slash or
+  // press Esc.
+  const slashQuery = value.startsWith("/") ? value.slice(1) : null
+  const slashOpen = slashQuery !== null && !noteMode
+
+  useImperativeHandle(
+    inputRef,
+    () => ({
+      focus() {
+        textareaRef.current?.focus()
+      },
+    }),
+    [],
+  )
 
   const notifyTyping = useCallback(() => {
     onTyping?.()
@@ -74,6 +108,11 @@ export function MessageInput({
     (rawContent: string) => {
       const body = rawContent.trim()
       if (!body) return
+      if (noteMode) {
+        onSaveNote?.(body)
+        onChange("")
+        return
+      }
       const content = replyTarget
         ? buildQuotedMessage({
             reply: { preview: replyTarget.preview },
@@ -82,7 +121,7 @@ export function MessageInput({
         : body
       onSend(content)
     },
-    [onSend, replyTarget],
+    [noteMode, onChange, onSaveNote, onSend, replyTarget],
   )
 
   const handleChange = useCallback(
@@ -104,7 +143,6 @@ export function MessageInput({
       const end = el.selectionEnd ?? value.length
       const next = value.slice(0, start) + insertion + value.slice(end)
       onChange(next)
-      // Restore caret AFTER the inserted text on the next paint.
       queueMicrotask(() => {
         el.focus()
         const caret = start + insertion.length
@@ -117,6 +155,8 @@ export function MessageInput({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      // Quick-replies popover handles Enter/Tab/Arrow keys via capture-phase.
+      if (slashOpen) return
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault()
         submit(value)
@@ -127,9 +167,6 @@ export function MessageInput({
         onCancelReply?.()
         return
       }
-      // Bare ":" with no other modifier opens the emoji picker, mirroring
-      // Slack/Discord. Only triggers when caret is at start or after space
-      // so it doesn't disrupt URLs like `https://`.
       if (e.key === ":" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const el = e.currentTarget
         const pos = el.selectionStart ?? 0
@@ -140,24 +177,46 @@ export function MessageInput({
         }
       }
     },
-    [onCancelReply, replyTarget, submit, value],
+    [onCancelReply, replyTarget, slashOpen, submit, value],
   )
 
   useEffect(() => {
     if (!sending && value === "") textareaRef.current?.focus()
   }, [sending, value])
 
-  const isRecording = recorder.state === "recording" || recorder.state === "requesting"
+  const isRecording =
+    recorder.state === "recording" || recorder.state === "requesting"
 
   function handleFilesPicked(kind: AttachmentKind, files: File[]) {
-    const placeholder = attachmentPlaceholder(kind, files)
-    submit(placeholder)
+    submit(attachmentPlaceholder(kind, files))
   }
 
   return (
-    <div className="border-border/40 bg-background border-t">
+    <div
+      className={`border-border/40 bg-background border-t ${
+        noteMode ? "ring-amber-400/40 ring-inset ring-2" : ""
+      }`}
+    >
       {replyTarget && onCancelReply && (
         <ReplyPreview target={replyTarget} onCancel={onCancelReply} />
+      )}
+      {noteMode && (
+        <div className="border-border/40 flex items-center gap-2 border-b bg-amber-50 px-3 py-1.5 dark:bg-amber-950/30">
+          <IconNotes
+            className="size-3.5 text-amber-700 dark:text-amber-300"
+            aria-hidden="true"
+          />
+          <p className="flex-1 text-xs text-amber-700 dark:text-amber-300">
+            Nota interna · visível apenas para operadores neste dashboard
+          </p>
+          <button
+            type="button"
+            onClick={() => setNoteMode(false)}
+            className="text-xs text-amber-700 underline-offset-2 hover:underline dark:text-amber-300"
+          >
+            Desligar
+          </button>
+        </div>
       )}
       <form
         className="flex items-end gap-1.5 px-3 py-2.5"
@@ -165,7 +224,7 @@ export function MessageInput({
           e.preventDefault()
           submit(value)
         }}
-        aria-label="Formulário de envio de mensagem"
+        aria-label={noteMode ? "Adicionar nota interna" : "Enviar mensagem"}
       >
         {!isRecording && (
           <>
@@ -176,8 +235,28 @@ export function MessageInput({
             />
             <AttachmentMenu
               onPickFiles={handleFilesPicked}
-              disabled={sending || disabled}
+              disabled={sending || disabled || noteMode}
             />
+            {onSaveNote && (
+              <Button
+                type="button"
+                variant={noteMode ? "default" : "ghost"}
+                size="icon"
+                className={`size-9 shrink-0 ${
+                  noteMode
+                    ? "bg-amber-500 text-white hover:bg-amber-600"
+                    : ""
+                }`}
+                onClick={() => setNoteMode((v) => !v)}
+                aria-pressed={noteMode}
+                aria-label={
+                  noteMode ? "Voltar para mensagem normal" : "Nota interna"
+                }
+                title="Nota interna"
+              >
+                <IconNotes className="size-4" aria-hidden="true" />
+              </Button>
+            )}
           </>
         )}
 
@@ -189,18 +268,40 @@ export function MessageInput({
           />
         ) : (
           <>
-            <Textarea
-              ref={textareaRef}
-              value={value}
-              onChange={handleChange}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              disabled={sending || disabled}
-              rows={1}
-              className="min-h-10 max-h-32 flex-1 resize-none rounded-xl text-sm"
-              aria-label="Mensagem a enviar"
+            <QuickRepliesPopover
+              open={slashOpen && !noteMode}
+              onOpenChange={(o) => {
+                if (!o && slashOpen) onChange("")
+              }}
+              query={slashQuery ?? ""}
+              contactName={contactName}
+              onPick={(rendered) => {
+                onChange(rendered)
+                queueMicrotask(() => {
+                  textareaRef.current?.focus()
+                  const len = rendered.length
+                  textareaRef.current?.setSelectionRange(len, len)
+                })
+              }}
+              anchor={
+                <Textarea
+                  ref={textareaRef}
+                  value={value}
+                  onChange={handleChange}
+                  onKeyDown={handleKeyDown}
+                  placeholder={
+                    noteMode
+                      ? "Escreva uma nota interna…"
+                      : placeholder
+                  }
+                  disabled={sending || disabled}
+                  rows={1}
+                  className="min-h-10 max-h-32 flex-1 resize-none rounded-xl text-sm"
+                  aria-label={noteMode ? "Conteúdo da nota interna" : "Mensagem a enviar"}
+                />
+              }
             />
-            {value.trim().length === 0 ? (
+            {value.trim().length === 0 && !noteMode ? (
               <AudioRecorder
                 recorder={recorder}
                 onStart={() => void recorder.start()}
@@ -210,9 +311,13 @@ export function MessageInput({
               <Button
                 type="submit"
                 size="icon"
-                disabled={sending || disabled}
-                className="h-10 w-10 shrink-0 rounded-xl bg-[#25d366] text-white hover:bg-[#1da851]"
-                aria-label={sending ? "Enviando" : "Enviar mensagem"}
+                disabled={sending || disabled || value.trim().length === 0}
+                className={`h-10 w-10 shrink-0 rounded-xl ${
+                  noteMode
+                    ? "bg-amber-500 text-white hover:bg-amber-600"
+                    : "bg-wa-brand text-white hover:bg-wa-brand-hover"
+                }`}
+                aria-label={sending ? "Enviando" : noteMode ? "Salvar nota" : "Enviar mensagem"}
               >
                 {sending ? (
                   <IconLoader2 className="size-4 animate-spin" aria-hidden="true" />

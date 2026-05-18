@@ -45,6 +45,17 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* WhatsApp inbox semantic tokens — mapped per theme below. */
+  --color-wa-brand: var(--wa-brand);
+  --color-wa-brand-hover: var(--wa-brand-hover);
+  --color-wa-bubble-out: var(--wa-bubble-out);
+  --color-wa-bubble-out-fg: var(--wa-bubble-out-fg);
+  --color-wa-bubble-out-human: var(--wa-bubble-out-human);
+  --color-wa-bubble-in: var(--wa-bubble-in);
+  --color-wa-check-read: var(--wa-check-read);
+  --color-wa-note: var(--wa-note);
+  --color-wa-note-fg: var(--wa-note-fg);
 }
 
 :root {
@@ -126,6 +137,17 @@
   --sidebar-accent-foreground: hsl(240, 5.9%, 10%);
   --sidebar-border: rgba(0, 0, 29, 0.075);
   --sidebar-ring: hsl(217.2, 91.2%, 59.8%);
+
+  /* WhatsApp brand & bubble palette (light) */
+  --wa-brand: #128c4f; /* WCAG AA on white (4.5:1+) — darker than #25d366 */
+  --wa-brand-hover: #0e7240;
+  --wa-bubble-out: #d9fdd3;
+  --wa-bubble-out-fg: hsl(0, 0%, 12%);
+  --wa-bubble-out-human: hsl(206, 100%, 96%);
+  --wa-bubble-in: hsl(0, 0%, 100%);
+  --wa-check-read: #128c4f;
+  --wa-note: hsl(48, 96%, 89%);
+  --wa-note-fg: hsl(28, 80%, 26%);
 }
 
 :root[data-theme="light"],
@@ -206,6 +228,17 @@
   --sidebar-accent-foreground: hsl(240, 5.9%, 10%);
   --sidebar-border: rgba(0, 0, 29, 0.075);
   --sidebar-ring: hsl(217.2, 91.2%, 59.8%);
+
+  /* WhatsApp brand & bubble palette (light, mirrored) */
+  --wa-brand: #128c4f;
+  --wa-brand-hover: #0e7240;
+  --wa-bubble-out: #d9fdd3;
+  --wa-bubble-out-fg: hsl(0, 0%, 12%);
+  --wa-bubble-out-human: hsl(206, 100%, 96%);
+  --wa-bubble-in: hsl(0, 0%, 100%);
+  --wa-check-read: #128c4f;
+  --wa-note: hsl(48, 96%, 89%);
+  --wa-note-fg: hsl(28, 80%, 26%);
 }
 
 .dark {
@@ -343,6 +376,17 @@
   --sidebar-accent-foreground: #f9f9f7;
   --sidebar-border: rgba(255, 255, 255, 0.10);
   --sidebar-ring: #d97757;
+
+  /* WhatsApp brand & bubble palette (dark) */
+  --wa-brand: #25d366; /* OK on dark backgrounds */
+  --wa-brand-hover: #1da851;
+  --wa-bubble-out: #0a3d24;
+  --wa-bubble-out-fg: #e6f4ea;
+  --wa-bubble-out-human: hsl(206, 60%, 22%);
+  --wa-bubble-in: #2a2a28;
+  --wa-check-read: #53bdeb;
+  --wa-note: hsl(45, 70%, 22%);
+  --wa-note-fg: hsl(48, 95%, 86%);
 }
 
 @layer base {
@@ -354,6 +398,16 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* WCAG 2.1 AA focus visibility for keyboard users — every WhatsApp inbox
+     button/link inherits a 2px outline with offset (offset prevents the
+     ring from clipping into bubble/border radius). Mouse-only focus is
+     suppressed by :focus-visible. */
+  [data-whatsapp-inbox] :where(button, a, [role="button"]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 0.5rem;
   }
 
   /* WebKit Custom Scrollbar */
