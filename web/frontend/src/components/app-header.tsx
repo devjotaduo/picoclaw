@@ -6,6 +6,7 @@ import {
   IconPlayerPlay,
   IconPower,
   IconRefresh,
+  IconSettings,
   IconSun,
 } from "@tabler/icons-react"
 import { Link } from "@tanstack/react-router"
@@ -24,6 +25,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog.tsx"
 import { Button } from "@/components/ui/button.tsx"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator.tsx"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import {
@@ -92,7 +101,7 @@ export function AppHeader() {
   return (
     <header className="bg-background/95 supports-backdrop-filter:bg-background/60 border-b-border/50 sticky top-0 z-50 flex h-14 shrink-0 items-center justify-between border-b px-4 backdrop-blur">
       <div className="flex items-center gap-2">
-        <SidebarTrigger className="text-muted-foreground hover:bg-accent hover:text-foreground flex h-9 w-9 items-center justify-center rounded-lg sm:hidden [&>svg]:size-5">
+        <SidebarTrigger className="text-muted-foreground hover:bg-accent hover:text-foreground flex h-9 w-9 items-center justify-center rounded-lg [&>svg]:size-5">
           <IconMenu2 />
         </SidebarTrigger>
         <div className="hidden w-36 shrink-0 items-center sm:flex">
@@ -183,24 +192,22 @@ export function AppHeader() {
           </Tooltip>
         )}
 
-        {/* Gateway Start/Stop */}
+        {/* Gateway Start/Stop — quando ativo, fica no menu Configurações */}
         {isRunning ? (
           <Tooltip delayDuration={700}>
             <TooltipTrigger asChild>
-              <Button
-                variant="destructive"
-                size="icon-sm"
-                className="size-8"
+              <span
+                role="status"
+                aria-label={t("header.gateway.status.running", "Gateway online")}
+                className="hidden items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700 sm:inline-flex dark:bg-emerald-950/40 dark:text-emerald-300"
                 data-tour="gateway-button"
-                onClick={handleGatewayToggle}
-                disabled={gwLoading}
-                aria-label={t("header.gateway.action.stop")}
               >
-                <IconPower className="h-4 w-4 opacity-80" />
-              </Button>
+                <span className="bg-emerald-500 size-1.5 rounded-full" />
+                Gateway online
+              </span>
             </TooltipTrigger>
             <TooltipContent>
-              {gwError ?? t("header.gateway.action.stop")}
+              {gwError ?? t("header.gateway.action.running", "Gateway rodando")}
             </TooltipContent>
           </Tooltip>
         ) : (
@@ -265,19 +272,50 @@ export function AppHeader() {
           orientation="vertical"
         />
 
-        {/* Theme Toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={toggleTheme}
-        >
-          {theme === "dark" ? (
-            <IconSun className="size-4.5" />
-          ) : (
-            <IconMoon className="size-4.5" />
-          )}
-        </Button>
+        {/* Settings menu (theme + dangerous gateway controls) */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              aria-label={t("header.settings.tooltip", "Configurações")}
+            >
+              <IconSettings className="size-4.5" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="text-[10px] uppercase tracking-wide">
+              {t("header.settings.appearance", "Aparência")}
+            </DropdownMenuLabel>
+            <DropdownMenuItem onClick={toggleTheme}>
+              {theme === "dark" ? (
+                <IconSun className="size-3.5" />
+              ) : (
+                <IconMoon className="size-3.5" />
+              )}
+              {theme === "dark"
+                ? t("header.theme.light", "Modo claro")
+                : t("header.theme.dark", "Modo escuro")}
+            </DropdownMenuItem>
+            {isRunning && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-wide">
+                  {t("header.settings.gateway", "Gateway")}
+                </DropdownMenuLabel>
+                <DropdownMenuItem
+                  onClick={handleGatewayToggle}
+                  disabled={gwLoading}
+                  className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/40"
+                >
+                  <IconPower className="size-3.5" />
+                  {t("header.gateway.action.stop", "Parar gateway")}
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <Separator className="mx-2 my-2" orientation="vertical" />
 
