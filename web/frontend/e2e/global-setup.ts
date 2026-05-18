@@ -63,10 +63,16 @@ export default async function globalSetup(config: FullConfig) {
   // cookie/origin the SPA expects (and not just the API-set cookie).
   const browser = await chromium.launch()
   const ctx = await browser.newContext({ baseURL })
-  await ctx.request.post("/api/auth/login", {
+  const browserLoginRes = await ctx.request.post("/api/auth/login", {
     headers: { "Content-Type": "application/json" },
     data: { password: password.trim() },
   })
+  if (!browserLoginRes.ok()) {
+    const detail = (await browserLoginRes.text()).slice(0, 200)
+    throw new Error(
+      `[e2e/global-setup] browser-context login returned ${browserLoginRes.status()}: ${detail}`,
+    )
+  }
   fs.mkdirSync(path.dirname(authFile), { recursive: true })
   await ctx.storageState({ path: authFile })
   await ctx.close()
