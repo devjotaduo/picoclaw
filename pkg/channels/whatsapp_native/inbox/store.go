@@ -345,6 +345,72 @@ func (s *Store) MarkRead(ctx context.Context, jid string) error {
 	return err
 }
 
+// MarkUnread flags a chat as unread on the dashboard (operator action — the
+// contact sees no change). Uses MAX(1, unread_count) so a chat that already
+// has real unread bumps is not clobbered down to 1.
+func (s *Store) MarkUnread(ctx context.Context, jid string) error {
+	_, err := s.db.ExecContext(ctx, sqlMarkChatUnread, jid)
+	return err
+}
+
+// InternalNote is a dashboard-only annotation visible only to operators.
+// It is never sent to the contact.
+type InternalNote struct {
+	ID      int64  `json:"id"`
+	ChatJID string `json:"chat_jid"`
+	Content string `json:"content"`
+	Author  string `json:"author"`
+	TS      int64  `json:"ts"`
+}
+
+// ListInternalNotes returns the newest internal notes for a chat (capped at
+// `limit`, which defaults to DefaultListLimit when <= 0).
+func (s *Store) ListInternalNotes(ctx context.Context, jid string, limit int) ([]InternalNote, error) {
+	if limit <= 0 || limit > DefaultListLimit {
+		limit = DefaultListLimit
+	}
+	rows, err := s.db.QueryContext(ctx, sqlListInternalNotes, jid, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]InternalNote, 0)
+	for rows.Next() {
+		var n InternalNote
+		if err := rows.Scan(&n.ID, &n.ChatJID, &n.Content, &n.Author, &n.TS); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+// AddInternalNote persists a new note for a chat and returns it (with the
+// generated id). Content is trimmed by the caller — the store enforces
+// "non-empty after trim" at the SQL layer by relying on the http handler.
+func (s *Store) AddInternalNote(ctx context.Context, n InternalNote) (*InternalNote, error) {
+	if n.TS == 0 {
+		n.TS = time.Now().UnixMilli()
+	}
+	res, err := s.db.ExecContext(ctx, sqlInsertInternalNote, n.ChatJID, n.Content, n.Author, n.TS)
+	if err != nil {
+		return nil, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+	n.ID = id
+	return &n, nil
+}
+
+// DeleteInternalNote removes a single note. Returns nil even if no rows were
+// affected (idempotent) — the http handler returns 204 either way.
+func (s *Store) DeleteInternalNote(ctx context.Context, jid string, id int64) error {
+	_, err := s.db.ExecContext(ctx, sqlDeleteInternalNote, id, jid)
+	return err
+}
+
 // ListMessages returns the most recent messages for a chat (newest first).
 func (s *Store) ListMessages(ctx context.Context, jid string, limit int) ([]Message, error) {
 	if limit <= 0 || limit > DefaultListLimit {

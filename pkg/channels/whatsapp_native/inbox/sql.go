@@ -120,6 +120,18 @@ CREATE INDEX IF NOT EXISTS idx_wa_product_mentions_product
 CREATE INDEX IF NOT EXISTS idx_wa_product_mentions_chat_ts
 	ON wa_product_mentions(chat_jid, ts DESC);
 
+CREATE TABLE IF NOT EXISTS wa_internal_notes (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	chat_jid   TEXT NOT NULL,
+	content    TEXT NOT NULL,
+	author     TEXT NOT NULL,
+	ts         INTEGER NOT NULL,
+	FOREIGN KEY (chat_jid) REFERENCES wa_chats(jid)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wa_internal_notes_chat_ts
+	ON wa_internal_notes(chat_jid, ts DESC);
+
 INSERT OR IGNORE INTO wa_contact_profiles (
 	chat_jid, push_name, display_name, created_at, updated_at
 )
@@ -159,6 +171,27 @@ UPDATE wa_chats SET unread_count = unread_count + 1 WHERE jid = ?;`
 
 	sqlResetUnread = `
 UPDATE wa_chats SET unread_count = 0 WHERE jid = ?;`
+
+	// Marks a chat as unread on the dashboard. The contact sees no change —
+	// this is dashboard-local state, used by the operator to "snooze" a chat
+	// they read but want to revisit. We set to MAX(1, unread_count) so a
+	// chat with real unread bumps doesn't get clobbered.
+	sqlMarkChatUnread = `
+UPDATE wa_chats SET unread_count = MAX(1, unread_count) WHERE jid = ?;`
+
+	sqlInsertInternalNote = `
+INSERT INTO wa_internal_notes (chat_jid, content, author, ts)
+VALUES (?, ?, ?, ?);`
+
+	sqlListInternalNotes = `
+SELECT id, chat_jid, content, author, ts
+FROM wa_internal_notes
+WHERE chat_jid = ?
+ORDER BY ts DESC, id DESC
+LIMIT ?;`
+
+	sqlDeleteInternalNote = `
+DELETE FROM wa_internal_notes WHERE id = ? AND chat_jid = ?;`
 
 	sqlSetPaused = `
 UPDATE wa_chats SET paused = ?, updated_at = ? WHERE jid = ?;`

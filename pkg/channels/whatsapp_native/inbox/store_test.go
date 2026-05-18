@@ -131,3 +131,127 @@ func TestSaveContactProfile(t *testing.T) {
 		t.Fatalf("Tags = %#v, want two tags", saved.Tags)
 	}
 }
+
+func TestMarkUnreadAndRead(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "conversations.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	jid := "5574111110000@s.whatsapp.net"
+	if err := store.RecordMessage(ctx, Message{
+		MessageID: "in-1", ChatJID: jid, Direction: DirectionIn,
+		Source: SourceContact, Content: "oi", Delivered: true,
+	}, "Maria"); err != nil {
+		t.Fatalf("RecordMessage() error = %v", err)
+	}
+	chat, _ := store.GetChat(ctx, jid)
+	if chat.UnreadCount != 1 {
+		t.Fatalf("UnreadCount after inbound = %d, want 1", chat.UnreadCount)
+	}
+	if err := store.MarkRead(ctx, jid); err != nil {
+		t.Fatalf("MarkRead() error = %v", err)
+	}
+	chat, _ = store.GetChat(ctx, jid)
+	if chat.UnreadCount != 0 {
+		t.Fatalf("UnreadCount after MarkRead = %d, want 0", chat.UnreadCount)
+	}
+	if err := store.MarkUnread(ctx, jid); err != nil {
+		t.Fatalf("MarkUnread() error = %v", err)
+	}
+	chat, _ = store.GetChat(ctx, jid)
+	if chat.UnreadCount != 1 {
+		t.Fatalf("UnreadCount after MarkUnread = %d, want 1", chat.UnreadCount)
+	}
+	// MarkUnread on a chat already with multiple unreads must NOT clobber.
+	if err := store.RecordMessage(ctx, Message{
+		MessageID: "in-2", ChatJID: jid, Direction: DirectionIn,
+		Source: SourceContact, Content: "ola?", Delivered: true,
+	}, "Maria"); err != nil {
+		t.Fatalf("second RecordMessage() error = %v", err)
+	}
+	chat, _ = store.GetChat(ctx, jid)
+	if chat.UnreadCount != 2 {
+		t.Fatalf("UnreadCount after second inbound = %d, want 2", chat.UnreadCount)
+	}
+	if err := store.MarkUnread(ctx, jid); err != nil {
+		t.Fatalf("idempotent MarkUnread() error = %v", err)
+	}
+	chat, _ = store.GetChat(ctx, jid)
+	if chat.UnreadCount != 2 {
+		t.Fatalf("MarkUnread clobbered higher count: got %d, want 2", chat.UnreadCount)
+	}
+}
+
+func TestInternalNotesCRUD(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "conversations.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	jid := "5574222220000@s.whatsapp.net"
+	if err := store.RecordMessage(ctx, Message{
+		MessageID: "in-1", ChatJID: jid, Direction: DirectionIn,
+		Source: SourceContact, Content: "oi", Delivered: true,
+	}, "Joao"); err != nil {
+		t.Fatalf("RecordMessage() error = %v", err)
+	}
+	first, err := store.AddInternalNote(ctx, InternalNote{
+		ChatJID: jid, Content: "Cliente preferiu boleto", Author: "Ana",
+	})
+	if err != nil {
+		t.Fatalf("AddInternalNote() error = %v", err)
+	}
+	if first.ID == 0 {
+		t.Fatal("expected non-zero id")
+	}
+	if first.TS == 0 {
+		t.Fatal("expected TS to be set when zero")
+	}
+	second, err := store.AddInternalNote(ctx, InternalNote{
+		ChatJID: jid, Content: "Aguardando RG", Author: "Ana",
+	})
+	if err != nil {
+		t.Fatalf("AddInternalNote(2) error = %v", err)
+	}
+	if second.ID == first.ID {
+		t.Fatal("second note got same id as first")
+	}
+
+	notes, err := store.ListInternalNotes(ctx, jid, 0)
+	if err != nil {
+		t.Fatalf("ListInternalNotes() error = %v", err)
+	}
+	if len(notes) != 2 {
+		t.Fatalf("expected 2 notes, got %d", len(notes))
+	}
+	// Newest first.
+	if notes[0].ID != second.ID {
+		t.Fatalf("expected newest note first, got id %d", notes[0].ID)
+	}
+
+	if err := store.DeleteInternalNote(ctx, jid, first.ID); err != nil {
+		t.Fatalf("DeleteInternalNote() error = %v", err)
+	}
+	notes, _ = store.ListInternalNotes(ctx, jid, 0)
+	if len(notes) != 1 || notes[0].ID != second.ID {
+		t.Fatalf("after delete: notes = %+v", notes)
+	}
+
+	// Idempotent — deleting a non-existent id must not error.
+	if err := store.DeleteInternalNote(ctx, jid, 99999); err != nil {
+		t.Fatalf("Delete missing returned error: %v", err)
+	}
+	// JID mismatch must not delete the wrong chat's note.
+	if err := store.DeleteInternalNote(ctx, "other@s.whatsapp.net", second.ID); err != nil {
+		t.Fatalf("cross-jid delete returned error: %v", err)
+	}
+	notes, _ = store.ListInternalNotes(ctx, jid, 0)
+	if len(notes) != 1 {
+		t.Fatalf("cross-jid delete clobbered note: %+v", notes)
+	}
+}
