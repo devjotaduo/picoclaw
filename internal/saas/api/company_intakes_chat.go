@@ -101,7 +101,13 @@ func (h *Handler) handleCompanyIntakeChat(w http.ResponseWriter, r *http.Request
 		return
 	}
 	history := parseChatHistory(intake.ChatMessagesJSON)
-	if len(history) >= h.Cfg.ClaraMaxTurns {
+	userTurns := 0
+	for _, msg := range history {
+		if msg.Role == "user" {
+			userTurns++
+		}
+	}
+	if userTurns >= h.Cfg.ClaraMaxTurns {
 		writeError(w, http.StatusTooManyRequests, "limite de mensagens atingido")
 		return
 	}
