@@ -54,7 +54,13 @@ RUN CONFIG_PKG=github.com/sipeed/picoclaw/pkg/config && \
 # ============================================================
 FROM alpine:3.23
 
-RUN apk add --no-cache ca-certificates tzdata curl
+RUN apk add --no-cache \
+  ca-certificates \
+  curl \
+  github-cli \
+  jq \
+  tmux \
+  tzdata
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -q --spider http://127.0.0.1:18800/ || exit 1

@@ -128,6 +128,9 @@ func (p *Provisioner) runProvision(ctx context.Context, t *store.Tenant, passwor
 	if err := CopyTemplate(seedPath, t.VolumePath); err != nil {
 		return fmt.Errorf("copy template: %w", err)
 	}
+	if err := SyncTemplateSkills(p.Cfg.TenantTemplateDir, t.VolumePath); err != nil {
+		return fmt.Errorf("sync template skills: %w", err)
+	}
 	if profile != nil {
 		if err := WriteLauncherPolicy(t.VolumePath, profile.RolePolicy()); err != nil {
 			return fmt.Errorf("write launcher policy: %w", err)

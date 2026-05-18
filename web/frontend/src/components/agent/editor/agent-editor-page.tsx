@@ -47,7 +47,7 @@ import {
   updateInternalAgentOrchestration,
 } from "@/api/internal-agents"
 import { getLauncherPolicy } from "@/api/launcher-policy"
-import { getSkills } from "@/api/skills"
+import { type SkillSupportItem, getSkills } from "@/api/skills"
 import { listWhatsAppChats } from "@/api/whatsapp"
 import { CodeEditor } from "@/components/code-editor"
 import { PageHeader } from "@/components/page-header"
@@ -88,6 +88,7 @@ import type {
   AgentTemplate,
   TemplateApplyPayload,
   TemplateKnowledgeBase,
+  TemplateSkillConfig,
 } from "../templates/types"
 import {
   defaultTemplateSkillConfigs,
@@ -537,11 +538,14 @@ function rolePromptDefaults(agent: AgentSummary): Pick<
 
 function defaultDraftForAgent(
   agent: AgentSummary,
-  installedSkills: Parameters<typeof defaultTemplateSkillConfigs>[1],
+  installedSkills: SkillSupportItem[],
 ): TemplateApplyPayload {
   const baseTemplate = AGENT_TEMPLATES[0]
+  const defaultSkillConfigs = baseTemplate
+    ? defaultSkillConfigsForAgent(agent, baseTemplate, installedSkills)
+    : []
   const base = baseTemplate
-    ? templateToDraft(baseTemplate, defaultTemplateSkillConfigs(baseTemplate, installedSkills))
+    ? templateToDraft(baseTemplate, defaultSkillConfigs)
     : hydrateAgentPayload({} as TemplateApplyPayload)
   const defaults = rolePromptDefaults(agent)
   return hydrateAgentPayload({
@@ -554,6 +558,52 @@ function defaultDraftForAgent(
       name: base.company_info?.name || "{company.name}",
     },
   })
+}
+
+const defaultAgentSkillRecommendations: Record<string, string[]> = {
+  vendas: [
+    "lead-qualification",
+    "bant-spin-discovery",
+    "objection-handling",
+    "product-interest-extraction",
+    "whatsapp-follow-up-planner",
+  ],
+  marketing: [],
+  assistente: [
+    "internal-policy-search",
+    "confidentiality-check",
+    "whatsapp-report-builder",
+    "whatsapp-conversation-summary",
+    "human-handoff-brief",
+    "lgpd-check",
+    "sensitive-data-protection",
+    "log-sanitizer",
+  ],
+}
+
+function skillConfigsFromNames(
+  names: string[],
+  installedSkills: SkillSupportItem[],
+): TemplateSkillConfig[] {
+  const installedByName = new Map(
+    installedSkills.map((skill) => [skill.name.toLowerCase(), skill.name]),
+  )
+  return names
+    .map((name) => installedByName.get(name.toLowerCase()))
+    .filter((name): name is string => Boolean(name))
+    .map((name) => ({ name, enabled: true, visible: true }))
+}
+
+function defaultSkillConfigsForAgent(
+  agent: AgentSummary,
+  baseTemplate: AgentTemplate,
+  installedSkills: SkillSupportItem[],
+): TemplateSkillConfig[] {
+  const recommended = defaultAgentSkillRecommendations[agent.id]
+  if (recommended) {
+    return skillConfigsFromNames(recommended, installedSkills)
+  }
+  return defaultTemplateSkillConfigs(baseTemplate, installedSkills)
 }
 
 function hydrateKnowledgeBase(
@@ -569,6 +619,7 @@ function hydrateKnowledgeBase(
 }
 
 function hydrateAgentPayload(raw: TemplateApplyPayload): TemplateApplyPayload {
+  const legacySkills = legacyPayloadSkills(raw)
   return {
     ...raw,
     short_description: raw.short_description ?? "",
@@ -577,7 +628,9 @@ function hydrateAgentPayload(raw: TemplateApplyPayload): TemplateApplyPayload {
     functions: raw.functions ?? [],
     prohibitions: raw.prohibitions ?? [],
     protections: raw.protections ?? [],
-    skill_configs: raw.skill_configs ?? [],
+    skill_configs:
+      raw.skill_configs ??
+      legacySkills.map((name) => ({ name, enabled: true, visible: true })),
     conversation_flow: raw.conversation_flow ?? [],
     required_fields_by_intent: raw.required_fields_by_intent ?? {},
     response_examples: {
@@ -638,6 +691,22 @@ function hydrateAgentPayload(raw: TemplateApplyPayload): TemplateApplyPayload {
     },
     behavior: { ...DEFAULT_BEHAVIOR, ...raw.behavior },
   }
+}
+
+function legacyPayloadSkills(payload?: TemplateApplyPayload | null): string[] {
+  const rawSkills = (
+    payload as (TemplateApplyPayload & { skills?: unknown }) | null | undefined
+  )?.skills
+  if (!Array.isArray(rawSkills)) return []
+  return rawSkills.filter((skill): skill is string => typeof skill === "string")
+}
+
+function enabledSkillCount(payload?: TemplateApplyPayload | null): number {
+  const configs = payload?.skill_configs ?? []
+  if (configs.length > 0) {
+    return configs.filter((skill) => skill.enabled).length
+  }
+  return legacyPayloadSkills(payload).length
 }
 
 function prepareDraftForEdit(
@@ -1868,6 +1937,7 @@ export function AgentEditorPage() {
           open={editing}
           agent={selectedAgent}
           draft={draft}
+          installedSkills={installedSkills}
           isApplying={applyMutation.isPending}
           onDraftChange={setDraft}
           onApply={() => {
@@ -2444,7 +2514,7 @@ function PromptWorkspaceSection({
         day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
       })
     : null
-  const activeSkillCount = payload?.skill_configs?.filter((s) => s.enabled).length ?? 0
+  const activeSkillCount = enabledSkillCount(payload)
   const promptLabel = agent.id === "main" ? template?.name ?? payload?.template_id : promptSheetTitle(agent)
   const presentation = resolvedPayload?.presentation ?? payload?.presentation
 
@@ -2667,6 +2737,7 @@ function SpecialistPromptSheet({
   open,
   agent,
   draft,
+  installedSkills,
   isApplying,
   onDraftChange,
   onApply,
@@ -2675,6 +2746,7 @@ function SpecialistPromptSheet({
   open: boolean
   agent: AgentSummary | null
   draft: TemplateApplyPayload | null
+  installedSkills: SkillSupportItem[]
   isApplying: boolean
   onDraftChange: (draft: TemplateApplyPayload | null) => void
   onApply: () => void
@@ -2742,6 +2814,21 @@ function SpecialistPromptSheet({
               placeholder={"publicação externa\nalterar permissões"}
             />
           </div>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label className="text-xs">Skills deste agente</Label>
+              {installedSkills.length > 0 && (
+                <span className="text-muted-foreground rounded-full border px-2 py-0.5 text-[10px]">
+                  {enabledSkillCount(draft)} ativas de {installedSkills.length}
+                </span>
+              )}
+            </div>
+            <SkillConfigEditor
+              installedSkills={installedSkills}
+              value={draft.skill_configs ?? []}
+              onChange={(next) => setField("skill_configs", next)}
+            />
+          </div>
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs">Modelo</Label>
@@ -2764,6 +2851,109 @@ function SpecialistPromptSheet({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function SkillConfigEditor({
+  installedSkills,
+  value,
+  onChange,
+}: {
+  installedSkills: SkillSupportItem[]
+  value: TemplateSkillConfig[]
+  onChange: (next: TemplateSkillConfig[]) => void
+}) {
+  function getSkillConfig(name: string): TemplateSkillConfig | undefined {
+    return value.find((config) => config.name === name)
+  }
+
+  function setSkillConfig(
+    name: string,
+    patch: Partial<Omit<TemplateSkillConfig, "name">>,
+  ) {
+    const existing = getSkillConfig(name)
+    const merged: TemplateSkillConfig = {
+      name,
+      enabled: existing?.enabled ?? false,
+      visible: existing?.visible ?? true,
+      ...patch,
+    }
+    const next = existing
+      ? value.map((config) => (config.name === name ? merged : config))
+      : [...value, merged]
+    onChange(next)
+  }
+
+  if (installedSkills.length === 0) {
+    return (
+      <div className="border-border/40 bg-muted/10 text-muted-foreground rounded-lg border border-dashed px-4 py-5 text-center text-sm">
+        Nenhuma skill instalada neste workspace.
+      </div>
+    )
+  }
+
+  return (
+    <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
+      {installedSkills.map((skill) => {
+        const cfg = getSkillConfig(skill.name)
+        const enabled = cfg?.enabled ?? false
+        const visible = cfg?.visible ?? true
+        const enabledID = `specialist-skill-enabled-${skill.name}`
+        const visibleID = `specialist-skill-visible-${skill.name}`
+        return (
+          <li
+            key={skill.name}
+            className="border-border/50 bg-muted/10 rounded-lg border px-3 py-2"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <Label
+                  htmlFor={enabledID}
+                  className="cursor-pointer text-sm font-medium"
+                >
+                  {skill.name}
+                </Label>
+                {skill.description ? (
+                  <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
+                    {skill.description}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex shrink-0 items-center gap-4">
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-muted-foreground text-[10px] tracking-wide uppercase">
+                    Ativa
+                  </span>
+                  <Switch
+                    id={enabledID}
+                    checked={enabled}
+                    onCheckedChange={(checked) =>
+                      setSkillConfig(skill.name, {
+                        enabled: checked,
+                        visible: cfg?.visible ?? true,
+                      })
+                    }
+                  />
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-muted-foreground text-[10px] tracking-wide uppercase">
+                    Visível
+                  </span>
+                  <Switch
+                    id={visibleID}
+                    checked={enabled && visible}
+                    disabled={!enabled}
+                    onCheckedChange={(checked) =>
+                      setSkillConfig(skill.name, { visible: checked })
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
@@ -2798,7 +2988,7 @@ function AgentDetailView({
   const payload = configData.payload!
   const isActive = agent.active !== false
   const isDefault = agent.default
-  const skillsActiveCount = payload.skill_configs?.filter((s) => s.enabled).length ?? 0
+  const skillsActiveCount = enabledSkillCount(payload)
   const professionalsCount = payload.professionals?.length ?? 0
   const productsCount = payload.products?.length ?? 0
   const appliedAt = configData.applied_at
