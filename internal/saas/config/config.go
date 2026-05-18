@@ -80,7 +80,7 @@ func Load() (*Config, error) {
 		// (claude-sonnet-4-5 is mapped to openrouter/anthropic/claude-sonnet-4.5
 		// in deploy/litellm/config.yaml). Override via env when bumping the upstream.
 		ClaraModel:          envOr("CLARA_MODEL", "claude-sonnet-4-5"),
-		ClaraMaxTurns:       envInt("CLARA_MAX_TURNS", 16),
+		ClaraMaxTurns:       envInt("CLARA_MAX_TURNS", 28), // up to ~14 user turns × 2 roles
 		ClaraRateLimitPerIP: envInt("CLARA_RATE_LIMIT_PER_IP", 30),
 		ClaraRateWindow:     time.Duration(envInt("CLARA_RATE_WINDOW_SECONDS", 600)) * time.Second,
 		ClaraEnabled:        envBool("CLARA_ENABLED", true),

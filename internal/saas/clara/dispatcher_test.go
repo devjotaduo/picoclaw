@@ -108,6 +108,57 @@ func TestParseAnswers_PreservesUnknownKeys(t *testing.T) {
 	}
 }
 
+func TestApply_SetProblemArea_PersistsAreaAndNote(t *testing.T) {
+	answers := &Answers{Extra: map[string]any{}}
+	mut, err := Apply("set_problem_area",
+		json.RawMessage(`{"area":"agendamento","note":"perde horário sem confirmar"}`),
+		answers)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if mut.AnswersDelta == nil {
+		t.Fatal("expected answers delta")
+	}
+	if mut.AnswersDelta.ProblemArea != "agendamento" {
+		t.Fatalf("ProblemArea = %q, want %q", mut.AnswersDelta.ProblemArea, "agendamento")
+	}
+	if mut.AnswersDelta.ProblemAreaNote != "perde horário sem confirmar" {
+		t.Fatalf("ProblemAreaNote = %q", mut.AnswersDelta.ProblemAreaNote)
+	}
+}
+
+func TestApply_SetProblemArea_RejectsUnknownArea(t *testing.T) {
+	answers := &Answers{Extra: map[string]any{}}
+	_, err := Apply("set_problem_area",
+		json.RawMessage(`{"area":"finance"}`),
+		answers)
+	if err == nil {
+		t.Fatal("expected error for unknown problem area")
+	}
+}
+
+func TestApply_SetSalesMode_PersistsOnlineProductType(t *testing.T) {
+	answers := &Answers{Extra: map[string]any{}}
+	mut, err := Apply("set_sales_mode",
+		json.RawMessage(`{"online":true,"product_type":"Físico","note":"roupas femininas pelo Insta"}`),
+		answers)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if mut.AnswersDelta == nil {
+		t.Fatal("expected answers delta")
+	}
+	if mut.AnswersDelta.SalesOnline == nil || !*mut.AnswersDelta.SalesOnline {
+		t.Fatalf("SalesOnline = %v, want pointer to true", mut.AnswersDelta.SalesOnline)
+	}
+	if mut.AnswersDelta.ProductType != "físico" {
+		t.Fatalf("ProductType = %q, want lowercased 'físico'", mut.AnswersDelta.ProductType)
+	}
+	if mut.AnswersDelta.SalesNote != "roupas femininas pelo Insta" {
+		t.Fatalf("SalesNote = %q", mut.AnswersDelta.SalesNote)
+	}
+}
+
 func TestAnswers_MarshalRoundTrip(t *testing.T) {
 	a := &Answers{
 		Offer:    "Vende móveis",
@@ -126,5 +177,34 @@ func TestAnswers_MarshalRoundTrip(t *testing.T) {
 	}
 	if round.Offer != a.Offer || len(round.Pains) != 1 || round.Extra["city_region"] != "Curitiba" {
 		t.Fatalf("round-trip lost data: %+v", round)
+	}
+}
+
+func TestAnswers_MarshalRoundTrip_NewStructuredFields(t *testing.T) {
+	online := true
+	a := &Answers{
+		ProblemArea:     "agendamento",
+		ProblemAreaNote: "perde horário",
+		SalesOnline:     &online,
+		ProductType:     "serviço",
+		SalesNote:       "atende em domicílio",
+		Extra:           map[string]any{},
+	}
+	raw, err := a.Marshal()
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	round, err := ParseAnswers(raw)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if round.ProblemArea != "agendamento" || round.ProblemAreaNote != "perde horário" {
+		t.Fatalf("problem area round-trip = %+v", round)
+	}
+	if round.SalesOnline == nil || !*round.SalesOnline {
+		t.Fatalf("SalesOnline lost: %v", round.SalesOnline)
+	}
+	if round.ProductType != "serviço" || round.SalesNote != "atende em domicílio" {
+		t.Fatalf("sales mode round-trip = %+v", round)
 	}
 }

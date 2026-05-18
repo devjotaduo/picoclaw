@@ -36,7 +36,37 @@ export type ClaraExtracted = {
 	channels: string[];
 	pains: string[];
 	systems: string[];
+
+	// Light onboarding signals — rendered by ClaraFinalize as a narrative
+	// mini-report. Technical detail (prices, integrations, etc.) is left for
+	// Sofia's WhatsApp follow-up, NOT this screen.
+	offer?: string;
+	website?: string;
+	instagram?: string;
+	crmName?: string;
+	crmNotes?: string;
+	quotingPersonalized?: boolean;
+	quotingNotes?: string;
+	priorityAgent?: "ana" | "leo" | "maya" | "sofia";
+	priorityReason?: string;
+
+	// Structured pain tag (problemArea) + how the visitor sells today
+	// (salesOnline + productType). Used by ClaraFinalize to render the
+	// "how the agents will help" recommendations.
+	problemArea?: ClaraProblemArea;
+	problemAreaNote?: string;
+	salesOnline?: boolean;
+	productType?: string;
+	salesNote?: string;
 };
+
+export type ClaraProblemArea =
+	| "vendas"
+	| "atendimento"
+	| "suporte"
+	| "agendamento"
+	| "marketing"
+	| "gestao";
 
 export type ClaraStatus = "idle" | "sending" | "streaming" | "error";
 
@@ -238,8 +268,8 @@ export function useClaraChat({
 						return;
 					case "extracted":
 						// Authoritative snapshot from the server after a tool applied.
-						// Wipes the "(salvando…)" placeholder with the real value.
 						setExtracted((cur) => ({
+							...cur,
 							companyName:
 								(typeof ev.company_name === "string" && ev.company_name) || cur.companyName,
 							contactName:
@@ -248,6 +278,24 @@ export function useClaraChat({
 							channels: arrayOrPrev(ev.channels, cur.channels),
 							pains: arrayOrPrev(ev.pains, cur.pains),
 							systems: arrayOrPrev(ev.systems, cur.systems),
+							offer: stringOrPrev(ev.offer, cur.offer),
+							website: stringOrPrev(ev.website, cur.website),
+							instagram: stringOrPrev(ev.instagram, cur.instagram),
+							crmName: stringOrPrev(ev.crm_name, cur.crmName),
+							crmNotes: stringOrPrev(ev.crm_notes, cur.crmNotes),
+							quotingPersonalized:
+								typeof ev.quoting_personalized === "boolean"
+									? ev.quoting_personalized
+									: cur.quotingPersonalized,
+							quotingNotes: stringOrPrev(ev.quoting_notes, cur.quotingNotes),
+							priorityAgent: priorityAgentOrPrev(ev.priority_agent, cur.priorityAgent),
+							priorityReason: stringOrPrev(ev.priority_reason, cur.priorityReason),
+							problemArea: problemAreaOrPrev(ev.problem_area, cur.problemArea),
+							problemAreaNote: stringOrPrev(ev.problem_area_note, cur.problemAreaNote),
+							salesOnline:
+								typeof ev.sales_online === "boolean" ? ev.sales_online : cur.salesOnline,
+							productType: stringOrPrev(ev.product_type, cur.productType),
+							salesNote: stringOrPrev(ev.sales_note, cur.salesNote),
 						}));
 						return;
 					case "tool_applied":
@@ -349,6 +397,38 @@ function arrayOrPrev(v: unknown, prev: string[]): string[] {
 	return v.filter((x): x is string => typeof x === "string");
 }
 
+function stringOrPrev(v: unknown, prev: string | undefined): string | undefined {
+	if (typeof v === "string" && v.trim() !== "") return v;
+	return prev;
+}
+
+function priorityAgentOrPrev(
+	v: unknown,
+	prev: ClaraExtracted["priorityAgent"],
+): ClaraExtracted["priorityAgent"] {
+	if (v === "ana" || v === "leo" || v === "maya" || v === "sofia") return v;
+	return prev;
+}
+
+const PROBLEM_AREAS: ClaraProblemArea[] = [
+	"vendas",
+	"atendimento",
+	"suporte",
+	"agendamento",
+	"marketing",
+	"gestao",
+];
+
+function problemAreaOrPrev(
+	v: unknown,
+	prev: ClaraExtracted["problemArea"],
+): ClaraExtracted["problemArea"] {
+	if (typeof v === "string" && (PROBLEM_AREAS as string[]).includes(v)) {
+		return v as ClaraProblemArea;
+	}
+	return prev;
+}
+
 // humanizeError maps known backend error strings to PT-BR. Anything else
 // becomes a generic phrase — and any JSON-looking payload is suppressed so
 // users never see raw {"error":"…"} in the UI (P0.4 ticket).
@@ -409,6 +489,29 @@ export function extractFromIntake(
 		if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
 		return [];
 	};
+	const str = (key: string): string | undefined => {
+		const v = answers[key];
+		return typeof v === "string" && v.trim() !== "" ? v : undefined;
+	};
+	const priority = (): ClaraExtracted["priorityAgent"] => {
+		const v = answers["priority_agent"];
+		return v === "ana" || v === "leo" || v === "maya" || v === "sofia" ? v : undefined;
+	};
+	const quoting = (): boolean | undefined => {
+		const v = answers["quoting_personalized"];
+		return typeof v === "boolean" ? v : undefined;
+	};
+	const problemArea = (): ClaraExtracted["problemArea"] => {
+		const v = answers["problem_area"];
+		if (typeof v === "string" && (PROBLEM_AREAS as string[]).includes(v)) {
+			return v as ClaraProblemArea;
+		}
+		return undefined;
+	};
+	const salesOnline = (): boolean | undefined => {
+		const v = answers["sales_online"];
+		return typeof v === "boolean" ? v : undefined;
+	};
 	return {
 		companyName: companyName || undefined,
 		contactName: contactName || undefined,
@@ -416,5 +519,19 @@ export function extractFromIntake(
 		channels: arr("channels"),
 		pains: arr("pains"),
 		systems: arr("systems"),
+		offer: str("offer"),
+		website: str("website"),
+		instagram: str("instagram"),
+		crmName: str("crm_name"),
+		crmNotes: str("crm_notes"),
+		quotingPersonalized: quoting(),
+		quotingNotes: str("quoting_notes"),
+		priorityAgent: priority(),
+		priorityReason: str("priority_reason"),
+		problemArea: problemArea(),
+		problemAreaNote: str("problem_area_note"),
+		salesOnline: salesOnline(),
+		productType: str("product_type"),
+		salesNote: str("sales_note"),
 	};
 }

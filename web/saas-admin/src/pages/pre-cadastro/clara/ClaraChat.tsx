@@ -544,7 +544,16 @@ function SummarySheet({
 		extracted.segments.length === 0 &&
 		extracted.channels.length === 0 &&
 		extracted.pains.length === 0 &&
-		extracted.systems.length === 0;
+		extracted.systems.length === 0 &&
+		!extracted.problemArea &&
+		typeof extracted.salesOnline !== "boolean" &&
+		!extracted.productType;
+
+	const salesChips: string[] = [];
+	if (typeof extracted.salesOnline === "boolean") {
+		salesChips.push(extracted.salesOnline ? "vende online" : "só presencial");
+	}
+	if (extracted.productType) salesChips.push(extracted.productType);
 
 	return (
 		<div className="fixed inset-0 z-50 flex">
@@ -584,7 +593,12 @@ function SummarySheet({
 								icon={<CheckCircle2 className="h-3.5 w-3.5" />}
 							/>
 							<SummarySection label="Negócio" items={extracted.segments} />
+							<SummarySection label="Como vende" items={salesChips} />
 							<SummarySection label="Canais" items={extracted.channels} />
+							<SummarySection
+								label="Foco do problema"
+								items={extracted.problemArea ? [PROBLEM_AREA_LABELS[extracted.problemArea]] : []}
+							/>
 							<SummarySection label="Dores" items={extracted.pains} />
 							<SummarySection label="Sistemas" items={extracted.systems} />
 						</dl>
@@ -630,12 +644,25 @@ function hasAnyExtracted(e: ClaraExtracted): boolean {
 			e.segments.length ||
 			e.channels.length ||
 			e.pains.length ||
-			e.systems.length,
+			e.systems.length ||
+			e.problemArea ||
+			typeof e.salesOnline === "boolean" ||
+			e.productType,
 	);
 }
 
+const PROBLEM_AREA_LABELS: Record<NonNullable<ClaraExtracted["problemArea"]>, string> = {
+	vendas: "Vendas",
+	atendimento: "Atendimento",
+	suporte: "Suporte pós-venda",
+	agendamento: "Agendamento",
+	marketing: "Marketing / presença",
+	gestao: "Organização interna",
+};
+
 function mergeExtracted(server: ClaraExtracted, live: ClaraExtracted): ClaraExtracted {
 	const pick = (s: string[], l: string[]) => (s.length > 0 ? s : l);
+	const pickStr = (s: string | undefined, l: string | undefined) => s || l;
 	return {
 		companyName: server.companyName || live.companyName,
 		contactName: server.contactName || live.contactName,
@@ -643,5 +670,23 @@ function mergeExtracted(server: ClaraExtracted, live: ClaraExtracted): ClaraExtr
 		channels: pick(server.channels, live.channels),
 		pains: pick(server.pains, live.pains),
 		systems: pick(server.systems, live.systems),
+		offer: pickStr(server.offer, live.offer),
+		website: pickStr(server.website, live.website),
+		instagram: pickStr(server.instagram, live.instagram),
+		crmName: pickStr(server.crmName, live.crmName),
+		crmNotes: pickStr(server.crmNotes, live.crmNotes),
+		quotingPersonalized:
+			typeof server.quotingPersonalized === "boolean"
+				? server.quotingPersonalized
+				: live.quotingPersonalized,
+		quotingNotes: pickStr(server.quotingNotes, live.quotingNotes),
+		priorityAgent: server.priorityAgent || live.priorityAgent,
+		priorityReason: pickStr(server.priorityReason, live.priorityReason),
+		problemArea: server.problemArea || live.problemArea,
+		problemAreaNote: pickStr(server.problemAreaNote, live.problemAreaNote),
+		salesOnline:
+			typeof server.salesOnline === "boolean" ? server.salesOnline : live.salesOnline,
+		productType: pickStr(server.productType, live.productType),
+		salesNote: pickStr(server.salesNote, live.salesNote),
 	};
 }

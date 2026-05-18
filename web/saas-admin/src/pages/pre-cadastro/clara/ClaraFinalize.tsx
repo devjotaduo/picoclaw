@@ -137,13 +137,18 @@ export function ClaraFinalize(props: ClaraFinalizeProps) {
 
 			<main className="flex-1 overflow-y-auto px-4 py-8 sm:px-6">
 				<div className="mx-auto max-w-md">
-					<h1 className="text-xl font-semibold text-zinc-900">
-						Já dá pra te mandar uma proposta inicial
-					</h1>
+					<h1 className="text-xl font-semibold text-zinc-900">Confere o que entendi</h1>
 					<p className="mt-1.5 text-sm text-zinc-600">
-						{props.qualifiedReason
-							? props.qualifiedReason
-							: "Com o que conversamos, já consigo desenhar o que dá pra automatizar no seu negócio."}
+						{props.qualifiedReason ||
+							"Esse é o resuminho do nosso papo. Se estiver tudo certo, confirma seu contato pra Sofia te chamar no WhatsApp e pegar os detalhes técnicos (preços, integrações, esses pormenores)."}
+					</p>
+
+					<MiniReport extracted={props.extracted} />
+
+					<AgentRecommendations extracted={props.extracted} />
+
+					<p className="mt-7 text-sm font-medium text-zinc-900">
+						Como a Sofia te chama:
 					</p>
 
 					<section className="mt-6 space-y-3" aria-labelledby="finalize-contact">
@@ -239,12 +244,13 @@ export function ClaraFinalize(props: ClaraFinalizeProps) {
 								Enviando…
 							</>
 						) : (
-							"Enviar e receber proposta"
+							"Confirmar — Sofia vai te chamar"
 						)}
 					</Button>
 
 					<p className="mt-3 text-center text-xs text-zinc-500">
-						Sem cobrança agora. Nosso time entra em contato com a proposta.
+						Sem compromisso agora. A Sofia te chama no WhatsApp pra pegar os detalhes
+						técnicos (preços, integrações, esses pormenores).
 					</p>
 
 					{hasExtracted(props.extracted) && (
@@ -258,6 +264,309 @@ export function ClaraFinalize(props: ClaraFinalizeProps) {
 			</main>
 		</div>
 	);
+}
+
+// MiniReport renders the conversational summary Clara assembles after the
+// chat — narrative, scannable, not a form. Each block is omitted when Clara
+// didn't capture it (no "—" placeholders). Sofia uses this to start the
+// WhatsApp follow-up already aware of the context.
+const AGENT_LABELS: Record<NonNullable<ClaraExtracted["priorityAgent"]>, string> = {
+	ana: "Ana (atendimento)",
+	leo: "Leo (vendas / orçamentos)",
+	maya: "Maya (marketing e Instagram)",
+	sofia: "Sofia (sua secretária)",
+};
+
+const PROBLEM_AREA_LABELS: Record<NonNullable<ClaraExtracted["problemArea"]>, string> = {
+	vendas: "Vendas",
+	atendimento: "Atendimento ao cliente",
+	suporte: "Suporte pós-venda",
+	agendamento: "Agendamento",
+	marketing: "Marketing / presença",
+	gestao: "Organização interna",
+};
+
+function MiniReport({ extracted: e }: { extracted: ClaraExtracted }) {
+	const blocks: { label: string; value: React.ReactNode }[] = [];
+
+	if (e.contactName || e.companyName) {
+		blocks.push({
+			label: "Quem",
+			value: joinNonEmpty([e.contactName, e.companyName]),
+		});
+	}
+	if (e.offer) {
+		blocks.push({ label: "Negócio", value: e.offer });
+	}
+	if (e.segments.length > 0) {
+		blocks.push({ label: "Segmento", value: e.segments.join(", ") });
+	}
+	if (e.website || e.instagram) {
+		blocks.push({
+			label: "Onde está",
+			value: joinNonEmpty([e.website, e.instagram]),
+		});
+	}
+	if (e.channels.length > 0) {
+		blocks.push({
+			label: "Fala com cliente por",
+			value: e.channels.join(", "),
+		});
+	}
+	if (e.crmName) {
+		blocks.push({
+			label: "Gerencia clientes com",
+			value: e.crmNotes ? `${e.crmName} — ${e.crmNotes}` : e.crmName,
+		});
+	}
+	if (typeof e.quotingPersonalized === "boolean") {
+		const v = e.quotingPersonalized
+			? "Sim, cada cliente tem orçamento próprio"
+			: "Não, usa tabela fixa";
+		blocks.push({
+			label: "Orçamento personalizado",
+			value: e.quotingNotes ? `${v} (${e.quotingNotes})` : v,
+		});
+	}
+	if (typeof e.salesOnline === "boolean" || e.productType) {
+		const parts: string[] = [];
+		if (typeof e.salesOnline === "boolean") {
+			parts.push(e.salesOnline ? "Vende online" : "Só presencial");
+		}
+		if (e.productType) parts.push(`produto ${e.productType}`);
+		blocks.push({
+			label: "Como vende",
+			value: e.salesNote ? `${parts.join(" · ")} — ${e.salesNote}` : parts.join(" · "),
+		});
+	}
+	if (e.problemArea) {
+		const label = PROBLEM_AREA_LABELS[e.problemArea];
+		blocks.push({
+			label: "Foco do problema",
+			value: e.problemAreaNote ? `${label} — ${e.problemAreaNote}` : label,
+		});
+	}
+	if (e.pains.length > 0) {
+		blocks.push({
+			label: "O que mais cansa hoje",
+			value: e.pains.join("; "),
+		});
+	}
+	if (e.priorityAgent) {
+		blocks.push({
+			label: "Prioridade",
+			value: e.priorityReason
+				? `${AGENT_LABELS[e.priorityAgent]} — ${e.priorityReason}`
+				: AGENT_LABELS[e.priorityAgent],
+		});
+	}
+
+	if (blocks.length === 0) {
+		return (
+			<section className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+				A Clara não conseguiu extrair nada concreto desta vez. Você pode voltar e contar
+				um pouco mais, ou confirmar mesmo assim que a Sofia te chama pra entender melhor.
+			</section>
+		);
+	}
+
+	return (
+		<section
+			className="mt-6 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
+			aria-labelledby="mini-report"
+		>
+			<h2 id="mini-report" className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+				Mini-relatório
+			</h2>
+			<dl className="mt-3 space-y-2.5">
+				{blocks.map((b) => (
+					<div key={b.label} className="flex items-baseline gap-3">
+						<dt className="w-32 shrink-0 text-xs font-medium uppercase tracking-wide text-zinc-500">
+							{b.label}
+						</dt>
+						<dd className="text-sm text-zinc-900">{b.value}</dd>
+					</div>
+				))}
+			</dl>
+		</section>
+	);
+}
+
+// AgentRecommendations renders 1-2 cards explaining, in the visitor's own
+// language, how each Jotaduo agent would help this specific business. The
+// bullets are picked from a small static table indexed by problem area,
+// product type, and primary channel — no LLM call, no technical jargon.
+type AgentKey = NonNullable<ClaraExtracted["priorityAgent"]>;
+type AgentRecommendation = { agentKey: AgentKey; label: string; bullets: string[] };
+
+function AgentRecommendations({ extracted: e }: { extracted: ClaraExtracted }) {
+	const recs = buildAgentRecommendations(e);
+	if (recs.length === 0) return null;
+	return (
+		<section
+			className="mt-6 rounded-xl border border-violet-200 bg-violet-50/50 p-4"
+			aria-labelledby="agent-recos"
+		>
+			<h2
+				id="agent-recos"
+				className="text-xs font-medium uppercase tracking-wide text-violet-700"
+			>
+				Como os agentes vão te ajudar
+			</h2>
+			<div className="mt-3 space-y-4">
+				{recs.map((r) => (
+					<div key={r.agentKey}>
+						<p className="text-sm font-medium text-zinc-900">{r.label}</p>
+						<ul className="mt-1.5 space-y-1">
+							{r.bullets.map((b, i) => (
+								<li
+									key={`${r.agentKey}-${i}`}
+									className="flex gap-2 text-sm text-zinc-800"
+								>
+									<span aria-hidden="true" className="mt-1.5 inline-block h-1 w-1 shrink-0 rounded-full bg-violet-500" />
+									<span>{b}</span>
+								</li>
+							))}
+						</ul>
+					</div>
+				))}
+			</div>
+			<p className="mt-3 text-xs text-zinc-600">
+				A Sofia confirma esses pontos contigo no WhatsApp.
+			</p>
+		</section>
+	);
+}
+
+function buildAgentRecommendations(e: ClaraExtracted): AgentRecommendation[] {
+	const pains = e.pains.map((p) => p.toLowerCase());
+	const channels = e.channels.map((c) => c.toLowerCase());
+	const onInsta = channels.includes("instagram");
+	const onZap = channels.includes("whatsapp");
+	const segments = e.segments.map((s) => s.toLowerCase());
+	const isClinica = segments.some((s) => s.includes("clín") || s.includes("estét") || s.includes("saúde"));
+	const isLoja = segments.some((s) => s.includes("loja") || s.includes("produto") || s.includes("e-commerce"));
+	const isServico = segments.some((s) => s.includes("serv") || s.includes("consultoria") || s.includes("sob medida"));
+	const isRestaurante = segments.some((s) => s.includes("restaurante") || s.includes("cardápio") || s.includes("delivery"));
+	const painText = pains.join(" ");
+	const wantsAna =
+		e.problemArea === "atendimento" ||
+		e.problemArea === "suporte" ||
+		e.priorityAgent === "ana" ||
+		painText.includes("demora") ||
+		painText.includes("dúvida") ||
+		painText.includes("responder");
+	const wantsLeo =
+		e.problemArea === "vendas" ||
+		e.quotingPersonalized === true ||
+		e.priorityAgent === "leo" ||
+		painText.includes("orçamento") ||
+		painText.includes("lead");
+	const wantsMaya =
+		e.problemArea === "marketing" ||
+		e.priorityAgent === "maya" ||
+		(!!e.instagram && painText.includes("marketing"));
+	const wantsSofia =
+		e.problemArea === "agendamento" ||
+		e.problemArea === "gestao" ||
+		e.priorityAgent === "sofia" ||
+		isClinica ||
+		painText.includes("agendamento") ||
+		painText.includes("sobrecarregado") ||
+		painText.includes("follow-up");
+
+	const recs: AgentRecommendation[] = [];
+	const seen = new Set<AgentKey>();
+	const add = (key: AgentKey, bullets: string[]) => {
+		if (seen.has(key) || bullets.length === 0) return;
+		seen.add(key);
+		recs.push({ agentKey: key, label: AGENT_LABELS[key], bullets: bullets.slice(0, 3) });
+	};
+
+	// Prioritize the agent the visitor explicitly chose, then derive a
+	// natural ordering from the problem area, then fall back to a stable
+	// default so we always pick *some* agent when signals are sparse.
+	const areaToAgent: Record<NonNullable<ClaraExtracted["problemArea"]>, AgentKey> = {
+		vendas: "leo",
+		atendimento: "ana",
+		suporte: "ana",
+		agendamento: "sofia",
+		marketing: "maya",
+		gestao: "sofia",
+	};
+	const ordered: AgentKey[] = [];
+	if (e.priorityAgent) ordered.push(e.priorityAgent);
+	if (e.problemArea && !ordered.includes(areaToAgent[e.problemArea])) {
+		ordered.push(areaToAgent[e.problemArea]);
+	}
+	for (const k of ["sofia", "ana", "leo", "maya"] as AgentKey[]) {
+		if (!ordered.includes(k)) ordered.push(k);
+	}
+
+	for (const key of ordered) {
+		if (recs.length >= 2) break;
+		switch (key) {
+			case "ana": {
+				if (!wantsAna) break;
+				const bullets: string[] = [];
+				if (onInsta) bullets.push("Responde DM do Instagram no mesmo minuto, dia e noite.");
+				if (onZap) bullets.push("Atende o WhatsApp sem fila — separa quem quer comprar de quem só pergunta.");
+				bullets.push("Repete a resposta certa pras dúvidas que aparecem todo dia.");
+				if (isClinica) bullets.push("Tira dúvida de horário e preço sem você precisar olhar.");
+				add("ana", bullets);
+				break;
+			}
+			case "leo": {
+				if (!wantsLeo) break;
+				const bullets: string[] = [];
+				if (e.quotingPersonalized === true) {
+					bullets.push("Monta orçamento sob medida em 5 min, com as regras que você usa.");
+				} else if (isLoja || e.salesOnline === true) {
+					bullets.push("Acompanha quem viu o produto e não comprou pra puxar de volta.");
+				} else {
+					bullets.push("Manda orçamento pronto pra você só conferir e enviar.");
+				}
+				bullets.push("Lembra o cliente da próxima etapa pra venda não esfriar.");
+				if (e.productType === "serviço" || isServico) {
+					bullets.push("Pergunta o que precisa pra fechar antes de você entrar na conversa.");
+				}
+				add("leo", bullets);
+				break;
+			}
+			case "maya": {
+				if (!wantsMaya) break;
+				const bullets: string[] = [];
+				if (e.instagram) {
+					bullets.push("Posta no Instagram sem você precisar pensar no que escrever.");
+					bullets.push("Responde os DMs e manda quem mostrou interesse pro Leo fechar.");
+				} else {
+					bullets.push("Cria post e legenda do que faz sentido pro seu público.");
+				}
+				if (e.website) bullets.push("Sugere o que vale colocar no site pra cliente novo achar.");
+				add("maya", bullets);
+				break;
+			}
+			case "sofia": {
+				if (!wantsSofia) break;
+				const bullets: string[] = [];
+				if (isClinica || e.problemArea === "agendamento") {
+					bullets.push("Confirma e remarca consulta sozinha, sem você lembrar.");
+					bullets.push("Avisa quando alguém marcou e quando vai faltar.");
+				} else if (isLoja || isRestaurante) {
+					bullets.push("Te manda no fim do dia um resumo dos pedidos e do que ficou em aberto.");
+				} else {
+					bullets.push("Lembra dos follow-ups que sempre escapam.");
+				}
+				bullets.push("Organiza sua agenda pra você não perder cliente por esquecimento.");
+				add("sofia", bullets);
+				break;
+			}
+		}
+	}
+
+	// Drop the secondary agent when it's identical to the primary or when we
+	// couldn't generate any bullet for it.
+	return recs;
 }
 
 // EditableSummary lets the visitor adjust what the agent extracted before
