@@ -12,6 +12,7 @@ describe("launcher display helpers", () => {
     expect(parsed.error).toBeNull();
     expect(parsed.showReasoning).toBe(true);
     expect(parsed.showToolCalls).toBe(true);
+    expect(parsed.showModelSelector).toBe(true);
   });
 
   it("updates display flags without losing existing config", () => {
@@ -27,12 +28,25 @@ describe("launcher display helpers", () => {
     expect(parsed.ui.show_tool_calls).toBe(false);
   });
 
+  it("updates the model selector flag", () => {
+    const next = setLauncherDisplayOption(
+      `{"version":3,"ui":{"show_reasoning":false}}`,
+      "show_model_selector",
+      false,
+    );
+    const parsed = JSON.parse(next);
+
+    expect(parsed.ui.show_reasoning).toBe(false);
+    expect(parsed.ui.show_model_selector).toBe(false);
+  });
+
   it("reports invalid JSON without changing visual state", () => {
     const parsed = parseLauncherDisplayConfig(`{"version":`);
 
     expect(parsed.error).toBeTruthy();
     expect(parsed.showReasoning).toBe(true);
     expect(parsed.showToolCalls).toBe(true);
+    expect(parsed.showModelSelector).toBe(true);
   });
 
   it("rejects non-object config roots", () => {

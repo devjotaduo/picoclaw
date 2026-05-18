@@ -171,6 +171,11 @@ export function ChatPage() {
     assistantDetailsPolicyReady &&
     launcherPolicyQ.data.ui?.show_tool_calls !== false
   const canToggleAssistantDetails = canShowReasoning || canShowToolCalls
+  const canShowModelSelector =
+    launcherPolicyQ.isSuccess &&
+    launcherPolicyQ.data.ui?.show_model_selector !== false
+  const hasChatHeaderControls =
+    chatAgents.length > 0 || (canChooseModel && canShowModelSelector)
   const inputDisabledReason = resolveChatInputDisabledReason({
     hasDefaultModel,
     connectionState,
@@ -330,7 +335,7 @@ export function ChatPage() {
           hasScrolled ? "shadow-xs" : "shadow-none"
         }`}
         titleExtra={
-          (chatAgents.length > 0 || canChooseModel) && (
+          hasChatHeaderControls && (
             <div className="flex min-w-0 items-center gap-2">
               {chatAgents.length > 0 && (
                 <Select
@@ -355,7 +360,7 @@ export function ChatPage() {
                   </SelectContent>
                 </Select>
               )}
-              {canChooseModel && (
+              {canChooseModel && canShowModelSelector && (
                 <ModelSelector
                   defaultModelName={defaultModelName}
                   apiKeyModels={apiKeyModels}

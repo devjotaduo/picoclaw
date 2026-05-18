@@ -1092,6 +1092,8 @@
       "show_reasoning_hint": "允许聊天和历史记录显示内部推理消息",
       "show_tool_calls": "显示工具调用",
       "show_tool_calls_hint": "允许聊天和历史记录显示已调用的工具、参数和说明",
+      "show_model_selector": "显示模型选择器",
+      "show_model_selector_hint": "在聊天页面顶部显示模型选择器",
       "tool_feedback_enabled": "工具反馈",
       "tool_feedback_enabled_hint": "在每次执行工具前，先向当前会话发送一条简短的执行说明",
       "tool_feedback_separate_messages": "分开发送反馈消息",

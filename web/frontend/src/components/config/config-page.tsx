@@ -496,6 +496,7 @@ export function ConfigPage() {
           ui: {
             show_reasoning: form.showReasoning,
             show_tool_calls: form.showToolCalls,
+            show_model_selector: form.showModelSelector,
           },
           agents: {
             defaults: {

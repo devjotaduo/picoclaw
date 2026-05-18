@@ -61,8 +61,8 @@ func TestHandleGetLauncherPolicy_NoFile(t *testing.T) {
 	if err := json.Unmarshal(resp["ui"], &ui); err != nil {
 		t.Fatalf("unmarshal ui: %v", err)
 	}
-	if !ui["show_reasoning"] || !ui["show_tool_calls"] {
-		t.Fatalf("ui = %#v, want both assistant detail flags enabled by default", ui)
+	if !ui["show_reasoning"] || !ui["show_tool_calls"] || !ui["show_model_selector"] {
+		t.Fatalf("ui = %#v, want UI flags enabled by default", ui)
 	}
 }
 
@@ -146,6 +146,7 @@ func TestHandleGetLauncherPolicy_IncludesUIConfig(t *testing.T) {
 	}
 	cfg.UI.ShowReasoning = false
 	cfg.UI.ShowToolCalls = true
+	cfg.UI.ShowModelSelector = false
 	if err := config.SaveConfig(configPath, cfg); err != nil {
 		t.Fatalf("SaveConfig: %v", err)
 	}
@@ -173,6 +174,9 @@ func TestHandleGetLauncherPolicy_IncludesUIConfig(t *testing.T) {
 	}
 	if !resp.UI["show_tool_calls"] {
 		t.Fatalf("show_tool_calls = false, want true")
+	}
+	if resp.UI["show_model_selector"] {
+		t.Fatalf("show_model_selector = true, want false")
 	}
 }
 

@@ -56,14 +56,16 @@ type Config struct {
 }
 
 type UIConfig struct {
-	ShowReasoning bool `json:"show_reasoning"`
-	ShowToolCalls bool `json:"show_tool_calls"`
+	ShowReasoning     bool `json:"show_reasoning"`
+	ShowToolCalls     bool `json:"show_tool_calls"`
+	ShowModelSelector bool `json:"show_model_selector"`
 }
 
 func DefaultUIConfig() UIConfig {
 	return UIConfig{
-		ShowReasoning: true,
-		ShowToolCalls: true,
+		ShowReasoning:     true,
+		ShowToolCalls:     true,
+		ShowModelSelector: true,
 	}
 }
 
