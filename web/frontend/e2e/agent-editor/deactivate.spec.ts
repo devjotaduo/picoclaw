@@ -9,6 +9,7 @@ test.describe("agent editor — desativar com confirmação (destrutivo)", () =>
     const nonDefault = sidebar
       .nth(1)
       .or(page.getByText(/Maya|Leo|Sofia/i).first())
+      .first()
     await nonDefault.click()
 
     const moreButton = page.getByRole("button", { name: /^Mais$/ })
