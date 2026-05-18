@@ -27,7 +27,7 @@ import {
   IconWorldWww,
 } from "@tabler/icons-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
@@ -47,6 +47,7 @@ import {
   updateInternalAgentOrchestration,
 } from "@/api/internal-agents"
 import { getSkills } from "@/api/skills"
+import { listWhatsAppChats } from "@/api/whatsapp"
 import { CodeEditor } from "@/components/code-editor"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
@@ -91,6 +92,24 @@ import {
   defaultTemplateSkillConfigs,
   templateToDraft,
 } from "../templates/use-templates-page"
+import {
+  type ActiveConversation,
+  DeactivateAgentDialog,
+} from "./deactivate-agent-dialog"
+import { LabelWithTooltip } from "./label-with-tooltip"
+import { ProgressChecklist } from "./progress-checklist"
+import { SaveBar } from "./save-bar"
+import {
+  type StepID,
+  isReadyToActivate,
+  validateChecklist,
+} from "./schemas"
+import { useDirtyGuard, useSaveShortcut } from "./use-dirty-guard"
+import type { SaveState } from "@/store/agent-editor"
+import { jidToPhone } from "./whatsapp-format"
+import { WhatsAppGroupList } from "./whatsapp-group-list"
+import { WhatsAppPhoneList } from "./whatsapp-phone-list"
+import { WorkspaceDisplay } from "./workspace-display"
 
 // ─── tab type ────────────────────────────────────────────────────────────────
 
@@ -1045,7 +1064,19 @@ export function AgentEditorPage() {
       toast.error(t("pages.agent.editor.default_agent_must_stay_active", "O agente padrão precisa continuar ativo."))
       return
     }
-    activeMutation.mutate({ agentId: agent.id, active: !active })
+    if (active) {
+      setDeactivateOpen(true)
+      return
+    }
+    activeMutation.mutate({ agentId: agent.id, active: true })
+  }
+
+  function handleConfirmDeactivate() {
+    if (!selectedAgent) return
+    activeMutation.mutate(
+      { agentId: selectedAgent.id, active: false },
+      { onSettled: () => setDeactivateOpen(false) },
+    )
   }
 
   function handleSheetOpenChange(open: boolean) {
@@ -1112,6 +1143,145 @@ export function AgentEditorPage() {
   const selectedRoleConfigDraft = roleConfigDrafts[selectedAgentId] || "{}"
   const selectedRoleConfig = parseRoleConfigDraft(selectedRoleConfigDraft)
   const quickPrompts = quickPromptsByAgent[selectedAgentId] || []
+
+  // ── P0: dirty tracking, save state, checklist ────────────────────────────
+  const baseline = useMemo(() => {
+    const data = editorStateQuery.data
+    if (!data) return null
+    const a = data.agents.find((x) => x.id === selectedAgentId)
+    return {
+      profile: a ? profileDraftFromInternal(a) : null,
+      roleConfig: JSON.stringify(a?.role_config ?? {}, null, 2),
+      mainAgentID: data.main_agent_id || "main",
+      mainAllowAgents: (data.main_allow_agents || []).filter(
+        (id) => id !== (data.main_agent_id || "main"),
+      ),
+      assistantJIDs: (data.assistant_whatsapp_jids || data.admin_whatsapp_jids || []).join("\n"),
+      assistantChats: (data.assistant_whatsapp_chats || []).join("\n"),
+    }
+  }, [editorStateQuery.data, selectedAgentId])
+
+  const isOrchestrationDirty = useMemo(() => {
+    if (!baseline) return false
+    const currentProfile = selectedProfile
+    const profileEq =
+      JSON.stringify(currentProfile ?? null) ===
+      JSON.stringify(baseline.profile ?? null)
+    return !(
+      profileEq &&
+      selectedRoleConfigDraft === baseline.roleConfig &&
+      mainAgentID === baseline.mainAgentID &&
+      JSON.stringify(mainAllowAgents) === JSON.stringify(baseline.mainAllowAgents) &&
+      assistantJIDs === baseline.assistantJIDs &&
+      assistantChats === baseline.assistantChats
+    )
+  }, [
+    baseline,
+    selectedProfile,
+    selectedRoleConfigDraft,
+    mainAgentID,
+    mainAllowAgents,
+    assistantJIDs,
+    assistantChats,
+  ])
+
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
+  const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null)
+  useEffect(() => {
+    if (saveOrchestrationMutation.isSuccess) {
+      setLastSavedAt(Date.now())
+      setSaveErrorMsg(null)
+    }
+  }, [saveOrchestrationMutation.isSuccess])
+  useEffect(() => {
+    if (saveOrchestrationMutation.isError) {
+      setSaveErrorMsg(
+        saveOrchestrationMutation.error instanceof Error
+          ? saveOrchestrationMutation.error.message
+          : "Erro ao salvar",
+      )
+    }
+  }, [saveOrchestrationMutation.isError, saveOrchestrationMutation.error])
+
+  const saveState: SaveState = saveOrchestrationMutation.isPending
+    ? "saving"
+    : saveOrchestrationMutation.isError && isOrchestrationDirty
+      ? "error"
+      : isOrchestrationDirty
+        ? "dirty"
+        : lastSavedAt
+          ? "saved"
+          : "idle"
+
+  const handleManualSave = useCallback(() => {
+    if (!isOrchestrationDirty || saveOrchestrationMutation.isPending) return
+    saveOrchestrationMutation.mutate()
+  }, [isOrchestrationDirty, saveOrchestrationMutation])
+
+  const handleDiscardOrchestration = useCallback(() => {
+    if (!baseline || !selectedAgentId) return
+    setRoleConfigDrafts((d) => ({ ...d, [selectedAgentId]: baseline.roleConfig }))
+    setMainAgentID(baseline.mainAgentID)
+    setMainAllowAgents(baseline.mainAllowAgents)
+    setAssistantJIDs(baseline.assistantJIDs)
+    setAssistantChats(baseline.assistantChats)
+    if (baseline.profile) {
+      setProfiles((current) => ({ ...current, [selectedAgentId]: baseline.profile! }))
+    }
+    setSaveErrorMsg(null)
+  }, [baseline, selectedAgentId])
+
+  useSaveShortcut(handleManualSave)
+  useDirtyGuard(
+    isOrchestrationDirty,
+    "Há alterações não salvas no agente. Deseja sair mesmo assim?",
+  )
+
+  const checklistSteps = useMemo(
+    () =>
+      validateChecklist({
+        payload: selectedPrompt?.payload ?? null,
+        roleConfigDraft: selectedRoleConfigDraft,
+        mainAgentID,
+        assistantPhones: splitLines(assistantJIDs).map(jidToPhone).filter(Boolean),
+        assistantGroups: splitLines(assistantChats),
+      }),
+    [
+      selectedPrompt?.payload,
+      selectedRoleConfigDraft,
+      mainAgentID,
+      assistantJIDs,
+      assistantChats,
+    ],
+  )
+  const isReady = isReadyToActivate(checklistSteps)
+
+  // ── P0: active conversations for deactivate dialog ───────────────────────
+  const [deactivateOpen, setDeactivateOpen] = useState(false)
+  const activeConversationsQuery = useQuery({
+    queryKey: ["whatsapp", "chats", "active", selectedAgentId],
+    queryFn: async (): Promise<ActiveConversation[]> => {
+      try {
+        const chats = await listWhatsAppChats(20)
+        return chats
+          .filter((c) => !c.paused)
+          .slice(0, 8)
+          .map((c) => ({
+            id: c.jid,
+            contactLabel: c.display_name || c.push_name || jidToPhone(c.jid),
+            channel: "WhatsApp",
+          }))
+      } catch {
+        return []
+      }
+    },
+    enabled: deactivateOpen,
+  })
+
+  function handleStepClick(id: StepID) {
+    const target = document.getElementById(`section-${id}`)
+    target?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -1251,6 +1421,14 @@ export function AgentEditorPage() {
                   isLoadingOrchestration={editorStateQuery.isLoading}
                   isTogglingActive={activeMutation.isPending}
                   isDeleting={deleteMutation.isPending}
+                  checklistSteps={checklistSteps}
+                  isReadyToActivate={isReady}
+                  saveState={saveState}
+                  lastSavedAt={lastSavedAt}
+                  saveErrorMsg={saveErrorMsg}
+                  onSave={handleManualSave}
+                  onDiscard={handleDiscardOrchestration}
+                  onStepClick={handleStepClick}
                   messages={chatMessages}
                   chatInput={chatInput}
                   isSending={sendingChat}
@@ -1434,6 +1612,18 @@ export function AgentEditorPage() {
           onOpenChange={handleSheetOpenChange}
         />
       )}
+
+      {selectedAgent && (
+        <DeactivateAgentDialog
+          open={deactivateOpen}
+          agentName={selectedAgent.name || selectedAgent.id}
+          conversations={activeConversationsQuery.data ?? []}
+          isLoadingConversations={activeConversationsQuery.isLoading}
+          isSubmitting={activeMutation.isPending}
+          onConfirm={handleConfirmDeactivate}
+          onCancel={() => setDeactivateOpen(false)}
+        />
+      )}
     </div>
   )
 }
@@ -1483,6 +1673,14 @@ function UnifiedAgentEditor({
   onSendChat,
   onPromptSelect,
   onProposalInspect,
+  checklistSteps,
+  isReadyToActivate: ready,
+  saveState,
+  lastSavedAt,
+  saveErrorMsg,
+  onSave,
+  onDiscard,
+  onStepClick,
 }: {
   agent: AgentEditorAgent
   configured: boolean
@@ -1526,56 +1724,80 @@ function UnifiedAgentEditor({
   onSendChat: () => void
   onPromptSelect: (v: string) => void
   onProposalInspect: (proposal: unknown) => void
+  checklistSteps: ReturnType<typeof validateChecklist>
+  isReadyToActivate: boolean
+  saveState: SaveState
+  lastSavedAt: number | null
+  saveErrorMsg: string | null
+  onSave: () => void
+  onDiscard: () => void
+  onStepClick: (id: StepID) => void
 }) {
+  void ready
   return (
-    <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-300">
-      <IdentityProfileSection
-        agent={agent}
-        selectedProfile={selectedProfile}
-        isTogglingActive={isTogglingActive}
-        isDeleting={isDeleting}
-        onUpdateProfile={onUpdateProfile}
-        onToggleActive={onToggleActive}
-        onDelete={onDelete}
+    <div className="animate-in fade-in-0 slide-in-from-bottom-2 flex flex-col gap-6 pb-0 duration-300">
+      <ProgressChecklist
+        steps={checklistSteps}
+        onStepClick={onStepClick}
       />
 
-      <OperationalRoleSection
-        selectedAgentId={selectedAgentId}
-        selectedRoleConfig={selectedRoleConfig}
-        selectedRoleConfigDraft={selectedRoleConfigDraft}
-        onUpdateRoleConfig={onUpdateRoleConfig}
-        onRoleConfigDraftChange={onRoleConfigDraftChange}
-      />
+      <div id="section-identity">
+        <IdentityProfileSection
+          agent={agent}
+          selectedProfile={selectedProfile}
+          isTogglingActive={isTogglingActive}
+          isDeleting={isDeleting}
+          onUpdateProfile={onUpdateProfile}
+          onToggleActive={onToggleActive}
+          onDelete={onDelete}
+        />
+      </div>
 
-      <PromptWorkspaceSection
-        agent={agent}
-        configured={configured}
-        configData={configData}
-        resolvedPayload={resolvedPayload}
-        template={template}
-        onCreate={onCreate}
-        onConfigure={onConfigure}
-        onEditPrompt={onEditPrompt}
-        onOpenRawEditor={onOpenRawEditor}
-      />
+      <div id="section-role">
+        <OperationalRoleSection
+          selectedAgentId={selectedAgentId}
+          selectedRoleConfig={selectedRoleConfig}
+          selectedRoleConfigDraft={selectedRoleConfigDraft}
+          onUpdateRoleConfig={onUpdateRoleConfig}
+          onRoleConfigDraftChange={onRoleConfigDraftChange}
+        />
+      </div>
 
-      <AccessRoutingSection
-        selectedAgentId={selectedAgentId}
-        agent={agent}
-        mainAgentID={mainAgentID}
-        mainAllowAgents={mainAllowAgents}
-        assistantJIDs={assistantJIDs}
-        assistantChats={assistantChats}
-        internalAgents={internalAgents}
-        isSaving={isSavingOrchestration}
-        isLoading={isLoadingOrchestration}
-        onMainAgentChange={onMainAgentChange}
-        onToggleMainAllow={onToggleMainAllow}
-        onAssistantJIDsChange={onAssistantJIDsChange}
-        onAssistantChatsChange={onAssistantChatsChange}
-        onSave={onSaveOrchestration}
-        onRefresh={onRefreshOrchestration}
-      />
+      <div id="section-prompt">
+        <PromptWorkspaceSection
+          agent={agent}
+          configured={configured}
+          configData={configData}
+          resolvedPayload={resolvedPayload}
+          template={template}
+          onCreate={onCreate}
+          onConfigure={onConfigure}
+          onEditPrompt={onEditPrompt}
+          onOpenRawEditor={onOpenRawEditor}
+        />
+      </div>
+
+      <div id="section-knowledge" aria-hidden="true" />
+
+      <div id="section-routing">
+        <AccessRoutingSection
+          selectedAgentId={selectedAgentId}
+          agent={agent}
+          mainAgentID={mainAgentID}
+          mainAllowAgents={mainAllowAgents}
+          assistantJIDs={assistantJIDs}
+          assistantChats={assistantChats}
+          internalAgents={internalAgents}
+          isSaving={isSavingOrchestration}
+          isLoading={isLoadingOrchestration}
+          onMainAgentChange={onMainAgentChange}
+          onToggleMainAllow={onToggleMainAllow}
+          onAssistantJIDsChange={onAssistantJIDsChange}
+          onAssistantChatsChange={onAssistantChatsChange}
+          onSave={onSaveOrchestration}
+          onRefresh={onRefreshOrchestration}
+        />
+      </div>
 
       <section id="agent-chat-section" className="space-y-3">
         <SectionHeader title="Chat de teste" icon={IconMessageCircle} />
@@ -1593,6 +1815,14 @@ function UnifiedAgentEditor({
           onProposalInspect={onProposalInspect}
         />
       </section>
+
+      <SaveBar
+        saveState={saveState}
+        lastSavedAt={lastSavedAt}
+        errorMessage={saveErrorMsg}
+        onSave={onSave}
+        onDiscard={onDiscard}
+      />
     </div>
   )
 }
@@ -1629,10 +1859,22 @@ function IdentityProfileSection({
               <StatusBadge active={isActive} />
             </div>
             <p className="text-muted-foreground text-sm">{agentRoleLabel(agent)}</p>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               <ReadyStatusBadges agent={agent} />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="text-muted-foreground/60 hover:text-foreground cursor-help text-[10px] uppercase tracking-wide"
+                    aria-label="Ver identificador técnico"
+                  >
+                    ID técnico
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="font-mono text-xs">
+                  {agent.id}
+                </TooltipContent>
+              </Tooltip>
             </div>
-            <p className="text-muted-foreground/70 font-mono text-xs">{agent.id}</p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-end">
             <Button
@@ -1673,12 +1915,32 @@ function IdentityProfileSection({
                 <Input value={selectedProfile.imageURL} onChange={(e) => onUpdateProfile({ imageURL: e.target.value })} placeholder="https://..." />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Ícone</Label>
-                <Input value={selectedProfile.icon} onChange={(e) => onUpdateProfile({ icon: e.target.value })} placeholder="headset, target, sparkles…" />
+                <LabelWithTooltip
+                  htmlFor={`${agent.id}-icon`}
+                  tooltip="Símbolo mostrado no avatar quando não houver imagem. Aceita: headset, target, sparkles, robot, assistant, world."
+                >
+                  Ícone
+                </LabelWithTooltip>
+                <Input
+                  id={`${agent.id}-icon`}
+                  value={selectedProfile.icon}
+                  onChange={(e) => onUpdateProfile({ icon: e.target.value })}
+                  placeholder="headset, target, sparkles…"
+                />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Iniciais</Label>
-                <Input value={selectedProfile.initials} onChange={(e) => onUpdateProfile({ initials: e.target.value.toUpperCase() })} maxLength={4} />
+                <LabelWithTooltip
+                  htmlFor={`${agent.id}-initials`}
+                  tooltip="Letras mostradas no avatar quando não há imagem nem ícone. Até 4 caracteres."
+                >
+                  Iniciais
+                </LabelWithTooltip>
+                <Input
+                  id={`${agent.id}-initials`}
+                  value={selectedProfile.initials}
+                  onChange={(e) => onUpdateProfile({ initials: e.target.value.toUpperCase() })}
+                  maxLength={4}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Cor de fundo</Label>
@@ -1717,9 +1979,28 @@ function OperationalRoleSection({
 }) {
   return (
     <section className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
-      <SectionHeader title="Papel operacional" icon={IconSparkles} />
+      <div className="flex items-start gap-2">
+        <SectionHeader title="Papel operacional" icon={IconSparkles} />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="O que é papel operacional"
+              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring focus-visible:ring-offset-background mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+            >
+              <span aria-hidden="true">?</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs text-xs">
+            Define a função do agente no negócio (atendente, vendas, marketing,
+            assistente). Campos como triagem, escalonamento e fonte de FAQ
+            ficam aqui, e são consumidos por canais e regras antes do prompt.
+          </TooltipContent>
+        </Tooltip>
+      </div>
       <p className="text-muted-foreground mt-1 mb-3 text-xs">
-        Campos salvos em config.json para orientar o papel, sem misturar com o prompt renderizado do workspace.
+        Campos que orientam o papel sem misturar com o prompt renderizado do
+        workspace.
       </p>
       {selectedRoleConfig ? (
         <RoleSpecificConfigEditor config={selectedRoleConfig} onChange={onUpdateRoleConfig} />
@@ -1729,12 +2010,19 @@ function OperationalRoleSection({
         </div>
       )}
       <details className="mt-3 rounded-xl border border-border/60 bg-muted/20 p-3">
-        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">JSON avançado do papel</summary>
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+          Modo avançado · editar JSON do papel
+        </summary>
+        <p className="text-muted-foreground/80 mt-2 text-[11px]">
+          Edite com cuidado. Erros de JSON impedem o salvamento. Prefira os
+          campos guiados acima.
+        </p>
         <Textarea
           value={selectedRoleConfigDraft}
           onChange={(e) => onRoleConfigDraftChange(e.target.value)}
           className="mt-3 min-h-48 font-mono text-xs"
           spellCheck={false}
+          aria-label="JSON do papel operacional"
         />
       </details>
     </section>
@@ -1805,11 +2093,28 @@ function PromptWorkspaceSection({
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <InfoCard label="ID do agente" value={agent.id} mono />
-          <InfoCard label="Workspace" value={agent.workspace} mono />
-          <InfoCard label="Última aplicação" value={appliedAt} />
-          <InfoCard label="Skills no prompt" value={configured ? `${activeSkillCount}` : "pendente"} />
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <WorkspaceDisplay
+            workspace={agent.workspace}
+            isDefault={agent.default}
+          />
+          {appliedAt && (
+            <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
+              Última aplicação: {appliedAt}
+            </span>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="border-border/60 bg-muted/40 inline-flex cursor-help items-center gap-1.5 rounded-md border px-2 py-1 text-xs">
+                Skills no prompt: {configured ? activeSkillCount : "—"}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs text-xs">
+              Capacidades extras (busca, RAG, ferramentas) ativadas no
+              AGENT.md. Cada skill é descrita no prompt para o LLM saber
+              quando usar.
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
       {agent.id === "marketing" && <MarketingPublishingPanel agent={agent} />}
@@ -1864,27 +2169,37 @@ function AccessRoutingSection({
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-xs">Agente principal público</Label>
+            <LabelWithTooltip
+              htmlFor={`${selectedAgentId}-main-agent`}
+              tooltip="O agente principal é quem responde sozinho quando alguém escreve no WhatsApp público. Ele pode delegar tarefas para os subagentes marcados abaixo."
+            >
+              Agente principal público
+            </LabelWithTooltip>
             <Select value={mainAgentID} onValueChange={onMainAgentChange} disabled={isLoading || internalAgents.length === 0}>
-              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger id={`${selectedAgentId}-main-agent`} className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {internalAgents.map((a) => (
                   <SelectItem key={a.id} value={a.id}>{a.name || a.id}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {mainAgent && <p className="text-muted-foreground font-mono text-xs">{mainAgent.id}</p>}
+            {mainAgent && (
+              <p className="text-muted-foreground text-xs">
+                Selecionado: <span className="font-medium">{mainAgent.name || mainAgent.id}</span>
+              </p>
+            )}
           </div>
 
           {subagentOptions.length > 0 && (
             <div className="space-y-2">
-              <Label className="text-xs">Ana pode chamar no atendimento público</Label>
+              <LabelWithTooltip
+                tooltip="Quais especialistas o agente principal pode chamar quando precisar de ajuda em vendas, marketing ou outras áreas."
+              >
+                Delegação para especialistas
+              </LabelWithTooltip>
               {subagentOptions.map((item) => (
                 <label key={item.id} className="border-border/60 flex min-h-10 cursor-pointer items-center justify-between rounded-lg border px-3 text-sm hover:bg-muted/40">
-                  <span>
-                    <span className="font-medium">{item.name || item.id}</span>
-                    <span className="text-muted-foreground ml-2 font-mono text-xs">{item.id}</span>
-                  </span>
+                  <span className="font-medium">{item.name || item.id}</span>
                   <Switch checked={mainAllowAgents.includes(item.id)} onCheckedChange={() => onToggleMainAllow(item.id)} />
                 </label>
               ))}
@@ -1896,41 +2211,54 @@ function AccessRoutingSection({
           <div className="grid gap-2 sm:grid-cols-2">
             <InfoCard label="Acesso painel" value={agent.access?.panel_enabled === false ? "desativado" : "ativo"} />
             <InfoCard label="WhatsApp direto" value={agent.access?.whatsapp_direct_enabled ? "ativo" : "restrito"} />
-            <InfoCard label="Subagentes deste agente" value={selectedSubagents.length ? selectedSubagents.join(", ") : "nenhum"} />
-            <InfoCard label="Agente selecionado" value={selectedAgentId} mono />
+            <InfoCard label="Especialistas chamados" value={selectedSubagents.length ? `${selectedSubagents.length}` : "nenhum"} />
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Números autorizados da Sofia</Label>
-            <Textarea
-              value={assistantJIDs}
-              onChange={(e) => onAssistantJIDsChange(e.target.value)}
-              placeholder="5511999999999@s.whatsapp.net"
-              className="min-h-20 resize-none text-sm"
+            <LabelWithTooltip
+              htmlFor={`${selectedAgentId}-assistant-phones`}
+              tooltip="Telefones que podem usar a Sofia (assistente do dono) para tarefas administrativas no WhatsApp pessoal."
+            >
+              Telefones autorizados da Sofia
+            </LabelWithTooltip>
+            <WhatsAppPhoneList
+              id={`${selectedAgentId}-assistant-phones`}
+              jids={splitLines(assistantJIDs)}
+              onChange={(jids) => onAssistantJIDsChange(jids.join("\n"))}
+              ariaLabel="Telefones autorizados da Sofia"
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Grupos autorizados da Sofia</Label>
-            <Textarea
-              value={assistantChats}
-              onChange={(e) => onAssistantChatsChange(e.target.value)}
-              placeholder="120363000000000000@g.us"
-              className="min-h-20 resize-none text-sm"
+            <LabelWithTooltip
+              htmlFor={`${selectedAgentId}-assistant-groups`}
+              tooltip="Grupos onde a Sofia pode atuar. Vincule pelo convite do grupo ou pelo ID numérico."
+            >
+              Grupos vinculados da Sofia
+            </LabelWithTooltip>
+            <WhatsAppGroupList
+              id={`${selectedAgentId}-assistant-groups`}
+              jids={splitLines(assistantChats)}
+              onChange={(jids) => onAssistantChatsChange(jids.join("\n"))}
+              ariaLabel="Grupos vinculados da Sofia"
             />
           </div>
         </div>
       </div>
 
-      <div className="mt-5 flex items-center gap-2">
-        <Button onClick={onSave} disabled={isSaving} className="gap-2">
-          {isSaving ? <IconLoader2 className="size-4 animate-spin" /> : <IconDeviceFloppy className="size-4" />}
-          Salvar perfil, papel e roteamento
-        </Button>
-        <Button variant="outline" onClick={onRefresh} disabled={isLoading} className="gap-2">
-          <IconRefresh className="size-4" />
-          Atualizar leitura
-        </Button>
-      </div>
+      <p className="text-muted-foreground mt-4 text-[11px]">
+        Use a barra de salvamento no rodapé para confirmar as alterações.
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={isLoading}
+          className="text-foreground/80 hover:text-foreground ml-2 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Recarregar do servidor
+        </button>
+      </p>
+      <span className="sr-only">
+        {isSaving ? "Salvando alterações" : "Pronto"}
+      </span>
     </section>
   )
 }
