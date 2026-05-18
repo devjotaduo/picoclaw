@@ -52,6 +52,8 @@ type Behavior struct {
 	ResponseCooldownSeconds     int      `json:"response_cooldown_seconds,omitempty"`
 	HandoffKeywords             []string `json:"handoff_keywords,omitempty"`
 	HandoffAfterFailures        int      `json:"handoff_after_failures,omitempty"`
+	// OperatorIdentificationMode: "transition" | "prefix" | "transition+prefix" | "none"
+	OperatorIdentificationMode string `json:"operator_identification_mode,omitempty"`
 
 	// Schedule snapshot denormalized from company_info at apply-time so the
 	// agent loop does not need to re-read the template to evaluate business hours.

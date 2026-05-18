@@ -1,0 +1,4 @@
+interface:
+  display_name: "WhatsApp Business Memory"
+  short_description: "Aprende com conversas do WhatsApp e atualiza memoria"
+  default_prompt: "Use $whatsapp-business-memory para analisar conversas do WhatsApp da empresa e salvar aprendizados seguros em memoria."

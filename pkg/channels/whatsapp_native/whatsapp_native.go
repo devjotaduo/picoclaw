@@ -96,6 +96,14 @@ type OutboundObservation struct {
 	Content   string
 	Timestamp time.Time
 	Error     error
+	Operator  Operator
+}
+
+// Operator carries the identity of the human who triggered a manual send,
+// extracted from the trusted-gateway claims at request time.
+type Operator struct {
+	ID   string
+	Name string
 }
 
 // PauseChecker is invoked for every inbound message before publishing to the
@@ -128,6 +136,9 @@ type WhatsAppNativeChannel struct {
 
 	inboxHandler *inboxHTTPHandler // optional; nil when persistence is disabled
 	avatars      *avatarFetcher    // optional; nil when persistence is disabled
+
+	opMu               sync.Mutex
+	lastOperatorByChat map[string]string
 }
 
 // AddObserver registers an observer that will receive every inbound and
@@ -657,7 +668,7 @@ func (c *WhatsAppNativeChannel) handleIncoming(evt *events.Message) {
 }
 
 func (c *WhatsAppNativeChannel) Send(ctx context.Context, msg bus.OutboundMessage) ([]string, error) {
-	return c.sendWithSource(ctx, msg, "agent")
+	return c.sendWithSource(ctx, msg, "agent", Operator{})
 }
 
 // SendMedia sends media attachments as native WhatsApp messages.
@@ -667,13 +678,68 @@ func (c *WhatsAppNativeChannel) SendMedia(ctx context.Context, msg bus.OutboundM
 
 // SendManual sends a message tagged as authored by a human operator. Observers
 // are notified with Source = "human" so the dashboard can render the bubble
-// with the right styling and skip the agent attribution.
-func (c *WhatsAppNativeChannel) SendManual(ctx context.Context, chatID, content string) error {
-	_, err := c.sendWithSource(ctx, bus.OutboundMessage{ChatID: chatID, Content: content}, "human")
+// with the right styling and skip the agent attribution. The op identifies
+// who sent the message (used for audit and to surface the operator's name).
+func (c *WhatsAppNativeChannel) SendManual(ctx context.Context, chatID, content string, op Operator) error {
+	mode, displayName := c.resolveOperatorIdentification(chatID, op)
+	if (mode == "transition" || mode == "transition+prefix") && c.operatorChangedFor(chatID, op.ID) {
+		intro := fmt.Sprintf("✋ %s assumiu o atendimento e vai te ajudar daqui em diante.", displayName)
+		if _, err := c.sendWithSource(ctx, bus.OutboundMessage{ChatID: chatID, Content: intro}, "human", op); err == nil {
+			c.recordOperatorForChat(chatID, op.ID)
+		}
+	}
+	final := content
+	if mode == "prefix" || mode == "transition+prefix" {
+		final = "*" + displayName + ":* " + content
+	}
+	_, err := c.sendWithSource(ctx, bus.OutboundMessage{ChatID: chatID, Content: final}, "human", op)
 	return err
 }
 
-func (c *WhatsAppNativeChannel) sendWithSource(ctx context.Context, msg bus.OutboundMessage, source string) ([]string, error) {
+func (c *WhatsAppNativeChannel) resolveOperatorIdentification(chatID string, op Operator) (mode, displayName string) {
+	mode = "transition"
+	if provider := c.BehaviorProvider(); provider != nil {
+		if bh := provider.ChannelBehavior(c.Name(), chatID); bh != nil {
+			if m := strings.TrimSpace(bh.OperatorIdentificationMode); m != "" {
+				mode = m
+			}
+		}
+	}
+	displayName = strings.TrimSpace(op.Name)
+	if displayName == "" {
+		displayName = strings.TrimSpace(op.ID)
+	}
+	if displayName == "" {
+		return "none", ""
+	}
+	if at := strings.IndexByte(displayName, '@'); at > 0 {
+		displayName = displayName[:at]
+	}
+	return mode, displayName
+}
+
+func (c *WhatsAppNativeChannel) operatorChangedFor(chatID, opID string) bool {
+	if opID == "" {
+		return false
+	}
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
+	if c.lastOperatorByChat == nil {
+		c.lastOperatorByChat = map[string]string{}
+	}
+	return c.lastOperatorByChat[chatID] != opID
+}
+
+func (c *WhatsAppNativeChannel) recordOperatorForChat(chatID, opID string) {
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
+	if c.lastOperatorByChat == nil {
+		c.lastOperatorByChat = map[string]string{}
+	}
+	c.lastOperatorByChat[chatID] = opID
+}
+
+func (c *WhatsAppNativeChannel) sendWithSource(ctx context.Context, msg bus.OutboundMessage, source string, op Operator) ([]string, error) {
 	if !c.IsRunning() {
 		return nil, channels.ErrNotRunning
 	}
@@ -717,6 +783,7 @@ func (c *WhatsAppNativeChannel) sendWithSource(ctx context.Context, msg bus.Outb
 				Content:   msg.Content,
 				Timestamp: time.Now(),
 				Error:     sendErr,
+				Operator:  op,
 			})
 		}
 		return nil, fmt.Errorf("whatsapp send: %w", channels.ErrTemporary)
@@ -729,6 +796,7 @@ func (c *WhatsAppNativeChannel) sendWithSource(ctx context.Context, msg bus.Outb
 			MessageID: messageID,
 			Content:   msg.Content,
 			Timestamp: time.Now(),
+			Operator:  op,
 		})
 	}
 	return nil, nil

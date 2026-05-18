@@ -73,6 +73,7 @@ func (a *behaviorProviderAdapter) ChannelBehaviorForContext(inbound bus.InboundC
 		ProcessVideo:            b.ProcessVideo,
 		ProcessStickers:         b.ProcessStickers,
 		ProcessLocation:         b.ProcessLocation,
-		MaxMediaSizeMB:          b.MaxMediaSizeMB,
+		MaxMediaSizeMB:             b.MaxMediaSizeMB,
+		OperatorIdentificationMode: b.OperatorIdentificationMode,
 	}
 }

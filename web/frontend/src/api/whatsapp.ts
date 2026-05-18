@@ -46,6 +46,10 @@ export interface WhatsAppMessage {
   status?: WhatsAppMessageStatus
   read_at?: number
   error?: string
+  // Identifies the human operator who sent this message when source ==
+  // "human". Empty/undefined for agent or contact-sourced messages.
+  operator_id?: string
+  operator_name?: string
 }
 
 export interface WhatsAppProductMention {

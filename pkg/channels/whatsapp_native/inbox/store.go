@@ -67,6 +67,15 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	for _, ddl := range []string{
+		"ALTER TABLE wa_messages ADD COLUMN operator_id TEXT",
+		"ALTER TABLE wa_messages ADD COLUMN operator_name TEXT",
+	} {
+		if _, err := db.Exec(ddl); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+			_ = db.Close()
+			return nil, fmt.Errorf("migrate %q: %w", ddl, err)
+		}
+	}
 	return &Store{db: db, path: path}, nil
 }
 
@@ -93,16 +102,18 @@ type Chat struct {
 
 // Message models a row in wa_messages.
 type Message struct {
-	ID        int64  `json:"id"`
-	MessageID string `json:"message_id,omitempty"`
-	ChatJID   string `json:"chat_jid"`
-	SenderJID string `json:"sender_jid,omitempty"`
-	Direction string `json:"direction"`
-	Source    string `json:"source"`
-	Content   string `json:"content"`
-	TS        int64  `json:"ts"`
-	Delivered bool   `json:"delivered"`
-	Error     string `json:"error,omitempty"`
+	ID           int64  `json:"id"`
+	MessageID    string `json:"message_id,omitempty"`
+	ChatJID      string `json:"chat_jid"`
+	SenderJID    string `json:"sender_jid,omitempty"`
+	Direction    string `json:"direction"`
+	Source       string `json:"source"`
+	Content      string `json:"content"`
+	TS           int64  `json:"ts"`
+	Delivered    bool   `json:"delivered"`
+	Error        string `json:"error,omitempty"`
+	OperatorID   string `json:"operator_id,omitempty"`
+	OperatorName string `json:"operator_name,omitempty"`
 }
 
 // ContactProfile is the CRM-light row attached to one WhatsApp chat.
@@ -254,6 +265,7 @@ func (s *Store) RecordMessage(ctx context.Context, msg Message, pushName string)
 		nullStr(msg.MessageID), msg.ChatJID, nullStr(msg.SenderJID),
 		msg.Direction, msg.Source, msg.Content, msg.TS,
 		boolToInt(msg.Delivered), nullStr(msg.Error),
+		nullStr(msg.OperatorID), nullStr(msg.OperatorName),
 	); err != nil {
 		return fmt.Errorf("insert message: %w", err)
 	}
@@ -429,7 +441,8 @@ func (s *Store) ListMessages(ctx context.Context, jid string, limit int) ([]Mess
 			delivered                    int
 		)
 		if err := rows.Scan(&m.ID, &messageID, &m.ChatJID, &senderJID, &m.Direction,
-			&m.Source, &m.Content, &m.TS, &delivered, &errStr); err != nil {
+			&m.Source, &m.Content, &m.TS, &delivered, &errStr,
+			&m.OperatorID, &m.OperatorName); err != nil {
 			return nil, err
 		}
 		m.MessageID = messageID.String
