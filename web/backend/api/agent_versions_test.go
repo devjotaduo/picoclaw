@@ -177,18 +177,14 @@ func TestCreateVersion_RejectsInvalidJSONPayload(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/api/agents/main/versions",
-		bytes.NewReader([]byte(`{"label":"x","payload":"not valid"}`)),
+		bytes.NewReader([]byte(`{"label":"x","payload":{"name":"ok"}} trailing`)),
 	)
 	req.SetPathValue("agentID", "main")
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.handleCreateAgentVersion(rec, req)
-	// The payload IS valid JSON (a string), but the contract requires
-	// an object. We accept any valid JSON via json.RawMessage but the
-	// test exercises the non-empty path so a malformed body still hits
-	// status 400.
-	if rec.Code != http.StatusCreated && rec.Code != http.StatusBadRequest {
-		t.Fatalf("unexpected status %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
