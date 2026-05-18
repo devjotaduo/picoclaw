@@ -236,13 +236,27 @@ func (h *inboxHTTPHandler) sendManual(w http.ResponseWriter, r *http.Request, ji
 		jsonError(w, http.StatusBadRequest, "content is required")
 		return
 	}
+	op := operatorFromRequest(r)
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	if err := h.channel.SendManual(ctx, jid, content); err != nil {
+	if err := h.channel.SendManual(ctx, jid, content, op); err != nil {
 		jsonError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	writeJSON(w, map[string]any{"status": "sent"})
+}
+
+func operatorFromRequest(r *http.Request) Operator {
+	const (
+		headerUserID    = "X-Picoclaw-Gateway-User"
+		headerUserEmail = "X-Picoclaw-Gateway-Email"
+	)
+	id := strings.TrimSpace(r.Header.Get(headerUserID))
+	email := strings.TrimSpace(r.Header.Get(headerUserEmail))
+	if id == "" && email == "" {
+		return Operator{}
+	}
+	return Operator{ID: id, Name: email}
 }
 
 // POST /whatsapp_native/inbox/chats/{jid}/read

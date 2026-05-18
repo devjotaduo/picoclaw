@@ -58,13 +58,15 @@ func (o *persistingObserver) OnOutbound(ctx context.Context, evt OutboundObserva
 		source = inbox.SourceAgent
 	}
 	msg := inbox.Message{
-		MessageID: evt.MessageID,
-		ChatJID:   evt.ChatJID,
-		Direction: inbox.DirectionOut,
-		Source:    source,
-		Content:   evt.Content,
-		TS:        unixMilliOrNow(evt.Timestamp),
-		Delivered: evt.Error == nil,
+		MessageID:    evt.MessageID,
+		ChatJID:      evt.ChatJID,
+		Direction:    inbox.DirectionOut,
+		Source:       source,
+		Content:      evt.Content,
+		TS:           unixMilliOrNow(evt.Timestamp),
+		Delivered:    evt.Error == nil,
+		OperatorID:   evt.Operator.ID,
+		OperatorName: evt.Operator.Name,
 	}
 	if evt.Error != nil {
 		msg.Error = evt.Error.Error()

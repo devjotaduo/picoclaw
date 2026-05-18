@@ -96,6 +96,11 @@ func (c *BaseChannel) SetBehaviorProvider(p BehaviorProvider) {
 	c.behaviorProvider = p
 }
 
+// BehaviorProvider returns the currently attached BehaviorProvider, or
+// nil if none has been set. Concrete channels use this to consult the
+// active per-agent behavior at send time.
+func (c *BaseChannel) BehaviorProvider() BehaviorProvider { return c.behaviorProvider }
+
 type BaseChannel struct {
 	config              any
 	bus                 *bus.MessageBus

@@ -17,21 +17,22 @@ import (
 // Filters in this struct never need session history. Session-aware filters
 // (outbound-only, business hours, throttle, handoff) live in pkg/agent.
 type ChannelBehavior struct {
-	MasterEnabled           bool
-	RespondInDM             bool
-	RespondInGroups         bool
-	GroupMentionOnly        bool
-	KeywordTrigger          string
-	IgnoreOtherBots         bool
-	IgnoreForwardedMessages bool
-	IgnoreSelfMessages      bool
-	ProcessImages           bool
-	ProcessDocuments        bool
-	ProcessAudio            bool
-	ProcessVideo            bool
-	ProcessStickers         bool
-	ProcessLocation         bool
-	MaxMediaSizeMB          int
+	MasterEnabled              bool
+	RespondInDM                bool
+	RespondInGroups            bool
+	GroupMentionOnly           bool
+	KeywordTrigger             string
+	IgnoreOtherBots            bool
+	IgnoreForwardedMessages    bool
+	IgnoreSelfMessages         bool
+	ProcessImages              bool
+	ProcessDocuments           bool
+	ProcessAudio               bool
+	ProcessVideo               bool
+	ProcessStickers            bool
+	ProcessLocation            bool
+	MaxMediaSizeMB             int
+	OperatorIdentificationMode string
 }
 
 // BehaviorProvider supplies the active ChannelBehavior at message-arrival time.

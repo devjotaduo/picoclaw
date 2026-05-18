@@ -159,9 +159,17 @@ export function MessageBubble({
       : "bg-wa-bubble-out text-wa-bubble-out-fg ring-1 ring-emerald-200/60 dark:ring-emerald-800/40"
     : "bg-wa-bubble-in ring-1 ring-border/60 text-foreground"
 
+  const operatorDisplay = useMemo(() => {
+    if (!isHuman) return null
+    const raw = message.operator_name?.trim() || message.operator_id?.trim()
+    if (!raw) return null
+    const at = raw.indexOf("@")
+    return at > 0 ? raw.slice(0, at) : raw
+  }, [isHuman, message.operator_id, message.operator_name])
+
   const senderTooltip = isOut
     ? isHuman
-      ? `Enviado por: ${authorName ?? "Operador"} (manual)`
+      ? `Enviado por: ${operatorDisplay ?? authorName ?? "Operador"} (manual)`
       : isAgent
         ? `Enviado por: ${authorName ?? "Agente"} (auto)`
         : `Enviado por: ${authorName ?? "Sistema"}`
@@ -222,6 +230,14 @@ export function MessageBubble({
                   {quoted.preview}
                 </p>
               </div>
+            )}
+            {isOut && isHuman && operatorDisplay && (
+              <p
+                className="text-foreground/70 mb-0.5 text-[11px] font-semibold tracking-tight"
+                title={`Operador: ${operatorDisplay}`}
+              >
+                {operatorDisplay}
+              </p>
             )}
             <div className="break-words text-sm leading-relaxed whitespace-pre-wrap">
               {renderInline(bodyText, searchQuery)}

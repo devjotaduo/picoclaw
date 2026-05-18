@@ -26,16 +26,18 @@ CREATE INDEX IF NOT EXISTS idx_wa_chats_last_message_ts
 	ON wa_chats(last_message_ts DESC);
 
 CREATE TABLE IF NOT EXISTS wa_messages (
-	id           INTEGER PRIMARY KEY AUTOINCREMENT,
-	message_id   TEXT,
-	chat_jid     TEXT NOT NULL,
-	sender_jid   TEXT,
-	direction    TEXT NOT NULL,
-	source       TEXT NOT NULL,
-	content      TEXT NOT NULL,
-	ts           INTEGER NOT NULL,
-	delivered    INTEGER NOT NULL DEFAULT 0,
-	error        TEXT,
+	id            INTEGER PRIMARY KEY AUTOINCREMENT,
+	message_id    TEXT,
+	chat_jid      TEXT NOT NULL,
+	sender_jid    TEXT,
+	direction     TEXT NOT NULL,
+	source        TEXT NOT NULL,
+	content       TEXT NOT NULL,
+	ts            INTEGER NOT NULL,
+	delivered     INTEGER NOT NULL DEFAULT 0,
+	error         TEXT,
+	operator_id   TEXT,
+	operator_name TEXT,
 	FOREIGN KEY (chat_jid) REFERENCES wa_chats(jid)
 );
 
@@ -163,8 +165,8 @@ ON CONFLICT(jid) DO UPDATE SET
 ;`
 
 	sqlInsertMessage = `
-INSERT OR IGNORE INTO wa_messages (message_id, chat_jid, sender_jid, direction, source, content, ts, delivered, error)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`
+INSERT OR IGNORE INTO wa_messages (message_id, chat_jid, sender_jid, direction, source, content, ts, delivered, error, operator_id, operator_name)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
 	sqlIncrementUnread = `
 UPDATE wa_chats SET unread_count = unread_count + 1 WHERE jid = ?;`
@@ -215,7 +217,8 @@ FROM wa_chats WHERE jid = ?;`
 SELECT paused FROM wa_chats WHERE jid = ?;`
 
 	sqlListMessages = `
-SELECT id, message_id, chat_jid, sender_jid, direction, source, content, ts, delivered, error
+SELECT id, message_id, chat_jid, sender_jid, direction, source, content, ts, delivered, error,
+       COALESCE(operator_id, ''), COALESCE(operator_name, '')
 FROM wa_messages
 WHERE chat_jid = ?
 ORDER BY ts DESC, id DESC
