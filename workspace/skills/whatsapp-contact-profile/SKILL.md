@@ -1,6 +1,8 @@
 ---
 name: whatsapp-contact-profile
 description: Extrair e atualizar o perfil operacional de um contato do WhatsApp — nome, telefone, cidade, empresa, interesse, preferências, tags, resumo, prioridade e próxima ação. Ativar quando uma conversa revelar dados cadastrais, contexto comercial ou informações úteis para atendimento futuro.
+version: 1.0.0
+language: pt-br
 ---
 
 # WhatsApp Contact Profile

@@ -1,6 +1,8 @@
 ---
 name: confidentiality-check
 description: Validar autorização antes de tratar ou expor informação interna restrita — salário, avaliação de desempenho, advertência, dados pessoais de outro colaborador, informação estratégica/financeira da empresa não-pública. Ativar sempre que o pedido envolver dado restrito ou houver dúvida se a pessoa que pergunta tem permissão.
+version: 1.0.0
+language: pt-br
 ---
 
 # Confidentiality Check

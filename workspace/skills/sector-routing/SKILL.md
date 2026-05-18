@@ -1,6 +1,8 @@
 ---
 name: sector-routing
 description: Encaminhar um caso ao setor ou time correto da empresa com um resumo estruturado (cliente, contato, motivo, urgência, contexto, próxima ação). Ativar quando a intenção identificada exigir tratamento humano, exceção de política, decisão não prevista ou quando a pessoa pedir explicitamente para falar com alguém da equipe.
+version: 1.0.0
+language: pt-br
 ---
 
 # Sector Routing

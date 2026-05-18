@@ -1,6 +1,8 @@
 ---
 name: whatsapp-conversation-summary
 description: Gerar resumo estruturado de uma conversa de WhatsApp para registro, handoff, CRM ou relatório. Ativar ao encerrar atendimento, antes de transferir para humano, após uma reclamação, orçamento ou quando houver nova próxima ação.
+version: 1.0.0
+language: pt-br
 ---
 
 # WhatsApp Conversation Summary

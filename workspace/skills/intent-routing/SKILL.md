@@ -1,6 +1,8 @@
 ---
 name: intent-routing
 description: Classificar a intenção do cliente em uma das categorias da empresa (dúvida, reclamação, orçamento, suporte, financeiro, parceria, urgência, agendamento) antes de qualquer ação. Ativar no início de cada conversa ou quando o tópico mudar, para decidir o próximo passo (responder direto, coletar dados, encaminhar, escalar urgência).
+version: 1.0.0
+language: pt-br
 ---
 
 # Intent Routing

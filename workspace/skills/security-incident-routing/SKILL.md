@@ -1,6 +1,8 @@
 ---
 name: security-incident-routing
 description: Triar e escalar imediatamente possíveis incidentes de segurança, vazamento de dados, credenciais expostas, acesso indevido, fraude, phishing ou comportamento suspeito. Ativar sempre que houver risco de segurança real ou potencial.
+version: 1.0.0
+language: pt-br
 ---
 
 # Security Incident Routing

@@ -1,6 +1,8 @@
 ---
 name: severity-classification
 description: Classificar severidade de um incidente ou bug (SEV1 produção parada, SEV2 funcionalidade crítica degradada, SEV3 funcionalidade não-crítica com workaround, SEV4 cosmético) e direcionar o fluxo de escalação correspondente. Ativar ao montar bug report, abrir incidente ou priorizar fila de suporte.
+version: 1.0.0
+language: pt-br
 ---
 
 # Severity Classification

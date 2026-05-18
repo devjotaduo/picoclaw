@@ -1,6 +1,8 @@
 ---
 name: whatsapp-lgpd-consent
 description: Controlar consentimento e privacidade no atendimento por WhatsApp. Ativar quando houver coleta, registro, compartilhamento, exclusão, correção, portabilidade ou mascaramento de dados pessoais e sensíveis.
+version: 1.0.0
+language: pt-br
 ---
 
 # WhatsApp LGPD Consent

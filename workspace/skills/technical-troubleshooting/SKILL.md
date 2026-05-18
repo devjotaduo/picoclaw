@@ -1,6 +1,8 @@
 ---
 name: technical-troubleshooting
 description: Conduzir triagem técnica de problemas reportados por usuários do produto — coletar contexto estruturado (sistema, versão, mensagem de erro, passos para reproduzir, impacto), buscar na base de conhecimento e classificar severidade antes de escalar. Ativar quando a pessoa relatar bug, erro, falha, lentidão, comportamento inesperado ou qualquer problema com o produto/serviço.
+version: 1.0.0
+language: pt-br
 ---
 
 # Technical Troubleshooting

@@ -1,6 +1,8 @@
 ---
 name: sensitive-data-protection
 description: Tratar informações de saúde, dados de menores e qualquer dado sensível com sigilo absoluto. Ativar sempre que a conversa envolver dados clínicos, laudos, exames, prontuários, receitas, condição médica, dados de paciente menor de idade, ou solicitação de envio dessas informações. Validar identidade e canal autorizado antes de qualquer compartilhamento.
+version: 1.0.0
+language: pt-br
 ---
 
 # Sensitive Data Protection

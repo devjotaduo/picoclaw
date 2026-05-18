@@ -1,6 +1,8 @@
 ---
 name: appointment-triage
 description: Identificar a intenção do paciente em uma clínica/consultório — agendar, remarcar, cancelar, tirar dúvida administrativa, pedir preparo de exame, dúvida de convênio ou relato de urgência — e coletar os dados mínimos correspondentes. Ativar no início de qualquer contato em contexto de saúde, antes de qualquer agendamento, orientação ou encaminhamento.
+version: 1.0.0
+language: pt-br
 ---
 
 # Appointment Triage
@@ -51,3 +53,13 @@ Encaminhar ao setor responsável quando:
 - O convênio exigir autorização específica que a clínica precisa validar.
 - A pessoa pedir encaixe, prioridade ou exceção fora da política da clínica.
 - A pessoa estiver em sofrimento emocional intenso ou relatar risco para si.
+
+## LGPD / privacidade
+
+Dados coletados aqui (nome, telefone, convênio, data de nascimento, especialidade) são **dados sensíveis de saúde — art. 11 da LGPD**. Antes de salvar/encaminhar:
+
+- Acione `lgpd-check` para confirmar a base legal e necessidade da coleta.
+- Use `whatsapp-lgpd-consent` para registrar consentimento explícito quando o canal for WhatsApp.
+- **Não** salve número de carteirinha de plano nem CPF completo — mascare como `***.***.***-XX`.
+- **Não** copie conversas inteiras para memória/relatório — registre apenas o fato operacional (ex.: "agendado cardiologia 12/06").
+- Em encaminhamento ao setor responsável, envie só o mínimo necessário; deixe que a equipe consulte o histórico no sistema da clínica.

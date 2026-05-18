@@ -1,6 +1,8 @@
 ---
 name: product-interest-extraction
 description: Extrair produtos, serviços, quantidades, preço perguntado, objeções e intenção de compra em conversas de WhatsApp. Ativar quando a pessoa citar item, orçamento, disponibilidade, frete, entrega, medida, marca ou comparação de preço.
+version: 1.0.0
+language: pt-br
 ---
 
 # Product Interest Extraction

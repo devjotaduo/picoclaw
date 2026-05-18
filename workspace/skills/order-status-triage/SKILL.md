@@ -1,6 +1,8 @@
 ---
 name: order-status-triage
 description: Identificar a intenção de um contato de loja/e-commerce — dúvida sobre produto, status de pedido, troca/devolução, problema de entrega, reclamação ou pós-venda — e direcionar para o fluxo correto. Ativar no início de qualquer conversa de varejo, antes de expor dados de pedido ou aceitar pedidos de alteração. Validar identidade antes de mostrar qualquer dado de pedido (`customer-identity-verification`).
+version: 1.0.0
+language: pt-br
 ---
 
 # Order Status Triage

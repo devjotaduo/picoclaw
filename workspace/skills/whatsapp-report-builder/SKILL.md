@@ -1,6 +1,8 @@
 ---
 name: whatsapp-report-builder
 description: Montar relatórios de WhatsApp a partir de contatos, mensagens, insights, leads, produtos citados, handoffs e pendências. Ativar quando o usuário pedir relatório diário/semanal/mensal, métricas de atendimento, vendas ou resumo de conversas.
+version: 1.0.0
+language: pt-br
 ---
 
 # WhatsApp Report Builder

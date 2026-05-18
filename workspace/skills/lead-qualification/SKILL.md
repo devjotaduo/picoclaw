@@ -1,6 +1,8 @@
 ---
 name: lead-qualification
 description: Decidir se um lead tem fit ou não com a oferta da empresa antes de agendar reunião comercial. Avaliar ICP (segmento, porte, contexto), urgência, decisor envolvido e dor manifestada. Ativar quando alguém demonstrar interesse comercial (formulário preenchido, mensagem perguntando preço/proposta, indicação). Encerrar com elegância quando não houver fit.
+version: 1.0.0
+language: pt-br
 ---
 
 # Lead Qualification

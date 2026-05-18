@@ -1,6 +1,8 @@
 ---
 name: faq-answering
 description: Responder perguntas institucionais da empresa (horário, endereço, serviços, formas de pagamento, canais de contato, políticas públicas) usando apenas a base de conhecimento oficial. Ativar quando a pessoa fizer uma pergunta direta sobre a empresa ou seus serviços que admita resposta factual, e a resposta deva vir do Company Context, FAQ ou políticas oficiais — não inventar nem deduzir.
+version: 1.0.0
+language: pt-br
 ---
 
 # FAQ Answering

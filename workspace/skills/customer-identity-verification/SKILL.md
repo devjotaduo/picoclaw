@@ -1,6 +1,8 @@
 ---
 name: customer-identity-verification
 description: Confirmar a identidade do cliente antes de mostrar dados de pedido, alterar endereço, aceitar pedido de cancelamento, processar devolução ou expor qualquer informação pessoal cadastrada. Ativar antes de qualquer ação que exponha ou modifique dados do cliente. Usar combinação de nome + um identificador (nº do pedido, email parcial, CPF parcial) — nunca apenas nome.
+version: 1.0.0
+language: pt-br
 ---
 
 # Customer Identity Verification

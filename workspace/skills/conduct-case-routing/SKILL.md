@@ -1,6 +1,8 @@
 ---
 name: conduct-case-routing
 description: Tratar denúncias de conduta (assédio moral, assédio sexual, discriminação, fraude, conflito ético, retaliação) com sigilo absoluto e canal autorizado. Ativar quando um colaborador relatar uma situação que envolva conduta inadequada, denúncia, conflito interpessoal grave ou solicitar canal de ética. Sem julgamento, sem coletar detalhes íntimos desnecessários, sem registrar dado em sistema aberto.
+version: 1.0.0
+language: pt-br
 ---
 
 # Conduct Case Routing
