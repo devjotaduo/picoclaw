@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
-import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, SlidersHorizontal, ClipboardList, UserCog, LayoutDashboard, FileText } from "lucide-react";
+import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, SlidersHorizontal, ClipboardList, UserCog, LayoutDashboard, FileText, Activity } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -49,6 +49,11 @@ export function Layout() {
           {isPlatformAdmin && (
             <SideLink to="/dashboard" icon={<LayoutDashboard className="h-4 w-4" />} active={loc.pathname === "/dashboard"}>
               Dashboard
+            </SideLink>
+          )}
+          {isPlatformAdmin && (
+            <SideLink to="/server-health" icon={<Activity className="h-4 w-4" />} active={loc.pathname === "/server-health"}>
+              Saúde do servidor
             </SideLink>
           )}
           <SideLink to="/tenants" icon={<Users className="h-4 w-4" />} active={loc.pathname.startsWith("/tenants")}>

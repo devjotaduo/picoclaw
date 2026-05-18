@@ -18,6 +18,7 @@ import { UserManagement } from "@/pages/UserManagement";
 import { PlatformDashboard } from "@/pages/PlatformDashboard";
 import { PublicPreCadastro } from "@/pages/PublicPreCadastro";
 import { CompanyIntakes } from "@/pages/CompanyIntakes";
+import { ServerHealth } from "@/pages/ServerHealth";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { status } = useAuth();
@@ -67,6 +68,7 @@ export default function App() {
         <Route path="/audit" element={<RequirePlatform><AuditLog /></RequirePlatform>} />
         <Route path="/users" element={<RequirePlatform><UserManagement /></RequirePlatform>} />
         <Route path="/dashboard" element={<RequirePlatform><PlatformDashboard /></RequirePlatform>} />
+        <Route path="/server-health" element={<RequirePlatform><ServerHealth /></RequirePlatform>} />
         <Route path="/intakes" element={<RequirePlatform><CompanyIntakes /></RequirePlatform>} />
         <Route path="/crm" element={<RequirePlatform><Navigate to="/crm/contacts" replace /></RequirePlatform>} />
         <Route path="/crm/:view" element={<RequirePlatform><CrmPage /></RequirePlatform>} />

@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
 )
 
@@ -262,3 +263,18 @@ func isNotFound(err error) bool {
 }
 
 func ptrInt64(v int64) *int64 { return &v }
+
+// Ping returns the Docker daemon API version when reachable, or an error
+// when the engine socket is unavailable.
+func (d *DockerClient) Ping(ctx context.Context) (string, error) {
+	p, err := d.cli.Ping(ctx)
+	if err != nil {
+		return "", err
+	}
+	return p.APIVersion, nil
+}
+
+// Info returns the Docker engine info used by the server-health page.
+func (d *DockerClient) Info(ctx context.Context) (system.Info, error) {
+	return d.cli.Info(ctx)
+}
