@@ -517,135 +517,63 @@ function AgentSelectorNavItem({
   item,
   onAgentChange,
   onNavigate,
-  selectedAgent,
   selectedAgentID,
   title,
 }: AgentSelectorNavItemProps) {
-  const displayInitials = selectedAgent?.initials ?? "..."
-  const displayLabel = selectedAgent?.label ?? "..."
-  const displayShortLabel = selectedAgent?.shortLabel ?? "..."
-  const displayAccent =
-    selectedAgent?.accentClassName ??
-    "bg-muted text-muted-foreground ring-border/50"
-  const displayAvatarStyle = selectedAgent?.background
-    ? {
-        backgroundColor: selectedAgent.background,
-        color: selectedAgent.foreground || "#ffffff",
-      }
-    : undefined
+  const hasMultiple = agentOptions.length > 1
 
   return (
     <div
       className={cn(
-        "rounded-md px-2 py-1.5 transition-colors group-data-[collapsible=icon]:px-1",
+        "flex items-center rounded-md transition-colors",
         isActive
           ? "bg-accent/80 text-foreground font-medium"
           : "text-muted-foreground hover:bg-muted/60",
       )}
       data-testid="sidebar-agent-selector"
     >
-      <div className="flex min-w-0 items-start gap-2 group-data-[collapsible=icon]:justify-center">
-        <div className="flex w-9 shrink-0 flex-col items-center gap-1 group-data-[collapsible=icon]:w-8">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label={`Select agent: ${displayLabel}`}
-                className={cn(
-                  "hover:bg-background/70 focus-visible:ring-ring relative flex size-8 items-center justify-center rounded-md text-[10px] font-semibold ring-1 transition-colors focus-visible:ring-2 focus-visible:outline-hidden",
-                  selectedAgent?.background ? "" : displayAccent,
-                )}
-                style={displayAvatarStyle}
-                data-testid="agent-selector-trigger"
-                disabled={agentOptions.length === 0}
-              >
-                {selectedAgent?.imageURL ? (
-                  <img
-                    src={selectedAgent.imageURL}
-                    alt=""
-                    className="size-full rounded-md object-cover"
-                  />
-                ) : (
-                  displayInitials
-                )}
-                {agentOptions.length > 1 && (
-                  <IconChevronDown className="absolute right-0.5 bottom-0.5 size-2.5 opacity-70" />
-                )}
-              </button>
-            </DropdownMenuTrigger>
-            {agentOptions.length > 1 && (
-              <DropdownMenuContent
-                align="start"
-                side="right"
-                className="w-52"
-                data-testid="agent-selector-menu"
-              >
-                <DropdownMenuRadioGroup
-                  value={selectedAgentID}
-                  onValueChange={onAgentChange}
+      <Link
+        to={item.url}
+        onClick={onNavigate}
+        className="min-w-0 flex-1 px-2 py-1.5 text-sm"
+      >
+        <span className="block truncate">{title}</span>
+      </Link>
+      {hasMultiple && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Trocar agente"
+              className="hover:bg-background/70 focus-visible:ring-ring mr-1 inline-flex size-6 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-hidden group-data-[collapsible=icon]:hidden"
+              data-testid="agent-selector-trigger"
+            >
+              <IconChevronDown className="size-3.5 opacity-70" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            side="right"
+            className="w-52"
+            data-testid="agent-selector-menu"
+          >
+            <DropdownMenuRadioGroup
+              value={selectedAgentID}
+              onValueChange={onAgentChange}
+            >
+              {agentOptions.map((agent) => (
+                <DropdownMenuRadioItem
+                  key={agent.id}
+                  value={agent.id}
+                  data-testid={`agent-option-${agent.id}`}
                 >
-                  {agentOptions.map((agent) => (
-                    <DropdownMenuRadioItem
-                      key={agent.id}
-                      value={agent.id}
-                      data-testid={`agent-option-${agent.id}`}
-                    >
-                      <span
-                        className={cn(
-                          "flex size-6 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold ring-1",
-                          agent.background ? "" : agent.accentClassName,
-                        )}
-                        style={
-                          agent.background
-                            ? {
-                                backgroundColor: agent.background,
-                                color: agent.foreground || "#ffffff",
-                              }
-                            : undefined
-                        }
-                      >
-                        {agent.imageURL ? (
-                          <img
-                            src={agent.imageURL}
-                            alt=""
-                            className="size-full rounded-md object-cover"
-                          />
-                        ) : (
-                          agent.initials
-                        )}
-                      </span>
-                      <span className="truncate">{agent.label}</span>
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            )}
-          </DropdownMenu>
-          <span
-            className="bg-background/70 text-foreground/70 ring-border/50 max-w-9 rounded px-1 text-[9px] leading-4 font-medium ring-1 group-data-[collapsible=icon]:hidden"
-            data-testid="selected-agent-badge"
-          >
-            {displayShortLabel}
-          </span>
-        </div>
-        <Link
-          to={item.url}
-          onClick={onNavigate}
-          className="min-w-0 flex-1 pt-1 group-data-[collapsible=icon]:hidden"
-        >
-          <span
-            className={cn(
-              "block truncate text-sm",
-              isActive ? "opacity-100" : "opacity-80",
-            )}
-          >
-            {title}
-          </span>
-          <span className="text-muted-foreground/70 block truncate text-[11px] leading-4">
-            {displayLabel}
-          </span>
-        </Link>
-      </div>
+                  <span className="truncate">{agent.label}</span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   )
 }

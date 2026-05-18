@@ -41,6 +41,8 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 
+import { AvatarUpload } from "../editor/avatar-upload"
+
 type ChatMessage = {
   role: "user" | "assistant"
   content: string
@@ -537,10 +539,10 @@ export function OrchestrationPage() {
                     <span>{t("pages.orchestration.profile", "Perfil")}</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-4">
                   <div className="grid gap-2">
                     <div className="text-muted-foreground text-xs font-medium">
-                      {t("pages.orchestration.agent_name", "Nome")}
+                      {t("pages.orchestration.agent_name", "Nome do agente")}
                     </div>
                     <Input
                       value={selectedProfile.name}
@@ -549,70 +551,13 @@ export function OrchestrationPage() {
                       }
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1.5">
-                      <div className="text-muted-foreground text-xs font-medium">
-                        {t("pages.orchestration.avatar_icon", "Icone")}
-                      </div>
-                      <Input
-                        value={selectedProfile.icon}
-                        onChange={(event) =>
-                          updateSelectedProfile({ icon: event.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="text-muted-foreground text-xs font-medium">
-                        {t("pages.orchestration.avatar_initials", "Iniciais")}
-                      </div>
-                      <Input
-                        value={selectedProfile.initials}
-                        onChange={(event) =>
-                          updateSelectedProfile({
-                            initials: event.target.value.toUpperCase(),
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1.5">
-                      <div className="text-muted-foreground text-xs font-medium">
-                        {t("pages.orchestration.avatar_background", "Fundo")}
-                      </div>
-                      <Input
-                        value={selectedProfile.background}
-                        onChange={(event) =>
-                          updateSelectedProfile({
-                            background: event.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="text-muted-foreground text-xs font-medium">
-                        {t("pages.orchestration.avatar_foreground", "Texto")}
-                      </div>
-                      <Input
-                        value={selectedProfile.foreground}
-                        onChange={(event) =>
-                          updateSelectedProfile({
-                            foreground: event.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
                   <div className="space-y-1.5">
                     <div className="text-muted-foreground text-xs font-medium">
-                      {t("pages.orchestration.avatar_image", "Imagem URL")}
+                      {t("pages.orchestration.avatar_image", "Imagem")}
                     </div>
-                    <Input
+                    <AvatarUpload
                       value={selectedProfile.imageURL}
-                      onChange={(event) =>
-                        updateSelectedProfile({ imageURL: event.target.value })
-                      }
-                      placeholder="https://..."
+                      onChange={(next) => updateSelectedProfile({ imageURL: next })}
                     />
                   </div>
                 </CardContent>
