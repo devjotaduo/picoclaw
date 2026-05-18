@@ -10,8 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils"
 import { gatewayAtom } from "@/store/gateway"
 
-import { jidToPhone } from "./whatsapp-format"
-import { formatPhoneBR } from "./whatsapp-format"
+import { formatPhoneBR, jidToPhone } from "./whatsapp-format"
 
 function maskPhone(phone: string): string {
   if (!phone) return ""
