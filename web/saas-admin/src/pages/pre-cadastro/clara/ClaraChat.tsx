@@ -113,9 +113,12 @@ export function ClaraChat(props: ClaraChatProps) {
 			<ChatHeader
 				online={chat.status !== "error"}
 				onOpenSummary={() => setSummaryOpen(true)}
+				summaryAvailable={hasAnyExtracted(mergedExtractedEarly)}
 			/>
 
 			<MessageList chat={chat} />
+
+			<LimitWarning chat={chat} />
 
 			<ErrorBanner error={chat.error} />
 
@@ -137,14 +140,26 @@ export function ClaraChat(props: ClaraChatProps) {
 // ──────────────────────────────────────────────────────────────────────────────
 // Header
 
-function ChatHeader({ online, onOpenSummary }: { online: boolean; onOpenSummary: () => void }) {
+function ChatHeader({
+	online,
+	onOpenSummary,
+	summaryAvailable,
+}: {
+	online: boolean;
+	onOpenSummary: () => void;
+	summaryAvailable: boolean;
+}) {
 	return (
 		<header className="border-b border-zinc-200 bg-white px-4 py-3 sm:px-6">
 			<div className="mx-auto flex max-w-2xl items-center justify-between">
 				<div className="flex items-center gap-3">
 					<div className="relative">
-						<div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-sm font-semibold text-white">
-							CL
+						<div
+							className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-base font-semibold text-white"
+							role="img"
+							aria-label="Avatar da Clara"
+						>
+							C
 						</div>
 						{online && (
 							<span
@@ -155,7 +170,7 @@ function ChatHeader({ online, onOpenSummary }: { online: boolean; onOpenSummary:
 					</div>
 					<div>
 						<p className="text-sm font-medium text-zinc-900">Clara</p>
-						<p className="text-xs text-zinc-500">Especialista em IA & automação</p>
+						<p className="text-xs text-zinc-500">Especialista em IA &amp; automação</p>
 					</div>
 				</div>
 				<Button
@@ -163,7 +178,17 @@ function ChatHeader({ online, onOpenSummary }: { online: boolean; onOpenSummary:
 					size="sm"
 					className="gap-1.5"
 					onClick={onOpenSummary}
-					aria-label="Ver o que a Clara entendeu"
+					disabled={!summaryAvailable}
+					aria-label={
+						summaryAvailable
+							? "Ver o que a Clara entendeu até agora"
+							: "Disponível depois que a Clara entender seu negócio"
+					}
+					title={
+						summaryAvailable
+							? "Ver o que a Clara entendeu até agora"
+							: "Disponível depois que a Clara entender seu negócio"
+					}
 				>
 					<Sparkles className="h-3.5 w-3.5" />
 					O que entendi
@@ -194,13 +219,24 @@ function MessageList({ chat }: { chat: ClaraChatState }) {
 		return () => el.removeEventListener("scroll", onScroll);
 	}, []);
 
+	// Track length of last assistant message so we autoscroll on every delta
+	// not just on message count changes (which only fire when a new bubble
+	// appears, missing streaming updates).
+	const lastAssistantLen =
+		chat.messages.length > 0
+			? chat.messages[chat.messages.length - 1]?.content?.length ?? 0
+			: 0;
+
 	useEffect(() => {
 		const el = scrollRef.current;
 		if (!el) return;
 		if (stickToBottom.current) {
-			el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+			// Use `auto` (instant) for streaming deltas so the user always sees
+			// the newest token, and let the browser-native smoothness handle the
+			// brief reflow.
+			el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
 		}
-	}, [chat.messages, chat.status]);
+	}, [chat.messages.length, lastAssistantLen, chat.status]);
 
 	const visible = chat.messages.filter(
 		(m, idx) => !(idx === 0 && m.role === "user" && m.content === "Oi! Pode começar."),
@@ -210,49 +246,122 @@ function MessageList({ chat }: { chat: ClaraChatState }) {
 		<div
 			ref={scrollRef}
 			className="min-h-0 flex-1 overflow-y-auto"
-			aria-live="polite"
-			aria-relevant="additions"
 		>
-			<div className="mx-auto flex max-w-2xl flex-col gap-3 px-4 py-6 sm:px-6">
+			{/* role="log" lets screen-reader users navigate as a transcript,
+			    aria-live="polite" announces new messages without interrupting. */}
+			<ul
+				role="log"
+				aria-live="polite"
+				aria-relevant="additions"
+				aria-label="Conversa com a Clara"
+				className="mx-auto flex max-w-2xl list-none flex-col gap-3 px-4 py-6 sm:px-6"
+			>
 				{visible.map((m) => (
 					<MessageBubble key={m.id} message={m} />
 				))}
 				{chat.status === "sending" && <TypingIndicator />}
-			</div>
+			</ul>
 		</div>
 	);
 }
 
 function MessageBubble({ message }: { message: ClaraMessage }) {
 	if (message.role === "user") {
+		if (!message.content) return null; // never paint an empty user bubble
 		return (
-			<div className="flex justify-end">
+			<li className="flex justify-end">
 				<div className="max-w-[85%] rounded-2xl rounded-br-md bg-violet-600 px-4 py-2 text-sm text-white shadow-sm">
+					<span className="sr-only">Você:</span>
 					{message.content}
 				</div>
-			</div>
+			</li>
 		);
 	}
-	const isEmpty = !message.content && message.streaming;
-	return (
-		<div className="flex justify-start">
-			<div
-				className={cn(
-					"max-w-[85%] rounded-2xl rounded-bl-md bg-white px-4 py-2 text-sm text-zinc-900 shadow-sm ring-1 ring-zinc-200",
-					isEmpty && "opacity-60",
-				)}
-			>
-				{isEmpty ? <TypingDots /> : <span className="whitespace-pre-wrap">{message.content}</span>}
-			</div>
-		</div>
-	);
+
+	// Assistant bubble. Hierarchy:
+	//   1. content available  → render text
+	//   2. still streaming    → show typing dots
+	//   3. errored without text → show the humanised error in-bubble
+	//   4. otherwise          → render nothing (no blank ghost bubble)
+	if (message.content) {
+		return (
+			<li className="flex justify-start">
+				<div className="max-w-[85%] rounded-2xl rounded-bl-md bg-white px-4 py-2 text-sm text-zinc-900 shadow-sm ring-1 ring-zinc-200">
+					<span className="sr-only">Clara:</span>
+					<span className="whitespace-pre-wrap">{message.content}</span>
+				</div>
+			</li>
+		);
+	}
+	if (message.streaming) {
+		return (
+			<li className="flex justify-start">
+				<div className="rounded-2xl rounded-bl-md bg-white px-4 py-2 opacity-70 shadow-sm ring-1 ring-zinc-200">
+					<span className="sr-only">Clara está digitando</span>
+					<TypingDots />
+				</div>
+			</li>
+		);
+	}
+	if (message.errorText) {
+		return (
+			<li className="flex justify-start">
+				<div
+					className="max-w-[85%] rounded-2xl rounded-bl-md bg-amber-50 px-4 py-2 text-sm text-amber-900 shadow-sm ring-1 ring-amber-200"
+					role="alert"
+					aria-atomic="true"
+				>
+					{message.errorText}
+				</div>
+			</li>
+		);
+	}
+	return null;
 }
 
 function TypingIndicator() {
 	return (
-		<div className="flex justify-start">
-			<div className="rounded-2xl rounded-bl-md bg-white px-4 py-2 shadow-sm ring-1 ring-zinc-200">
+		<li className="flex justify-start">
+			<div
+				className="rounded-2xl rounded-bl-md bg-white px-4 py-2 shadow-sm ring-1 ring-zinc-200"
+				aria-live="polite"
+				aria-label="Clara está digitando"
+			>
 				<TypingDots />
+			</div>
+		</li>
+	);
+}
+
+// LimitWarning surfaces a soft warning when the visitor is two messages away
+// from CLARA_MAX_TURNS (8 user turns × 2 roles = 16) and a hard fallback when
+// they hit the limit. The backend still enforces the cap; this is UX.
+function LimitWarning({ chat }: { chat: ClaraChatState }) {
+	const userTurns = chat.messages.filter((m) => m.role === "user" && m.content).length;
+	const hardLimit = 8;
+	const softThreshold = 6;
+	if (userTurns < softThreshold) return null;
+	if (chat.qualified) return null; // already moved on
+
+	const reached = userTurns >= hardLimit;
+	const remaining = Math.max(0, hardLimit - userTurns);
+
+	return (
+		<div
+			className={cn(
+				"border-t px-4 py-2 text-sm sm:px-6",
+				reached ? "border-rose-200 bg-rose-50 text-rose-900" : "border-amber-200 bg-amber-50 text-amber-900",
+			)}
+			role="status"
+			aria-live="polite"
+		>
+			<div className="mx-auto flex max-w-2xl items-start gap-2">
+				<AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+				<span>
+					{reached
+						? "Já conversamos bastante! Que tal eu te mandar a proposta agora?"
+						: `Faltam ${remaining} ${remaining === 1 ? "mensagem" : "mensagens"} para a gente fechar — quer já pular pra proposta?`}
+				</span>
 			</div>
 		</div>
 	);
@@ -314,9 +423,7 @@ function Composer({
 		if (!disabled) textareaRef.current?.focus();
 	}, [disabled]);
 
-	const placeholder = qualified
-		? "Quer continuar? É só seguir 👇"
-		: "Conta pra Clara o que você precisa…";
+	const placeholder = qualified ? "Quer continuar? É só seguir 👇" : "Escreva sua mensagem…";
 
 	return (
 		<div
@@ -324,7 +431,11 @@ function Composer({
 			style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
 		>
 			<div className="mx-auto flex max-w-2xl items-end gap-2">
+				<label htmlFor="clara-message-input" className="sr-only">
+					Sua mensagem para a Clara
+				</label>
 				<textarea
+					id="clara-message-input"
 					ref={textareaRef}
 					value={value}
 					onChange={handleChange}
@@ -332,9 +443,22 @@ function Composer({
 					placeholder={placeholder}
 					rows={1}
 					disabled={disabled}
+					aria-multiline="true"
+					// Underline only misspelled words (skip-ink avoids green stripes
+					// over correctly-spelled text on Chrome 121+).
+					style={{ textDecorationSkipInk: "auto" }}
 					className={cn(
-						"flex-1 resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm",
-						"placeholder:text-zinc-400 focus:border-violet-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100",
+						// Explicit text color: without it the input text inherits the
+						// admin shell's near-white token (~oklch 0.97) over the same
+						// background, ending at 1.05:1 contrast — invisible.
+						"flex-1 resize-none rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900",
+						// Cap auto-resize so a long paste doesn't push the rest of the
+						// chat off-screen. Internal scrollbar takes over past the cap.
+						"max-h-40 overflow-y-auto",
+						// Selection contrast against violet primary.
+						"selection:bg-violet-200 selection:text-zinc-900",
+						"placeholder:text-zinc-500",
+						"focus:border-violet-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-300 focus-visible:ring-2 focus-visible:ring-violet-500",
 						"disabled:cursor-not-allowed disabled:opacity-60",
 					)}
 				/>
@@ -355,13 +479,34 @@ function Composer({
 // ──────────────────────────────────────────────────────────────────────────────
 // Error banner
 
-function ErrorBanner({ error }: { error: string }) {
+function ErrorBanner({
+	error,
+	onRetry,
+}: {
+	error: string;
+	onRetry?: () => void;
+}) {
 	if (!error) return null;
 	return (
-		<div className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 sm:px-6">
+		<div
+			className="border-t border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-900 sm:px-6"
+			role="alert"
+			aria-atomic="true"
+		>
 			<div className="mx-auto flex max-w-2xl items-start gap-2">
 				<AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-				<span>{error}</span>
+				<div className="flex-1">
+					<p>{error}</p>
+					{onRetry && (
+						<button
+							type="button"
+							onClick={onRetry}
+							className="mt-1 inline-flex text-xs font-medium underline underline-offset-2 hover:text-rose-700"
+						>
+							Tentar de novo
+						</button>
+					)}
+				</div>
 			</div>
 		</div>
 	);
@@ -477,6 +622,17 @@ function SummarySection({
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Extracted merge: prefer server snapshot, fall back to live mirror
+
+function hasAnyExtracted(e: ClaraExtracted): boolean {
+	return Boolean(
+		e.companyName ||
+			e.contactName ||
+			e.segments.length ||
+			e.channels.length ||
+			e.pains.length ||
+			e.systems.length,
+	);
+}
 
 function mergeExtracted(server: ClaraExtracted, live: ClaraExtracted): ClaraExtracted {
 	const pick = (s: string[], l: string[]) => (s.length > 0 ? s : l);

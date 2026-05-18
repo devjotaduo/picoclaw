@@ -23,6 +23,9 @@ export type ClaraMessage = {
 	content: string;
 	/** Set when this message is the assistant's first turn that is still being streamed. */
 	streaming?: boolean;
+	/** Human-readable error displayed instead of an empty bubble when the
+	 * model produced no text before the stream failed. */
+	errorText?: string;
 	createdAt: number;
 };
 
@@ -76,7 +79,24 @@ export function useClaraChat({
 	resumeToken,
 	initialMessages,
 }: UseClaraChatOptions): ClaraChatState {
-	const [messages, setMessages] = useState<ClaraMessage[]>(initialMessages ?? []);
+	const messagesStorageKey = intakeId ? `clara_messages_${intakeId}` : "";
+
+	// Hydrate from localStorage first so a refresh / "Voltar à conversa"
+	// after an error never strands the visitor with an empty transcript
+	// (P0.4 ticket).
+	const [messages, setMessages] = useState<ClaraMessage[]>(() => {
+		if (initialMessages && initialMessages.length > 0) return initialMessages;
+		if (!messagesStorageKey) return [];
+		try {
+			const saved = localStorage.getItem(messagesStorageKey);
+			if (!saved) return [];
+			const parsed = JSON.parse(saved) as ClaraMessage[];
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	});
+
 	const [status, setStatus] = useState<ClaraStatus>("idle");
 	const [error, setError] = useState("");
 	const [qualified, setQualified] = useState(false);
@@ -84,6 +104,17 @@ export function useClaraChat({
 	const [extracted, setExtracted] = useState<ClaraExtracted>(emptyExtracted);
 
 	const abortRef = useRef<AbortController | null>(null);
+
+	// Persist transcript on every change so a reload, an error, or even a
+	// crash never costs the visitor their progress (P0.4 ticket).
+	useEffect(() => {
+		if (!messagesStorageKey) return;
+		try {
+			localStorage.setItem(messagesStorageKey, JSON.stringify(messages.slice(-40)));
+		} catch {
+			// localStorage may be full or disabled in private mode; ignore.
+		}
+	}, [messages, messagesStorageKey]);
 
 	// Cancel any in-flight stream on unmount so a closed sheet doesn't keep
 	// reading from the network indefinitely.
@@ -197,7 +228,7 @@ export function useClaraChat({
 			function applyEvent(ev: SSEEvent, assistantTargetId: string) {
 				switch (ev.type) {
 					case "text":
-						if (typeof ev.delta === "string") {
+						if (typeof ev.delta === "string" && ev.delta.length > 0) {
 							setMessages((prev) =>
 								prev.map((m) =>
 									m.id === assistantTargetId ? { ...m, content: m.content + ev.delta } : m,
@@ -205,9 +236,23 @@ export function useClaraChat({
 							);
 						}
 						return;
+					case "extracted":
+						// Authoritative snapshot from the server after a tool applied.
+						// Wipes the "(salvando…)" placeholder with the real value.
+						setExtracted((cur) => ({
+							companyName:
+								(typeof ev.company_name === "string" && ev.company_name) || cur.companyName,
+							contactName:
+								(typeof ev.contact_name === "string" && ev.contact_name) || cur.contactName,
+							segments: arrayOrPrev(ev.segments, cur.segments),
+							channels: arrayOrPrev(ev.channels, cur.channels),
+							pains: arrayOrPrev(ev.pains, cur.pains),
+							systems: arrayOrPrev(ev.systems, cur.systems),
+						}));
+						return;
 					case "tool_applied":
-						// Front-end mirror of the mutation: update extracted summary so the
-						// transparency Sheet stays in sync without re-fetching the intake.
+						// Placeholder only — the authoritative update arrives on the
+						// `extracted` event that the server emits right after this one.
 						if (typeof ev.name === "string") {
 							setExtracted((cur) => mirrorTool(cur, ev));
 						}
@@ -217,11 +262,10 @@ export function useClaraChat({
 						if (typeof ev.reason === "string") setQualifiedReason(ev.reason);
 						return;
 					case "warning":
-						// Truncation hint, etc. Non-fatal.
-						return;
+						return; // truncation hint, etc. Non-fatal.
 					case "tool_error":
 					case "error":
-						finalizeWithError(typeof ev.message === "string" ? ev.message : "erro do agente");
+						finalizeWithError(humanizeError(ev.message));
 						return;
 					case "done":
 					case "tool_start":
@@ -237,7 +281,16 @@ export function useClaraChat({
 				setMessages((prev) =>
 					prev.map((m) =>
 						m.id === assistantId
-							? { ...m, streaming: false, content: m.content || "(erro)" }
+							? {
+									...m,
+									streaming: false,
+									// If the model never produced any text, replace the empty
+									// bubble with the humanised error so it never renders blank.
+									// If it did, keep the partial text and let the error banner
+									// carry the failure message.
+									content: m.content || "",
+									errorText: m.content ? undefined : message,
+								}
 							: m,
 					),
 				);
@@ -280,28 +333,65 @@ type SSEEvent = {
 	[key: string]: unknown;
 };
 
-function mirrorTool(current: ClaraExtracted, ev: SSEEvent): ClaraExtracted {
-	// We deliberately don't have field-level visibility into the tool args at
-	// the event boundary (the SSE only carries the tool name + an "applied"
-	// flag). This is a pragmatic mirror: when the agent fires a tool, we mark
-	// the corresponding category as "in progress" with a placeholder so the
-	// transparency Sheet doesn't stay empty between turns. A full refresh
-	// happens whenever the parent reloads the intake (e.g. after qualified).
-	const name = String(ev.name ?? "");
-	if (name === "set_identity") return current;
-	if (name === "set_business" && current.segments.length === 0) {
-		return { ...current, segments: ["(salvando…)"] };
-	}
-	if (name === "set_channels" && current.channels.length === 0) {
-		return { ...current, channels: ["(salvando…)"] };
-	}
-	if (name === "set_pain" && current.pains.length === 0) {
-		return { ...current, pains: ["(salvando…)"] };
-	}
-	if (name === "set_systems" && current.systems.length === 0) {
-		return { ...current, systems: ["(salvando…)"] };
-	}
+function mirrorTool(current: ClaraExtracted, _ev: SSEEvent): ClaraExtracted {
+	// The server always follows up `tool_applied` with an `extracted` event
+	// carrying the canonical answers snapshot. We no longer paint a
+	// "(salvando…)" placeholder here — it confused users (P0.6 ticket) when
+	// the snapshot arrived a few ms later and replaced it instantly.
 	return current;
+}
+
+// arrayOrPrev keeps the previous value when the server snapshot is missing
+// or not an array (defensive: we never want to drop extracted data just
+// because a single SSE event was malformed).
+function arrayOrPrev(v: unknown, prev: string[]): string[] {
+	if (!Array.isArray(v)) return prev;
+	return v.filter((x): x is string => typeof x === "string");
+}
+
+// humanizeError maps known backend error strings to PT-BR. Anything else
+// becomes a generic phrase — and any JSON-looking payload is suppressed so
+// users never see raw {"error":"…"} in the UI (P0.4 ticket).
+function humanizeError(raw: unknown): string {
+	const s = typeof raw === "string" ? raw.trim() : "";
+	if (!s) return "Algo travou aqui. Quer tentar de novo?";
+	// Catch JSON literals before doing any string matching.
+	if (s.startsWith("{") || s.startsWith("[")) {
+		try {
+			const obj = JSON.parse(s) as { error?: unknown; message?: unknown };
+			const inner = obj?.error ?? obj?.message;
+			if (typeof inner === "string" && !inner.startsWith("{")) {
+				return humanizeError(inner);
+			}
+		} catch {
+			// fall through
+		}
+		return "Algo travou aqui. Quer tentar de novo?";
+	}
+	const lower = s.toLowerCase();
+	if (lower.includes("limite de mensagens")) {
+		return "Já conversamos bastante! Vou direto para a proposta — só preciso do seu contato.";
+	}
+	if (lower.includes("muitas mensagens") || lower.includes("rate") || lower.includes("429")) {
+		return "Muitas mensagens em pouco tempo. Espera uns instantes e tenta de novo.";
+	}
+	if (lower.includes("token") && lower.includes("invalid")) {
+		return "Essa sessão expirou. Vou começar uma nova conversa.";
+	}
+	if (lower.includes("intake not found")) {
+		return "Não encontrei essa conversa. Vou começar do zero.";
+	}
+	if (lower.includes("not configured")) {
+		return "O assistente está temporariamente indisponível. Tenta de novo em alguns minutos.";
+	}
+	if (lower.includes("network") || lower.includes("fetch")) {
+		return "Sem conexão. Verifica sua internet e tenta de novo.";
+	}
+	// Generic short-message fallback — never echo a long internal string.
+	if (s.length > 140) {
+		return "Algo travou aqui. Quer tentar de novo?";
+	}
+	return s;
 }
 
 /**
