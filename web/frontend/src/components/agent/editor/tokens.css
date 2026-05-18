@@ -1,0 +1,109 @@
+/*
+ * Agent editor design tokens.
+ *
+ * Scope: only the /agent/editor surface. We do NOT override the global
+ * shadcn palette in :root — these tokens live behind a `.agent-editor`
+ * class so they can be tuned without breaking other pages.
+ */
+
+.agent-editor {
+  /* Spacing */
+  --editor-space-1: 4px;
+  --editor-space-2: 8px;
+  --editor-space-3: 12px;
+  --editor-space-4: 16px;
+  --editor-space-6: 24px;
+  --editor-space-8: 32px;
+
+  /* Radius */
+  --editor-radius-sm: 6px;
+  --editor-radius-md: 10px;
+  --editor-radius-lg: 16px;
+
+  /* Shadows */
+  --editor-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --editor-shadow-md: 0 4px 12px -4px rgb(0 0 0 / 0.08);
+
+  /* Typography scale (px) */
+  --editor-fs-xxs: 10px;
+  --editor-fs-xs: 11px;
+  --editor-fs-sm: 12px;
+  --editor-fs-base: 14px;
+  --editor-fs-lg: 16px;
+  --editor-fs-xl: 20px;
+
+  /* Semantic colors (light) */
+  --editor-color-success-fg: 4 120 87;
+  --editor-color-success-bg: 209 250 229;
+  --editor-color-success-ring: 110 231 183;
+
+  --editor-color-warning-fg: 180 83 9;
+  --editor-color-warning-bg: 254 243 199;
+  --editor-color-warning-ring: 253 224 71;
+
+  --editor-color-danger-fg: 185 28 28;
+  --editor-color-danger-bg: 254 226 226;
+  --editor-color-danger-ring: 252 165 165;
+
+  --editor-color-info-fg: 29 78 216;
+  --editor-color-info-bg: 219 234 254;
+  --editor-color-info-ring: 147 197 253;
+
+  --editor-color-accent-fg: 109 40 217;
+  --editor-color-accent-bg: 237 233 254;
+  --editor-color-accent-ring: 196 181 253;
+}
+
+.dark .agent-editor {
+  --editor-color-success-fg: 110 231 183;
+  --editor-color-success-bg: 6 78 59 / 0.4;
+  --editor-color-success-ring: 4 120 87;
+
+  --editor-color-warning-fg: 252 211 77;
+  --editor-color-warning-bg: 120 53 15 / 0.4;
+  --editor-color-warning-ring: 180 83 9;
+
+  --editor-color-danger-fg: 252 165 165;
+  --editor-color-danger-bg: 127 29 29 / 0.4;
+  --editor-color-danger-ring: 185 28 28;
+
+  --editor-color-info-fg: 147 197 253;
+  --editor-color-info-bg: 30 58 138 / 0.4;
+  --editor-color-info-ring: 29 78 216;
+
+  --editor-color-accent-fg: 196 181 253;
+  --editor-color-accent-bg: 76 29 149 / 0.4;
+  --editor-color-accent-ring: 109 40 217;
+}
+
+/* Reusable utility classes built on the tokens. */
+.agent-editor .editor-card {
+  border-radius: var(--editor-radius-lg);
+  box-shadow: var(--editor-shadow-sm);
+}
+
+.agent-editor .editor-status-empty {
+  color: rgb(var(--editor-color-info-fg) / 0.85);
+  background-color: rgb(var(--editor-color-info-bg));
+  border-color: rgb(var(--editor-color-info-ring));
+}
+.agent-editor .editor-status-partial {
+  color: rgb(var(--editor-color-warning-fg));
+  background-color: rgb(var(--editor-color-warning-bg));
+  border-color: rgb(var(--editor-color-warning-ring));
+}
+.agent-editor .editor-status-complete {
+  color: rgb(var(--editor-color-success-fg));
+  background-color: rgb(var(--editor-color-success-bg));
+  border-color: rgb(var(--editor-color-success-ring));
+}
+.agent-editor .editor-status-error {
+  color: rgb(var(--editor-color-danger-fg));
+  background-color: rgb(var(--editor-color-danger-bg));
+  border-color: rgb(var(--editor-color-danger-ring));
+}
+
+.agent-editor :focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}

@@ -118,6 +118,17 @@ import { ColorPicker, DEFAULT_FG_PRESETS } from "./color-picker"
 import { IconPicker } from "./icon-picker"
 import { TagInput } from "./tag-input"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
+
+import "./tokens.css"
+import { cn } from "@/lib/utils"
+import { CardStatusBadge } from "./card-status"
+import {
+  type AgentListControls,
+  type AgentListSort,
+  type AgentListStatusFilter,
+  DEFAULT_AGENT_LIST_CONTROLS,
+  applyAgentListControls,
+} from "./agent-list-filter"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -732,22 +743,41 @@ function ReadyStatusBadges({
   const promptReady = agent.prompt?.configured ?? false
   const routingReady = Boolean(agent.access || agent.subagents || agent.default)
   const items = [
-    { label: compact ? "Perfil" : "Perfil pronto", ready: profileReady },
-    { label: compact ? "Prompt" : "Prompt pronto", ready: promptReady },
-    { label: compact ? "Rotas" : "Roteamento pronto", ready: routingReady },
+    {
+      key: "profile",
+      label: compact ? "Perfil" : "Perfil pronto",
+      ready: profileReady,
+      readyClass:
+        "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-800",
+    },
+    {
+      key: "prompt",
+      label: compact ? "Prompt" : "Prompt pronto",
+      ready: promptReady,
+      readyClass:
+        "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-800",
+    },
+    {
+      key: "routing",
+      label: compact ? "Rotas" : "Roteamento pronto",
+      ready: routingReady,
+      readyClass:
+        "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800",
+    },
   ]
   return (
     <>
       {items.map((item) => (
         <span
-          key={item.label}
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${
+          key={item.key}
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${
             item.ready
-              ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-800"
+              ? item.readyClass
               : "bg-muted text-muted-foreground ring-border"
           }`}
+          aria-label={`${item.label}: ${item.ready ? "pronto" : "pendente"}`}
         >
-          {item.label}
+          {item.ready ? item.label : `${item.label} · pendente`}
         </span>
       ))}
     </>
@@ -830,6 +860,12 @@ export function AgentEditorPage() {
 
   const [selectedAgentId, setSelectedAgentId] = useState(firstAgentId)
   const [searchQuery, setSearchQuery] = useState("")
+  const [listStatus, setListStatus] = useState<AgentListStatusFilter>(
+    DEFAULT_AGENT_LIST_CONTROLS.status,
+  )
+  const [listSort, setListSort] = useState<AgentListSort>(
+    DEFAULT_AGENT_LIST_CONTROLS.sort,
+  )
   const prevAgentIdRef = useRef(selectedAgentId)
 
   useEffect(() => {
@@ -1244,11 +1280,14 @@ export function AgentEditorPage() {
   }, [configData.payload])
 
 
-  const filteredAgents = useMemo(() => {
-    if (!searchQuery.trim()) return agents
-    const q = searchQuery.toLowerCase()
-    return agents.filter((a) => (a.name ?? "").toLowerCase().includes(q) || a.id.toLowerCase().includes(q))
-  }, [agents, searchQuery])
+  const listControls: AgentListControls = useMemo(
+    () => ({ search: searchQuery, status: listStatus, sort: listSort }),
+    [searchQuery, listStatus, listSort],
+  )
+  const filteredAgents = useMemo(
+    () => applyAgentListControls(agents, listControls),
+    [agents, listControls],
+  )
 
   const isLoadingMain = editorStateQuery.isLoading
 
@@ -1394,7 +1433,7 @@ export function AgentEditorPage() {
 
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="agent-editor flex h-full flex-col">
       <PageHeader title={t("navigation.agent_editor")}>
         {selectedAgent && (
           <>
@@ -1444,7 +1483,7 @@ export function AgentEditorPage() {
               </Button>
             </div>
 
-            <div className="border-border/40 border-b px-3 py-2.5">
+            <div className="border-border/40 space-y-2 border-b px-3 py-2.5">
               <div className="relative">
                 <IconSearch className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
                 <input
@@ -1455,6 +1494,54 @@ export function AgentEditorPage() {
                   className="border-border/60 bg-muted/30 placeholder:text-muted-foreground/60 focus:ring-primary/20 w-full rounded-lg border py-1.5 pr-3 pl-8 text-xs outline-none focus:ring-2"
                   aria-label="Buscar agentes"
                 />
+              </div>
+              <div
+                role="group"
+                aria-label="Filtrar agentes"
+                className="flex flex-wrap items-center gap-1"
+              >
+                {(["all", "active", "inactive"] as const).map((s) => {
+                  const active = listStatus === s
+                  const label =
+                    s === "all" ? "Todos" : s === "active" ? "Ativos" : "Inativos"
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setListStatus(s)}
+                      aria-pressed={active}
+                      className={cn(
+                        "focus-visible:ring-ring rounded-full border px-2 py-0.5 text-[10px] font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+                        active
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border/60 text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <label
+                  htmlFor="agent-sort"
+                  className="text-muted-foreground text-[10px] uppercase tracking-wide"
+                >
+                  Ordenar
+                </label>
+                <select
+                  id="agent-sort"
+                  value={listSort}
+                  onChange={(e) =>
+                    setListSort(e.target.value as AgentListSort)
+                  }
+                  className="border-border/60 bg-muted/30 focus:ring-primary/20 rounded-md border px-2 py-0.5 text-[11px] outline-none focus:ring-2"
+                  aria-label="Ordenar agentes"
+                >
+                  <option value="default">Padrão primeiro</option>
+                  <option value="name">Nome A–Z</option>
+                  <option value="edited">Última edição</option>
+                </select>
               </div>
             </div>
 
@@ -2079,7 +2166,7 @@ function IdentityProfileSection({
           <AgentAvatar agent={agent} size="lg" />
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-foreground text-2xl font-bold tracking-tight">{selectedProfile?.name || agent.name || agent.id}</h2>
+              <h2 className="text-foreground text-xl font-semibold tracking-tight">{selectedProfile?.name || agent.name || agent.id}</h2>
               {agent.default && <DefaultBadge />}
               <StatusBadge active={isActive} />
             </div>
@@ -2107,29 +2194,69 @@ function IdentityProfileSection({
               </Tooltip>
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-end">
-            <Button
-              variant={isActive ? "outline" : "default"}
-              size="sm"
-              onClick={onToggleActive}
-              disabled={isTogglingActive || (agent.default && isActive)}
-              className={isActive ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/40" : ""}
-            >
-              {isTogglingActive ? <IconLoader2 className="size-4 animate-spin" /> : isActive ? <IconPlayerPause className="size-4" /> : <IconPlayerPlay className="size-4" />}
-              {isActive ? "Desativar" : "Ativar"}
-            </Button>
-            {onDelete && (
+          <div className="flex shrink-0 items-center gap-2">
+            {!isActive && (
               <Button
-                variant="outline"
+                variant="default"
                 size="sm"
-                onClick={onDelete}
-                disabled={isDeleting}
-                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40"
+                onClick={onToggleActive}
+                disabled={isTogglingActive}
+                className="gap-1.5"
               >
-                {isDeleting ? <IconLoader2 className="size-4 animate-spin" /> : <IconTrash className="size-4" />}
-                Remover
+                {isTogglingActive ? (
+                  <IconLoader2 className="size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <IconPlayerPlay className="size-4" aria-hidden="true" />
+                )}
+                Ativar
               </Button>
             )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label={`Ações para ${agent.name || agent.id}`}
+                  className="gap-1"
+                >
+                  <IconDotsVertical className="size-4" aria-hidden="true" />
+                  Mais
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {isActive && (
+                  <DropdownMenuItem
+                    onClick={onToggleActive}
+                    disabled={isTogglingActive || (agent.default && isActive)}
+                    className="text-amber-700 focus:bg-amber-50 focus:text-amber-800 dark:text-amber-300 dark:focus:bg-amber-950/40"
+                  >
+                    {isTogglingActive ? (
+                      <IconLoader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <IconPlayerPause className="size-3.5" aria-hidden="true" />
+                    )}
+                    Desativar atendimento
+                  </DropdownMenuItem>
+                )}
+                {onDelete && (
+                  <>
+                    {isActive && <DropdownMenuSeparator />}
+                    <DropdownMenuItem
+                      onClick={onDelete}
+                      disabled={isDeleting}
+                      className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/40"
+                    >
+                      {isDeleting ? (
+                        <IconLoader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <IconTrash className="size-3.5" aria-hidden="true" />
+                      )}
+                      Remover agente
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -2702,7 +2829,7 @@ function AgentDetailView({
           <AgentAvatar agent={agent} size="lg" />
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-foreground text-2xl font-bold tracking-tight">{payload.name || agent.name || agent.id}</h2>
+              <h2 className="text-foreground text-xl font-semibold tracking-tight">{payload.name || agent.name || agent.id}</h2>
               {isDefault && <DefaultBadge />}
               <StatusBadge active={isActive} />
             </div>
@@ -3518,16 +3645,38 @@ function LoadingSkeleton() {
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   const { t } = useTranslation()
   return (
-    <div className="border-border/40 bg-card/40 flex flex-col items-center gap-5 rounded-2xl border p-12 text-center">
-      <div className="bg-muted flex size-16 items-center justify-center rounded-2xl">
-        <IconUsers className="text-muted-foreground size-8" />
+    <div
+      role="region"
+      aria-label="Nenhum agente selecionado"
+      className="border-border/40 bg-card/40 flex flex-col items-center gap-5 rounded-2xl border p-12 text-center"
+    >
+      <div
+        aria-hidden="true"
+        className="from-primary/15 to-primary/0 relative flex size-24 items-center justify-center rounded-3xl bg-gradient-to-br"
+      >
+        <div className="bg-background flex size-16 items-center justify-center rounded-2xl shadow-sm">
+          <IconUsers className="text-muted-foreground size-8" />
+        </div>
+        <span className="bg-emerald-500 absolute -right-1 -bottom-1 inline-flex size-6 items-center justify-center rounded-full text-[10px] font-bold text-white shadow">
+          +
+        </span>
       </div>
       <div className="space-y-1.5">
-        <h3 className="text-foreground text-base font-semibold">{t("pages.agent.editor.empty_title")}</h3>
-        <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">{t("pages.agent.editor.empty_description")}</p>
+        <h3 className="text-foreground text-lg font-semibold">
+          {t(
+            "pages.agent.editor.empty_title",
+            "Selecione um agente ou crie um novo",
+          )}
+        </h3>
+        <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
+          {t(
+            "pages.agent.editor.empty_description",
+            "Escolha um agente na lista ao lado para editar identidade, papel, prompt e roteamento. Você também pode começar do zero com o wizard.",
+          )}
+        </p>
       </div>
       <Button onClick={onCreate} className="gap-2">
-        <IconPlus className="size-4" />
+        <IconPlus className="size-4" aria-hidden="true" />
         {t("pages.agent.editor.new_agent", "Novo agente")}
       </Button>
     </div>
