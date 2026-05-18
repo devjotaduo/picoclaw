@@ -121,6 +121,7 @@ func (h *Handler) Routes() http.Handler {
 				r.Get("/audit", h.handleListAudit)
 				r.Get("/platform/stats", h.handlePlatformStats)
 				r.Get("/platform/usage-timeseries", h.handlePlatformTimeseries)
+				r.Get("/platform/server-health", h.handleServerHealth)
 				r.Get("/users", h.handleListUsers)
 				r.Post("/platform/invite-admin", h.handleInvitePlatformAdmin)
 				r.Get("/company-intakes", h.handleListCompanyIntakes)
