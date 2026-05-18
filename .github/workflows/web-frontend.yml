@@ -1,0 +1,59 @@
+name: Web Frontend
+
+on:
+  pull_request:
+    paths:
+      - "web/frontend/**"
+      - ".github/workflows/web-frontend.yml"
+  push:
+    branches: [main]
+    paths:
+      - "web/frontend/**"
+      - ".github/workflows/web-frontend.yml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: web/frontend
+
+jobs:
+  ci:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check
+        run: pnpm format
+        continue-on-error: true
+
+      - name: ESLint
+        run: pnpm lint
+
+      - name: TypeScript build
+        run: pnpm exec tsc -b
+
+      - name: Unit tests (Vitest)
+        run: pnpm test
+
+      - name: Vite build
+        run: pnpm exec vite build

@@ -1,0 +1,158 @@
+name: E2E (agent editor)
+
+# Manual trigger by default. Auto-runs on PRs only when the
+# `e2e` label is applied, so day-to-day PRs aren't blocked by
+# a heavier suite that requires a running launcher.
+on:
+  workflow_dispatch:
+    inputs:
+      destructive:
+        description: "Include destructive specs (creates/edits/deletes real agents)"
+        type: boolean
+        default: false
+  pull_request:
+    types: [labeled, synchronize, opened, reopened]
+    paths:
+      - "web/frontend/**"
+      - "web/backend/**"
+      - "cmd/picoclaw-launcher/**"
+      - "pkg/**"
+      - ".github/workflows/e2e.yml"
+
+permissions:
+  contents: read
+
+env:
+  PLAYWRIGHT_BASE_URL: http://127.0.0.1:18800
+  E2E_BASE_URL: http://127.0.0.1:18800
+
+jobs:
+  e2e:
+    name: Playwright
+    # Skip PR runs unless they carry the `e2e` label. workflow_dispatch
+    # always runs.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'e2e'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/frontend/pnpm-lock.yaml
+
+      - name: Install web/frontend deps
+        working-directory: web/frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build launcher (binary + embedded frontend)
+        run: make build-launcher
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('web/frontend/pnpm-lock.yaml') }}
+          restore-keys: pw-${{ runner.os }}-
+
+      - name: Install Playwright Chromium
+        working-directory: web/frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Prepare ephemeral PICOCLAW_HOME
+        run: |
+          export E2E_HOME="${RUNNER_TEMP}/picoclaw-home"
+          mkdir -p "${E2E_HOME}"
+          echo "PICOCLAW_HOME=${E2E_HOME}" >> "$GITHUB_ENV"
+
+      - name: Start launcher in background
+        env:
+          PICOCLAW_DASHBOARD_PORT: "18800"
+        run: |
+          ./build/picoclaw-launcher \
+            --port "${PICOCLAW_DASHBOARD_PORT}" \
+            > "${RUNNER_TEMP}/launcher.log" 2>&1 &
+          echo $! > "${RUNNER_TEMP}/launcher.pid"
+
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18800/health >/dev/null 2>&1; then
+              echo "launcher is up (after ${i}s)"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "launcher did not become ready in 60s"
+          cat "${RUNNER_TEMP}/launcher.log" || true
+          exit 1
+
+      - name: Configure dashboard password
+        id: setup-auth
+        env:
+          E2E_PASSWORD: ${{ secrets.PICOCLAW_E2E_PASSWORD || 'e2e-runner-pw-9X3kpf' }}
+        run: |
+          curl -fsS -X POST http://127.0.0.1:18800/api/auth/setup \
+            -H "Content-Type: application/json" \
+            -d "{\"password\":\"${E2E_PASSWORD}\",\"confirm\":\"${E2E_PASSWORD}\"}" \
+            || true
+          # If setup is a no-op (already initialized) the global-setup
+          # login step below will fail loudly — we don't gate on the
+          # curl exit code because a 409 here is recoverable.
+          echo "E2E_PASSWORD=${E2E_PASSWORD}" >> "$GITHUB_ENV"
+
+      - name: Run Playwright suite
+        working-directory: web/frontend
+        env:
+          E2E_DESTRUCTIVE: ${{ github.event.inputs.destructive == 'true' && '1' || '' }}
+          CI: "1"
+        run: pnpm test:e2e
+
+      - name: Stop launcher
+        if: always()
+        run: |
+          if [ -f "${RUNNER_TEMP}/launcher.pid" ]; then
+            kill "$(cat "${RUNNER_TEMP}/launcher.pid")" 2>/dev/null || true
+          fi
+
+      - name: Upload launcher log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-log
+          path: ${{ runner.temp }}/launcher.log
+          if-no-files-found: ignore
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/frontend/e2e/.report
+          if-no-files-found: ignore
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: web/frontend/e2e/.test-results
+          if-no-files-found: ignore
