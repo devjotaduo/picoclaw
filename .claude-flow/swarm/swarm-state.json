@@ -4,7 +4,7 @@
       "swarmId": "swarm-1778966398689-qs5zw2",
       "topology": "hierarchical",
       "maxAgents": 6,
-      "status": "running",
+      "status": "terminated",
       "agents": [],
       "tasks": [],
       "config": {
@@ -16,8 +16,67 @@
         "consensusMechanism": "majority"
       },
       "createdAt": "2026-05-16T21:19:58.689Z",
-      "updatedAt": "2026-05-16T21:19:58.689Z",
-      "pid": 1892883
+      "updatedAt": "2026-05-18T12:10:43.294Z",
+      "pid": 1892883,
+      "terminationReason": "host process 1892883 exited"
+    },
+    "swarm-1779106243293-fvdn8w": {
+      "swarmId": "swarm-1779106243293-fvdn8w",
+      "topology": "mesh",
+      "maxAgents": 5,
+      "status": "running",
+      "agents": [],
+      "tasks": [],
+      "config": {
+        "topology": "mesh",
+        "maxAgents": 5,
+        "strategy": "specialized",
+        "communicationProtocol": "message-bus",
+        "autoScaling": true,
+        "consensusMechanism": "majority"
+      },
+      "createdAt": "2026-05-18T12:10:43.293Z",
+      "updatedAt": "2026-05-18T12:10:43.293Z",
+      "pid": 4170237
+    },
+    "swarm-1779106534806-d9c7jh": {
+      "swarmId": "swarm-1779106534806-d9c7jh",
+      "topology": "mesh",
+      "maxAgents": 4,
+      "status": "terminated",
+      "agents": [],
+      "tasks": [],
+      "config": {
+        "topology": "mesh",
+        "maxAgents": 4,
+        "strategy": "specialized",
+        "communicationProtocol": "message-bus",
+        "autoScaling": true,
+        "consensusMechanism": "majority"
+      },
+      "createdAt": "2026-05-18T12:15:34.806Z",
+      "updatedAt": "2026-05-18T13:43:26.836Z",
+      "pid": 566,
+      "terminationReason": "host process 566 exited"
+    },
+    "swarm-1779111806830-623lwf": {
+      "swarmId": "swarm-1779111806830-623lwf",
+      "topology": "mesh",
+      "maxAgents": 3,
+      "status": "running",
+      "agents": [],
+      "tasks": [],
+      "config": {
+        "topology": "mesh",
+        "maxAgents": 3,
+        "strategy": "specialized",
+        "communicationProtocol": "message-bus",
+        "autoScaling": true,
+        "consensusMechanism": "majority"
+      },
+      "createdAt": "2026-05-18T13:43:26.830Z",
+      "updatedAt": "2026-05-18T13:43:26.830Z",
+      "pid": 3112465
     }
   },
   "version": "3.0.0"

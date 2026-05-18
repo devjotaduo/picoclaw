@@ -136,6 +136,52 @@ func CopyTemplate(templateDir, dstDir string) error {
 	})
 }
 
+// SyncTemplateSkills overlays workspace/skills from the main tenant template
+// onto a freshly-seeded tenant volume. Launcher profiles can be older or
+// narrower than the operator's primary workspace; tenant creation should still
+// inherit the current shared skill catalog. Extra profile-specific skills are
+// left in place.
+func SyncTemplateSkills(templateDir, dstDir string) error {
+	if templateDir == "" {
+		return nil
+	}
+	srcRoot := filepath.Join(templateDir, "workspace", "skills")
+	info, err := os.Stat(srcRoot)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("stat template skills: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("template skills %s is not a directory", srcRoot)
+	}
+	dstRoot := filepath.Join(dstDir, "workspace", "skills")
+	return filepath.Walk(srcRoot, func(path string, fi os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(srcRoot, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		if fi.Mode()&os.ModeSymlink != 0 || (!fi.Mode().IsRegular() && !fi.IsDir()) {
+			return nil
+		}
+		dst := filepath.Join(dstRoot, rel)
+		if fi.IsDir() {
+			return os.MkdirAll(dst, fi.Mode().Perm())
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return err
+		}
+		return copyFile(path, dst, fi.Mode().Perm())
+	})
+}
+
 func copyFile(src, dst string, mode os.FileMode) error {
 	in, err := os.Open(src)
 	if err != nil {

@@ -66,6 +66,138 @@ func TestList_ParsesFrontmatter(t *testing.T) {
 	}
 }
 
+func TestList_ParsesIntegrationSchema(t *testing.T) {
+	m := newTestManager(t)
+	if err := os.MkdirAll(filepath.Join(m.skillsDir(), "agenda"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const content = `---
+name: agenda
+description: Agenda integration.
+metadata:
+  integration:
+    title: Agenda
+    description: Dados usados pela agenda.
+    fields:
+      - key: api_url
+        label: URL da API
+        type: url
+        required: true
+      - key: api_token
+        label: Token
+        type: secret
+        required: true
+      - key: mode
+        label: Modo
+        type: select
+        options:
+          - value: sandbox
+            label: Sandbox
+          - production
+---
+
+# Agenda
+`
+	if err := os.WriteFile(m.skillFilePath("agenda"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := m.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var agenda SkillSummary
+	for _, item := range list {
+		if item.Name == "agenda" {
+			agenda = item
+			break
+		}
+	}
+	if agenda.Integration == nil {
+		t.Fatalf("expected integration schema, got %+v", agenda)
+	}
+	if agenda.Integration.Title != "Agenda" {
+		t.Fatalf("title = %q", agenda.Integration.Title)
+	}
+	if got := agenda.Integration.Fields[2].Options[1].Value; got != "production" {
+		t.Fatalf("string option value = %q", got)
+	}
+}
+
+func TestList_ReportsInvalidIntegrationSchema(t *testing.T) {
+	m := newTestManager(t)
+	if err := os.MkdirAll(filepath.Join(m.skillsDir(), "broken"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const content = `---
+name: broken
+metadata:
+  integration:
+    fields:
+      - key: ApiURL
+        label: URL
+        type: mystery
+---
+
+# Broken
+`
+	if err := os.WriteFile(m.skillFilePath("broken"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := m.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range list {
+		if item.Name == "broken" {
+			if item.Integration != nil {
+				t.Fatalf("invalid schema should not decode: %+v", item.Integration)
+			}
+			if item.IntegrationSchemaError == "" {
+				t.Fatal("expected integration schema error")
+			}
+			return
+		}
+	}
+	t.Fatal("broken skill not found")
+}
+
+func TestWriteIntegrationsManifest_RedactsSecrets(t *testing.T) {
+	m := newTestManager(t)
+	err := m.WriteIntegrationsManifest([]IntegrationManifestItem{
+		{
+			SkillName:   "agenda",
+			Title:       "Agenda",
+			Description: "Dados usados pela agenda.",
+			Status:      IntegrationStatusConfigured,
+			Fields: []IntegrationField{
+				{Key: "api_url", Label: "URL da API", Type: FieldTypeURL, Required: true},
+				{Key: "api_token", Label: "Token", Type: FieldTypeSecret, Required: true},
+			},
+			Values:            map[string]any{"api_url": "https://api.example.com"},
+			SecretsConfigured: map[string]bool{"api_token": true},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(m.integrationsPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, "https://api.example.com") {
+		t.Fatalf("manifest missing non-secret value:\n%s", text)
+	}
+	if !strings.Contains(text, "configured secret") {
+		t.Fatalf("manifest missing secret configured marker:\n%s", text)
+	}
+	if strings.Contains(text, "api-token-123") {
+		t.Fatalf("manifest leaked secret:\n%s", text)
+	}
+}
+
 func TestSetActive_AddsAndRemoves(t *testing.T) {
 	m := newTestManager(t)
 	if err := m.SetActive("weather", true); err != nil {

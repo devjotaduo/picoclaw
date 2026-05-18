@@ -9,6 +9,8 @@ import {
   type LauncherForm,
   type MCPServerForm,
   type MCPServerType,
+  type QuickTaskForm,
+  newQuickTask,
 } from "@/components/config/form-model"
 import { Field, SwitchCardField } from "@/components/shared-form"
 import { Button } from "@/components/ui/button"
@@ -101,7 +103,102 @@ export function InterfaceSection({
           onFieldChange("showModelSelector", checked)
         }
       />
+
+      <Field
+        label={t("pages.config.chat_intro")}
+        hint={t("pages.config.chat_intro_hint")}
+        layout="setting-row"
+      >
+        <Textarea
+          value={form.chatIntro}
+          onChange={(e) => onFieldChange("chatIntro", e.target.value)}
+          placeholder={t("pages.config.chat_intro_placeholder")}
+          rows={2}
+        />
+      </Field>
+
+      <Field
+        label={t("pages.config.quick_tasks_label")}
+        hint={t("pages.config.quick_tasks_hint")}
+        layout="setting-row"
+      >
+        <QuickTasksEditor
+          tasks={form.quickTasks}
+          onChange={(next) => onFieldChange("quickTasks", next)}
+        />
+      </Field>
     </ConfigSectionCard>
+  )
+}
+
+interface QuickTasksEditorProps {
+  tasks: QuickTaskForm[]
+  onChange: (next: QuickTaskForm[]) => void
+}
+
+function QuickTasksEditor({ tasks, onChange }: QuickTasksEditorProps) {
+  const { t } = useTranslation()
+
+  const update = (id: string, patch: Partial<QuickTaskForm>) => {
+    onChange(
+      tasks.map((task) => (task.id === id ? { ...task, ...patch } : task)),
+    )
+  }
+
+  const remove = (id: string) => {
+    onChange(tasks.filter((task) => task.id !== id))
+  }
+
+  const add = () => {
+    onChange([...tasks, newQuickTask()])
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {tasks.length === 0 && (
+        <p className="text-muted-foreground text-sm">
+          {t("pages.config.quick_tasks_empty")}
+        </p>
+      )}
+      {tasks.map((task, index) => (
+        <div
+          key={task.id}
+          className="border-border/70 flex flex-col gap-2 rounded-md border p-3"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-muted-foreground text-xs font-medium uppercase">
+              {t("pages.config.quick_task_index", { index: index + 1 })}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => remove(task.id)}
+              aria-label={t("pages.config.quick_task_remove")}
+            >
+              <IconTrash className="size-4" />
+            </Button>
+          </div>
+          <Input
+            value={task.label}
+            onChange={(e) => update(task.id, { label: e.target.value })}
+            placeholder={t("pages.config.quick_task_label_placeholder")}
+          />
+          <Textarea
+            value={task.prompt}
+            onChange={(e) => update(task.id, { prompt: e.target.value })}
+            placeholder={t("pages.config.quick_task_prompt_placeholder")}
+            rows={2}
+          />
+        </div>
+      ))}
+      <div>
+        <Button type="button" variant="outline" size="sm" onClick={add}>
+          <IconPlus className="size-4" />
+          {t("pages.config.quick_task_add")}
+        </Button>
+      </div>
+    </div>
   )
 }
 

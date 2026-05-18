@@ -26,7 +26,14 @@ import {
   IconUsers,
   IconWorldWww,
 } from "@tabler/icons-react"
+import { IconCopy, IconDotsVertical } from "@tabler/icons-react"
+import {
+  IconExternalLink,
+  IconHistory,
+  IconMessageDots,
+} from "@tabler/icons-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -47,7 +54,7 @@ import {
   updateInternalAgentOrchestration,
 } from "@/api/internal-agents"
 import { getLauncherPolicy } from "@/api/launcher-policy"
-import { getSkills } from "@/api/skills"
+import { type SkillSupportItem, getSkills } from "@/api/skills"
 import { listWhatsAppChats } from "@/api/whatsapp"
 import { CodeEditor } from "@/components/code-editor"
 import { PageHeader } from "@/components/page-header"
@@ -61,6 +68,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -73,12 +87,15 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
+import type { SaveState } from "@/store/agent-editor"
 
 import { AGENT_TEMPLATES, getTemplateById } from "../templates/catalog"
 import { substituteAgentPlaceholders } from "../templates/substitute-placeholders"
@@ -88,40 +105,12 @@ import type {
   AgentTemplate,
   TemplateApplyPayload,
   TemplateKnowledgeBase,
+  TemplateSkillConfig,
 } from "../templates/types"
 import {
   defaultTemplateSkillConfigs,
   templateToDraft,
 } from "../templates/use-templates-page"
-import {
-  type ActiveConversation,
-  DeactivateAgentDialog,
-} from "./deactivate-agent-dialog"
-import { AvatarUpload } from "./avatar-upload"
-import { LabelWithTooltip } from "./label-with-tooltip"
-import { ProgressChecklist } from "./progress-checklist"
-import { SaveBar } from "./save-bar"
-import {
-  isReadyToActivate,
-  validateChecklist,
-} from "./schemas"
-import {
-  type AgentEditorTab,
-  TabsNav,
-} from "./tabs-nav"
-import { useDirtyGuard, useSaveShortcut } from "./use-dirty-guard"
-import { useTabSync } from "./use-tab-sync"
-import type { SaveState } from "@/store/agent-editor"
-import { jidToPhone } from "./whatsapp-format"
-import { WhatsAppGroupList } from "./whatsapp-group-list"
-import { WhatsAppPhoneList } from "./whatsapp-phone-list"
-import { WorkspaceDisplay } from "./workspace-display"
-import { TagInput } from "./tag-input"
-import { Tabs, TabsContent } from "@/components/ui/tabs"
-
-import "./tokens.css"
-import { cn } from "@/lib/utils"
-import { CardStatusBadge } from "./card-status"
 import {
   type AgentListControls,
   type AgentListSort,
@@ -129,22 +118,31 @@ import {
   DEFAULT_AGENT_LIST_CONTROLS,
   applyAgentListControls,
 } from "./agent-list-filter"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { IconCopy, IconDotsVertical } from "@tabler/icons-react"
 import { AgentWizard, type WizardDraft } from "./agent-wizard"
+import { AvatarUpload } from "./avatar-upload"
+import { CardStatusBadge } from "./card-status"
 import { ChatTestDrawer } from "./chat-test-drawer"
+import {
+  type ActiveConversation,
+  DeactivateAgentDialog,
+} from "./deactivate-agent-dialog"
 import { GatewayStatusBadge } from "./gateway-status-badge"
+import { LabelWithTooltip } from "./label-with-tooltip"
+import { ProgressChecklist } from "./progress-checklist"
 import { PromptPreview } from "./prompt-preview"
+import { SaveBar } from "./save-bar"
+import { isReadyToActivate, validateChecklist } from "./schemas"
+import { type AgentEditorTab, TabsNav } from "./tabs-nav"
+import { TagInput } from "./tag-input"
+import "./tokens.css"
+import { useDirtyGuard, useSaveShortcut } from "./use-dirty-guard"
+import { useTabSync } from "./use-tab-sync"
 import { appendVersion } from "./version-history"
 import { VersionHistoryDrawer } from "./version-history-drawer"
-import { IconHistory, IconExternalLink, IconMessageDots } from "@tabler/icons-react"
-import { Link } from "@tanstack/react-router"
+import { jidToPhone } from "./whatsapp-format"
+import { WhatsAppGroupList } from "./whatsapp-group-list"
+import { WhatsAppPhoneList } from "./whatsapp-phone-list"
+import { WorkspaceDisplay } from "./workspace-display"
 
 // ─── tab type ────────────────────────────────────────────────────────────────
 
@@ -390,10 +388,38 @@ function proposalPublicURLs(proposal: unknown): string[] {
 
 function profileDraftFromInternal(agent: AgentEditorAgent): AgentProfileDraft {
   const fallbacksByID: Record<string, AgentProfileDraft> = {
-    main: { name: "Ana", icon: "headset", initials: "AN", background: "#2563eb", foreground: "#ffffff", imageURL: "" },
-    vendas: { name: "Leo", icon: "target", initials: "LE", background: "#16a34a", foreground: "#ffffff", imageURL: "" },
-    marketing: { name: "Maya", icon: "sparkles", initials: "MA", background: "#f43f5e", foreground: "#ffffff", imageURL: "" },
-    assistente: { name: "Sofia", icon: "assistant", initials: "SO", background: "#7c3aed", foreground: "#ffffff", imageURL: "" },
+    main: {
+      name: "Ana",
+      icon: "headset",
+      initials: "AN",
+      background: "#2563eb",
+      foreground: "#ffffff",
+      imageURL: "",
+    },
+    vendas: {
+      name: "Leo",
+      icon: "target",
+      initials: "LE",
+      background: "#16a34a",
+      foreground: "#ffffff",
+      imageURL: "",
+    },
+    marketing: {
+      name: "Maya",
+      icon: "sparkles",
+      initials: "MA",
+      background: "#f43f5e",
+      foreground: "#ffffff",
+      imageURL: "",
+    },
+    assistente: {
+      name: "Sofia",
+      icon: "assistant",
+      initials: "SO",
+      background: "#7c3aed",
+      foreground: "#ffffff",
+      imageURL: "",
+    },
   }
   const fallback = fallbacksByID[agent.id] ?? {
     name: agent.name || agent.id,
@@ -439,7 +465,9 @@ const quickPromptsByAgent: Record<
   ],
 }
 
-function agentKind(agentID: string): "attendant" | "sales" | "marketing" | "assistant" | "custom" {
+function agentKind(
+  agentID: string,
+): "attendant" | "sales" | "marketing" | "assistant" | "custom" {
   switch (agentID) {
     case "main":
       return "attendant"
@@ -487,61 +515,148 @@ function promptSheetTitle(agent?: AgentSummary | null): string {
   }
 }
 
-function rolePromptDefaults(agent: AgentSummary): Pick<
+function rolePromptDefaults(
+  agent: AgentSummary,
+): Pick<
   TemplateApplyPayload,
-  "template_id" | "short_description" | "presentation" | "functions" | "prohibitions" | "protections" | "approval_required_for"
+  | "template_id"
+  | "short_description"
+  | "presentation"
+  | "functions"
+  | "prohibitions"
+  | "protections"
+  | "approval_required_for"
 > {
   switch (agent.id) {
     case "vendas":
       return {
         template_id: "especialista-vendas",
-        short_description: "Consultor comercial subagente para qualificação, venda e follow-up.",
-        presentation: "Sou o Leo, consultor comercial. Qualifico oportunidades, trato objeções, organizo follow-up e devolvo um resumo comercial objetivo.",
-        functions: ["Qualificar leads", "Classificar estágio do funil", "Sugerir próxima ação", "Preparar resumo comercial"],
-        prohibitions: ["Não fazer suporte operacional", "Não criar campanhas de marketing", "Não prometer preço sem fonte confirmada"],
-        protections: ["Encaminhar exceções comerciais para aprovação humana", "Registrar dados faltantes antes de avançar"],
-        approval_required_for: ["desconto", "condição comercial especial", "contrato", "promessa de prazo"],
+        short_description:
+          "Consultor comercial subagente para qualificação, venda e follow-up.",
+        presentation:
+          "Sou o Leo, consultor comercial. Qualifico oportunidades, trato objeções, organizo follow-up e devolvo um resumo comercial objetivo.",
+        functions: [
+          "Qualificar leads",
+          "Classificar estágio do funil",
+          "Sugerir próxima ação",
+          "Preparar resumo comercial",
+        ],
+        prohibitions: [
+          "Não fazer suporte operacional",
+          "Não criar campanhas de marketing",
+          "Não prometer preço sem fonte confirmada",
+        ],
+        protections: [
+          "Encaminhar exceções comerciais para aprovação humana",
+          "Registrar dados faltantes antes de avançar",
+        ],
+        approval_required_for: [
+          "desconto",
+          "condição comercial especial",
+          "contrato",
+          "promessa de prazo",
+        ],
       }
     case "marketing":
       return {
         template_id: "especialista-marketing",
-        short_description: "Especialista de marketing para campanhas, posts, imagens, catálogos HTML e sites simples.",
-        presentation: "Sou a Maya, especialista de marketing. Crio campanhas, posts, calendários, catálogos HTML e sites simples para aprovação.",
-        functions: ["Criar posts e campanhas", "Gerar ideias visuais", "Salvar catálogos e sites em public/marketing", "Apontar pendências para aprovação"],
-        prohibitions: ["Não atender cliente final", "Não vender no lugar do Leo", "Não publicar sem aprovação quando a regra exigir"],
-        protections: ["Usar a pasta pública configurada", "Registrar arquivos e URLs gerados", "Pedir aprovação quando houver risco de marca"],
-        approval_required_for: ["publicação externa", "uso de imagem sensível", "promoção com preço", "campanha paga"],
+        short_description:
+          "Especialista de marketing para campanhas, posts, imagens, catálogos HTML e sites simples.",
+        presentation:
+          "Sou a Maya, especialista de marketing. Crio campanhas, posts, calendários, catálogos HTML e sites simples para aprovação.",
+        functions: [
+          "Criar posts e campanhas",
+          "Gerar ideias visuais",
+          "Salvar catálogos e sites em public/marketing",
+          "Apontar pendências para aprovação",
+        ],
+        prohibitions: [
+          "Não atender cliente final",
+          "Não vender no lugar do Leo",
+          "Não publicar sem aprovação quando a regra exigir",
+        ],
+        protections: [
+          "Usar a pasta pública configurada",
+          "Registrar arquivos e URLs gerados",
+          "Pedir aprovação quando houver risco de marca",
+        ],
+        approval_required_for: [
+          "publicação externa",
+          "uso de imagem sensível",
+          "promoção com preço",
+          "campanha paga",
+        ],
       }
     case "assistente":
       return {
         template_id: "assistente-dono",
-        short_description: "Assistente privada do dono para organização, relatórios, documentos e coordenação dos agentes.",
-        presentation: "Sou a Sofia, assistente privada do dono. Organizo agenda, relatórios, documentos, workspace e coordeno Ana, Leo e Maya quando necessário.",
-        functions: ["Organizar agenda e relatórios", "Editar workspace autorizado", "Coordenar agentes internos", "Solicitar confirmação para mudanças sensíveis"],
-        prohibitions: ["Não agir como atendente pública", "Não atender WhatsApp público", "Não executar mudanças sensíveis sem confirmação"],
-        protections: ["Verificar autorização do solicitante", "Registrar decisões importantes", "Pedir confirmação antes de alterar agentes ou permissões"],
-        approval_required_for: ["alterar agentes", "alterar permissões", "apagar arquivos", "enviar relatório externo"],
+        short_description:
+          "Assistente privada do dono para organização, relatórios, documentos e coordenação dos agentes.",
+        presentation:
+          "Sou a Sofia, assistente privada do dono. Organizo agenda, relatórios, documentos, workspace e coordeno Ana, Leo e Maya quando necessário.",
+        functions: [
+          "Organizar agenda e relatórios",
+          "Editar workspace autorizado",
+          "Coordenar agentes internos",
+          "Solicitar confirmação para mudanças sensíveis",
+        ],
+        prohibitions: [
+          "Não agir como atendente pública",
+          "Não atender WhatsApp público",
+          "Não executar mudanças sensíveis sem confirmação",
+        ],
+        protections: [
+          "Verificar autorização do solicitante",
+          "Registrar decisões importantes",
+          "Pedir confirmação antes de alterar agentes ou permissões",
+        ],
+        approval_required_for: [
+          "alterar agentes",
+          "alterar permissões",
+          "apagar arquivos",
+          "enviar relatório externo",
+        ],
       }
     default:
       return {
         template_id: "atendente-geral",
-        short_description: "Atendente principal para dúvidas, triagem, encaminhamento e agendamento.",
-        presentation: "Olá! Sou a Ana, atendente principal. Posso responder dúvidas, coletar dados iniciais e encaminhar para o setor certo.",
-        functions: ["Responder dúvidas gerais", "Fazer triagem", "Encaminhar para vendas", "Apoiar agendamentos"],
-        prohibitions: ["Não inventar informação", "Não chamar marketing ou assistente pelo WhatsApp público"],
-        protections: ["Encaminhar casos sensíveis para humano", "Pedir dados mínimos antes de acionar vendas"],
-        approval_required_for: ["informação sensível", "exceção comercial", "assunto jurídico"],
+        short_description:
+          "Atendente principal para dúvidas, triagem, encaminhamento e agendamento.",
+        presentation:
+          "Olá! Sou a Ana, atendente principal. Posso responder dúvidas, coletar dados iniciais e encaminhar para o setor certo.",
+        functions: [
+          "Responder dúvidas gerais",
+          "Fazer triagem",
+          "Encaminhar para vendas",
+          "Apoiar agendamentos",
+        ],
+        prohibitions: [
+          "Não inventar informação",
+          "Não chamar marketing ou assistente pelo WhatsApp público",
+        ],
+        protections: [
+          "Encaminhar casos sensíveis para humano",
+          "Pedir dados mínimos antes de acionar vendas",
+        ],
+        approval_required_for: [
+          "informação sensível",
+          "exceção comercial",
+          "assunto jurídico",
+        ],
       }
   }
 }
 
 function defaultDraftForAgent(
   agent: AgentSummary,
-  installedSkills: Parameters<typeof defaultTemplateSkillConfigs>[1],
+  installedSkills: SkillSupportItem[],
 ): TemplateApplyPayload {
   const baseTemplate = AGENT_TEMPLATES[0]
+  const defaultSkillConfigs = baseTemplate
+    ? defaultSkillConfigsForAgent(agent, baseTemplate, installedSkills)
+    : []
   const base = baseTemplate
-    ? templateToDraft(baseTemplate, defaultTemplateSkillConfigs(baseTemplate, installedSkills))
+    ? templateToDraft(baseTemplate, defaultSkillConfigs)
     : hydrateAgentPayload({} as TemplateApplyPayload)
   const defaults = rolePromptDefaults(agent)
   return hydrateAgentPayload({
@@ -554,6 +669,52 @@ function defaultDraftForAgent(
       name: base.company_info?.name || "{company.name}",
     },
   })
+}
+
+const defaultAgentSkillRecommendations: Record<string, string[]> = {
+  vendas: [
+    "lead-qualification",
+    "bant-spin-discovery",
+    "objection-handling",
+    "product-interest-extraction",
+    "whatsapp-follow-up-planner",
+  ],
+  marketing: [],
+  assistente: [
+    "internal-policy-search",
+    "confidentiality-check",
+    "whatsapp-report-builder",
+    "whatsapp-conversation-summary",
+    "human-handoff-brief",
+    "lgpd-check",
+    "sensitive-data-protection",
+    "log-sanitizer",
+  ],
+}
+
+function skillConfigsFromNames(
+  names: string[],
+  installedSkills: SkillSupportItem[],
+): TemplateSkillConfig[] {
+  const installedByName = new Map(
+    installedSkills.map((skill) => [skill.name.toLowerCase(), skill.name]),
+  )
+  return names
+    .map((name) => installedByName.get(name.toLowerCase()))
+    .filter((name): name is string => Boolean(name))
+    .map((name) => ({ name, enabled: true, visible: true }))
+}
+
+function defaultSkillConfigsForAgent(
+  agent: AgentSummary,
+  baseTemplate: AgentTemplate,
+  installedSkills: SkillSupportItem[],
+): TemplateSkillConfig[] {
+  const recommended = defaultAgentSkillRecommendations[agent.id]
+  if (recommended) {
+    return skillConfigsFromNames(recommended, installedSkills)
+  }
+  return defaultTemplateSkillConfigs(baseTemplate, installedSkills)
 }
 
 function hydrateKnowledgeBase(
@@ -569,6 +730,7 @@ function hydrateKnowledgeBase(
 }
 
 function hydrateAgentPayload(raw: TemplateApplyPayload): TemplateApplyPayload {
+  const legacySkills = legacyPayloadSkills(raw)
   return {
     ...raw,
     short_description: raw.short_description ?? "",
@@ -577,11 +739,19 @@ function hydrateAgentPayload(raw: TemplateApplyPayload): TemplateApplyPayload {
     functions: raw.functions ?? [],
     prohibitions: raw.prohibitions ?? [],
     protections: raw.protections ?? [],
-    skill_configs: raw.skill_configs ?? [],
+    skill_configs:
+      raw.skill_configs ??
+      legacySkills.map((name) => ({ name, enabled: true, visible: true })),
     conversation_flow: raw.conversation_flow ?? [],
     required_fields_by_intent: raw.required_fields_by_intent ?? {},
     response_examples: {
-      ...{ greeting: "", clarification: "", unknown_answer: "", routing: "", closing: "" },
+      ...{
+        greeting: "",
+        clarification: "",
+        unknown_answer: "",
+        routing: "",
+        closing: "",
+      },
       ...raw.response_examples,
     },
     knowledge_base: hydrateKnowledgeBase(raw.knowledge_base),
@@ -591,18 +761,32 @@ function hydrateAgentPayload(raw: TemplateApplyPayload): TemplateApplyPayload {
       dont: raw.style_guide?.dont ?? [],
     },
     fallback_policy: {
-      max_clarifying_questions: raw.fallback_policy?.max_clarifying_questions ?? 0,
+      max_clarifying_questions:
+        raw.fallback_policy?.max_clarifying_questions ?? 0,
       when_unsure: raw.fallback_policy?.when_unsure ?? "",
       when_to_route: raw.fallback_policy?.when_to_route ?? [],
       route_message: raw.fallback_policy?.route_message ?? "",
     },
     handoff_summary_template: raw.handoff_summary_template ?? {
-      cliente: "", contato: "", motivo: "", resumo: "", dados_coletados: "",
-      urgencia: "", setor_destino: "", proxima_acao: "",
+      cliente: "",
+      contato: "",
+      motivo: "",
+      resumo: "",
+      dados_coletados: "",
+      urgencia: "",
+      setor_destino: "",
+      proxima_acao: "",
     },
     structured_output_template: raw.structured_output_template ?? {
-      intent: "", confidence: "", collected_fields: {}, missing_fields: [],
-      needs_routing: false, target_sector: "", priority: "", summary: "", next_action: "",
+      intent: "",
+      confidence: "",
+      collected_fields: {},
+      missing_fields: [],
+      needs_routing: false,
+      target_sector: "",
+      priority: "",
+      summary: "",
+      next_action: "",
     },
     priority_rules: {
       high: raw.priority_rules?.high ?? [],
@@ -640,11 +824,32 @@ function hydrateAgentPayload(raw: TemplateApplyPayload): TemplateApplyPayload {
   }
 }
 
+function legacyPayloadSkills(payload?: TemplateApplyPayload | null): string[] {
+  const rawSkills = (
+    payload as (TemplateApplyPayload & { skills?: unknown }) | null | undefined
+  )?.skills
+  if (!Array.isArray(rawSkills)) return []
+  return rawSkills
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+}
+
+function enabledSkillCount(payload?: TemplateApplyPayload | null): number {
+  const configs = payload?.skill_configs ?? []
+  if (configs.length > 0) {
+    return configs.filter((skill) => skill.enabled).length
+  }
+  return legacyPayloadSkills(payload).length
+}
+
 function prepareDraftForEdit(
   raw: TemplateApplyPayload,
   agentId: string,
 ): TemplateApplyPayload {
-  return { ...substituteAgentPlaceholders(hydrateAgentPayload(raw)), agent_id: agentId }
+  return {
+    ...substituteAgentPlaceholders(hydrateAgentPayload(raw)),
+    agent_id: agentId,
+  }
 }
 
 // ─── shared UI sub-components ─────────────────────────────────────────────────
@@ -656,7 +861,11 @@ function AgentAvatar({
   agent: AgentSummary
   size?: "sm" | "md" | "lg"
 }) {
-  const sizeClasses = { sm: "size-8 text-xs", md: "size-10 text-sm", lg: "size-14 text-base" }
+  const sizeClasses = {
+    sm: "size-8 text-xs",
+    md: "size-10 text-sm",
+    lg: "size-14 text-base",
+  }
   const fallback = defaultAvatarForAgent(agent)
   const avatar = agent.avatar ?? fallback
   const Icon = iconForAvatar(avatar.icon || fallback.icon)
@@ -665,7 +874,10 @@ function AgentAvatar({
   return (
     <div
       className={`${sizeClasses[size]} ring-border/50 flex shrink-0 items-center justify-center overflow-hidden rounded-xl font-semibold ring-1`}
-      style={{ backgroundColor: avatar.background || fallback.background, color: avatar.foreground || fallback.foreground }}
+      style={{
+        backgroundColor: avatar.background || fallback.background,
+        color: avatar.foreground || fallback.foreground,
+      }}
       aria-hidden="true"
     >
       {imageURL ? (
@@ -682,11 +894,15 @@ function AgentAvatar({
 function ProfileAvatar({ profile }: { profile: AgentProfileDraft }) {
   const Icon = iconForAvatar(profile.icon)
   const imageURL = profile.imageURL.trim()
-  const initials = profile.initials.trim() || profile.name.slice(0, 2).toUpperCase()
+  const initials =
+    profile.initials.trim() || profile.name.slice(0, 2).toUpperCase()
   return (
     <span
       className="ring-border/50 flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl text-sm font-semibold ring-1"
-      style={{ backgroundColor: profile.background || "#475569", color: profile.foreground || "#ffffff" }}
+      style={{
+        backgroundColor: profile.background || "#475569",
+        color: profile.foreground || "#ffffff",
+      }}
       aria-hidden="true"
     >
       {imageURL ? (
@@ -710,8 +926,12 @@ function StatusBadge({ active }: { active: boolean }) {
           : "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-400 dark:ring-red-800"
       }`}
     >
-      <span className={`size-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-red-500"}`} />
-      {active ? t("pages.agent.editor.active", "Ativo") : t("pages.agent.editor.inactive", "Inativo")}
+      <span
+        className={`size-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-red-500"}`}
+      />
+      {active
+        ? t("pages.agent.editor.active", "Ativo")
+        : t("pages.agent.editor.inactive", "Inativo")}
     </span>
   )
 }
@@ -793,22 +1013,43 @@ function DefaultBadge() {
   )
 }
 
-function InfoCard({ label, value, mono = false }: { label: string; value: string | undefined | null; mono?: boolean }) {
+function InfoCard({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string
+  value: string | undefined | null
+  mono?: boolean
+}) {
   return (
     <div className="bg-muted/30 hover:bg-muted/50 min-w-0 rounded-xl border border-transparent px-4 py-3 transition-colors">
-      <p className="text-muted-foreground mb-1 text-[10px] font-medium tracking-wider uppercase">{label}</p>
-      <p className={`text-foreground min-w-0 truncate text-sm font-medium ${mono ? "font-mono text-xs" : ""}`} title={value || "—"}>
+      <p className="text-muted-foreground mb-1 text-[10px] font-medium tracking-wider uppercase">
+        {label}
+      </p>
+      <p
+        className={`text-foreground min-w-0 truncate text-sm font-medium ${mono ? "font-mono text-xs" : ""}`}
+        title={value || "—"}
+      >
         {value || "—"}
       </p>
     </div>
   )
 }
 
-function SectionHeader({ title, icon: Icon }: { title: string; icon: React.ElementType }) {
+function SectionHeader({
+  title,
+  icon: Icon,
+}: {
+  title: string
+  icon: React.ElementType
+}) {
   return (
     <div className="flex items-center gap-2">
       <Icon className="text-muted-foreground size-3.5" />
-      <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">{title}</h3>
+      <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+        {title}
+      </h3>
     </div>
   )
 }
@@ -835,7 +1076,7 @@ function TabBar({
             className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               isActive
                 ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                : "text-muted-foreground hover:text-foreground border-transparent"
             }`}
           >
             <Icon className="size-3.5" />
@@ -854,9 +1095,16 @@ export function AgentEditorPage() {
   const queryClient = useQueryClient()
 
   // ── editor state ──────────────────────────────────────────────────────────
-  const editorStateQuery = useQuery({ queryKey: ["agent-editor-state"], queryFn: getAgentEditorState })
-  const agents = useMemo(() => editorStateQuery.data?.agents ?? [], [editorStateQuery.data?.agents])
-  const firstAgentId = agents.find((a) => a.default)?.id ?? agents[0]?.id ?? "main"
+  const editorStateQuery = useQuery({
+    queryKey: ["agent-editor-state"],
+    queryFn: getAgentEditorState,
+  })
+  const agents = useMemo(
+    () => editorStateQuery.data?.agents ?? [],
+    [editorStateQuery.data?.agents],
+  )
+  const firstAgentId =
+    agents.find((a) => a.default)?.id ?? agents[0]?.id ?? "main"
 
   const [selectedAgentId, setSelectedAgentId] = useState(firstAgentId)
   const [searchQuery, setSearchQuery] = useState("")
@@ -870,14 +1118,16 @@ export function AgentEditorPage() {
 
   useEffect(() => {
     if (agents.length === 0) return
-    if (!agents.some((a) => a.id === selectedAgentId)) setSelectedAgentId(firstAgentId)
+    if (!agents.some((a) => a.id === selectedAgentId))
+      setSelectedAgentId(firstAgentId)
   }, [agents, firstAgentId, selectedAgentId])
 
   useEffect(() => {
     prevAgentIdRef.current = selectedAgentId
   }, [selectedAgentId])
 
-  const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? agents[0] ?? null
+  const selectedAgent =
+    agents.find((a) => a.id === selectedAgentId) ?? agents[0] ?? null
   const selectedPrompt = selectedAgent?.prompt
   const configData = useMemo<AgentConfigResponse>(
     () => ({
@@ -888,7 +1138,10 @@ export function AgentEditorPage() {
     [selectedPrompt],
   )
   const skillsQuery = useQuery({ queryKey: ["skills"], queryFn: getSkills })
-  const installedSkills = useMemo(() => skillsQuery.data?.skills ?? [], [skillsQuery.data?.skills])
+  const installedSkills = useMemo(
+    () => skillsQuery.data?.skills ?? [],
+    [skillsQuery.data?.skills],
+  )
   const launcherPolicyQuery = useQuery({
     queryKey: ["launcher-policy"],
     queryFn: getLauncherPolicy,
@@ -915,18 +1168,29 @@ export function AgentEditorPage() {
   }, [canCreateAgents, createOpen])
 
   const template = useMemo<AgentTemplate | null>(() => {
-    const id = draft?.template_id ?? selectedPrompt?.payload?.template_id ?? selectedPrompt?.template_id
+    const id =
+      draft?.template_id ??
+      selectedPrompt?.payload?.template_id ??
+      selectedPrompt?.template_id
     if (!id) return null
     return getTemplateById(id) ?? AGENT_TEMPLATES[0] ?? null
-  }, [draft?.template_id, selectedPrompt?.payload?.template_id, selectedPrompt?.template_id])
+  }, [
+    draft?.template_id,
+    selectedPrompt?.payload?.template_id,
+    selectedPrompt?.template_id,
+  ])
 
   // ── orchestration state ───────────────────────────────────────────────────
   const [mainAgentID, setMainAgentID] = useState("main")
   const [mainAllowAgents, setMainAllowAgents] = useState<string[]>([])
   const [assistantJIDs, setAssistantJIDs] = useState("")
   const [assistantChats, setAssistantChats] = useState("")
-  const [profiles, setProfiles] = useState<Record<string, AgentProfileDraft>>({})
-  const [roleConfigDrafts, setRoleConfigDrafts] = useState<Record<string, string>>({})
+  const [profiles, setProfiles] = useState<Record<string, AgentProfileDraft>>(
+    {},
+  )
+  const [roleConfigDrafts, setRoleConfigDrafts] = useState<
+    Record<string, string>
+  >({})
 
   // chat state — reset when agent changes
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -937,13 +1201,31 @@ export function AgentEditorPage() {
   useEffect(() => {
     const data = editorStateQuery.data
     if (!data) return
-    const nextMain = data.main_agent_id || data.agents.find((a) => a.default)?.id || "main"
+    const nextMain =
+      data.main_agent_id || data.agents.find((a) => a.default)?.id || "main"
     setMainAgentID(nextMain)
-    setMainAllowAgents((data.main_allow_agents || []).filter((id) => id !== nextMain))
-    setAssistantJIDs((data.assistant_whatsapp_jids || data.admin_whatsapp_jids || []).join("\n"))
+    setMainAllowAgents(
+      (data.main_allow_agents || []).filter((id) => id !== nextMain),
+    )
+    setAssistantJIDs(
+      (data.assistant_whatsapp_jids || data.admin_whatsapp_jids || []).join(
+        "\n",
+      ),
+    )
     setAssistantChats((data.assistant_whatsapp_chats || []).join("\n"))
-    setProfiles(Object.fromEntries(data.agents.map((a) => [a.id, profileDraftFromInternal(a)])))
-    setRoleConfigDrafts(Object.fromEntries(data.agents.map((a) => [a.id, JSON.stringify(a.role_config ?? {}, null, 2)])))
+    setProfiles(
+      Object.fromEntries(
+        data.agents.map((a) => [a.id, profileDraftFromInternal(a)]),
+      ),
+    )
+    setRoleConfigDrafts(
+      Object.fromEntries(
+        data.agents.map((a) => [
+          a.id,
+          JSON.stringify(a.role_config ?? {}, null, 2),
+        ]),
+      ),
+    )
   }, [editorStateQuery.data])
 
   useEffect(() => {
@@ -951,7 +1233,9 @@ export function AgentEditorPage() {
     setChatSessionID(undefined)
     setProposals([])
     if (!selectedAgentId) return
-    getInternalAgentProposals(selectedAgentId).then(setProposals).catch(() => setProposals([]))
+    getInternalAgentProposals(selectedAgentId)
+      .then(setProposals)
+      .catch(() => setProposals([]))
   }, [selectedAgentId])
 
   // ── mutations ─────────────────────────────────────────────────────────────
@@ -973,11 +1257,15 @@ export function AgentEditorPage() {
       setDraft(null)
       void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })
       void queryClient.invalidateQueries({ queryKey: ["agents"] })
-      void queryClient.invalidateQueries({ queryKey: ["agent-config", agentId] })
+      void queryClient.invalidateQueries({
+        queryKey: ["agent-config", agentId],
+      })
       void queryClient.invalidateQueries({ queryKey: ["config"] })
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : t("pages.agent.editor.save_error"))
+      toast.error(
+        err instanceof Error ? err.message : t("pages.agent.editor.save_error"),
+      )
     },
   })
 
@@ -1012,7 +1300,9 @@ export function AgentEditorPage() {
       setSelectedAgentId(created.id)
       void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })
       void queryClient.invalidateQueries({ queryKey: ["agents"] })
-      void queryClient.invalidateQueries({ queryKey: ["agent-config", created.id] })
+      void queryClient.invalidateQueries({
+        queryKey: ["agent-config", created.id],
+      })
       void queryClient.invalidateQueries({ queryKey: ["config"] })
       if (openAfter) {
         setActiveTab("test")
@@ -1025,7 +1315,10 @@ export function AgentEditorPage() {
       toast.error(
         err instanceof Error
           ? err.message
-          : t("pages.agent.editor.create_error", "Não foi possível criar o agente."),
+          : t(
+              "pages.agent.editor.create_error",
+              "Não foi possível criar o agente.",
+            ),
       )
     },
   })
@@ -1033,14 +1326,26 @@ export function AgentEditorPage() {
   const deleteMutation = useMutation({
     mutationFn: deleteAgent,
     onSuccess: (_result, agentId) => {
-      toast.success(t("pages.agent.editor.delete_success", "Agente removido da configuração."))
+      toast.success(
+        t(
+          "pages.agent.editor.delete_success",
+          "Agente removido da configuração.",
+        ),
+      )
       if (selectedAgentId === agentId) setSelectedAgentId("main")
       void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })
       void queryClient.invalidateQueries({ queryKey: ["agents"] })
       void queryClient.invalidateQueries({ queryKey: ["config"] })
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : t("pages.agent.editor.delete_error", "Não foi possível remover o agente."))
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t(
+              "pages.agent.editor.delete_error",
+              "Não foi possível remover o agente.",
+            ),
+      )
     },
   })
 
@@ -1048,15 +1353,24 @@ export function AgentEditorPage() {
     mutationFn: ({ agentId, active }: { agentId: string; active: boolean }) =>
       updateAgent(agentId, { active }),
     onSuccess: (updated) => {
-      toast.success(updated.active
-        ? t("pages.agent.editor.activate_success", "Agente ativado.")
-        : t("pages.agent.editor.deactivate_success", "Agente desativado."))
+      toast.success(
+        updated.active
+          ? t("pages.agent.editor.activate_success", "Agente ativado.")
+          : t("pages.agent.editor.deactivate_success", "Agente desativado."),
+      )
       void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })
       void queryClient.invalidateQueries({ queryKey: ["agents"] })
       void queryClient.invalidateQueries({ queryKey: ["config"] })
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : t("pages.agent.editor.toggle_active_error", "Não foi possível alterar o status do agente."))
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t(
+              "pages.agent.editor.toggle_active_error",
+              "Não foi possível alterar o status do agente.",
+            ),
+      )
     },
   })
 
@@ -1068,7 +1382,12 @@ export function AgentEditorPage() {
         if (!trimmed) continue
         const parsed = JSON.parse(trimmed) as unknown
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          throw new Error(t("pages.orchestration.role_config_invalid", "Perfil operacional deve ser um objeto JSON."))
+          throw new Error(
+            t(
+              "pages.orchestration.role_config_invalid",
+              "Perfil operacional deve ser um objeto JSON.",
+            ),
+          )
         }
         parsedRoleConfigs[id] = parsed as Record<string, unknown>
       }
@@ -1119,16 +1438,35 @@ export function AgentEditorPage() {
   function parseRawDraft(): TemplateApplyPayload | null {
     try {
       const parsed = JSON.parse(rawDraft) as unknown
-      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-        setRawError(t("pages.agent.editor.raw_object_required", { defaultValue: "A configuração do agente precisa ser um objeto JSON." }))
+      if (
+        parsed === null ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed)
+      ) {
+        setRawError(
+          t("pages.agent.editor.raw_object_required", {
+            defaultValue:
+              "A configuração do agente precisa ser um objeto JSON.",
+          }),
+        )
         return null
       }
       const payload = hydrateAgentPayload(parsed as TemplateApplyPayload)
       setRawError(null)
       return { ...payload, agent_id: payload.agent_id ?? selectedAgentId }
     } catch (err) {
-      const message = err instanceof Error ? err.message : t("pages.agent.editor.raw_unknown_error", { defaultValue: "Erro desconhecido de leitura" })
-      setRawError(t("pages.agent.editor.raw_invalid_json", { defaultValue: "JSON inválido: {{message}}", message }))
+      const message =
+        err instanceof Error
+          ? err.message
+          : t("pages.agent.editor.raw_unknown_error", {
+              defaultValue: "Erro desconhecido de leitura",
+            })
+      setRawError(
+        t("pages.agent.editor.raw_invalid_json", {
+          defaultValue: "JSON inválido: {{message}}",
+          message,
+        }),
+      )
       return null
     }
   }
@@ -1137,7 +1475,16 @@ export function AgentEditorPage() {
     const payload = configData.payload
     if (!payload) return
     const cloned = JSON.parse(JSON.stringify(payload)) as TemplateApplyPayload
-    setRawDraft(JSON.stringify({ ...hydrateAgentPayload(cloned), agent_id: cloned.agent_id ?? selectedAgentId }, null, 2))
+    setRawDraft(
+      JSON.stringify(
+        {
+          ...hydrateAgentPayload(cloned),
+          agent_id: cloned.agent_id ?? selectedAgentId,
+        },
+        null,
+        2,
+      ),
+    )
     setRawError(null)
     setRawOpen(true)
   }
@@ -1156,7 +1503,9 @@ export function AgentEditorPage() {
 
   function handleCreateOpen() {
     if (!canCreateAgents) {
-      toast.warning("A criação de novos agentes está desativada pelo administrador.")
+      toast.warning(
+        "A criação de novos agentes está desativada pelo administrador.",
+      )
       return
     }
     setCreateOpen(true)
@@ -1165,20 +1514,34 @@ export function AgentEditorPage() {
   function handleConfigureSelectedAgent() {
     if (!selectedAgent) return
     const nextDraft = defaultDraftForAgent(selectedAgent, installedSkills)
-    setDraft({ ...nextDraft, agent_id: selectedAgent.id, name: selectedAgent.name || nextDraft.name })
+    setDraft({
+      ...nextDraft,
+      agent_id: selectedAgent.id,
+      name: selectedAgent.name || nextDraft.name,
+    })
     setEditing(true)
   }
 
   function handleDeleteAgent(agent: AgentSummary) {
     if (agent.id === "main") return
-    const confirmed = window.confirm(t("pages.agent.editor.delete_confirm", "Remover este agente da configuração? Os arquivos de workspace serão preservados."))
+    const confirmed = window.confirm(
+      t(
+        "pages.agent.editor.delete_confirm",
+        "Remover este agente da configuração? Os arquivos de workspace serão preservados.",
+      ),
+    )
     if (confirmed) deleteMutation.mutate(agent.id)
   }
 
   function handleToggleAgentActive(agent: AgentSummary) {
     const active = agent.active !== false
     if (agent.default && active) {
-      toast.error(t("pages.agent.editor.default_agent_must_stay_active", "O agente padrão precisa continuar ativo."))
+      toast.error(
+        t(
+          "pages.agent.editor.default_agent_must_stay_active",
+          "O agente padrão precisa continuar ativo.",
+        ),
+      )
       return
     }
     if (active) {
@@ -1199,7 +1562,10 @@ export function AgentEditorPage() {
   const duplicateMutation = useMutation({
     mutationFn: async (source: AgentEditorAgent) => {
       const base = source.id.replace(/-(copia|copy|copia-\d+)$/i, "")
-      const newID = uniqueAgentID(`${base}-copia`, agents.map((a) => a.id))
+      const newID = uniqueAgentID(
+        `${base}-copia`,
+        agents.map((a) => a.id),
+      )
       const newName = `${source.name || source.id} (cópia)`
       const created = await createAgent({ id: newID, name: newName })
       const payload = source.prompt?.payload
@@ -1238,7 +1604,9 @@ export function AgentEditorPage() {
 
   function handleDuplicateAgent(source: AgentEditorAgent) {
     if (!canCreateAgents) {
-      toast.warning("A criação de novos agentes está desativada pelo administrador.")
+      toast.warning(
+        "A criação de novos agentes está desativada pelo administrador.",
+      )
       return
     }
     duplicateMutation.mutate(source)
@@ -1257,7 +1625,10 @@ export function AgentEditorPage() {
   }
 
   function handleSheetOpenChange(open: boolean) {
-    if (!open && !applyMutation.isPending) { setEditing(false); setDraft(null) }
+    if (!open && !applyMutation.isPending) {
+      setEditing(false)
+      setDraft(null)
+    }
   }
 
   // ── chat handler ──────────────────────────────────────────────────────────
@@ -1269,9 +1640,16 @@ export function AgentEditorPage() {
     setChatMessages((prev) => [...prev, { role: "user", content }])
     setChatInput("")
     try {
-      const response = await sendInternalAgentTurn(selectedAgentId, content, chatSessionID)
+      const response = await sendInternalAgentTurn(
+        selectedAgentId,
+        content,
+        chatSessionID,
+      )
       setChatSessionID(response.session_id)
-      setChatMessages((prev) => [...prev, { role: "assistant", content: response.content }])
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: response.content },
+      ])
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     } finally {
@@ -1289,11 +1667,17 @@ export function AgentEditorPage() {
     })
   }
 
-  function updateSelectedRoleConfig(updater: (current: RoleConfigDraft) => RoleConfigDraft) {
+  function updateSelectedRoleConfig(
+    updater: (current: RoleConfigDraft) => RoleConfigDraft,
+  ) {
     if (!selectedAgentId) return
-    const current = parseRoleConfigDraft(roleConfigDrafts[selectedAgentId] || "{}") ?? {}
+    const current =
+      parseRoleConfigDraft(roleConfigDrafts[selectedAgentId] || "{}") ?? {}
     const next = updater(current)
-    setRoleConfigDrafts((drafts) => ({ ...drafts, [selectedAgentId]: JSON.stringify(next, null, 2) }))
+    setRoleConfigDrafts((drafts) => ({
+      ...drafts,
+      [selectedAgentId]: JSON.stringify(next, null, 2),
+    }))
   }
 
   // ── derived values ────────────────────────────────────────────────────────
@@ -1301,9 +1685,8 @@ export function AgentEditorPage() {
   const resolvedPayload = useMemo(() => {
     const payload = configData.payload
     if (!payload) return null
-    return substituteAgentPlaceholders(payload)
+    return substituteAgentPlaceholders(hydrateAgentPayload(payload))
   }, [configData.payload])
-
 
   const listControls: AgentListControls = useMemo(
     () => ({ search: searchQuery, status: listStatus, sort: listSort }),
@@ -1334,7 +1717,11 @@ export function AgentEditorPage() {
       mainAllowAgents: (data.main_allow_agents || []).filter(
         (id) => id !== (data.main_agent_id || "main"),
       ),
-      assistantJIDs: (data.assistant_whatsapp_jids || data.admin_whatsapp_jids || []).join("\n"),
+      assistantJIDs: (
+        data.assistant_whatsapp_jids ||
+        data.admin_whatsapp_jids ||
+        []
+      ).join("\n"),
       assistantChats: (data.assistant_whatsapp_chats || []).join("\n"),
     }
   }, [editorStateQuery.data, selectedAgentId])
@@ -1349,7 +1736,8 @@ export function AgentEditorPage() {
       profileEq &&
       selectedRoleConfigDraft === baseline.roleConfig &&
       mainAgentID === baseline.mainAgentID &&
-      JSON.stringify(mainAllowAgents) === JSON.stringify(baseline.mainAllowAgents) &&
+      JSON.stringify(mainAllowAgents) ===
+        JSON.stringify(baseline.mainAllowAgents) &&
       assistantJIDs === baseline.assistantJIDs &&
       assistantChats === baseline.assistantChats
     )
@@ -1398,13 +1786,19 @@ export function AgentEditorPage() {
 
   const handleDiscardOrchestration = useCallback(() => {
     if (!baseline || !selectedAgentId) return
-    setRoleConfigDrafts((d) => ({ ...d, [selectedAgentId]: baseline.roleConfig }))
+    setRoleConfigDrafts((d) => ({
+      ...d,
+      [selectedAgentId]: baseline.roleConfig,
+    }))
     setMainAgentID(baseline.mainAgentID)
     setMainAllowAgents(baseline.mainAllowAgents)
     setAssistantJIDs(baseline.assistantJIDs)
     setAssistantChats(baseline.assistantChats)
     if (baseline.profile) {
-      setProfiles((current) => ({ ...current, [selectedAgentId]: baseline.profile! }))
+      setProfiles((current) => ({
+        ...current,
+        [selectedAgentId]: baseline.profile!,
+      }))
     }
     setSaveErrorMsg(null)
   }, [baseline, selectedAgentId])
@@ -1421,7 +1815,9 @@ export function AgentEditorPage() {
         payload: selectedPrompt?.payload ?? null,
         roleConfigDraft: selectedRoleConfigDraft,
         mainAgentID,
-        assistantPhones: splitLines(assistantJIDs).map(jidToPhone).filter(Boolean),
+        assistantPhones: splitLines(assistantJIDs)
+          .map(jidToPhone)
+          .filter(Boolean),
         assistantGroups: splitLines(assistantChats),
       }),
     [
@@ -1456,7 +1852,6 @@ export function AgentEditorPage() {
     enabled: deactivateOpen,
   })
 
-
   return (
     <div className="agent-editor flex h-full flex-col">
       <PageHeader title={t("navigation.agent_editor")}>
@@ -1489,13 +1884,14 @@ export function AgentEditorPage() {
 
       <div className="flex-1 overflow-auto">
         <div className="mx-auto grid h-full w-full max-w-7xl gap-0 lg:grid-cols-[288px_minmax(0,1fr)]">
-
           {/* ── sidebar ──────────────────────────────────────────── */}
           <aside className="border-border/40 flex flex-col border-r">
             <div className="border-border/40 flex items-center justify-between gap-2 border-b px-4 py-3">
               <div className="flex items-center gap-2">
                 <IconUsers className="text-muted-foreground size-4 shrink-0" />
-                <span className="text-sm font-semibold">{t("pages.agent.editor.agents", "Agentes")}</span>
+                <span className="text-sm font-semibold">
+                  {t("pages.agent.editor.agents", "Agentes")}
+                </span>
                 {agents.length > 0 && (
                   <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums">
                     {agents.length}
@@ -1503,7 +1899,11 @@ export function AgentEditorPage() {
                 )}
               </div>
               {canCreateAgents && (
-                <Button size="sm" onClick={handleCreateOpen} className="h-7 gap-1 px-2.5 text-xs">
+                <Button
+                  size="sm"
+                  onClick={handleCreateOpen}
+                  className="h-7 gap-1 px-2.5 text-xs"
+                >
                   <IconPlus className="size-3.5" />
                   {t("pages.agent.editor.new_agent", "Novo agente")}
                 </Button>
@@ -1530,7 +1930,11 @@ export function AgentEditorPage() {
                 {(["all", "active", "inactive"] as const).map((s) => {
                   const active = listStatus === s
                   const label =
-                    s === "all" ? "Todos" : s === "active" ? "Ativos" : "Inativos"
+                    s === "all"
+                      ? "Todos"
+                      : s === "active"
+                        ? "Ativos"
+                        : "Inativos"
                   return (
                     <button
                       key={s}
@@ -1552,16 +1956,14 @@ export function AgentEditorPage() {
               <div className="flex items-center justify-between gap-2">
                 <label
                   htmlFor="agent-sort"
-                  className="text-muted-foreground text-[10px] uppercase tracking-wide"
+                  className="text-muted-foreground text-[10px] tracking-wide uppercase"
                 >
                   Ordenar
                 </label>
                 <select
                   id="agent-sort"
                   value={listSort}
-                  onChange={(e) =>
-                    setListSort(e.target.value as AgentListSort)
-                  }
+                  onChange={(e) => setListSort(e.target.value as AgentListSort)}
                   className="border-border/60 bg-muted/30 focus:ring-primary/20 rounded-md border px-2 py-0.5 text-[11px] outline-none focus:ring-2"
                   aria-label="Ordenar agentes"
                 >
@@ -1576,7 +1978,10 @@ export function AgentEditorPage() {
               {editorStateQuery.isLoading ? (
                 <div className="space-y-1 p-2">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center gap-3 rounded-xl px-3 py-2.5">
+                    <div
+                      key={i}
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5"
+                    >
                       <Skeleton className="size-10 rounded-xl" />
                       <div className="flex-1 space-y-2">
                         <Skeleton className="h-3 w-3/4 rounded" />
@@ -1642,7 +2047,10 @@ export function AgentEditorPage() {
                               aria-label={`Mais ações para ${agent.name || agent.id}`}
                               className="text-muted-foreground hover:text-foreground focus-visible:ring-ring focus-visible:ring-offset-background inline-flex size-7 shrink-0 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
                             >
-                              <IconDotsVertical className="size-4" aria-hidden="true" />
+                              <IconDotsVertical
+                                className="size-4"
+                                aria-hidden="true"
+                              />
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44">
@@ -1655,8 +2063,7 @@ export function AgentEditorPage() {
                             <DropdownMenuItem
                               onClick={() => handleDuplicateAgent(agent)}
                               disabled={
-                                duplicateMutation.isPending ||
-                                !canCreateAgents
+                                duplicateMutation.isPending || !canCreateAgents
                               }
                             >
                               <IconCopy className="size-3.5" />
@@ -1689,16 +2096,25 @@ export function AgentEditorPage() {
           <main className="flex min-w-0 flex-col overflow-hidden">
             {/* mobile agent selector */}
             <div className="border-border/40 flex items-center gap-2 border-b px-4 py-2.5 lg:hidden">
-              <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
-                <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue /></SelectTrigger>
+              <Select
+                value={selectedAgentId}
+                onValueChange={setSelectedAgentId}
+              >
+                <SelectTrigger className="h-8 flex-1 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {agents.map((a) => (
-                    <SelectItem key={a.id} value={a.id} className="text-xs">{a.name || a.id}</SelectItem>
+                    <SelectItem key={a.id} value={a.id} className="text-xs">
+                      {a.name || a.id}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {canCreateAgents && (
-                <Button size="sm" onClick={handleCreateOpen} className="h-8"><IconPlus className="size-3.5" /></Button>
+                <Button size="sm" onClick={handleCreateOpen} className="h-8">
+                  <IconPlus className="size-3.5" />
+                </Button>
               )}
             </div>
 
@@ -1706,7 +2122,10 @@ export function AgentEditorPage() {
               {isLoadingMain ? (
                 <LoadingSkeleton />
               ) : !selectedAgent ? (
-                <EmptyState onCreate={handleCreateOpen} canCreate={canCreateAgents} />
+                <EmptyState
+                  onCreate={handleCreateOpen}
+                  canCreate={canCreateAgents}
+                />
               ) : (
                 <UnifiedAgentEditor
                   agent={selectedAgent}
@@ -1749,7 +2168,11 @@ export function AgentEditorPage() {
                   onEditPrompt={handleEdit}
                   onOpenRawEditor={handleOpenRawEditor}
                   onToggleActive={() => handleToggleAgentActive(selectedAgent)}
-                  onDelete={selectedAgent.id !== "main" ? () => handleDeleteAgent(selectedAgent) : undefined}
+                  onDelete={
+                    selectedAgent.id !== "main"
+                      ? () => handleDeleteAgent(selectedAgent)
+                      : undefined
+                  }
                   onUpdateProfile={updateSelectedProfile}
                   onUpdateRoleConfig={updateSelectedRoleConfig}
                   onRoleConfigDraftChange={(v) =>
@@ -1767,7 +2190,11 @@ export function AgentEditorPage() {
                   onAssistantJIDsChange={setAssistantJIDs}
                   onAssistantChatsChange={setAssistantChats}
                   onSaveOrchestration={() => saveOrchestrationMutation.mutate()}
-                  onRefreshOrchestration={() => void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })}
+                  onRefreshOrchestration={() =>
+                    void queryClient.invalidateQueries({
+                      queryKey: ["agent-editor-state"],
+                    })
+                  }
                   onChatInputChange={setChatInput}
                   onSendChat={handleSendChat}
                   onPromptSelect={setChatInput}
@@ -1798,18 +2225,29 @@ export function AgentEditorPage() {
       <Dialog open={rawOpen} onOpenChange={handleRawOpenChange}>
         <DialogContent className="flex h-[min(86vh,760px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
           <DialogHeader className="border-border/40 border-b px-6 py-4 pr-14">
-            <DialogTitle>{t("pages.agent.editor.raw_json_title", "JSON bruto do agente")}</DialogTitle>
+            <DialogTitle>
+              {t("pages.agent.editor.raw_json_title", "JSON bruto do agente")}
+            </DialogTitle>
             <DialogDescription>
-              {t("pages.agent.editor.raw_json_description", "Editor avançado do payload exato salvo no workspace deste agente.")}
+              {t(
+                "pages.agent.editor.raw_json_description",
+                "Editor avançado do payload exato salvo no workspace deste agente.",
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 p-4">
             <CodeEditor
               value={rawDraft}
-              onChange={(value) => { setRawDraft(value); if (rawError) setRawError(null) }}
+              onChange={(value) => {
+                setRawDraft(value)
+                if (rawError) setRawError(null)
+              }}
               language="json"
               path={`${selectedAgentId}/agent_config.json`}
-              ariaLabel={t("pages.agent.editor.raw_json_title", "JSON bruto do agente")}
+              ariaLabel={t(
+                "pages.agent.editor.raw_json_title",
+                "JSON bruto do agente",
+              )}
               className="h-full min-h-[360px]"
             />
           </div>
@@ -1822,20 +2260,41 @@ export function AgentEditorPage() {
                 </span>
               ) : (
                 <span className="text-muted-foreground">
-                  {t("pages.agent.editor.raw_char_count", { count: rawDraft.length, defaultValue: "{{count}} caracteres" })}
+                  {t("pages.agent.editor.raw_char_count", {
+                    count: rawDraft.length,
+                    defaultValue: "{{count}} caracteres",
+                  })}
                 </span>
               )}
             </div>
             <DialogFooter className="shrink-0">
-              <Button variant="outline" onClick={() => handleRawOpenChange(false)} disabled={applyMutation.isPending}>
+              <Button
+                variant="outline"
+                onClick={() => handleRawOpenChange(false)}
+                disabled={applyMutation.isPending}
+              >
                 {t("pages.agent.templates.cancel")}
               </Button>
-              <Button variant="outline" onClick={() => { const p = parseRawDraft(); if (p) setRawDraft(JSON.stringify(p, null, 2)) }} disabled={applyMutation.isPending}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const p = parseRawDraft()
+                  if (p) setRawDraft(JSON.stringify(p, null, 2))
+                }}
+                disabled={applyMutation.isPending}
+              >
                 <IconBraces className="size-4" />
                 {t("pages.agent.editor.raw_format", "Formatar")}
               </Button>
-              <Button onClick={handleSaveRawDraft} disabled={applyMutation.isPending}>
-                {applyMutation.isPending ? <IconLoader2 className="size-4 animate-spin" /> : <IconCheck className="size-4" />}
+              <Button
+                onClick={handleSaveRawDraft}
+                disabled={applyMutation.isPending}
+              >
+                {applyMutation.isPending ? (
+                  <IconLoader2 className="size-4 animate-spin" />
+                ) : (
+                  <IconCheck className="size-4" />
+                )}
                 {t("pages.agent.editor.raw_save", "Salvar JSON")}
               </Button>
             </DialogFooter>
@@ -1856,7 +2315,12 @@ export function AgentEditorPage() {
           onDraftChange={setDraft}
           onApply={() => {
             if (draft) {
-              applyMutation.mutate(substituteAgentPlaceholders({ ...draft, agent_id: draft.agent_id ?? selectedAgentId }))
+              applyMutation.mutate(
+                substituteAgentPlaceholders({
+                  ...draft,
+                  agent_id: draft.agent_id ?? selectedAgentId,
+                }),
+              )
             }
           }}
           onSaveTemplate={() => {}}
@@ -1868,11 +2332,17 @@ export function AgentEditorPage() {
           open={editing}
           agent={selectedAgent}
           draft={draft}
+          installedSkills={installedSkills}
           isApplying={applyMutation.isPending}
           onDraftChange={setDraft}
           onApply={() => {
             if (draft) {
-              applyMutation.mutate(substituteAgentPlaceholders({ ...draft, agent_id: draft.agent_id ?? selectedAgentId }))
+              applyMutation.mutate(
+                substituteAgentPlaceholders({
+                  ...draft,
+                  agent_id: draft.agent_id ?? selectedAgentId,
+                }),
+              )
             }
           }}
           onOpenChange={handleSheetOpenChange}
@@ -2010,7 +2480,11 @@ function UnifiedAgentEditor({
   chatInput: string
   isSending: boolean
   proposals: unknown[]
-  quickPrompts: Array<{ icon: React.ElementType; label: string; prompt: string }>
+  quickPrompts: Array<{
+    icon: React.ElementType
+    label: string
+    prompt: string
+  }>
   canCreate: boolean
   onCreate: () => void
   onConfigure: () => void
@@ -2091,7 +2565,9 @@ function UnifiedAgentEditor({
               onEditPrompt={onEditPrompt}
               onOpenRawEditor={onOpenRawEditor}
             />
-            <PromptPreview payload={resolvedPayload ?? configData.payload ?? null} />
+            <PromptPreview
+              payload={resolvedPayload ?? configData.payload ?? null}
+            />
           </div>
         </TabsContent>
 
@@ -2187,11 +2663,15 @@ function IdentityProfileSection({
           <AgentAvatar agent={agent} size="lg" />
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-foreground text-xl font-semibold tracking-tight">{selectedProfile?.name || agent.name || agent.id}</h2>
+              <h2 className="text-foreground text-xl font-semibold tracking-tight">
+                {selectedProfile?.name || agent.name || agent.id}
+              </h2>
               {agent.default && <DefaultBadge />}
               <StatusBadge active={isActive} />
             </div>
-            <p className="text-muted-foreground text-sm">{agentRoleLabel(agent)}</p>
+            <p className="text-muted-foreground text-sm">
+              {agentRoleLabel(agent)}
+            </p>
             <div className="flex flex-wrap items-center gap-1.5">
               <ReadyStatusBadges agent={agent} />
               <GatewayStatusBadge
@@ -2203,7 +2683,7 @@ function IdentityProfileSection({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span
-                    className="text-muted-foreground/60 hover:text-foreground cursor-help text-[10px] uppercase tracking-wide"
+                    className="text-muted-foreground/60 hover:text-foreground cursor-help text-[10px] tracking-wide uppercase"
                     aria-label="Ver identificador técnico"
                   >
                     ID técnico
@@ -2225,7 +2705,10 @@ function IdentityProfileSection({
                 className="gap-1.5"
               >
                 {isTogglingActive ? (
-                  <IconLoader2 className="size-4 animate-spin" aria-hidden="true" />
+                  <IconLoader2
+                    className="size-4 animate-spin"
+                    aria-hidden="true"
+                  />
                 ) : (
                   <IconPlayerPlay className="size-4" aria-hidden="true" />
                 )}
@@ -2252,9 +2735,15 @@ function IdentityProfileSection({
                     className="text-amber-700 focus:bg-amber-50 focus:text-amber-800 dark:text-amber-300 dark:focus:bg-amber-950/40"
                   >
                     {isTogglingActive ? (
-                      <IconLoader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                      <IconLoader2
+                        className="size-3.5 animate-spin"
+                        aria-hidden="true"
+                      />
                     ) : (
-                      <IconPlayerPause className="size-3.5" aria-hidden="true" />
+                      <IconPlayerPause
+                        className="size-3.5"
+                        aria-hidden="true"
+                      />
                     )}
                     Desativar atendimento
                   </DropdownMenuItem>
@@ -2268,7 +2757,10 @@ function IdentityProfileSection({
                       className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/40"
                     >
                       {isDeleting ? (
-                        <IconLoader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                        <IconLoader2
+                          className="size-3.5 animate-spin"
+                          aria-hidden="true"
+                        />
                       ) : (
                         <IconTrash className="size-3.5" aria-hidden="true" />
                       )}
@@ -2287,7 +2779,10 @@ function IdentityProfileSection({
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label className="text-xs">Nome do agente</Label>
-                <Input value={selectedProfile.name} onChange={(e) => onUpdateProfile({ name: e.target.value })} />
+                <Input
+                  value={selectedProfile.name}
+                  onChange={(e) => onUpdateProfile({ name: e.target.value })}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Imagem</Label>
@@ -2361,9 +2856,10 @@ function OperationalRoleSection({
               </button>
             </TooltipTrigger>
             <TooltipContent className="max-w-xs text-xs">
-              Define a função do agente no negócio (atendente, vendas, marketing,
-              assistente). Campos como triagem, escalonamento e fonte de FAQ
-              ficam aqui, e são consumidos por canais e regras antes do prompt.
+              Define a função do agente no negócio (atendente, vendas,
+              marketing, assistente). Campos como triagem, escalonamento e fonte
+              de FAQ ficam aqui, e são consumidos por canais e regras antes do
+              prompt.
             </TooltipContent>
           </Tooltip>
         </div>
@@ -2405,7 +2901,10 @@ function OperationalRoleSection({
           )}
         </div>
       ) : selectedRoleConfig ? (
-        <RoleSpecificConfigEditor config={selectedRoleConfig} onChange={onUpdateRoleConfig} />
+        <RoleSpecificConfigEditor
+          config={selectedRoleConfig}
+          onChange={onUpdateRoleConfig}
+        />
       ) : (
         <div className="text-muted-foreground rounded-xl border border-dashed p-4 text-sm">
           Nenhum perfil operacional encontrado para {selectedAgentId}.
@@ -2441,11 +2940,18 @@ function PromptWorkspaceSection({
   const payload = configData.payload
   const appliedAt = configData.applied_at
     ? new Date(configData.applied_at * 1000).toLocaleString("pt-BR", {
-        day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       })
     : null
-  const activeSkillCount = payload?.skill_configs?.filter((s) => s.enabled).length ?? 0
-  const promptLabel = agent.id === "main" ? template?.name ?? payload?.template_id : promptSheetTitle(agent)
+  const activeSkillCount = enabledSkillCount(payload)
+  const promptLabel =
+    agent.id === "main"
+      ? (template?.name ?? payload?.template_id)
+      : promptSheetTitle(agent)
   const presentation = resolvedPayload?.presentation ?? payload?.presentation
 
   return (
@@ -2454,26 +2960,45 @@ function PromptWorkspaceSection({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-2">
             <SectionHeader title="Prompt & Workspace" icon={IconSettings} />
-            <h3 className="text-lg font-semibold">{configured ? promptLabel : "Prompt do workspace pendente"}</h3>
+            <h3 className="text-lg font-semibold">
+              {configured ? promptLabel : "Prompt do workspace pendente"}
+            </h3>
             <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">
               {configured
-                ? presentation || "Arquivos de runtime já foram gerados para este agente."
+                ? presentation ||
+                  "Arquivos de runtime já foram gerados para este agente."
                 : "A identidade e o roteamento podem ser salvos antes do prompt. Quando aplicar, serão gerados AGENT.md, SOUL.md, behavior.json e agent_config.json."}
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-end">
-            <Button onClick={configured ? onEditPrompt : onConfigure} size="default" className="gap-2">
+            <Button
+              onClick={configured ? onEditPrompt : onConfigure}
+              size="default"
+              className="gap-2"
+            >
               <IconEdit className="size-4" />
-              {configured ? promptEditLabel(agent) : "Criar prompt do workspace"}
+              {configured
+                ? promptEditLabel(agent)
+                : "Criar prompt do workspace"}
             </Button>
             {configured && (
-              <Button variant="outline" onClick={onOpenRawEditor} size="default" className="gap-2">
+              <Button
+                variant="outline"
+                onClick={onOpenRawEditor}
+                size="default"
+                className="gap-2"
+              >
                 <IconBraces className="size-4" />
                 JSON bruto do prompt
               </Button>
             )}
             {!configured && canCreate && (
-              <Button variant="outline" onClick={onCreate} size="default" className="gap-2">
+              <Button
+                variant="outline"
+                onClick={onCreate}
+                size="default"
+                className="gap-2"
+              >
                 <IconPlus className="size-4" />
                 Novo agente
               </Button>
@@ -2575,32 +3100,50 @@ function AccessRoutingSection({
             >
               Agente principal público
             </LabelWithTooltip>
-            <Select value={mainAgentID} onValueChange={onMainAgentChange} disabled={isLoading || internalAgents.length === 0}>
-              <SelectTrigger id={`${selectedAgentId}-main-agent`} className="w-full"><SelectValue /></SelectTrigger>
+            <Select
+              value={mainAgentID}
+              onValueChange={onMainAgentChange}
+              disabled={isLoading || internalAgents.length === 0}
+            >
+              <SelectTrigger
+                id={`${selectedAgentId}-main-agent`}
+                className="w-full"
+              >
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {internalAgents.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>{a.name || a.id}</SelectItem>
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name || a.id}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {mainAgent && (
               <p className="text-muted-foreground text-xs">
-                Selecionado: <span className="font-medium">{mainAgent.name || mainAgent.id}</span>
+                Selecionado:{" "}
+                <span className="font-medium">
+                  {mainAgent.name || mainAgent.id}
+                </span>
               </p>
             )}
           </div>
 
           {subagentOptions.length > 0 && (
             <div className="space-y-2">
-              <LabelWithTooltip
-                tooltip="Quais especialistas o agente principal pode chamar quando precisar de ajuda em vendas, marketing ou outras áreas."
-              >
+              <LabelWithTooltip tooltip="Quais especialistas o agente principal pode chamar quando precisar de ajuda em vendas, marketing ou outras áreas.">
                 Delegação para especialistas
               </LabelWithTooltip>
               {subagentOptions.map((item) => (
-                <label key={item.id} className="border-border/60 flex min-h-10 cursor-pointer items-center justify-between rounded-lg border px-3 text-sm hover:bg-muted/40">
+                <label
+                  key={item.id}
+                  className="border-border/60 hover:bg-muted/40 flex min-h-10 cursor-pointer items-center justify-between rounded-lg border px-3 text-sm"
+                >
                   <span className="font-medium">{item.name || item.id}</span>
-                  <Switch checked={mainAllowAgents.includes(item.id)} onCheckedChange={() => onToggleMainAllow(item.id)} />
+                  <Switch
+                    checked={mainAllowAgents.includes(item.id)}
+                    onCheckedChange={() => onToggleMainAllow(item.id)}
+                  />
                 </label>
               ))}
             </div>
@@ -2609,9 +3152,26 @@ function AccessRoutingSection({
 
         <div className="space-y-4">
           <div className="grid gap-2 sm:grid-cols-2">
-            <InfoCard label="Acesso painel" value={agent.access?.panel_enabled === false ? "desativado" : "ativo"} />
-            <InfoCard label="WhatsApp direto" value={agent.access?.whatsapp_direct_enabled ? "ativo" : "restrito"} />
-            <InfoCard label="Especialistas chamados" value={selectedSubagents.length ? `${selectedSubagents.length}` : "nenhum"} />
+            <InfoCard
+              label="Acesso painel"
+              value={
+                agent.access?.panel_enabled === false ? "desativado" : "ativo"
+              }
+            />
+            <InfoCard
+              label="WhatsApp direto"
+              value={
+                agent.access?.whatsapp_direct_enabled ? "ativo" : "restrito"
+              }
+            />
+            <InfoCard
+              label="Especialistas chamados"
+              value={
+                selectedSubagents.length
+                  ? `${selectedSubagents.length}`
+                  : "nenhum"
+              }
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -2667,6 +3227,7 @@ function SpecialistPromptSheet({
   open,
   agent,
   draft,
+  installedSkills,
   isApplying,
   onDraftChange,
   onApply,
@@ -2675,6 +3236,7 @@ function SpecialistPromptSheet({
   open: boolean
   agent: AgentSummary | null
   draft: TemplateApplyPayload | null
+  installedSkills: SkillSupportItem[]
   isApplying: boolean
   onDraftChange: (draft: TemplateApplyPayload | null) => void
   onApply: () => void
@@ -2683,7 +3245,10 @@ function SpecialistPromptSheet({
   if (!draft || !agent) {
     return null
   }
-  const setField = <K extends keyof TemplateApplyPayload>(key: K, value: TemplateApplyPayload[K]) => {
+  const setField = <K extends keyof TemplateApplyPayload>(
+    key: K,
+    value: TemplateApplyPayload[K],
+  ) => {
     onDraftChange({ ...draft, [key]: value })
   }
 
@@ -2693,7 +3258,8 @@ function SpecialistPromptSheet({
         <DialogHeader className="border-border/40 border-b px-6 py-4 pr-14">
           <DialogTitle>{promptSheetTitle(agent)}</DialogTitle>
           <DialogDescription>
-            Editor enxuto do prompt especializado. Nome, avatar, papel e roteamento ficam na tela principal.
+            Editor enxuto do prompt especializado. Nome, avatar, papel e
+            roteamento ficam na tela principal.
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
@@ -2719,13 +3285,17 @@ function SpecialistPromptSheet({
               label="Funções principais"
               value={lines(draft.functions)}
               onChange={(v) => setField("functions", splitLines(v))}
-              placeholder={"Qualificar lead\nCriar campanha\nOrganizar relatório"}
+              placeholder={
+                "Qualificar lead\nCriar campanha\nOrganizar relatório"
+              }
             />
             <TextListField
               label="Limites"
               value={lines(draft.prohibitions)}
               onChange={(v) => setField("prohibitions", splitLines(v))}
-              placeholder={"Não atender público final\nNão publicar sem aprovação"}
+              placeholder={
+                "Não atender público final\nNão publicar sem aprovação"
+              }
             />
           </div>
           <div className="grid gap-3 md:grid-cols-2">
@@ -2742,28 +3312,162 @@ function SpecialistPromptSheet({
               placeholder={"publicação externa\nalterar permissões"}
             />
           </div>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label className="text-xs">Skills deste agente</Label>
+              {installedSkills.length > 0 && (
+                <span className="text-muted-foreground rounded-full border px-2 py-0.5 text-[10px]">
+                  {enabledSkillCount(draft)} ativas de {installedSkills.length}
+                </span>
+              )}
+            </div>
+            <SkillConfigEditor
+              installedSkills={installedSkills}
+              value={draft.skill_configs ?? []}
+              onChange={(next) => setField("skill_configs", next)}
+            />
+          </div>
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs">Modelo</Label>
-              <Input value={draft.model || ""} onChange={(e) => setField("model", e.target.value)} placeholder="default" />
+              <Input
+                value={draft.model || ""}
+                onChange={(e) => setField("model", e.target.value)}
+                placeholder="default"
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">ID do payload</Label>
-              <Input value={draft.template_id || ""} onChange={(e) => setField("template_id", e.target.value)} className="font-mono text-xs" />
+              <Input
+                value={draft.template_id || ""}
+                onChange={(e) => setField("template_id", e.target.value)}
+                className="font-mono text-xs"
+              />
             </div>
           </div>
         </div>
         <DialogFooter className="border-border/40 border-t px-6 py-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isApplying}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isApplying}
+          >
             Cancelar
           </Button>
           <Button onClick={onApply} disabled={isApplying} className="gap-2">
-            {isApplying ? <IconLoader2 className="size-4 animate-spin" /> : <IconCheck className="size-4" />}
+            {isApplying ? (
+              <IconLoader2 className="size-4 animate-spin" />
+            ) : (
+              <IconCheck className="size-4" />
+            )}
             Aplicar no workspace
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function SkillConfigEditor({
+  installedSkills,
+  value,
+  onChange,
+}: {
+  installedSkills: SkillSupportItem[]
+  value: TemplateSkillConfig[]
+  onChange: (next: TemplateSkillConfig[]) => void
+}) {
+  function getSkillConfig(name: string): TemplateSkillConfig | undefined {
+    return value.find((config) => config.name === name)
+  }
+
+  function setSkillConfig(
+    name: string,
+    patch: Partial<Omit<TemplateSkillConfig, "name">>,
+  ) {
+    const existing = getSkillConfig(name)
+    const merged: TemplateSkillConfig = {
+      name,
+      enabled: existing?.enabled ?? false,
+      visible: existing?.visible ?? true,
+      ...patch,
+    }
+    const next = existing
+      ? value.map((config) => (config.name === name ? merged : config))
+      : [...value, merged]
+    onChange(next)
+  }
+
+  if (installedSkills.length === 0) {
+    return (
+      <div className="border-border/40 bg-muted/10 text-muted-foreground rounded-lg border border-dashed px-4 py-5 text-center text-sm">
+        Nenhuma skill instalada neste workspace.
+      </div>
+    )
+  }
+
+  return (
+    <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
+      {installedSkills.map((skill) => {
+        const cfg = getSkillConfig(skill.name)
+        const enabled = cfg?.enabled ?? false
+        const visible = cfg?.visible ?? true
+        const enabledID = `specialist-skill-enabled-${skill.name}`
+        const visibleID = `specialist-skill-visible-${skill.name}`
+        return (
+          <li
+            key={skill.name}
+            className="border-border/50 bg-muted/10 rounded-lg border px-3 py-2"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <Label
+                  htmlFor={enabledID}
+                  className="cursor-pointer text-sm font-medium"
+                >
+                  {skill.name}
+                </Label>
+                {skill.description ? (
+                  <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
+                    {skill.description}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex shrink-0 items-center gap-4">
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-muted-foreground text-[10px] tracking-wide uppercase">
+                    Ativa
+                  </span>
+                  <Switch
+                    id={enabledID}
+                    checked={enabled}
+                    onCheckedChange={(checked) =>
+                      setSkillConfig(skill.name, {
+                        enabled: checked,
+                        visible: cfg?.visible ?? true,
+                      })
+                    }
+                  />
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-muted-foreground text-[10px] tracking-wide uppercase">
+                    Visível
+                  </span>
+                  <Switch
+                    id={visibleID}
+                    checked={enabled && visible}
+                    disabled={!enabled}
+                    onCheckedChange={(checked) =>
+                      setSkillConfig(skill.name, { visible: checked })
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
@@ -2798,12 +3502,16 @@ function AgentDetailView({
   const payload = configData.payload!
   const isActive = agent.active !== false
   const isDefault = agent.default
-  const skillsActiveCount = payload.skill_configs?.filter((s) => s.enabled).length ?? 0
+  const skillsActiveCount = enabledSkillCount(payload)
   const professionalsCount = payload.professionals?.length ?? 0
   const productsCount = payload.products?.length ?? 0
   const appliedAt = configData.applied_at
     ? new Date(configData.applied_at * 1000).toLocaleString("pt-BR", {
-        day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       })
     : null
 
@@ -2815,7 +3523,9 @@ function AgentDetailView({
           <AgentAvatar agent={agent} size="lg" />
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-foreground text-xl font-semibold tracking-tight">{payload.name || agent.name || agent.id}</h2>
+              <h2 className="text-foreground text-xl font-semibold tracking-tight">
+                {payload.name || agent.name || agent.id}
+              </h2>
               {isDefault && <DefaultBadge />}
               <StatusBadge active={isActive} />
             </div>
@@ -2824,20 +3534,34 @@ function AgentDetailView({
                 {resolvedPayload?.presentation ?? payload.presentation}
               </p>
             )}
-            <p className="text-muted-foreground/70 font-mono text-xs">{agent.id}</p>
-            <p className="text-muted-foreground text-xs">{agentRoleLabel(agent)}</p>
+            <p className="text-muted-foreground/70 font-mono text-xs">
+              {agent.id}
+            </p>
+            <p className="text-muted-foreground text-xs">
+              {agentRoleLabel(agent)}
+            </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 sm:flex-col sm:items-end">
             <Button onClick={onEdit} size="default" className="gap-2">
               <IconEdit className="size-4" />
               {promptEditLabel(agent)}
             </Button>
-            <Button variant="outline" onClick={onOpenRawEditor} size="default" className="gap-2">
+            <Button
+              variant="outline"
+              onClick={onOpenRawEditor}
+              size="default"
+              className="gap-2"
+            >
               <IconBraces className="size-4" />
               {t("pages.agent.editor.raw_json", "JSON bruto")}
             </Button>
             {agent.id === "marketing" && (
-              <Button variant="outline" onClick={onOpenChat} size="default" className="gap-2">
+              <Button
+                variant="outline"
+                onClick={onOpenChat}
+                size="default"
+                className="gap-2"
+              >
                 <IconSparkles className="size-4" />
                 Testar Maya
               </Button>
@@ -2850,39 +3574,96 @@ function AgentDetailView({
         {agent.id === "marketing" && <MarketingPublishingPanel agent={agent} />}
 
         <section>
-          <SectionHeader title={t("pages.agent.editor.section_identity", "Identidade")} icon={IconSparkles} />
+          <SectionHeader
+            title={t("pages.agent.editor.section_identity", "Identidade")}
+            icon={IconSparkles}
+          />
           <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <InfoCard label={t("pages.agent.editor.summary.template", "Template aplicado")} value={template?.name ?? payload.template_id} />
-            <InfoCard label={t("pages.agent.editor.summary.tone", "Tom")} value={payload.tone} />
-            <InfoCard label={t("pages.agent.editor.summary.language", "Idioma")} value={payload.language} />
-            <InfoCard label={t("pages.agent.editor.summary.company", "Empresa")} value={payload.company_info?.name} />
-          </div>
-        </section>
-
-        <Separator className="opacity-50" />
-
-        <section>
-          <SectionHeader title={t("pages.agent.editor.section_workspace", "Workspace")} icon={IconSettings} />
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <InfoCard label={t("pages.agent.editor.summary.agent_id", "ID do agente")} value={agent.id} mono />
-            <InfoCard label={t("pages.agent.editor.summary.workspace", "Workspace")} value={agent.workspace} mono />
-            {appliedAt && <InfoCard label={t("pages.agent.editor.summary.applied_at", "Última aplicação")} value={appliedAt} />}
-          </div>
-        </section>
-
-        <Separator className="opacity-50" />
-
-        <section>
-          <SectionHeader title={t("pages.agent.editor.section_capabilities", "Capacidades")} icon={IconUsers} />
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            <InfoCard label={t("pages.agent.editor.summary.skills_active", "Skills ativas")} value={`${skillsActiveCount}`} />
             <InfoCard
-              label={t("pages.agent.editor.summary.professionals", "Profissionais")}
-              value={payload.modules?.professionals_enabled ? `${professionalsCount}` : t("pages.agent.editor.summary.disabled", "desativado")}
+              label={t(
+                "pages.agent.editor.summary.template",
+                "Template aplicado",
+              )}
+              value={template?.name ?? payload.template_id}
+            />
+            <InfoCard
+              label={t("pages.agent.editor.summary.tone", "Tom")}
+              value={payload.tone}
+            />
+            <InfoCard
+              label={t("pages.agent.editor.summary.language", "Idioma")}
+              value={payload.language}
+            />
+            <InfoCard
+              label={t("pages.agent.editor.summary.company", "Empresa")}
+              value={payload.company_info?.name}
+            />
+          </div>
+        </section>
+
+        <Separator className="opacity-50" />
+
+        <section>
+          <SectionHeader
+            title={t("pages.agent.editor.section_workspace", "Workspace")}
+            icon={IconSettings}
+          />
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <InfoCard
+              label={t("pages.agent.editor.summary.agent_id", "ID do agente")}
+              value={agent.id}
+              mono
+            />
+            <InfoCard
+              label={t("pages.agent.editor.summary.workspace", "Workspace")}
+              value={agent.workspace}
+              mono
+            />
+            {appliedAt && (
+              <InfoCard
+                label={t(
+                  "pages.agent.editor.summary.applied_at",
+                  "Última aplicação",
+                )}
+                value={appliedAt}
+              />
+            )}
+          </div>
+        </section>
+
+        <Separator className="opacity-50" />
+
+        <section>
+          <SectionHeader
+            title={t("pages.agent.editor.section_capabilities", "Capacidades")}
+            icon={IconUsers}
+          />
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <InfoCard
+              label={t(
+                "pages.agent.editor.summary.skills_active",
+                "Skills ativas",
+              )}
+              value={`${skillsActiveCount}`}
+            />
+            <InfoCard
+              label={t(
+                "pages.agent.editor.summary.professionals",
+                "Profissionais",
+              )}
+              value={
+                payload.modules?.professionals_enabled
+                  ? `${professionalsCount}`
+                  : t("pages.agent.editor.summary.disabled", "desativado")
+              }
             />
             <InfoCard
               label={t("pages.agent.editor.summary.products", "Produtos")}
-              value={payload.modules?.products_enabled ? `${productsCount}` : t("pages.agent.editor.summary.disabled", "desativado")}
+              value={
+                payload.modules?.products_enabled
+                  ? `${productsCount}`
+                  : t("pages.agent.editor.summary.disabled", "desativado")
+              }
             />
           </div>
         </section>
@@ -2890,9 +3671,15 @@ function AgentDetailView({
         <Separator className="opacity-50" />
 
         <section>
-          <SectionHeader title={t("pages.agent.editor.section_danger", "Zona de risco")} icon={IconAlertTriangle} />
+          <SectionHeader
+            title={t("pages.agent.editor.section_danger", "Zona de risco")}
+            icon={IconAlertTriangle}
+          />
           <p className="text-muted-foreground mt-1 mb-3 text-xs">
-            {t("pages.agent.editor.danger_description", "Estas ações afetam o comportamento do agente em todos os canais.")}
+            {t(
+              "pages.agent.editor.danger_description",
+              "Estas ações afetam o comportamento do agente em todos os canais.",
+            )}
           </p>
           <div className="border-destructive/20 bg-destructive/3 rounded-xl border p-4">
             <div className="flex flex-wrap items-center gap-3">
@@ -2901,11 +3688,30 @@ function AgentDetailView({
                 size="sm"
                 onClick={onToggleActive}
                 disabled={isTogglingActive || (isDefault && isActive)}
-                title={isDefault && isActive ? t("pages.agent.editor.default_agent_must_stay_active", "O agente padrão precisa continuar ativo.") : undefined}
-                className={isActive ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/40" : ""}
+                title={
+                  isDefault && isActive
+                    ? t(
+                        "pages.agent.editor.default_agent_must_stay_active",
+                        "O agente padrão precisa continuar ativo.",
+                      )
+                    : undefined
+                }
+                className={
+                  isActive
+                    ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/40"
+                    : ""
+                }
               >
-                {isTogglingActive ? <IconLoader2 className="size-4 animate-spin" /> : isActive ? <IconPlayerPause className="size-4" /> : <IconPlayerPlay className="size-4" />}
-                {isActive ? t("pages.agent.editor.deactivate_agent", "Desativar agente") : t("pages.agent.editor.activate_agent", "Ativar agente")}
+                {isTogglingActive ? (
+                  <IconLoader2 className="size-4 animate-spin" />
+                ) : isActive ? (
+                  <IconPlayerPause className="size-4" />
+                ) : (
+                  <IconPlayerPlay className="size-4" />
+                )}
+                {isActive
+                  ? t("pages.agent.editor.deactivate_agent", "Desativar agente")
+                  : t("pages.agent.editor.activate_agent", "Ativar agente")}
               </Button>
               {agent.id !== "main" && (
                 <Tooltip>
@@ -2917,11 +3723,17 @@ function AgentDetailView({
                       disabled={isDeleting}
                       className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40"
                     >
-                      {isDeleting ? <IconLoader2 className="size-4 animate-spin" /> : <IconTrash className="size-4" />}
+                      {isDeleting ? (
+                        <IconLoader2 className="size-4 animate-spin" />
+                      ) : (
+                        <IconTrash className="size-4" />
+                      )}
                       {t("pages.agent.editor.delete_agent", "Remover agente")}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Os arquivos de workspace são preservados.</TooltipContent>
+                  <TooltipContent>
+                    Os arquivos de workspace são preservados.
+                  </TooltipContent>
                 </Tooltip>
               )}
             </div>
@@ -2989,17 +3801,26 @@ function ProfileTab({
           <div className="mb-4 flex items-center gap-3">
             <ProfileAvatar profile={selectedProfile} />
             <div>
-              <h3 className="text-sm font-semibold">{selectedProfile.name || selectedAgentId}</h3>
+              <h3 className="text-sm font-semibold">
+                {selectedProfile.name || selectedAgentId}
+              </h3>
               <p className="text-muted-foreground text-xs">{selectedAgentId}</p>
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label className="text-xs">{t("pages.orchestration.agent_name", "Nome do agente")}</Label>
-              <Input value={selectedProfile.name} onChange={(e) => onUpdateProfile({ name: e.target.value })} />
+              <Label className="text-xs">
+                {t("pages.orchestration.agent_name", "Nome do agente")}
+              </Label>
+              <Input
+                value={selectedProfile.name}
+                onChange={(e) => onUpdateProfile({ name: e.target.value })}
+              />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">{t("pages.orchestration.avatar_image", "Imagem")}</Label>
+              <Label className="text-xs">
+                {t("pages.orchestration.avatar_image", "Imagem")}
+              </Label>
               <AvatarUpload
                 value={selectedProfile.imageURL}
                 onChange={(next) => onUpdateProfile({ imageURL: next })}
@@ -3011,12 +3832,21 @@ function ProfileTab({
 
       {/* role config */}
       <div className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
-        <SectionHeader title={t("pages.orchestration.role_config", "Perfil operacional")} icon={IconSparkles} />
+        <SectionHeader
+          title={t("pages.orchestration.role_config", "Perfil operacional")}
+          icon={IconSparkles}
+        />
         <p className="text-muted-foreground mt-1 mb-3 text-xs">
-          {t("pages.orchestration.role_config_hint", "Configuração estruturada do papel deste agente.")}
+          {t(
+            "pages.orchestration.role_config_hint",
+            "Configuração estruturada do papel deste agente.",
+          )}
         </p>
         {selectedRoleConfig && (
-          <RoleSpecificConfigEditor config={selectedRoleConfig} onChange={onUpdateRoleConfig} />
+          <RoleSpecificConfigEditor
+            config={selectedRoleConfig}
+            onChange={onUpdateRoleConfig}
+          />
         )}
         <Textarea
           value={selectedRoleConfigDraft}
@@ -3028,35 +3858,65 @@ function ProfileTab({
 
       {/* routing */}
       <div className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
-        <SectionHeader title={t("pages.orchestration.main_allowlist", "Roteamento")} icon={IconShield} />
+        <SectionHeader
+          title={t("pages.orchestration.main_allowlist", "Roteamento")}
+          icon={IconShield}
+        />
         <div className="mt-4 space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-xs">{t("pages.orchestration.main_agent", "Agente principal")}</Label>
-            <Select value={mainAgentID} onValueChange={onMainAgentChange} disabled={isLoading || internalAgents.length === 0}>
-              <SelectTrigger className="w-full"><SelectValue placeholder={t("pages.orchestration.main_agent_placeholder")} /></SelectTrigger>
+            <Label className="text-xs">
+              {t("pages.orchestration.main_agent", "Agente principal")}
+            </Label>
+            <Select
+              value={mainAgentID}
+              onValueChange={onMainAgentChange}
+              disabled={isLoading || internalAgents.length === 0}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue
+                  placeholder={t("pages.orchestration.main_agent_placeholder")}
+                />
+              </SelectTrigger>
               <SelectContent>
                 {internalAgents.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>{a.name || a.id}</SelectItem>
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name || a.id}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {mainAgent && <p className="text-muted-foreground font-mono text-xs">{mainAgent.id}</p>}
+            {mainAgent && (
+              <p className="text-muted-foreground font-mono text-xs">
+                {mainAgent.id}
+              </p>
+            )}
           </div>
 
           {subagentOptions.length > 0 && (
             <div className="space-y-2">
               <Label className="text-xs">Subagentes permitidos</Label>
               {subagentOptions.map((agent) => (
-                <label key={agent.id} className="border-border/60 flex min-h-10 cursor-pointer items-center justify-between rounded-lg border px-3 text-sm hover:bg-muted/40">
+                <label
+                  key={agent.id}
+                  className="border-border/60 hover:bg-muted/40 flex min-h-10 cursor-pointer items-center justify-between rounded-lg border px-3 text-sm"
+                >
                   <span className="font-medium">{agent.name || agent.id}</span>
-                  <Switch checked={mainAllowAgents.includes(agent.id)} onCheckedChange={() => onToggleMainAllow(agent.id)} />
+                  <Switch
+                    checked={mainAllowAgents.includes(agent.id)}
+                    onCheckedChange={() => onToggleMainAllow(agent.id)}
+                  />
                 </label>
               ))}
             </div>
           )}
 
           <div className="space-y-1.5">
-            <Label className="text-xs">{t("pages.orchestration.assistant_jids", "Números autorizados da Sofia")}</Label>
+            <Label className="text-xs">
+              {t(
+                "pages.orchestration.assistant_jids",
+                "Números autorizados da Sofia",
+              )}
+            </Label>
             <Textarea
               value={assistantJIDs}
               onChange={(e) => onAssistantJIDsChange(e.target.value)}
@@ -3065,7 +3925,12 @@ function ProfileTab({
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t("pages.orchestration.assistant_chats", "Grupos autorizados da Sofia")}</Label>
+            <Label className="text-xs">
+              {t(
+                "pages.orchestration.assistant_chats",
+                "Grupos autorizados da Sofia",
+              )}
+            </Label>
             <Textarea
               value={assistantChats}
               onChange={(e) => onAssistantChatsChange(e.target.value)}
@@ -3079,10 +3944,19 @@ function ProfileTab({
       {/* save bar */}
       <div className="flex items-center gap-2 pb-4">
         <Button onClick={onSave} disabled={isSaving} className="gap-2">
-          {isSaving ? <IconLoader2 className="size-4 animate-spin" /> : <IconDeviceFloppy className="size-4" />}
+          {isSaving ? (
+            <IconLoader2 className="size-4 animate-spin" />
+          ) : (
+            <IconDeviceFloppy className="size-4" />
+          )}
           {t("common.save", "Salvar")}
         </Button>
-        <Button variant="outline" onClick={onRefresh} disabled={isLoading} className="gap-2">
+        <Button
+          variant="outline"
+          onClick={onRefresh}
+          disabled={isLoading}
+          className="gap-2"
+        >
           <IconRefresh className="size-4" />
           {t("common.refresh", "Atualizar")}
         </Button>
@@ -3112,7 +3986,11 @@ function ChatTab({
   chatInput: string
   isSending: boolean
   proposals: unknown[]
-  quickPrompts: Array<{ icon: React.ElementType; label: string; prompt: string }>
+  quickPrompts: Array<{
+    icon: React.ElementType
+    label: string
+    prompt: string
+  }>
   onChatInputChange: (v: string) => void
   onSend: () => void
   onPromptSelect: (v: string) => void
@@ -3142,33 +4020,46 @@ function ChatTab({
 
   return (
     <div className="animate-in fade-in-0 slide-in-from-bottom-2 flex h-full flex-col gap-4 duration-300">
-      <div className="border-border/60 bg-card flex flex-col overflow-hidden rounded-xl border shadow-sm" style={{ minHeight: 560 }}>
+      <div
+        className="border-border/60 bg-card flex flex-col overflow-hidden rounded-xl border shadow-sm"
+        style={{ minHeight: 560 }}
+      >
         {/* chat header — avatar + nome + status online */}
-        <div className="border-border/60 flex items-center gap-3 border-b bg-background/40 px-4 py-3">
+        <div className="border-border/60 bg-background/40 flex items-center gap-3 border-b px-4 py-3">
           {selectedProfile && <ProfileAvatar profile={selectedProfile} />}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <p className="truncate text-sm font-semibold">{agentName}</p>
               <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
-                <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                <span
+                  className="size-1.5 rounded-full bg-emerald-500"
+                  aria-hidden="true"
+                />
                 Online
               </span>
             </div>
-            <p className="text-muted-foreground truncate text-xs">Chat de teste · respostas não enviadas a usuários reais</p>
+            <p className="text-muted-foreground truncate text-xs">
+              Chat de teste · respostas não enviadas a usuários reais
+            </p>
           </div>
         </div>
 
         {/* messages */}
-        <div className="flex-1 overflow-y-auto bg-muted/10 px-4 py-5">
+        <div className="bg-muted/10 flex-1 overflow-y-auto px-4 py-5">
           {messages.length === 0 ? (
             <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center gap-4 text-center">
               <div className="bg-muted text-muted-foreground flex size-12 items-center justify-center rounded-full">
                 <IconMessageCircle className="size-5" aria-hidden="true" />
               </div>
               <div>
-                <p className="text-sm font-medium">Comece uma conversa de teste</p>
+                <p className="text-sm font-medium">
+                  Comece uma conversa de teste
+                </p>
                 <p className="text-muted-foreground mt-1 text-xs">
-                  {t("pages.orchestration.empty_chat", "Selecione um agente interno e envie uma mensagem.")}
+                  {t(
+                    "pages.orchestration.empty_chat",
+                    "Selecione um agente interno e envie uma mensagem.",
+                  )}
                 </p>
               </div>
               {quickPrompts.length > 0 && (
@@ -3180,10 +4071,15 @@ function ChatTab({
                         key={item.label}
                         type="button"
                         onClick={() => onPromptSelect(item.prompt)}
-                        className="border-border/60 hover:border-primary/60 hover:bg-muted/60 focus-visible:ring-primary/30 group flex items-start gap-2 rounded-lg border bg-background px-3 py-2.5 text-left transition-colors focus:outline-none focus-visible:ring-2"
+                        className="border-border/60 hover:border-primary/60 hover:bg-muted/60 focus-visible:ring-primary/30 group bg-background flex items-start gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors focus:outline-none focus-visible:ring-2"
                       >
-                        <Icon className="text-muted-foreground group-hover:text-foreground mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                        <span className="text-xs font-medium leading-snug">{item.label}</span>
+                        <Icon
+                          className="text-muted-foreground group-hover:text-foreground mt-0.5 size-4 shrink-0"
+                          aria-hidden="true"
+                        />
+                        <span className="text-xs leading-snug font-medium">
+                          {item.label}
+                        </span>
                       </button>
                     )
                   })}
@@ -3195,7 +4091,10 @@ function ChatTab({
               {messages.map((msg, i) => {
                 const isUser = msg.role === "user"
                 return (
-                  <div key={`${msg.role}-${i}`} className={`flex ${isUser ? "justify-end" : "justify-start gap-2"}`}>
+                  <div
+                    key={`${msg.role}-${i}`}
+                    className={`flex ${isUser ? "justify-end" : "justify-start gap-2"}`}
+                  >
                     {!isUser && selectedProfile && (
                       <div className="mt-auto">
                         <ProfileAvatar profile={selectedProfile} />
@@ -3254,7 +4153,7 @@ function ChatTab({
 
         {/* input */}
         <div className="border-border/60 bg-background border-t p-3">
-          <div className="border-border/60 focus-within:border-primary/60 focus-within:ring-primary/20 flex items-end gap-2 rounded-xl border bg-background px-3 py-2 transition-colors focus-within:ring-2">
+          <div className="border-border/60 focus-within:border-primary/60 focus-within:ring-primary/20 bg-background flex items-end gap-2 rounded-xl border px-3 py-2 transition-colors focus-within:ring-2">
             <Textarea
               ref={textareaRef}
               value={chatInput}
@@ -3277,13 +4176,26 @@ function ChatTab({
               disabled={!canSend}
               aria-label={t("pages.orchestration.send", "Enviar")}
             >
-              {isSending ? <IconLoader2 className="size-4 animate-spin" /> : <IconSend className="size-4" />}
+              {isSending ? (
+                <IconLoader2 className="size-4 animate-spin" />
+              ) : (
+                <IconSend className="size-4" />
+              )}
             </Button>
           </div>
           <p className="text-muted-foreground mt-1.5 text-[11px]">
-            <kbd className="bg-muted rounded px-1 py-0.5 font-mono text-[10px]">Enter</kbd> para enviar ·{" "}
-            <kbd className="bg-muted rounded px-1 py-0.5 font-mono text-[10px]">Shift</kbd> +{" "}
-            <kbd className="bg-muted rounded px-1 py-0.5 font-mono text-[10px]">Enter</kbd> nova linha
+            <kbd className="bg-muted rounded px-1 py-0.5 font-mono text-[10px]">
+              Enter
+            </kbd>{" "}
+            para enviar ·{" "}
+            <kbd className="bg-muted rounded px-1 py-0.5 font-mono text-[10px]">
+              Shift
+            </kbd>{" "}
+            +{" "}
+            <kbd className="bg-muted rounded px-1 py-0.5 font-mono text-[10px]">
+              Enter
+            </kbd>{" "}
+            nova linha
           </p>
         </div>
       </div>
@@ -3291,10 +4203,17 @@ function ChatTab({
       {/* proposals */}
       {proposals.length > 0 && (
         <div className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
-          <SectionHeader title={t("pages.orchestration.proposals", "Propostas")} icon={IconFileDescription} />
+          <SectionHeader
+            title={t("pages.orchestration.proposals", "Propostas")}
+            icon={IconFileDescription}
+          />
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             {proposals.slice(0, 6).map((proposal, i) => (
-              <ProposalCard key={i} proposal={proposal} onInspect={() => onProposalInspect(proposal)} />
+              <ProposalCard
+                key={i}
+                proposal={proposal}
+                onInspect={() => onProposalInspect(proposal)}
+              />
             ))}
           </div>
         </div>
@@ -3307,35 +4226,64 @@ function ChatTab({
 
 function MarketingPublishingPanel({ agent }: { agent: AgentSummary }) {
   const publishDir = marketingPublishDir(agent)
-  const deliverables = agent.role_config?.marketing?.deliverables ?? ["catalog_html", "simple_site", "campaign"]
-  const platforms = agent.role_config?.marketing?.platforms ?? ["instagram", "site", "catalog_html"]
+  const deliverables = agent.role_config?.marketing?.deliverables ?? [
+    "catalog_html",
+    "simple_site",
+    "campaign",
+  ]
+  const platforms = agent.role_config?.marketing?.platforms ?? [
+    "instagram",
+    "site",
+    "catalog_html",
+  ]
 
   return (
     <section className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
       <SectionHeader title="Publicação da Maya" icon={IconWorldWww} />
       <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-relaxed">
         Catálogos, cardápios e sites simples salvos em{" "}
-        <code className="bg-muted rounded px-1 font-mono text-xs">{publishDir}</code>{" "}
+        <code className="bg-muted rounded px-1 font-mono text-xs">
+          {publishDir}
+        </code>{" "}
         ficam acessíveis em{" "}
-        <code className="bg-muted rounded px-1 font-mono text-xs">/public/marketing/&lt;arquivo&gt;</code>.
+        <code className="bg-muted rounded px-1 font-mono text-xs">
+          /public/marketing/&lt;arquivo&gt;
+        </code>
+        .
       </p>
       <div className="mt-4 grid gap-2 md:grid-cols-3">
         <InfoCard label="Pasta pública" value={publishDir} mono />
         <InfoCard label="URL base" value="/public/marketing/" mono />
         <InfoCard
           label="Aprovação"
-          value={agent.role_config?.marketing?.requires_human_review === false ? "sem revisão obrigatória" : "revisão humana"}
+          value={
+            agent.role_config?.marketing?.requires_human_review === false
+              ? "sem revisão obrigatória"
+              : "revisão humana"
+          }
         />
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <CapabilityList icon={IconFileDescription} title="Entregáveis" items={deliverables} />
+        <CapabilityList
+          icon={IconFileDescription}
+          title="Entregáveis"
+          items={deliverables}
+        />
         <CapabilityList icon={IconPhoto} title="Canais" items={platforms} />
       </div>
     </section>
   )
 }
 
-function CapabilityList({ icon: Icon, title, items }: { icon: React.ElementType; title: string; items: string[] }) {
+function CapabilityList({
+  icon: Icon,
+  title,
+  items,
+}: {
+  icon: React.ElementType
+  title: string
+  items: string[]
+}) {
   return (
     <div className="bg-muted/30 rounded-xl p-3">
       <div className="text-muted-foreground mb-2 flex items-center gap-2 text-xs font-medium uppercase">
@@ -3344,7 +4292,9 @@ function CapabilityList({ icon: Icon, title, items }: { icon: React.ElementType;
       </div>
       <div className="flex flex-wrap gap-1.5">
         {items.map((item) => (
-          <Badge key={item} variant="secondary" className="rounded-full">{item}</Badge>
+          <Badge key={item} variant="secondary" className="rounded-full">
+            {item}
+          </Badge>
         ))}
       </div>
     </div>
@@ -3383,7 +4333,10 @@ function AttendantRoleConfigEditor({
 }) {
   const attendant = (config.attendant || {}) as AttendantRoleConfig
   const updateAttendant = (patch: Partial<AttendantRoleConfig>) => {
-    onChange((c) => ({ ...c, attendant: { ...((c.attendant || {}) as AttendantRoleConfig), ...patch } }))
+    onChange((c) => ({
+      ...c,
+      attendant: { ...((c.attendant || {}) as AttendantRoleConfig), ...patch },
+    }))
   }
 
   return (
@@ -3391,22 +4344,50 @@ function AttendantRoleConfigEditor({
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-medium">Ana: atendimento e triagem</div>
-          <div className="text-muted-foreground text-xs">Campos da porta pública: setores, dados mínimos e escalonamentos.</div>
+          <div className="text-muted-foreground text-xs">
+            Campos da porta pública: setores, dados mínimos e escalonamentos.
+          </div>
         </div>
         <label className="flex cursor-pointer items-center gap-2 text-xs">
           Agendamento
-          <Switch checked={attendant.scheduling_enabled ?? false} onCheckedChange={(v) => updateAttendant({ scheduling_enabled: v })} />
+          <Switch
+            checked={attendant.scheduling_enabled ?? false}
+            onCheckedChange={(v) => updateAttendant({ scheduling_enabled: v })}
+          />
         </label>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <TextListField label="Setores" value={lines(attendant.departments)} placeholder={"vendas\nsuporte\nfinanceiro\nhumano"} onChange={(v) => updateAttendant({ departments: splitLines(v) })} />
-        <TextListField label="Dados de triagem" value={lines(attendant.triage_fields)} placeholder={"nome\ncontato\nassunto\nurgencia"} onChange={(v) => updateAttendant({ triage_fields: splitLines(v) })} />
+        <TextListField
+          label="Setores"
+          value={lines(attendant.departments)}
+          placeholder={"vendas\nsuporte\nfinanceiro\nhumano"}
+          onChange={(v) => updateAttendant({ departments: splitLines(v) })}
+        />
+        <TextListField
+          label="Dados de triagem"
+          value={lines(attendant.triage_fields)}
+          placeholder={"nome\ncontato\nassunto\nurgencia"}
+          onChange={(v) => updateAttendant({ triage_fields: splitLines(v) })}
+        />
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <TextListField label="Regras de escalonamento" value={lines(attendant.escalation_rules)} placeholder={"reclamacao grave\ndesconto ou excecao\ninformacao nao confirmada"} onChange={(v) => updateAttendant({ escalation_rules: splitLines(v) })} />
+        <TextListField
+          label="Regras de escalonamento"
+          value={lines(attendant.escalation_rules)}
+          placeholder={
+            "reclamacao grave\ndesconto ou excecao\ninformacao nao confirmada"
+          }
+          onChange={(v) => updateAttendant({ escalation_rules: splitLines(v) })}
+        />
         <div className="space-y-1.5">
-          <div className="text-muted-foreground text-xs font-medium">Fonte de FAQ</div>
-          <Input value={attendant.faq_source || ""} onChange={(e) => updateAttendant({ faq_source: e.target.value })} placeholder="company_context" />
+          <div className="text-muted-foreground text-xs font-medium">
+            Fonte de FAQ
+          </div>
+          <Input
+            value={attendant.faq_source || ""}
+            onChange={(e) => updateAttendant({ faq_source: e.target.value })}
+            placeholder="company_context"
+          />
         </div>
       </div>
     </div>
@@ -3422,31 +4403,77 @@ function SalesRoleConfigEditor({
 }) {
   const sales = (config.sales || {}) as SalesRoleConfig
   const updateSales = (patch: Partial<SalesRoleConfig>) => {
-    onChange((c) => ({ ...c, sales: { ...((c.sales || {}) as SalesRoleConfig), ...patch } }))
+    onChange((c) => ({
+      ...c,
+      sales: { ...((c.sales || {}) as SalesRoleConfig), ...patch },
+    }))
   }
 
   return (
     <div className="border-border/60 bg-muted/20 mb-3 space-y-4 rounded-xl border p-4">
       <div>
         <div className="text-sm font-medium">Leo: vendas e follow-up</div>
-        <div className="text-muted-foreground text-xs">Campos usados para qualificar lead, classificar oportunidade e devolver próxima ação.</div>
+        <div className="text-muted-foreground text-xs">
+          Campos usados para qualificar lead, classificar oportunidade e
+          devolver próxima ação.
+        </div>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <TextListField label="Etapas do funil" value={lines(sales.funnel_stages)} placeholder={"novo\nqualificacao\nproposta\nfollow_up\nganho\nperdido"} onChange={(v) => updateSales({ funnel_stages: splitLines(v) })} />
-        <TextListField label="Campos de qualificação" value={lines(sales.qualification_fields)} placeholder={"problema\nfit\nautoridade\nprazo\norcamento\nproximo_passo"} onChange={(v) => updateSales({ qualification_fields: splitLines(v) })} />
+        <TextListField
+          label="Etapas do funil"
+          value={lines(sales.funnel_stages)}
+          placeholder={
+            "novo\nqualificacao\nproposta\nfollow_up\nganho\nperdido"
+          }
+          onChange={(v) => updateSales({ funnel_stages: splitLines(v) })}
+        />
+        <TextListField
+          label="Campos de qualificação"
+          value={lines(sales.qualification_fields)}
+          placeholder={
+            "problema\nfit\nautoridade\nprazo\norcamento\nproximo_passo"
+          }
+          onChange={(v) => updateSales({ qualification_fields: splitLines(v) })}
+        />
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <TextListField label="Cadência de follow-up" value={lines(sales.followup_cadence)} placeholder={"D+1\nD+3\nD+7"} onChange={(v) => updateSales({ followup_cadence: splitLines(v) })} />
-        <TextListField label="Regras de handoff" value={lines(sales.handoff_rules)} placeholder={"lead qualificado com prazo\npedido de contrato\nexcecao comercial"} onChange={(v) => updateSales({ handoff_rules: splitLines(v) })} />
+        <TextListField
+          label="Cadência de follow-up"
+          value={lines(sales.followup_cadence)}
+          placeholder={"D+1\nD+3\nD+7"}
+          onChange={(v) => updateSales({ followup_cadence: splitLines(v) })}
+        />
+        <TextListField
+          label="Regras de handoff"
+          value={lines(sales.handoff_rules)}
+          placeholder={
+            "lead qualificado com prazo\npedido de contrato\nexcecao comercial"
+          }
+          onChange={(v) => updateSales({ handoff_rules: splitLines(v) })}
+        />
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-1.5">
-          <div className="text-muted-foreground text-xs font-medium">CRM / sistema</div>
-          <Input value={sales.crm_integration || ""} onChange={(e) => updateSales({ crm_integration: e.target.value })} placeholder="future, planilha, CRM..." />
+          <div className="text-muted-foreground text-xs font-medium">
+            CRM / sistema
+          </div>
+          <Input
+            value={sales.crm_integration || ""}
+            onChange={(e) => updateSales({ crm_integration: e.target.value })}
+            placeholder="future, planilha, CRM..."
+          />
         </div>
         <div className="space-y-1.5">
-          <div className="text-muted-foreground text-xs font-medium">Fonte de preços</div>
-          <Input value={sales.price_policy_source || ""} onChange={(e) => updateSales({ price_policy_source: e.target.value })} placeholder="memory/pricing.md" />
+          <div className="text-muted-foreground text-xs font-medium">
+            Fonte de preços
+          </div>
+          <Input
+            value={sales.price_policy_source || ""}
+            onChange={(e) =>
+              updateSales({ price_policy_source: e.target.value })
+            }
+            placeholder="memory/pricing.md"
+          />
         </div>
       </div>
     </div>
@@ -3465,12 +4492,19 @@ function MarketingRoleConfigEditor({
   const brandKit = marketing.brand_kit || {}
 
   const updateMarketing = (patch: Partial<MarketingRoleConfig>) => {
-    onChange((c) => ({ ...c, marketing: { ...((c.marketing || {}) as MarketingRoleConfig), ...patch } }))
+    onChange((c) => ({
+      ...c,
+      marketing: { ...((c.marketing || {}) as MarketingRoleConfig), ...patch },
+    }))
   }
-  const updateBrandKit = (patch: NonNullable<MarketingRoleConfig["brand_kit"]>) => {
+  const updateBrandKit = (
+    patch: NonNullable<MarketingRoleConfig["brand_kit"]>,
+  ) => {
     updateMarketing({ brand_kit: { ...brandKit, ...patch } })
   }
-  const updateCadence = (patch: NonNullable<MarketingRoleConfig["cadence"]>) => {
+  const updateCadence = (
+    patch: NonNullable<MarketingRoleConfig["cadence"]>,
+  ) => {
     updateMarketing({ cadence: { ...cadence, ...patch } })
   }
 
@@ -3479,22 +4513,44 @@ function MarketingRoleConfigEditor({
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-medium">Maya: sites e catálogos</div>
-          <div className="text-muted-foreground text-xs">Campos para orientar campanhas, páginas e catálogos HTML.</div>
+          <div className="text-muted-foreground text-xs">
+            Campos para orientar campanhas, páginas e catálogos HTML.
+          </div>
         </div>
         <label className="flex cursor-pointer items-center gap-2 text-xs">
           Revisão humana
-          <Switch checked={marketing.requires_human_review ?? true} onCheckedChange={(v) => updateMarketing({ requires_human_review: v })} />
+          <Switch
+            checked={marketing.requires_human_review ?? true}
+            onCheckedChange={(v) =>
+              updateMarketing({ requires_human_review: v })
+            }
+          />
         </label>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-1.5">
-          <div className="text-muted-foreground text-xs font-medium">Pasta pública</div>
-          <Input value={marketing.public_publish_dir || ""} onChange={(e) => updateMarketing({ public_publish_dir: e.target.value })} placeholder="public/marketing" />
+          <div className="text-muted-foreground text-xs font-medium">
+            Pasta pública
+          </div>
+          <Input
+            value={marketing.public_publish_dir || ""}
+            onChange={(e) =>
+              updateMarketing({ public_publish_dir: e.target.value })
+            }
+            placeholder="public/marketing"
+          />
         </div>
         <div className="space-y-1.5">
-          <div className="text-muted-foreground text-xs font-medium">Aprovação</div>
-          <Select value={marketing.approval_mode || "owner_required"} onValueChange={(v) => updateMarketing({ approval_mode: v })}>
-            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+          <div className="text-muted-foreground text-xs font-medium">
+            Aprovação
+          </div>
+          <Select
+            value={marketing.approval_mode || "owner_required"}
+            onValueChange={(v) => updateMarketing({ approval_mode: v })}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="owner_required">Dono aprova</SelectItem>
               <SelectItem value="admin_required">Admin aprova</SelectItem>
@@ -3504,39 +4560,113 @@ function MarketingRoleConfigEditor({
         </div>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <TextListField label="Plataformas" value={lines(marketing.platforms)} placeholder={"instagram\nsite\ncatalog_html"} onChange={(v) => updateMarketing({ platforms: splitLines(v) })} />
-        <TextListField label="Entregáveis" value={lines(marketing.deliverables)} placeholder={"post\ncampaign\ncatalog_html\nsimple_site"} onChange={(v) => updateMarketing({ deliverables: splitLines(v) })} />
+        <TextListField
+          label="Plataformas"
+          value={lines(marketing.platforms)}
+          placeholder={"instagram\nsite\ncatalog_html"}
+          onChange={(v) => updateMarketing({ platforms: splitLines(v) })}
+        />
+        <TextListField
+          label="Entregáveis"
+          value={lines(marketing.deliverables)}
+          placeholder={"post\ncampaign\ncatalog_html\nsimple_site"}
+          onChange={(v) => updateMarketing({ deliverables: splitLines(v) })}
+        />
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <TextListField label="Pilares de conteúdo" value={lines(marketing.content_pillars)} placeholder={"educação\nprova social\npromoções"} onChange={(v) => updateMarketing({ content_pillars: splitLines(v) })} />
-        <TextListField label="Fontes de tendência" value={lines(marketing.trend_sources)} placeholder={"instagram\ngoogle_trends\nconcorrentes"} onChange={(v) => updateMarketing({ trend_sources: splitLines(v) })} />
+        <TextListField
+          label="Pilares de conteúdo"
+          value={lines(marketing.content_pillars)}
+          placeholder={"educação\nprova social\npromoções"}
+          onChange={(v) => updateMarketing({ content_pillars: splitLines(v) })}
+        />
+        <TextListField
+          label="Fontes de tendência"
+          value={lines(marketing.trend_sources)}
+          placeholder={"instagram\ngoogle_trends\nconcorrentes"}
+          onChange={(v) => updateMarketing({ trend_sources: splitLines(v) })}
+        />
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <TextListField label="Cores da marca" value={lines(brandKit.colors)} placeholder={"#111827\n#f97316"} onChange={(v) => updateBrandKit({ colors: splitLines(v) })} />
-        <TextListField label="Fontes da marca" value={lines(brandKit.fonts)} placeholder={"Inter\nMontserrat"} onChange={(v) => updateBrandKit({ fonts: splitLines(v) })} />
+        <TextListField
+          label="Cores da marca"
+          value={lines(brandKit.colors)}
+          placeholder={"#111827\n#f97316"}
+          onChange={(v) => updateBrandKit({ colors: splitLines(v) })}
+        />
+        <TextListField
+          label="Fontes da marca"
+          value={lines(brandKit.fonts)}
+          placeholder={"Inter\nMontserrat"}
+          onChange={(v) => updateBrandKit({ fonts: splitLines(v) })}
+        />
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-1.5">
           <div className="text-muted-foreground text-xs font-medium">Tom</div>
-          <Input value={brandKit.tone || ""} onChange={(e) => updateBrandKit({ tone: e.target.value })} placeholder="claro, próximo e profissional" />
+          <Input
+            value={brandKit.tone || ""}
+            onChange={(e) => updateBrandKit({ tone: e.target.value })}
+            placeholder="claro, próximo e profissional"
+          />
         </div>
         <div className="space-y-1.5">
-          <div className="text-muted-foreground text-xs font-medium">Estilo visual</div>
-          <Input value={brandKit.visual_style || ""} onChange={(e) => updateBrandKit({ visual_style: e.target.value })} placeholder="limpo, moderno, com fotos reais" />
+          <div className="text-muted-foreground text-xs font-medium">
+            Estilo visual
+          </div>
+          <Input
+            value={brandKit.visual_style || ""}
+            onChange={(e) => updateBrandKit({ visual_style: e.target.value })}
+            placeholder="limpo, moderno, com fotos reais"
+          />
         </div>
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         <div className="space-y-1.5">
-          <div className="text-muted-foreground text-xs font-medium">Posts/semana</div>
-          <Input type="number" min={0} value={cadence.posts_per_week ?? ""} onChange={(e) => updateCadence({ posts_per_week: e.target.value ? Number(e.target.value) : undefined })} />
+          <div className="text-muted-foreground text-xs font-medium">
+            Posts/semana
+          </div>
+          <Input
+            type="number"
+            min={0}
+            value={cadence.posts_per_week ?? ""}
+            onChange={(e) =>
+              updateCadence({
+                posts_per_week: e.target.value
+                  ? Number(e.target.value)
+                  : undefined,
+              })
+            }
+          />
         </div>
         <div className="space-y-1.5">
-          <div className="text-muted-foreground text-xs font-medium">Campanhas/mês</div>
-          <Input type="number" min={0} value={cadence.campaigns_per_month ?? ""} onChange={(e) => updateCadence({ campaigns_per_month: e.target.value ? Number(e.target.value) : undefined })} />
+          <div className="text-muted-foreground text-xs font-medium">
+            Campanhas/mês
+          </div>
+          <Input
+            type="number"
+            min={0}
+            value={cadence.campaigns_per_month ?? ""}
+            onChange={(e) =>
+              updateCadence({
+                campaigns_per_month: e.target.value
+                  ? Number(e.target.value)
+                  : undefined,
+              })
+            }
+          />
         </div>
         <div className="space-y-1.5">
-          <div className="text-muted-foreground text-xs font-medium">Horizonte</div>
-          <Input value={cadence.planning_horizon || ""} onChange={(e) => updateCadence({ planning_horizon: e.target.value })} placeholder="1-4 semanas" />
+          <div className="text-muted-foreground text-xs font-medium">
+            Horizonte
+          </div>
+          <Input
+            value={cadence.planning_horizon || ""}
+            onChange={(e) =>
+              updateCadence({ planning_horizon: e.target.value })
+            }
+            placeholder="1-4 semanas"
+          />
         </div>
       </div>
     </div>
@@ -3552,7 +4682,10 @@ function AssistantRoleConfigEditor({
 }) {
   const assistant = (config.assistant || {}) as AssistantRoleConfig
   const updateAssistant = (patch: Partial<AssistantRoleConfig>) => {
-    onChange((c) => ({ ...c, assistant: { ...((c.assistant || {}) as AssistantRoleConfig), ...patch } }))
+    onChange((c) => ({
+      ...c,
+      assistant: { ...((c.assistant || {}) as AssistantRoleConfig), ...patch },
+    }))
   }
 
   return (
@@ -3560,25 +4693,65 @@ function AssistantRoleConfigEditor({
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-medium">Sofia: assistente do dono</div>
-          <div className="text-muted-foreground text-xs">Escopos privados, relatórios, delegação e confirmações obrigatórias.</div>
+          <div className="text-muted-foreground text-xs">
+            Escopos privados, relatórios, delegação e confirmações obrigatórias.
+          </div>
         </div>
         <label className="flex cursor-pointer items-center gap-2 text-xs">
           Edita agentes
-          <Switch checked={assistant.can_edit_agents ?? true} onCheckedChange={(v) => updateAssistant({ can_edit_agents: v })} />
+          <Switch
+            checked={assistant.can_edit_agents ?? true}
+            onCheckedChange={(v) => updateAssistant({ can_edit_agents: v })}
+          />
         </label>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <TextListField label="Escopos autorizados" value={lines(assistant.authorized_scopes)} placeholder={"workspace\nagents\nreports\ndocuments\nagenda\norchestration"} onChange={(v) => updateAssistant({ authorized_scopes: splitLines(v) })} />
-        <TextListField label="Relatórios" value={lines(assistant.report_cadence)} placeholder={"daily\nweekly\nmonthly"} onChange={(v) => updateAssistant({ report_cadence: splitLines(v) })} />
+        <TextListField
+          label="Escopos autorizados"
+          value={lines(assistant.authorized_scopes)}
+          placeholder={
+            "workspace\nagents\nreports\ndocuments\nagenda\norchestration"
+          }
+          onChange={(v) =>
+            updateAssistant({ authorized_scopes: splitLines(v) })
+          }
+        />
+        <TextListField
+          label="Relatórios"
+          value={lines(assistant.report_cadence)}
+          placeholder={"daily\nweekly\nmonthly"}
+          onChange={(v) => updateAssistant({ report_cadence: splitLines(v) })}
+        />
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <TextListField label="Pode chamar agentes" value={lines(assistant.can_call_agents)} placeholder={"main\nvendas\nmarketing"} onChange={(v) => updateAssistant({ can_call_agents: splitLines(v) })} />
-        <TextListField label="Exige confirmação" value={lines(assistant.requires_confirmation)} placeholder={"editar agentes\nalterar permissoes\npublicar materiais\napagar arquivos"} onChange={(v) => updateAssistant({ requires_confirmation: splitLines(v) })} />
+        <TextListField
+          label="Pode chamar agentes"
+          value={lines(assistant.can_call_agents)}
+          placeholder={"main\nvendas\nmarketing"}
+          onChange={(v) => updateAssistant({ can_call_agents: splitLines(v) })}
+        />
+        <TextListField
+          label="Exige confirmação"
+          value={lines(assistant.requires_confirmation)}
+          placeholder={
+            "editar agentes\nalterar permissoes\npublicar materiais\napagar arquivos"
+          }
+          onChange={(v) =>
+            updateAssistant({ requires_confirmation: splitLines(v) })
+          }
+        />
       </div>
       <div className="space-y-1.5">
-        <div className="text-muted-foreground text-xs font-medium">Auditoria</div>
-        <Select value={assistant.audit_level || "high"} onValueChange={(v) => updateAssistant({ audit_level: v })}>
-          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+        <div className="text-muted-foreground text-xs font-medium">
+          Auditoria
+        </div>
+        <Select
+          value={assistant.audit_level || "high"}
+          onValueChange={(v) => updateAssistant({ audit_level: v })}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="high">Alta</SelectItem>
             <SelectItem value="medium">Média</SelectItem>
@@ -3613,7 +4786,10 @@ function TextListField({
         .map((s) => s.trim())
         .filter(Boolean)
     : undefined
-  const hint = tags.length === 0 ? placeholder?.split(/\r?\n/)[0] ?? undefined : undefined
+  const hint =
+    tags.length === 0
+      ? (placeholder?.split(/\r?\n/)[0] ?? undefined)
+      : undefined
   return (
     <div className="space-y-1.5">
       <div className="text-muted-foreground text-xs font-medium">{label}</div>
@@ -3630,11 +4806,22 @@ function TextListField({
 
 // ─── proposal card ────────────────────────────────────────────────────────────
 
-function ProposalCard({ proposal, onInspect }: { proposal: unknown; onInspect: () => void }) {
+function ProposalCard({
+  proposal,
+  onInspect,
+}: {
+  proposal: unknown
+  onInspect: () => void
+}) {
   const kind = proposalKind(proposal)
   const assets = proposalAssets(proposal)
   const publicURLs = proposalPublicURLs(proposal)
-  const Icon = kind === "site" ? IconWorldWww : kind === "catalog" ? IconFileDescription : IconSparkles
+  const Icon =
+    kind === "site"
+      ? IconWorldWww
+      : kind === "catalog"
+        ? IconFileDescription
+        : IconSparkles
 
   return (
     <div className="bg-muted/30 ring-border/60 rounded-xl p-3 text-sm ring-1">
@@ -3642,25 +4829,48 @@ function ProposalCard({ proposal, onInspect }: { proposal: unknown; onInspect: (
         <div className="flex min-w-0 items-center gap-2">
           <Icon className="text-muted-foreground size-4 shrink-0" />
           <div className="min-w-0">
-            <div className="truncate font-medium">{proposalTitle(proposal)}</div>
-            <div className="text-muted-foreground text-xs">{kind || "marketing"}</div>
+            <div className="truncate font-medium">
+              {proposalTitle(proposal)}
+            </div>
+            <div className="text-muted-foreground text-xs">
+              {kind || "marketing"}
+            </div>
           </div>
         </div>
-        <Button type="button" variant="ghost" size="sm" onClick={onInspect}>Revisar</Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onInspect}>
+          Revisar
+        </Button>
       </div>
       {assets.length > 0 ? (
         <div className="space-y-1">
           {assets.slice(0, 3).map((asset) => (
-            <div key={asset} className="text-muted-foreground truncate font-mono text-xs" title={asset}>{asset}</div>
+            <div
+              key={asset}
+              className="text-muted-foreground truncate font-mono text-xs"
+              title={asset}
+            >
+              {asset}
+            </div>
           ))}
         </div>
       ) : (
-        <div className="text-muted-foreground text-xs">Sem arquivo vinculado.</div>
+        <div className="text-muted-foreground text-xs">
+          Sem arquivo vinculado.
+        </div>
       )}
       {publicURLs.length > 0 && (
         <div className="border-border/60 mt-3 space-y-1 border-t pt-2">
           {publicURLs.slice(0, 3).map((url) => (
-            <a key={url} href={url} target="_blank" rel="noreferrer" className="text-primary block truncate text-xs hover:underline" title={url}>{url}</a>
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary block truncate text-xs hover:underline"
+              title={url}
+            >
+              {url}
+            </a>
           ))}
         </div>
       )}
@@ -3684,7 +4894,9 @@ function LoadingSkeleton() {
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14 rounded-xl" />)}
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-14 rounded-xl" />
+        ))}
       </div>
     </div>
   )
@@ -3713,7 +4925,7 @@ function EmptyState({
         <div className="bg-background flex size-16 items-center justify-center rounded-2xl shadow-sm">
           <IconUsers className="text-muted-foreground size-8" />
         </div>
-        <span className="bg-emerald-500 absolute -right-1 -bottom-1 inline-flex size-6 items-center justify-center rounded-full text-[10px] font-bold text-white shadow">
+        <span className="absolute -right-1 -bottom-1 inline-flex size-6 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow">
           +
         </span>
       </div>
@@ -3774,11 +4986,15 @@ function UnconfiguredState({
             <AgentAvatar agent={agent} size="lg" />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-foreground text-2xl font-bold">{agent.name || agent.id}</h2>
+                <h2 className="text-foreground text-2xl font-bold">
+                  {agent.name || agent.id}
+                </h2>
                 {agent.default && <DefaultBadge />}
                 <StatusBadge active={isActive} />
               </div>
-              <p className="text-muted-foreground mt-1 font-mono text-xs">{agent.id}</p>
+              <p className="text-muted-foreground mt-1 font-mono text-xs">
+                {agent.id}
+              </p>
             </div>
           </div>
         </div>
@@ -3790,10 +5006,17 @@ function UnconfiguredState({
         </div>
         <div className="space-y-1.5">
           <h3 className="text-foreground text-base font-semibold">
-            {agent ? t("pages.agent.editor.empty_agent_title", "Agente sem template") : t("pages.agent.editor.empty_title")}
+            {agent
+              ? t("pages.agent.editor.empty_agent_title", "Agente sem template")
+              : t("pages.agent.editor.empty_title")}
           </h3>
           <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
-            {agent ? t("pages.agent.editor.empty_agent_description", "Crie ou aplique um template para gerar o workspace do agente.") : t("pages.agent.editor.empty_description")}
+            {agent
+              ? t(
+                  "pages.agent.editor.empty_agent_description",
+                  "Crie ou aplique um template para gerar o workspace do agente.",
+                )
+              : t("pages.agent.editor.empty_description")}
           </p>
         </div>
         <div className="flex flex-wrap justify-center gap-2">
@@ -3803,7 +5026,11 @@ function UnconfiguredState({
               {t("pages.agent.editor.configure_agent", "Configurar")}
             </Button>
           )}
-          <Button variant={agent && onConfigure ? "outline" : "default"} onClick={onCreate} className="gap-2">
+          <Button
+            variant={agent && onConfigure ? "outline" : "default"}
+            onClick={onCreate}
+            className="gap-2"
+          >
             <IconPlus className="size-4" />
             {t("pages.agent.editor.new_agent", "Novo agente")}
           </Button>
@@ -3812,19 +5039,47 @@ function UnconfiguredState({
 
       {agent && (onToggleActive || onDelete) && (
         <div className="border-destructive/20 bg-destructive/3 rounded-xl border p-4">
-          <p className="text-muted-foreground mb-3 text-xs font-medium">{t("pages.agent.editor.section_danger", "Zona de risco")}</p>
+          <p className="text-muted-foreground mb-3 text-xs font-medium">
+            {t("pages.agent.editor.section_danger", "Zona de risco")}
+          </p>
           <div className="flex flex-wrap gap-2">
             {onToggleActive && (
-              <Button variant="outline" size="sm" onClick={onToggleActive} disabled={isTogglingActive || (agent.default && isActive)}
-                className={isActive ? "border-amber-200 text-amber-700 hover:bg-amber-50" : ""}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onToggleActive}
+                disabled={isTogglingActive || (agent.default && isActive)}
+                className={
+                  isActive
+                    ? "border-amber-200 text-amber-700 hover:bg-amber-50"
+                    : ""
+                }
               >
-                {isTogglingActive ? <IconLoader2 className="size-4 animate-spin" /> : isActive ? <IconPlayerPause className="size-4" /> : <IconPlayerPlay className="size-4" />}
-                {isActive ? t("pages.agent.editor.deactivate_agent", "Desativar agente") : t("pages.agent.editor.activate_agent", "Ativar agente")}
+                {isTogglingActive ? (
+                  <IconLoader2 className="size-4 animate-spin" />
+                ) : isActive ? (
+                  <IconPlayerPause className="size-4" />
+                ) : (
+                  <IconPlayerPlay className="size-4" />
+                )}
+                {isActive
+                  ? t("pages.agent.editor.deactivate_agent", "Desativar agente")
+                  : t("pages.agent.editor.activate_agent", "Ativar agente")}
               </Button>
             )}
             {onDelete && (
-              <Button variant="outline" size="sm" onClick={onDelete} disabled={isDeleting} className="border-red-200 text-red-600 hover:bg-red-50">
-                {isDeleting ? <IconLoader2 className="size-4 animate-spin" /> : <IconTrash className="size-4" />}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onDelete}
+                disabled={isDeleting}
+                className="border-red-200 text-red-600 hover:bg-red-50"
+              >
+                {isDeleting ? (
+                  <IconLoader2 className="size-4 animate-spin" />
+                ) : (
+                  <IconTrash className="size-4" />
+                )}
                 {t("pages.agent.editor.delete_agent", "Remover agente")}
               </Button>
             )}

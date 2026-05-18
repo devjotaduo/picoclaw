@@ -39,7 +39,7 @@ export function LogoutConfirmDialog({
           <AlertDialogDescription>
             {t(
               "credentials.logoutDialog.description",
-              "This will remove your saved credential for {{provider}}.",
+              "Isso removerá sua credencial salva para {{provider}}.",
               { provider: providerLabel },
             )}
           </AlertDialogDescription>

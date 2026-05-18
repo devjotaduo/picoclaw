@@ -400,33 +400,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       .filter((group) => group.items.length > 0)
   }, [canRead, channelItems])
 
+  const channelsMoreToggleTitle = showAllChannels
+    ? t("navigation.show_less_channels")
+    : t("navigation.show_more_channels")
+
   return (
     <Sidebar
       {...props}
+      collapsible="icon"
       className="bg-background border-r-border/20 border-r pt-3"
     >
       <SidebarContent className="bg-background">
-        {navGroups.map((group) => (
-          <Collapsible
-            key={group.label}
-            defaultOpen={group.defaultOpen}
-            className="group/collapsible mb-1"
-          >
-            <SidebarGroup className="px-2 py-0">
-              <SidebarGroupLabel asChild>
-                <CollapsibleTrigger className="hover:bg-muted/60 flex w-full cursor-pointer items-center justify-between rounded-md px-2 py-1.5 transition-colors">
-                  <span>{t(group.label)}</span>
-                  <IconChevronRight className="size-3.5 opacity-50 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                </CollapsibleTrigger>
-              </SidebarGroupLabel>
-              <CollapsibleContent>
-                <SidebarGroupContent className="pt-1">
-                  <SidebarMenu>
-                    {group.items.map((item) => {
+        {navGroups.map((group) => {
+          const isFlatGroup = group.label === "navigation.agent_group"
+          const menuContent = (
+            <SidebarMenu>
+              {group.items.map((item) => {
                       const isActive =
                         currentPath === item.url ||
                         (item.url !== "/" &&
                           currentPath.startsWith(`${item.url}/`))
+                      const title =
+                        item.translateTitle === false
+                          ? item.title
+                          : t(item.title)
                       return (
                         <SidebarMenuItem key={item.title}>
                           {item.feature === "agent_editor" ? (
@@ -438,17 +435,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                               onNavigate={handleNavItemClick}
                               selectedAgent={selectedAgent}
                               selectedAgentID={selectedAgentID}
-                              title={
-                                item.translateTitle === false
-                                  ? item.title
-                                  : t(item.title)
-                              }
+                              title={title}
                             />
                           ) : (
                             <SidebarMenuButton
                               asChild
                               isActive={isActive}
                               onClick={handleNavItemClick}
+                              tooltip={title}
                               data-tour={
                                 item.url === "/models"
                                   ? "models-nav"
@@ -459,9 +453,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                               {item.external ? (
                                 <a href={item.url}>
                                   <item.icon className="size-4 opacity-60" />
-                                  <span className="opacity-80">
-                                    {item.title}
-                                  </span>
+                                  <span className="opacity-80">{title}</span>
                                 </a>
                               ) : (
                                 <Link to={item.url}>
@@ -473,9 +465,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                       isActive ? "opacity-100" : "opacity-80"
                                     }
                                   >
-                                    {item.translateTitle === false
-                                      ? item.title
-                                      : t(item.title)}
+                                    {title}
                                   </span>
                                 </Link>
                               )}
@@ -484,31 +474,59 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         </SidebarMenuItem>
                       )
                     })}
-                    {group.isChannelsGroup && hasMoreChannels && (
-                      <SidebarMenuItem key="channels-more-toggle">
-                        <SidebarMenuButton
-                          onClick={toggleShowAllChannels}
-                          className="text-muted-foreground hover:bg-muted/60 h-9 px-3"
-                        >
-                          {showAllChannels ? (
-                            <IconChevronsUp className="size-4 opacity-60" />
-                          ) : (
-                            <IconChevronsDown className="size-4 opacity-60" />
-                          )}
-                          <span className="opacity-80">
-                            {showAllChannels
-                              ? t("navigation.show_less_channels")
-                              : t("navigation.show_more_channels")}
-                          </span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
+              {group.isChannelsGroup && hasMoreChannels && (
+                <SidebarMenuItem key="channels-more-toggle">
+                  <SidebarMenuButton
+                    onClick={toggleShowAllChannels}
+                    tooltip={channelsMoreToggleTitle}
+                    className="text-muted-foreground hover:bg-muted/60 h-9 px-3"
+                  >
+                    {showAllChannels ? (
+                      <IconChevronsUp className="size-4 opacity-60" />
+                    ) : (
+                      <IconChevronsDown className="size-4 opacity-60" />
                     )}
-                  </SidebarMenu>
+                    <span className="opacity-80">
+                      {channelsMoreToggleTitle}
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+            </SidebarMenu>
+          )
+
+          if (isFlatGroup) {
+            return (
+              <SidebarGroup key={group.label} className="mb-1 px-2 py-0">
+                <SidebarGroupContent className="pt-1">
+                  {menuContent}
                 </SidebarGroupContent>
-              </CollapsibleContent>
-            </SidebarGroup>
-          </Collapsible>
-        ))}
+              </SidebarGroup>
+            )
+          }
+
+          return (
+            <Collapsible
+              key={group.label}
+              defaultOpen={group.defaultOpen}
+              className="group/collapsible mb-1"
+            >
+              <SidebarGroup className="px-2 py-0">
+                <SidebarGroupLabel asChild>
+                  <CollapsibleTrigger className="hover:bg-muted/60 flex w-full cursor-pointer items-center justify-between rounded-md px-2 py-1.5 transition-colors">
+                    <span>{t(group.label)}</span>
+                    <IconChevronRight className="size-3.5 opacity-50 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                  </CollapsibleTrigger>
+                </SidebarGroupLabel>
+                <CollapsibleContent>
+                  <SidebarGroupContent className="pt-1">
+                    {menuContent}
+                  </SidebarGroupContent>
+                </CollapsibleContent>
+              </SidebarGroup>
+            </Collapsible>
+          )
+        })}
       </SidebarContent>
       <SidebarRail />
     </Sidebar>
@@ -536,31 +554,48 @@ function AgentSelectorNavItem({
   title,
 }: AgentSelectorNavItemProps) {
   const hasMultiple = agentOptions.length > 1
+  const Icon = item.icon
 
   return (
     <div
-      className={cn(
-        "flex items-center rounded-md transition-colors",
-        isActive
-          ? "bg-accent/80 text-foreground font-medium"
-          : "text-muted-foreground hover:bg-muted/60",
-      )}
+      className="flex w-full items-center rounded-md"
       data-testid="sidebar-agent-selector"
     >
-      <Link
-        to={item.url}
+      <SidebarMenuButton
+        asChild
+        isActive={isActive}
         onClick={onNavigate}
-        className="min-w-0 flex-1 px-2 py-1.5 text-sm"
+        tooltip={title}
+        className={cn(
+          "h-9 min-w-0 flex-1 px-3",
+          isActive
+            ? "bg-accent/80 text-foreground font-medium"
+            : "text-muted-foreground hover:bg-muted/60",
+          hasMultiple &&
+            "rounded-r-none pr-2 group-data-[collapsible=icon]:rounded-md",
+        )}
       >
-        <span className="block truncate">{title}</span>
-      </Link>
+        <Link to={item.url}>
+          <Icon
+            className={`size-4 ${isActive ? "opacity-100" : "opacity-60"}`}
+          />
+          <span className={isActive ? "opacity-100" : "opacity-80"}>
+            {title}
+          </span>
+        </Link>
+      </SidebarMenuButton>
       {hasMultiple && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
               aria-label="Trocar agente"
-              className="hover:bg-background/70 focus-visible:ring-ring mr-1 inline-flex size-6 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-hidden group-data-[collapsible=icon]:hidden"
+              className={cn(
+                "focus-visible:ring-ring mr-1 inline-flex size-6 items-center justify-center rounded-md transition-colors group-data-[collapsible=icon]:hidden focus-visible:ring-2 focus-visible:outline-hidden",
+                isActive
+                  ? "text-foreground hover:bg-background/70"
+                  : "text-muted-foreground hover:bg-muted/60",
+              )}
               data-testid="agent-selector-trigger"
             >
               <IconChevronDown className="size-3.5 opacity-70" />

@@ -372,6 +372,7 @@ func TestTenantStore_DeleteCascadeRemovesRelatedRows(t *testing.T) {
 	invites := &store.InviteStore{DB: db}
 	usage := &store.UsageStore{DB: db}
 	audit := &store.AuditStore{DB: db}
+	integrations := &store.SkillIntegrationStore{DB: db}
 
 	suffix := time.Now().UnixNano()
 	tenantID := fmt.Sprintf("cascade-%d", suffix)
@@ -414,6 +415,22 @@ func TestTenantStore_DeleteCascadeRemovesRelatedRows(t *testing.T) {
 	if err := audit.Insert(ctx, &owner.ID, &tenantID, "tenant.delete", "tenant", tenantID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := integrations.Upsert(ctx, &store.SkillIntegrationSettings{
+		TenantID:    tenantID,
+		SkillName:   "agenda",
+		ValuesJSON:  []byte(`{"api_url":"https://api.example.com"}`),
+		SecretsJSON: []byte(`{"api_token":"enc://example"}`),
+		UpdatedBy:   &owner.ID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	integration, err := integrations.Get(ctx, tenantID, "agenda")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(integration.ValuesJSON) == "{}" {
+		t.Fatal("expected integration values to be stored")
+	}
 
 	if err := tenants.DeleteCascade(ctx, tenantID); err != nil {
 		t.Fatal(err)
@@ -435,5 +452,6 @@ func TestTenantStore_DeleteCascadeRemovesRelatedRows(t *testing.T) {
 	assertCount("tenant_memberships", "tenant_id = $1", 0)
 	assertCount("invites", "tenant_id = $1", 0)
 	assertCount("usage_logs", "tenant_id = $1", 0)
+	assertCount("tenant_skill_integrations", "tenant_id = $1", 0)
 	assertCount("audit_logs", "tenant_id IS NULL AND target_id = $1", 1)
 }

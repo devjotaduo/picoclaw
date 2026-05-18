@@ -73,7 +73,7 @@ type saveSkillReq struct {
 }
 
 func (h *Handler) handleSaveSkill(w http.ResponseWriter, r *http.Request) {
-	m, _, ok := h.skillsFor(w, r)
+	m, tenantID, ok := h.skillsFor(w, r)
 	if !ok {
 		return
 	}
@@ -90,6 +90,10 @@ func (h *Handler) handleSaveSkill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if err := h.syncTenantIntegrations(r.Context(), tenantID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -99,7 +103,7 @@ type createSkillReq struct {
 }
 
 func (h *Handler) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
-	m, _, ok := h.skillsFor(w, r)
+	m, tenantID, ok := h.skillsFor(w, r)
 	if !ok {
 		return
 	}
@@ -125,11 +129,15 @@ func (h *Handler) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if err := h.syncTenantIntegrations(r.Context(), tenantID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusCreated, s)
 }
 
 func (h *Handler) handleDeleteSkill(w http.ResponseWriter, r *http.Request) {
-	m, _, ok := h.skillsFor(w, r)
+	m, tenantID, ok := h.skillsFor(w, r)
 	if !ok {
 		return
 	}
@@ -145,6 +153,16 @@ func (h *Handler) handleDeleteSkill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if h.Integrations != nil {
+		if err := h.Integrations.Delete(r.Context(), tenantID, name); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if err := h.syncTenantIntegrations(r.Context(), tenantID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -154,7 +172,7 @@ type toggleReq struct {
 }
 
 func (h *Handler) handleSetSkillActive(w http.ResponseWriter, r *http.Request) {
-	m, _, ok := h.skillsFor(w, r)
+	m, tenantID, ok := h.skillsFor(w, r)
 	if !ok {
 		return
 	}
@@ -168,6 +186,10 @@ func (h *Handler) handleSetSkillActive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := m.SetActive(name, *req.Active); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.syncTenantIntegrations(r.Context(), tenantID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -205,7 +227,7 @@ func (h *Handler) handleGetAgentInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleSaveAgentInfo(w http.ResponseWriter, r *http.Request) {
-	m, _, ok := h.skillsFor(w, r)
+	m, tenantID, ok := h.skillsFor(w, r)
 	if !ok {
 		return
 	}
@@ -218,11 +240,15 @@ func (h *Handler) handleSaveAgentInfo(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := h.syncTenantIntegrations(r.Context(), tenantID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) handleSaveAgent(w http.ResponseWriter, r *http.Request) {
-	m, _, ok := h.skillsFor(w, r)
+	m, tenantID, ok := h.skillsFor(w, r)
 	if !ok {
 		return
 	}
@@ -234,6 +260,10 @@ func (h *Handler) handleSaveAgent(w http.ResponseWriter, r *http.Request) {
 	if err := m.SaveAgent(req.Content); err != nil {
 		// Frontmatter validation errors are user errors — surface them as 400.
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.syncTenantIntegrations(r.Context(), tenantID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
+import { getSkillDisplay } from "@/lib/skill-display";
 
 export function SkillEdit() {
   const { id = "", name = "" } = useParams();
@@ -69,6 +70,8 @@ export function SkillEdit() {
   if (q.isLoading) return <div className="p-6 text-sm text-zinc-500">Loading…</div>;
   if (q.isError || !q.data) return <div className="p-6 text-sm text-red-300">Failed to load skill.</div>;
 
+  const display = getSkillDisplay(q.data);
+
   const handleBack = () => {
     if (dirty) { setConfirmDiscard(true); return; }
     nav(`/tenants/${id}/skills`);
@@ -85,13 +88,18 @@ export function SkillEdit() {
 
       <header className="mb-4 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="truncate text-xl font-semibold">
+          <h1 className="truncate text-xl font-semibold text-zinc-100">
             {q.data.emoji && <span className="mr-2">{q.data.emoji}</span>}
-            <code className="font-mono text-zinc-100">{name}</code>
+            {display.name}
           </h1>
-          {q.data.description && (
-            <p className="mt-1 truncate text-sm text-zinc-400">{q.data.description}</p>
-          )}
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            <code className="rounded bg-zinc-950 px-1.5 py-0.5 text-[11px] text-zinc-500">
+              {name}
+            </code>
+            {display.description && (
+              <span className="truncate text-zinc-400">{display.description}</span>
+            )}
+          </div>
         </div>
         <Button onClick={() => saveM.mutate()} disabled={!dirty || saveM.isPending}>
           <Save className="h-4 w-4" />

@@ -1,5 +1,11 @@
 export type JsonRecord = Record<string, unknown>
 
+export interface QuickTaskForm {
+  id: string
+  label: string
+  prompt: string
+}
+
 export interface CoreConfigForm {
   workspace: string
   restrictToWorkspace: boolean
@@ -7,6 +13,8 @@ export interface CoreConfigForm {
   showReasoning: boolean
   showToolCalls: boolean
   showModelSelector: boolean
+  chatIntro: string
+  quickTasks: QuickTaskForm[]
   toolFeedbackEnabled: boolean
   toolFeedbackMaxArgsLength: string
   toolFeedbackSeparateMessages: boolean
@@ -106,6 +114,8 @@ export const EMPTY_FORM: CoreConfigForm = {
   showReasoning: true,
   showToolCalls: true,
   showModelSelector: true,
+  chatIntro: "",
+  quickTasks: [],
   toolFeedbackEnabled: false,
   toolFeedbackMaxArgsLength: "300",
   toolFeedbackSeparateMessages: false,
@@ -228,6 +238,32 @@ function mapMCPServers(value: unknown): MCPServerForm[] {
   })
 }
 
+function mapQuickTasks(value: unknown): QuickTaskForm[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value
+    .map((raw, index) => {
+      const cfg = asRecord(raw)
+      const label = asString(cfg.label)
+      const prompt = asString(cfg.prompt)
+      return {
+        id: `quick-task-${index}-${Math.random().toString(36).slice(2, 8)}`,
+        label,
+        prompt,
+      }
+    })
+    .filter((task) => task.label !== "" || task.prompt !== "")
+}
+
+export function newQuickTask(): QuickTaskForm {
+  return {
+    id: `quick-task-${Math.random().toString(36).slice(2, 10)}`,
+    label: "",
+    prompt: "",
+  }
+}
+
 export function buildFormFromConfig(config: unknown): CoreConfigForm {
   const root = asRecord(config)
   const agents = asRecord(root.agents)
@@ -266,6 +302,8 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
       ui.show_model_selector === undefined
         ? EMPTY_FORM.showModelSelector
         : asBool(ui.show_model_selector),
+    chatIntro: asString(ui.chat_intro),
+    quickTasks: mapQuickTasks(ui.quick_tasks),
     toolFeedbackEnabled:
       toolFeedback.enabled === undefined
         ? EMPTY_FORM.toolFeedbackEnabled

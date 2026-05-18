@@ -5,6 +5,7 @@ import Editor, {
 } from "@monaco-editor/react"
 import { IconLoader2 } from "@tabler/icons-react"
 import { useEffect, useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import { cn } from "@/lib/utils"
 
@@ -104,6 +105,7 @@ export function CodeEditor({
   wordWrap = "on",
   onValidate,
 }: CodeEditorProps) {
+  const { t } = useTranslation()
   const theme = useEditorTheme()
 
   const handleChange = useMemo<OnChange | undefined>(() => {
@@ -132,7 +134,7 @@ export function CodeEditor({
         loading={
           <div className="text-muted-foreground flex h-full items-center justify-center gap-2 text-sm">
             <IconLoader2 className="size-4 animate-spin" />
-            Loading editor...
+            {t("codeEditor.loading")}
           </div>
         }
         options={{

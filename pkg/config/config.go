@@ -56,9 +56,19 @@ type Config struct {
 }
 
 type UIConfig struct {
-	ShowReasoning     bool `json:"show_reasoning"`
-	ShowToolCalls     bool `json:"show_tool_calls"`
-	ShowModelSelector bool `json:"show_model_selector"`
+	ShowReasoning     bool            `json:"show_reasoning"`
+	ShowToolCalls     bool            `json:"show_tool_calls"`
+	ShowModelSelector bool            `json:"show_model_selector"`
+	ChatIntro         string          `json:"chat_intro,omitempty"`
+	QuickTasks        []QuickTaskItem `json:"quick_tasks,omitempty"`
+}
+
+// QuickTaskItem is a pre-configured prompt that admins can expose on the chat
+// empty state so end users can kick off common requests with one click.
+type QuickTaskItem struct {
+	Label  string `json:"label"`
+	Prompt string `json:"prompt"`
+	Icon   string `json:"icon,omitempty"`
 }
 
 func DefaultUIConfig() UIConfig {

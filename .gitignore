@@ -76,3 +76,13 @@ docker/data
 
 .omc/
 .claude-*.zip
+
+# Ruflo / claude-flow runtime
+.swarm/
+.claude-flow/
+ruvector.db
+.agentdb/
+
+# Python bytecode (devs/)
+__pycache__/
+*.pyc

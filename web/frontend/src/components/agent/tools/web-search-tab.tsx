@@ -43,7 +43,7 @@ export function WebSearchTab({
           <p className="text-destructive font-medium">
             {t(
               "pages.agent.tools.web_search.load_error",
-              "Failed to load web search configuration",
+              "Falha ao carregar configuração de pesquisa web.",
             )}
           </p>
         </div>
@@ -56,13 +56,13 @@ export function WebSearchTab({
               <h1 className="text-foreground/90 text-2xl font-semibold tracking-tight">
                 {t(
                   "pages.agent.tools.web_search.title",
-                  "Web Search Configuration",
+                  "Pesquisa Web",
                 )}
               </h1>
               <p className="text-muted-foreground/80 text-[14px] leading-relaxed">
                 {t(
                   "pages.agent.tools.web_search.description",
-                  "Configure how the web search tool behaves by default, including whether the model may use its built-in search capability.",
+                  "Configure como a ferramenta de pesquisa web se comporta por padrão, incluindo se o modelo pode usar sua capacidade nativa de pesquisa.",
                 )}
               </p>
             </div>
@@ -72,7 +72,7 @@ export function WebSearchTab({
               disabled={!isDirty || isSaving}
               className="h-10 shrink-0 rounded-xl px-6 shadow-sm transition-all active:scale-95"
             >
-              {t("pages.agent.tools.web_search.save", "Save Changes")}
+              {t("pages.agent.tools.web_search.save", "Salvar Alterações")}
             </Button>
           </div>
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	saasPolicy "github.com/sipeed/picoclaw/internal/saas/policy"
 	"github.com/sipeed/picoclaw/pkg/config"
@@ -73,11 +74,29 @@ func (h *Handler) launcherUIConfig() config.UIConfig {
 	return cfg.UI
 }
 
-func launcherUIResponse(ui config.UIConfig) map[string]bool {
-	return map[string]bool{
+func launcherUIResponse(ui config.UIConfig) map[string]any {
+	tasks := make([]map[string]string, 0, len(ui.QuickTasks))
+	for _, task := range ui.QuickTasks {
+		label := strings.TrimSpace(task.Label)
+		prompt := strings.TrimSpace(task.Prompt)
+		if label == "" || prompt == "" {
+			continue
+		}
+		entry := map[string]string{
+			"label":  label,
+			"prompt": prompt,
+		}
+		if icon := strings.TrimSpace(task.Icon); icon != "" {
+			entry["icon"] = icon
+		}
+		tasks = append(tasks, entry)
+	}
+	return map[string]any{
 		"show_reasoning":      ui.ShowReasoning,
 		"show_tool_calls":     ui.ShowToolCalls,
 		"show_model_selector": ui.ShowModelSelector,
+		"chat_intro":          strings.TrimSpace(ui.ChatIntro),
+		"quick_tasks":         tasks,
 	}
 }
 

@@ -60,12 +60,19 @@ type UserDefinition struct {
 	Content string `json:"content"`
 }
 
+// IntegrationsDefinition represents the generated tenant integration manifest.
+type IntegrationsDefinition struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
 // AgentContextDefinition captures the workspace agent definition in a runtime-friendly shape.
 type AgentContextDefinition struct {
-	Source AgentDefinitionSource  `json:"source,omitempty"`
-	Agent  *AgentPromptDefinition `json:"agent,omitempty"`
-	Soul   *SoulDefinition        `json:"soul,omitempty"`
-	User   *UserDefinition        `json:"user,omitempty"`
+	Source       AgentDefinitionSource   `json:"source,omitempty"`
+	Agent        *AgentPromptDefinition  `json:"agent,omitempty"`
+	Soul         *SoulDefinition         `json:"soul,omitempty"`
+	User         *UserDefinition         `json:"user,omitempty"`
+	Integrations *IntegrationsDefinition `json:"integrations,omitempty"`
 }
 
 // LoadAgentDefinition parses the workspace agent bootstrap files.
@@ -80,6 +87,7 @@ func (cb *ContextBuilder) LoadAgentDefinition() AgentContextDefinition {
 func loadAgentDefinition(workspace string) AgentContextDefinition {
 	definition := AgentContextDefinition{}
 	definition.User = loadUserDefinition(workspace)
+	definition.Integrations = loadIntegrationsDefinition(workspace)
 	agentPath := filepath.Join(workspace, string(AgentDefinitionSourceAgent))
 	if content, err := os.ReadFile(agentPath); err == nil {
 		prompt := parseAgentPromptDefinition(agentPath, string(content))
@@ -123,6 +131,7 @@ func (definition AgentContextDefinition) trackedPaths(workspace string) []string
 		filepath.Join(workspace, string(AgentDefinitionSourceAgent)),
 		filepath.Join(workspace, "SOUL.md"),
 		filepath.Join(workspace, "USER.md"),
+		filepath.Join(workspace, "INTEGRATIONS.md"),
 	}
 	if definition.Source != AgentDefinitionSourceAgent {
 		paths = append(paths,
@@ -138,6 +147,18 @@ func loadUserDefinition(workspace string) *UserDefinition {
 	if content, err := os.ReadFile(userPath); err == nil {
 		return &UserDefinition{
 			Path:    userPath,
+			Content: string(content),
+		}
+	}
+
+	return nil
+}
+
+func loadIntegrationsDefinition(workspace string) *IntegrationsDefinition {
+	integrationsPath := filepath.Join(workspace, "INTEGRATIONS.md")
+	if content, err := os.ReadFile(integrationsPath); err == nil {
+		return &IntegrationsDefinition{
+			Path:    integrationsPath,
 			Content: string(content),
 		}
 	}

@@ -1117,6 +1117,43 @@ func TestLoadConfig_UIPartialDefaults(t *testing.T) {
 	if !cfg.UI.ShowModelSelector {
 		t.Fatal("UI.ShowModelSelector should keep default true when omitted")
 	}
+	if len(cfg.UI.QuickTasks) != 0 {
+		t.Fatalf("UI.QuickTasks = %#v, want empty by default", cfg.UI.QuickTasks)
+	}
+}
+
+func TestLoadConfig_UIQuickTasksRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	raw := `{
+"version":3,
+"ui":{
+  "chat_intro":"Olá, sou seu agente",
+  "quick_tasks":[
+    {"label":"Resumo","prompt":"Me dê um resumo","icon":"sparkles"},
+    {"label":"Status","prompt":"Quais tarefas estão pendentes?"}
+  ]
+}}`
+	if err := os.WriteFile(configPath, []byte(raw), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error: %v", err)
+	}
+	if cfg.UI.ChatIntro != "Olá, sou seu agente" {
+		t.Fatalf("UI.ChatIntro = %q", cfg.UI.ChatIntro)
+	}
+	if len(cfg.UI.QuickTasks) != 2 {
+		t.Fatalf("UI.QuickTasks len = %d, want 2", len(cfg.UI.QuickTasks))
+	}
+	if cfg.UI.QuickTasks[0].Label != "Resumo" || cfg.UI.QuickTasks[0].Icon != "sparkles" {
+		t.Fatalf("UI.QuickTasks[0] = %#v", cfg.UI.QuickTasks[0])
+	}
+	if cfg.UI.QuickTasks[1].Prompt != "Quais tarefas estão pendentes?" {
+		t.Fatalf("UI.QuickTasks[1] = %#v", cfg.UI.QuickTasks[1])
+	}
 }
 
 func TestDefaultConfig_WebProviderIsAuto(t *testing.T) {

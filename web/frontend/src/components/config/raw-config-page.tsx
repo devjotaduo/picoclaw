@@ -91,7 +91,7 @@ export function RawConfigPage() {
       toast.error(
         t(
           "pages.config.invalid_json",
-          error instanceof Error ? error.message : "Invalid JSON format.",
+          error instanceof Error ? error.message : "Formato JSON inválido.",
         ),
       )
     }
@@ -110,7 +110,7 @@ export function RawConfigPage() {
       toast.error(
         t(
           "pages.config.format_error",
-          error instanceof Error ? error.message : "Invalid JSON format.",
+          error instanceof Error ? error.message : "Formato JSON inválido.",
         ),
       )
     }

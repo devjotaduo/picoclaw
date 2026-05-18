@@ -203,7 +203,7 @@ export function AppHeader() {
                 data-tour="gateway-button"
               >
                 <span className="bg-emerald-500 size-1.5 rounded-full" />
-                Gateway online
+                {t("header.gateway.status.running", "Gateway online")}
               </span>
             </TooltipTrigger>
             <TooltipContent>

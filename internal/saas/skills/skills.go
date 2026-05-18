@@ -245,11 +245,13 @@ func ValidateName(name string) error {
 
 // SkillSummary is the lightweight row returned by List.
 type SkillSummary struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Emoji       string `json:"emoji,omitempty"`
-	Active      bool   `json:"active"`  // present in AGENT.md `skills:` list
-	Visible     bool   `json:"visible"` // metadata.visible — defaults to true
+	Name                   string             `json:"name"`
+	Description            string             `json:"description"`
+	Emoji                  string             `json:"emoji,omitempty"`
+	Active                 bool               `json:"active"`  // present in AGENT.md `skills:` list
+	Visible                bool               `json:"visible"` // metadata.visible — defaults to true
+	Integration            *IntegrationSchema `json:"integration,omitempty"`
+	IntegrationSchemaError string             `json:"integration_schema_error,omitempty"`
 }
 
 // Skill is the full payload returned by Get.
@@ -508,11 +510,13 @@ func summarizeContent(name string, raw []byte) (SkillSummary, error) {
 		s.Name = doc.Name
 	}
 	s.Description = strings.TrimSpace(doc.Description)
-	visible, emoji := readMetadata(doc.Metadata)
+	visible, emoji, integration, integrationErr := readMetadata(doc.Metadata, s.Name)
 	if visible != nil {
 		s.Visible = *visible
 	}
 	s.Emoji = emoji
+	s.Integration = integration
+	s.IntegrationSchemaError = integrationErr
 	return s, nil
 }
 
@@ -520,14 +524,15 @@ func summarizeContent(name string, raw []byte) (SkillSummary, error) {
 //   - metadata: {"visible": true, "nanobot": {"emoji": "🌤"}}
 //   - metadata as a nested mapping
 //
-// It returns the visible flag (nil = unset) and the nanobot emoji.
-func readMetadata(meta any) (*bool, string) {
+// It returns the visible flag (nil = unset), nanobot emoji, and optional
+// integration schema declared for the skill.
+func readMetadata(meta any, skillName string) (*bool, string, *IntegrationSchema, string) {
 	if meta == nil {
-		return nil, ""
+		return nil, "", nil, ""
 	}
 	asMap, ok := meta.(map[string]any)
 	if !ok {
-		return nil, ""
+		return nil, "", nil, ""
 	}
 	var visible *bool
 	if v, ok := asMap["visible"].(bool); ok {
@@ -539,7 +544,8 @@ func readMetadata(meta any) (*bool, string) {
 			emoji = e
 		}
 	}
-	return visible, emoji
+	integration, integrationErr := parseIntegrationSchema(asMap["integration"], skillName)
+	return visible, emoji, integration, integrationErr
 }
 
 // setVisibleInFrontmatter rewrites just the metadata.visible field, preserving

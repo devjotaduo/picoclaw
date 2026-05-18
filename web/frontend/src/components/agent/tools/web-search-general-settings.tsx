@@ -28,15 +28,15 @@ export function WebSearchGeneralSettings({
   return (
     <div className="space-y-4">
       <h3 className="text-foreground/80 text-[13px] font-bold tracking-widest uppercase">
-        {t("pages.agent.tools.web_search.global_settings", "General")}
+        {t("pages.agent.tools.web_search.global_settings", "Geral")}
       </h3>
 
       <div className="bg-card border-border/40 divide-border/40 divide-y overflow-hidden rounded-2xl border shadow-sm">
         <SettingRow
-          label={t("pages.agent.tools.web_search.provider", "Primary Provider")}
+          label={t("pages.agent.tools.web_search.provider", "Provedor Principal")}
           description={t(
             "pages.agent.tools.web_search.provider_description",
-            "Select the default provider to use when the web search tool handles a request.",
+            "Selecione o provedor padrão a ser usado quando a ferramenta de pesquisa web atender a uma requisição.",
           )}
         >
           <Select
@@ -66,10 +66,10 @@ export function WebSearchGeneralSettings({
         </SettingRow>
 
         <SettingRow
-          label={t("pages.agent.tools.web_search.proxy", "Proxy Configuration")}
+          label={t("pages.agent.tools.web_search.proxy", "Proxy HTTPS")}
           description={t(
             "pages.agent.tools.web_search.proxy_description",
-            "Optional global HTTP/S proxy for underlying web requests.",
+            "Proxy HTTP/S global opcional para requisições web subjacentes.",
           )}
         >
           <Input
@@ -88,11 +88,11 @@ export function WebSearchGeneralSettings({
         <SettingRow
           label={t(
             "pages.agent.tools.web_search.prefer_native",
-            "Prefer Native Search",
+            "Preferir Pesquisa Nativa",
           )}
           description={t(
             "pages.agent.tools.web_search.prefer_native_hint",
-            "When enabled, the model may use its built-in search capability instead of the configured provider list.",
+            "Quando habilitado, o modelo pode usar sua capacidade de pesquisa nativa em vez da lista de provedores configurados.",
           )}
         >
           <Switch

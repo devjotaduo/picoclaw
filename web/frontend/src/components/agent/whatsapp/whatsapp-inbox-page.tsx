@@ -92,13 +92,21 @@ const messagesQueryKey = (jid: string) => ["whatsapp", "messages", jid]
 
 // ─── main page ────────────────────────────────────────────────────────────────
 
-export function WhatsAppInboxPage() {
+interface WhatsAppInboxPageProps {
+  initialJID?: string
+}
+
+export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [selectedJID, setSelectedJID] = useState<string | null>(null)
+  const [selectedJID, setSelectedJID] = useState<string | null>(
+    initialJID ?? null,
+  )
   const [draft, setDraft] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
-  const [mobileView, setMobileView] = useState<"list" | "chat">("list")
+  const [mobileView, setMobileView] = useState<"list" | "chat">(
+    initialJID ? "chat" : "list",
+  )
   const [filter, setFilter] = useState<ConversationFilter>("all")
   const [sort, setSort] = useState<ConversationSort>("recent")
   const [selectedTag, setSelectedTag] = useState<string | null>(null)

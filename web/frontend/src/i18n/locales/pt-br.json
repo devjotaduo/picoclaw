@@ -31,6 +31,13 @@
     "errorInvalid": "Senha incorreta. Tente novamente.",
     "errorNetwork": "Erro de rede. Tente novamente."
   },
+  "rootLayout": {
+    "authErrorPrefix": "Erro do serviço de autenticação",
+    "authErrorFallback": "Serviço de autenticação indisponível. Redefina o armazenamento de senha do dashboard e reinicie a aplicação."
+  },
+  "codeEditor": {
+    "loading": "Carregando editor..."
+  },
   "launcherSetup": {
     "title": "Definir senha do dashboard",
     "description": "Escolha uma senha para proteger o acesso a este dashboard. Você a usará toda vez que entrar.",
@@ -44,6 +51,7 @@
   },
   "chat": {
     "welcome": "Como posso te ajudar hoje?",
+    "welcomeWithAgent": "Olá! Sou {{name}}, como posso te ajudar?",
     "welcomeDesc": "Pergunte sobre clima, configurações ou qualquer outra tarefa. Estou aqui para ajudar.",
     "placeholder": "Inicie uma nova mensagem...",
     "disabledPlaceholder": {
@@ -117,6 +125,12 @@
       "apikey": "API Key",
       "oauth": "OAuth",
       "local": "Local"
+    },
+    "pendingHandoffs": {
+      "title": "Aguardando humano",
+      "loading": "Carregando conversas...",
+      "empty": "Nenhuma conversa aguardando atendimento humano.",
+      "unread": "{{count}} não lida(s)"
     }
   },
   "header": {
@@ -134,12 +148,14 @@
       "action": {
         "start": "Iniciar Gateway",
         "stop": "Parar Gateway",
-        "restart": "Reiniciar Gateway"
+        "restart": "Reiniciar Gateway",
+        "running": "Gateway rodando"
       },
       "status": {
         "starting": "Iniciando Gateway...",
         "restarting": "Reiniciando Gateway...",
-        "stopping": "Parando Gateway..."
+        "stopping": "Parando Gateway...",
+        "running": "Gateway online"
       },
       "restartRequired": "Alterações de configuração requerem reiniciar o gateway para ter efeito."
     }
@@ -153,6 +169,10 @@
     "sending": "Enviando...",
     "reset": "Redefinir",
     "confirm": "Confirmar",
+    "dismiss": "Dispensar",
+    "language": "Idioma",
+    "lightMode": "Modo claro",
+    "darkMode": "Modo escuro",
     "saveChangesTitle": "Você tem alterações de configuração não salvas",
     "restartRequiredTitle": "Reinício do gateway necessário",
     "restartRequiredDesc": "A configuração mais recente de {{name}} foi salva. Reinicie o gateway para que tenha efeito."
@@ -1109,6 +1129,17 @@
       "show_tool_calls_hint": "Permitir que o chat e o histórico exibam ferramentas chamadas, argumentos e explicações.",
       "show_model_selector": "Mostrar Seletor de Modelo",
       "show_model_selector_hint": "Exibir o seletor de modelo no topo da página de chat.",
+      "chat_intro": "Mensagem de boas-vindas do chat",
+      "chat_intro_hint": "Texto exibido abaixo do nome do agente na tela inicial do chat. Deixe em branco para usar o padrão.",
+      "chat_intro_placeholder": "Ex.: Sou seu assistente. Posso falar com outros agentes especialistas quando precisar.",
+      "quick_tasks_label": "Tarefas rápidas",
+      "quick_tasks_hint": "Botões clicáveis exibidos na tela inicial do chat. Cada tarefa envia o prompt configurado ao agente principal.",
+      "quick_tasks_empty": "Nenhuma tarefa rápida configurada. Adicione abaixo para sugerir ações ao usuário.",
+      "quick_task_index": "Tarefa {{index}}",
+      "quick_task_remove": "Remover tarefa",
+      "quick_task_add": "Adicionar tarefa",
+      "quick_task_label_placeholder": "Rótulo (ex.: Resumo do dia)",
+      "quick_task_prompt_placeholder": "Prompt enviado ao agente quando o botão for clicado",
       "tool_feedback_enabled": "Feedback de Ferramentas",
       "tool_feedback_enabled_hint": "Enviar uma breve nota de execução no chat atual antes de cada ferramenta rodar.",
       "tool_feedback_separate_messages": "Mensagens de Feedback Separadas",
@@ -1184,6 +1215,13 @@
       "dashboard_password_required": "Digite e confirme a nova senha de login.",
       "dashboard_password_mismatch": "As senhas de login não coincidem.",
       "dashboard_password_min_length": "A senha de login deve ter pelo menos 8 caracteres.",
+      "workspace_required": "O caminho do workspace é obrigatório.",
+      "session_scope_required": "O escopo da sessão é obrigatório.",
+      "mcp_discovery_method_required": "A descoberta MCP requer pelo menos um método de busca (BM25 ou regex).",
+      "mcp_servers_unique": "Os nomes dos servidores MCP devem ser únicos. Duplicados: {{names}}.",
+      "mcp_server_url_required": "O servidor MCP {{name}} requer uma URL.",
+      "mcp_server_url_invalid": "O servidor MCP {{name}} requer uma URL HTTP(S) válida.",
+      "mcp_server_command_required": "O servidor MCP {{name}} requer um comando.",
       "lan_access": "Habilitar Acesso pela LAN",
       "lan_access_hint": "Permitir acesso de outros dispositivos na sua rede local.",
       "allowed_cidrs": "CIDRs de Rede Permitidos",

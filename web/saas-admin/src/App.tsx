@@ -7,6 +7,7 @@ import { TenantDetail } from "@/pages/TenantDetail";
 import { NewTenant } from "@/pages/NewTenant";
 import { SkillsList } from "@/pages/SkillsList";
 import { SkillEdit } from "@/pages/SkillEdit";
+import { IntegrationsPage } from "@/pages/IntegrationsPage";
 import { AgentEdit } from "@/pages/AgentEdit";
 import { AgentSettings } from "@/pages/AgentSettings";
 import { CrmPage } from "@/pages/CrmPage";
@@ -63,6 +64,7 @@ export default function App() {
         <Route path="/tenants/:id/agent" element={<AgentEdit />} />
         <Route path="/tenants/:id/skills" element={<SkillsList />} />
         <Route path="/tenants/:id/skills/:name" element={<SkillEdit />} />
+        <Route path="/tenants/:id/integrations" element={<IntegrationsPage />} />
         <Route path="/tenants/:id/logs" element={<RequirePlatform><TenantLogs /></RequirePlatform>} />
         <Route path="/launcher-profiles" element={<RequirePlatform><LauncherProfiles /></RequirePlatform>} />
         <Route path="/audit" element={<RequirePlatform><AuditLog /></RequirePlatform>} />

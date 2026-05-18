@@ -21,6 +21,7 @@ type Handler struct {
 	Audit          *store.AuditStore
 	Tenants        *store.TenantStore
 	Profiles       *store.LauncherProfileStore
+	Integrations   *store.SkillIntegrationStore
 	CompanyIntakes *store.CompanyIntakeStore
 	Usage          *store.UsageStore
 	Provisioner    *tenant.Provisioner
@@ -41,6 +42,7 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		Audit:          &store.AuditStore{DB: db},
 		Tenants:        &store.TenantStore{DB: db},
 		Profiles:       &store.LauncherProfileStore{DB: db},
+		Integrations:   &store.SkillIntegrationStore{DB: db},
 		CompanyIntakes: &store.CompanyIntakeStore{DB: db},
 		Usage:          &store.UsageStore{DB: db},
 		Provisioner:    prov,
@@ -141,6 +143,8 @@ func (h *Handler) Routes() http.Handler {
 				r.Get("/tenants/{id}/agent/info", h.handleGetAgentInfo)
 				r.Get("/tenants/{id}/skills", h.handleListSkills)
 				r.Get("/tenants/{id}/skills/{name}", h.handleGetSkill)
+				r.Get("/tenants/{id}/integrations", h.handleListIntegrations)
+				r.Get("/tenants/{id}/integrations/{name}", h.handleGetIntegration)
 			})
 
 			r.Group(func(r chi.Router) {
@@ -152,6 +156,7 @@ func (h *Handler) Routes() http.Handler {
 				r.Delete("/tenants/{id}/skills/{name}", h.handleDeleteSkill)
 				r.Post("/tenants/{id}/skills/{name}/active", h.handleSetSkillActive)
 				r.Post("/tenants/{id}/skills/{name}/visible", h.handleSetSkillVisible)
+				r.Put("/tenants/{id}/integrations/{name}", h.handlePutIntegration)
 			})
 
 			r.Group(func(r chi.Router) {

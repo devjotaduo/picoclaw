@@ -127,6 +127,27 @@ func TestLoadAgentDefinitionLoadsWorkspaceUserMarkdown(t *testing.T) {
 	}
 }
 
+func TestLoadAgentDefinitionLoadsIntegrationsManifest(t *testing.T) {
+	tmpDir := setupWorkspace(t, map[string]string{
+		"AGENT.md":        "# Agent\nStructured agent.",
+		"INTEGRATIONS.md": "# Integrations\n\n## Agenda\nStatus: configured",
+	})
+	defer cleanupWorkspace(t, tmpDir)
+
+	cb := NewContextBuilder(tmpDir)
+	definition := cb.LoadAgentDefinition()
+
+	if definition.Integrations == nil {
+		t.Fatal("expected INTEGRATIONS.md to be loaded")
+	}
+	if definition.Integrations.Path != filepath.Join(tmpDir, "INTEGRATIONS.md") {
+		t.Fatalf("expected workspace INTEGRATIONS.md path, got %q", definition.Integrations.Path)
+	}
+	if !strings.Contains(definition.Integrations.Content, "Status: configured") {
+		t.Fatalf("expected integrations content, got %q", definition.Integrations.Content)
+	}
+}
+
 func TestLoadAgentDefinitionInvalidFrontmatterFallsBackToEmptyStructuredFields(t *testing.T) {
 	tmpDir := setupWorkspace(t, map[string]string{
 		"AGENT.md": `---
@@ -220,6 +241,24 @@ func TestLoadBootstrapFilesIncludesWorkspaceUserMarkdown(t *testing.T) {
 	}
 }
 
+func TestLoadBootstrapFilesIncludesIntegrationsManifest(t *testing.T) {
+	tmpDir := setupWorkspace(t, map[string]string{
+		"AGENT.md":        "# Agent\nFollow the new structure.",
+		"INTEGRATIONS.md": "# Integrations\n\n## Agenda\nStatus: configured",
+	})
+	defer cleanupWorkspace(t, tmpDir)
+
+	cb := NewContextBuilder(tmpDir)
+	bootstrap := cb.LoadBootstrapFiles()
+
+	if !strings.Contains(bootstrap, "Status: configured") {
+		t.Fatalf("expected INTEGRATIONS.md content in bootstrap, got %q", bootstrap)
+	}
+	if !strings.Contains(bootstrap, "## INTEGRATIONS.md") {
+		t.Fatalf("expected INTEGRATIONS.md heading in bootstrap, got %q", bootstrap)
+	}
+}
+
 func TestStructuredAgentIgnoresIdentityChanges(t *testing.T) {
 	tmpDir := setupWorkspace(t, map[string]string{
 		"AGENT.md":    "# Agent\nFollow the new structure.",
@@ -291,6 +330,42 @@ func TestStructuredAgentUserChangesInvalidateCache(t *testing.T) {
 	promptV2 := cb.BuildSystemPromptWithCache()
 	if !strings.Contains(promptV2, "Updated workspace preferences") {
 		t.Fatalf("expected updated workspace USER.md in prompt, got %q", promptV2)
+	}
+}
+
+func TestStructuredAgentIntegrationsChangesInvalidateCache(t *testing.T) {
+	tmpDir := setupWorkspace(t, map[string]string{
+		"AGENT.md":        "# Agent\nFollow the new structure.",
+		"INTEGRATIONS.md": "# Integrations\n\nStatus: pending",
+	})
+	defer cleanupWorkspace(t, tmpDir)
+
+	cb := NewContextBuilder(tmpDir)
+
+	promptV1 := cb.BuildSystemPromptWithCache()
+	if !strings.Contains(promptV1, "Status: pending") {
+		t.Fatalf("expected INTEGRATIONS.md in prompt, got %q", promptV1)
+	}
+
+	integrationsPath := filepath.Join(tmpDir, "INTEGRATIONS.md")
+	if err := os.WriteFile(integrationsPath, []byte("# Integrations\n\nStatus: configured"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	future := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(integrationsPath, future, future); err != nil {
+		t.Fatal(err)
+	}
+
+	cb.systemPromptMutex.RLock()
+	changed := cb.sourceFilesChangedLocked()
+	cb.systemPromptMutex.RUnlock()
+	if !changed {
+		t.Fatal("INTEGRATIONS.md changes should invalidate cache")
+	}
+
+	promptV2 := cb.BuildSystemPromptWithCache()
+	if !strings.Contains(promptV2, "Status: configured") {
+		t.Fatalf("expected updated INTEGRATIONS.md in prompt, got %q", promptV2)
 	}
 }
 

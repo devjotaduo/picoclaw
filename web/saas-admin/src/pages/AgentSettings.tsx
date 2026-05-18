@@ -10,6 +10,7 @@ import { Input, Label } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
+import { getSkillDisplay } from "@/lib/skill-display";
 
 const MODEL_PRESETS = [
   "gpt-4o-mini",
@@ -245,14 +246,26 @@ export function AgentSettings() {
             <ul className="space-y-1.5">
               {allSkills.map((s) => {
                 const isOn = activeSkills.has(s.name);
+                const display = getSkillDisplay(s);
                 return (
-                  <li key={s.name} className="flex items-center justify-between">
-                    <div className="flex min-w-0 items-center gap-2">
-                      {s.emoji && <span>{s.emoji}</span>}
-                      <span className="truncate font-mono text-sm">{s.name}</span>
-                      {s.description && (
-                        <span className="truncate text-xs text-zinc-500">— {s.description}</span>
-                      )}
+                  <li key={s.name} className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-2">
+                      {s.emoji && <span className="mt-0.5">{s.emoji}</span>}
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="truncate text-sm font-medium text-zinc-200">
+                            {display.name}
+                          </span>
+                          <code className="rounded bg-zinc-950 px-1.5 py-0.5 text-[11px] text-zinc-500">
+                            {s.name}
+                          </code>
+                        </div>
+                        {display.description && (
+                          <p className="mt-0.5 truncate text-xs text-zinc-500">
+                            {display.description}
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <Toggle
                       checked={isOn}
@@ -262,7 +275,7 @@ export function AgentSettings() {
                         else set.delete(s.name);
                         update("skills", Array.from(set).sort());
                       }}
-                      label={`Toggle ${s.name}`}
+                      label={`Alternar ${display.name}`}
                     />
                   </li>
                 );

@@ -2,6 +2,12 @@ import { launcherFetch } from "@/api/http"
 
 export type LauncherFeatureAccess = "none" | "read" | "write"
 
+export interface LauncherQuickTask {
+  label: string
+  prompt: string
+  icon?: string
+}
+
 export interface LauncherPolicyResponse {
   role: string
   feature_ids: string[]
@@ -10,6 +16,8 @@ export interface LauncherPolicyResponse {
     show_reasoning?: boolean
     show_tool_calls?: boolean
     show_model_selector?: boolean
+    chat_intro?: string
+    quick_tasks?: LauncherQuickTask[]
   }
 }
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Copy, Check, Sparkles, Bot, ExternalLink, PlusCircle, ScrollText } from "lucide-react";
+import { ArrowLeft, Copy, Check, Sparkles, Bot, ExternalLink, PlusCircle, ScrollText, Plug } from "lucide-react";
 import {
   getTenant,
   getUsage,
@@ -194,6 +194,11 @@ export function TenantDetail() {
               <Link to={`/tenants/${tenant.id}/skills`}>
                 <Button variant="outline" size="sm">
                   <Sparkles className="h-4 w-4" /> Skills
+                </Button>
+              </Link>
+              <Link to={`/tenants/${tenant.id}/integrations`}>
+                <Button variant="outline" size="sm">
+                  <Plug className="h-4 w-4" /> Integrações
                 </Button>
               </Link>
             </>

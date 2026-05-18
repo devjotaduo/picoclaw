@@ -31,6 +31,13 @@
     "errorInvalid": "Senha incorreta. Tente novamente.",
     "errorNetwork": "Erro de rede. Tente novamente."
   },
+  "rootLayout": {
+    "authErrorPrefix": "Erro do serviço de autenticação",
+    "authErrorFallback": "Serviço de autenticação indisponível. Redefina o armazenamento de senha do dashboard e reinicie a aplicação."
+  },
+  "codeEditor": {
+    "loading": "Carregando editor..."
+  },
   "launcherSetup": {
     "title": "Definir senha do dashboard",
     "description": "Escolha uma senha para proteger o acesso a este dashboard. Você a usará toda vez que entrar.",
@@ -43,8 +50,9 @@
     "errorNetwork": "Erro de rede. Tente novamente."
   },
   "chat": {
-    "welcome": "Como posso te ajudar hoje?",
-    "welcomeDesc": "Pergunte sobre clima, configurações ou qualquer outra tarefa. Estou aqui para ajudar.",
+    "welcome": "How can I help you today?",
+    "welcomeWithAgent": "Hi! I'm {{name}}, how can I help?",
+    "welcomeDesc": "Ask about weather, settings, or any other task. I'm here to help.",
     "placeholder": "Inicie uma nova mensagem...",
     "disabledPlaceholder": {
       "gatewayUnknown": "Não é possível conversar: o status do Gateway ainda está sendo verificado. Aguarde e atualize a página ou reinicie o Launcher se necessário.",
@@ -117,6 +125,12 @@
       "apikey": "API Key",
       "oauth": "OAuth",
       "local": "Local"
+    },
+    "pendingHandoffs": {
+      "title": "Waiting for human",
+      "loading": "Loading conversations...",
+      "empty": "No conversations waiting for human handoff.",
+      "unread": "{{count}} unread"
     }
   },
   "header": {
@@ -134,12 +148,14 @@
       "action": {
         "start": "Iniciar Gateway",
         "stop": "Parar Gateway",
-        "restart": "Reiniciar Gateway"
+        "restart": "Reiniciar Gateway",
+        "running": "Gateway rodando"
       },
       "status": {
         "starting": "Iniciando Gateway...",
         "restarting": "Reiniciando Gateway...",
-        "stopping": "Parando Gateway..."
+        "stopping": "Parando Gateway...",
+        "running": "Gateway online"
       },
       "restartRequired": "Alterações de configuração requerem reiniciar o gateway para ter efeito."
     }
@@ -148,11 +164,15 @@
     "cancel": "Cancelar",
     "save": "Salvar",
     "saving": "Salvando...",
-    "loading": "Loading...",
-    "refresh": "Refresh",
+    "loading": "Carregando...",
+    "refresh": "Atualizar",
     "sending": "Enviando...",
     "reset": "Redefinir",
     "confirm": "Confirmar",
+    "dismiss": "Dispensar",
+    "language": "Idioma",
+    "lightMode": "Modo claro",
+    "darkMode": "Modo escuro",
     "saveChangesTitle": "Você tem alterações de configuração não salvas",
     "restartRequiredTitle": "Reinício do gateway necessário",
     "restartRequiredDesc": "A configuração mais recente de {{name}} foi salva. Reinicie o gateway para que tenha efeito."
@@ -1109,6 +1129,17 @@
       "show_tool_calls_hint": "Allow chat and history to display called tools, arguments, and explanations.",
       "show_model_selector": "Show Model Selector",
       "show_model_selector_hint": "Display the model selector at the top of the chat page.",
+      "chat_intro": "Chat welcome message",
+      "chat_intro_hint": "Text shown below the agent name on the chat empty state. Leave blank to use the default.",
+      "chat_intro_placeholder": "e.g. I'm your assistant. I can call other specialist agents when needed.",
+      "quick_tasks_label": "Quick tasks",
+      "quick_tasks_hint": "Clickable buttons shown on the chat empty state. Each task sends its prompt to the main agent.",
+      "quick_tasks_empty": "No quick tasks configured. Add one below to suggest actions to the user.",
+      "quick_task_index": "Task {{index}}",
+      "quick_task_remove": "Remove task",
+      "quick_task_add": "Add task",
+      "quick_task_label_placeholder": "Label (e.g. Daily summary)",
+      "quick_task_prompt_placeholder": "Prompt sent to the agent when the button is clicked",
       "tool_feedback_enabled": "Feedback de Ferramentas",
       "tool_feedback_enabled_hint": "Enviar uma breve nota de execução no chat atual antes de cada ferramenta rodar.",
       "tool_feedback_separate_messages": "Mensagens de Feedback Separadas",
@@ -1184,6 +1215,13 @@
       "dashboard_password_required": "Digite e confirme a nova senha de login.",
       "dashboard_password_mismatch": "As senhas de login não coincidem.",
       "dashboard_password_min_length": "A senha de login deve ter pelo menos 8 caracteres.",
+      "workspace_required": "O caminho do workspace é obrigatório.",
+      "session_scope_required": "O escopo da sessão é obrigatório.",
+      "mcp_discovery_method_required": "A descoberta MCP requer pelo menos um método de busca (BM25 ou regex).",
+      "mcp_servers_unique": "Os nomes dos servidores MCP devem ser únicos. Duplicados: {{names}}.",
+      "mcp_server_url_required": "O servidor MCP {{name}} requer uma URL.",
+      "mcp_server_url_invalid": "O servidor MCP {{name}} requer uma URL HTTP(S) válida.",
+      "mcp_server_command_required": "O servidor MCP {{name}} requer um comando.",
       "lan_access": "Habilitar Acesso pela LAN",
       "lan_access_hint": "Permitir acesso de outros dispositivos na sua rede local.",
       "allowed_cidrs": "CIDRs de Rede Permitidos",

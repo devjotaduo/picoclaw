@@ -16,6 +16,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input, Label } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
 import { SkeletonRow } from "@/components/ui/skeleton";
+import { getSkillDisplay } from "@/lib/skill-display";
 
 export function SkillsList() {
   const { id = "" } = useParams();
@@ -62,6 +63,12 @@ export function SkillsList() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const skillPendingDelete = q.data?.skills.find((s) => s.name === confirmDelete);
+  const deleteDisplay = skillPendingDelete
+    ? getSkillDisplay(skillPendingDelete)
+    : confirmDelete
+      ? getSkillDisplay({ name: confirmDelete })
+      : null;
 
   return (
     <div className="mx-auto max-w-5xl p-6">
@@ -126,56 +133,62 @@ export function SkillsList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/60">
-                {q.data.skills.map((s) => (
-                  <tr key={s.name} className="hover:bg-zinc-900/40">
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        {s.emoji && <span>{s.emoji}</span>}
-                        <Link
-                          to={`/tenants/${id}/skills/${s.name}`}
-                          className="font-mono text-zinc-100 hover:text-brand-500"
-                        >
-                          {s.name}
-                        </Link>
-                      </div>
-                      {s.description && (
-                        <div className="mt-0.5 text-xs text-zinc-500">{s.description}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <Toggle
-                        checked={s.active}
-                        onChange={(next) => activateM.mutate({ name: s.name, active: next })}
-                        label={`Activate ${s.name}`}
-                      />
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <Toggle
-                        checked={s.visible}
-                        onChange={(next) => visibleM.mutate({ name: s.name, visible: next })}
-                        disabled={!s.active}
-                        label={`Show ${s.name}`}
-                      />
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <div className="flex justify-end gap-1">
-                        <Link to={`/tenants/${id}/skills/${s.name}`}>
-                          <Button variant="ghost" size="icon" aria-label="Edit">
-                            <Pencil className="h-4 w-4" />
+                {q.data.skills.map((s) => {
+                  const display = getSkillDisplay(s);
+                  return (
+                    <tr key={s.name} className="hover:bg-zinc-900/40">
+                      <td className="px-4 py-2.5">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          {s.emoji && <span>{s.emoji}</span>}
+                          <Link
+                            to={`/tenants/${id}/skills/${s.name}`}
+                            className="font-medium text-zinc-100 hover:text-brand-500"
+                          >
+                            {display.name}
+                          </Link>
+                          <code className="rounded bg-zinc-950 px-1.5 py-0.5 text-[11px] text-zinc-500">
+                            {s.name}
+                          </code>
+                        </div>
+                        {display.description && (
+                          <div className="mt-0.5 text-xs text-zinc-500">{display.description}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Toggle
+                          checked={s.active}
+                          onChange={(next) => activateM.mutate({ name: s.name, active: next })}
+                          label={`Ativar ${display.name}`}
+                        />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Toggle
+                          checked={s.visible}
+                          onChange={(next) => visibleM.mutate({ name: s.name, visible: next })}
+                          disabled={!s.active}
+                          label={`Mostrar ${display.name}`}
+                        />
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Link to={`/tenants/${id}/skills/${s.name}`}>
+                            <Button variant="ghost" size="icon" aria-label="Edit">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Delete"
+                            onClick={() => setConfirmDelete(s.name)}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-400" />
                           </Button>
-                        </Link>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Delete"
-                          onClick={() => setConfirmDelete(s.name)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-400" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </CardContent>
@@ -201,7 +214,8 @@ export function SkillsList() {
         size="sm"
       >
         <p className="text-sm text-zinc-300">
-          Permanently delete <code>{confirmDelete}</code>? This removes the folder from the workspace
+          Permanently delete {deleteDisplay?.name ?? "this skill"}{" "}
+          {confirmDelete && <code>{confirmDelete}</code>}? This removes the folder from the workspace
           and drops it from <code>AGENT.md</code>.
         </p>
         <div className="mt-4 flex justify-end gap-2">
