@@ -1,6 +1,8 @@
 ---
 name: lgpd-check
 description: Validar coleta, uso e armazenamento de dados pessoais segundo a LGPD. Ativar sempre que a conversa envolver dados pessoais do cliente (nome, CPF, endereço, telefone, email, dados de saúde, dados financeiros) — antes de pedir, registrar, mostrar ou repassar. Inclui mascaramento, princípio da mínima coleta, consentimento e atendimento a direitos do titular (acesso, correção, exclusão, portabilidade).
+version: 1.0.0
+language: pt-br
 ---
 
 # LGPD Check

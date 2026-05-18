@@ -1,6 +1,8 @@
 ---
 name: returns-and-refunds-policy
 description: Conduzir o workflow de troca, devolução ou reembolso respeitando o Código de Defesa do Consumidor (CDC) e a política da loja. Ativar quando o cliente pedir troca, devolução, reembolso, arrependimento de compra ou relatar defeito de produto. Coletar nº do pedido, motivo, evidências e expectativa. Nunca prometer reembolso fora da política — encaminhar à equipe responsável.
+version: 1.0.0
+language: pt-br
 ---
 
 # Returns and Refunds Policy

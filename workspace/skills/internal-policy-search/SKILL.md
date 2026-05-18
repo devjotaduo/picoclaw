@@ -1,6 +1,8 @@
 ---
 name: internal-policy-search
 description: Procurar políticas internas (RH, financeiro, TI, jurídico, compras, segurança) antes de orientar colaboradores sobre processos, benefícios, reembolso, equipamentos, acessos ou procedimentos internos. Ativar sempre que um colaborador perguntar "como faço para...", "qual é a política de...", "tenho direito a...". Quando a política não estiver clara ou faltar, encaminhar ao setor responsável — nunca inventar regra.
+version: 1.0.0
+language: pt-br
 ---
 
 # Internal Policy Search

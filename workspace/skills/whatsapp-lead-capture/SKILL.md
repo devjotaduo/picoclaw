@@ -1,6 +1,8 @@
 ---
 name: whatsapp-lead-capture
 description: Identificar e qualificar leads vindos pelo WhatsApp. Extrai interesse, produto/serviço, urgência, orçamento, decisor, estágio do funil e fit comercial. Ativar quando a pessoa pede preço, orçamento, compra, proposta, disponibilidade, entrega ou demonstra intenção comercial.
+version: 1.0.0
+language: pt-br
 ---
 
 # WhatsApp Lead Capture

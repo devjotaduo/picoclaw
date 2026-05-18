@@ -1,6 +1,8 @@
 ---
 name: health-safety-routing
 description: Detectar sinais de urgência clínica em uma conversa (dor forte, falta de ar, sangramento importante, desmaio, dor no peito, sintomas neurológicos súbitos, pensamentos de autoextermínio, sofrimento agudo) e orientar IMEDIATAMENTE busca por pronto-socorro, UPA ou 192 (SAMU). Ativar a qualquer momento — interrompendo qualquer outro fluxo — quando a pessoa relatar sintoma agudo, risco imediato ou estado emocional grave.
+version: 1.0.0
+language: pt-br
 ---
 
 # Health Safety Routing

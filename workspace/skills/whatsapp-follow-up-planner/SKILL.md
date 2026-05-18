@@ -1,6 +1,8 @@
 ---
 name: whatsapp-follow-up-planner
 description: Planejar retornos de WhatsApp para orçamento, pagamento, entrega, abandono, pós-venda e pendências. Ativar quando houver próxima ação futura, promessa de retorno, lead aguardando resposta ou atendimento que não terminou.
+version: 1.0.0
+language: pt-br
 ---
 
 # WhatsApp Follow-up Planner

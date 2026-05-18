@@ -1,6 +1,8 @@
 ---
 name: knowledge-base-resolution
 description: Buscar solução na base oficial de conhecimento antes de escalar um caso de suporte. Ativar quando houver dúvida operacional, problema técnico, erro recorrente ou pergunta que possa ter runbook, FAQ, política, status page ou procedimento documentado.
+version: 1.0.0
+language: pt-br
 ---
 
 # Knowledge Base Resolution

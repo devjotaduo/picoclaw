@@ -1,6 +1,8 @@
 ---
 name: memory-and-knowledge-check
 description: Auditar memória e base oficial antes de respostas de alto risco ou quando houver dúvida factual importante. Usar para revisar MEMORY.md, histórico da sessão, AGENT.md, módulos, FAQ e políticas antes de prometer prazos, valores, disponibilidade, encaminhamentos ou registrar fatos sensíveis.
+version: 1.0.0
+language: pt-br
 ---
 
 # Memory and Knowledge Check

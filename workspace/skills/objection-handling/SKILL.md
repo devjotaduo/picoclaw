@@ -1,6 +1,8 @@
 ---
 name: objection-handling
 description: Tratar objeções comerciais comuns (preço, prazo, alternativas no mercado, dúvida sobre fit, "vou pensar") com escuta ativa, reformulação e dados — nunca pressão. Ativar quando o lead expressar resistência, dúvida ou comparação durante qualificação ou negociação. Registrar objeções não resolvidas para o vendedor humano.
+version: 1.0.0
+language: pt-br
 ---
 
 # Objection Handling

@@ -1,6 +1,8 @@
 ---
 name: bant-spin-discovery
 description: Aplicar metodologias de descoberta comercial — BANT (Budget, Authority, Need, Timeline) ou SPIN (Situation, Problem, Implication, Need-payoff) — para qualificar lead de forma consultiva. Ativar quando, após contato inicial, o lead tiver potencial fit e for preciso aprofundar entendimento da dor, contexto e timing antes de propor reunião comercial.
+version: 1.0.0
+language: pt-br
 ---
 
 # BANT / SPIN Discovery

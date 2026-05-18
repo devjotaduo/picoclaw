@@ -1,6 +1,8 @@
 ---
 name: human-handoff-brief
 description: Preparar passagem para atendimento humano com contexto completo: cliente, contato, intenção, urgência, resumo, dados coletados, pendências, setor destino e próxima ação. Ativar quando houver exceção, reclamação grave, lead qualificado, pedido de humano ou decisão fora da automação.
+version: 1.0.0
+language: pt-br
 ---
 
 # Human Handoff Brief

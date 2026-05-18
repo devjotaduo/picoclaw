@@ -1,6 +1,8 @@
 ---
 name: clinic-scheduling
 description: Conduzir o workflow de agendamento, remarcação ou cancelamento de consultas em clínica/consultório — verificar disponibilidade, confirmar especialidade/profissional/convênio/data/horário/documentos. Ativar após `appointment-triage` ter identificado a intent como agendamento, remarcação ou cancelamento. Nunca confirmar encaixe, prioridade ou exceção sem aprovação explícita da clínica.
+version: 1.0.0
+language: pt-br
 ---
 
 # Clinic Scheduling
@@ -53,3 +55,14 @@ Encaminhar à equipe responsável quando:
 - Convênio exigir autorização ou validação que o sistema da clínica não automatiza.
 - Documentação do paciente estiver incompleta ou em divergência.
 - Pessoa relatar qualquer sintoma além do administrativo → `health-safety-routing`.
+
+## LGPD / privacidade
+
+Esta skill movimenta **dados sensíveis de saúde — art. 11 da LGPD**: identificação do paciente, profissional, convênio, especialidade, horário. Regras de mínimo:
+
+- Acione `lgpd-check` antes de gravar dado pessoal em memória persistente.
+- Use `whatsapp-lgpd-consent` para registrar consentimento quando o canal for WhatsApp.
+- **Não** registrar diagnóstico, sintoma, resultado de exame ou prontuário — isso é responsabilidade do profissional e fica no sistema da clínica.
+- **Não** salvar carteirinha completa de plano nem CPF completo — mascare (`***.***.***-XX`, número da carteirinha truncado nos últimos 4).
+- Confirmar dados em voz alta com o paciente antes de gravar (evita transcrição errada de número/data).
+- Não compartilhar agenda de um paciente com outro paciente nem confirmar publicamente que "fulano marcou consulta".

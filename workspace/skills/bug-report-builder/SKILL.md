@@ -1,6 +1,8 @@
 ---
 name: bug-report-builder
 description: Montar um relatório de bug pronto para o time de engenharia — descrição, passos para reproduzir, comportamento esperado vs. observado, ambiente, logs sanitizados, severidade sugerida. Ativar quando a triagem técnica identificar problema que precisa ser escalado para engenharia (não tem solução documentada na KB). Garante que o ticket chega com informação completa e sem dados sensíveis.
+version: 1.0.0
+language: pt-br
 ---
 
 # Bug Report Builder

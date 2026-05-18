@@ -1,6 +1,8 @@
 ---
 name: log-sanitizer
 description: Mascarar dados sensíveis em logs, stack traces, screenshots e prints antes de armazenar, compartilhar ou anexar a um ticket. Ativar sempre que o usuário colar log, mensagem de erro com payload, cabeçalhos HTTP, URLs com query string, mensagens de banco ou qualquer texto que possa conter token, chave, senha, CPF, cartão, email interno, cookie de sessão ou URL com credencial.
+version: 1.0.0
+language: pt-br
 ---
 
 # Log Sanitizer
