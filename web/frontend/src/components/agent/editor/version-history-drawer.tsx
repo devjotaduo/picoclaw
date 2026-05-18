@@ -1,0 +1,177 @@
+import { IconHistory, IconRotate, IconTrash } from "@tabler/icons-react"
+import { useEffect, useMemo, useState } from "react"
+
+import { Button } from "@/components/ui/button"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import { cn } from "@/lib/utils"
+
+import type { TemplateApplyPayload } from "@/components/agent/templates/types"
+
+import {
+  type AgentVersion,
+  type DiffLine,
+  deleteVersion,
+  diffPayload,
+  loadVersions,
+} from "./version-history"
+
+export interface VersionHistoryDrawerProps {
+  open: boolean
+  agentID: string
+  currentPayload: TemplateApplyPayload | null
+  onRestore: (payload: TemplateApplyPayload) => void
+  onOpenChange: (open: boolean) => void
+}
+
+export function VersionHistoryDrawer({
+  open,
+  agentID,
+  currentPayload,
+  onRestore,
+  onOpenChange,
+}: VersionHistoryDrawerProps) {
+  const [versions, setVersions] = useState<AgentVersion[]>([])
+  const [selectedID, setSelectedID] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const list = loadVersions(agentID)
+    setVersions(list)
+    setSelectedID(list[0]?.id ?? null)
+  }, [open, agentID])
+
+  const selected = useMemo(
+    () => versions.find((v) => v.id === selectedID) ?? null,
+    [versions, selectedID],
+  )
+
+  const diff = useMemo(
+    () => diffPayload(selected?.payload ?? null, currentPayload, 2),
+    [selected, currentPayload],
+  )
+
+  function handleDelete(id: string) {
+    deleteVersion(agentID, id)
+    const next = versions.filter((v) => v.id !== id)
+    setVersions(next)
+    if (selectedID === id) setSelectedID(next[0]?.id ?? null)
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
+      >
+        <SheetHeader className="border-border/40 border-b px-6 py-4">
+          <SheetTitle className="flex items-center gap-2 text-base">
+            <IconHistory className="size-4" aria-hidden="true" />
+            Histórico de versões
+          </SheetTitle>
+          <SheetDescription>
+            Versões salvas localmente neste navegador. As mais recentes
+            ficam no topo. Apenas as últimas 20 são mantidas.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="grid min-h-0 flex-1 grid-cols-1 sm:grid-cols-[200px_1fr]">
+          <aside className="border-border/40 min-h-0 overflow-y-auto border-b sm:border-r sm:border-b-0">
+            {versions.length === 0 ? (
+              <p className="text-muted-foreground p-4 text-xs">
+                Nenhuma versão salva ainda. Versões são criadas
+                automaticamente a cada salvamento bem-sucedido do prompt.
+              </p>
+            ) : (
+              <ul role="list" className="divide-border/40 divide-y">
+                {versions.map((v) => {
+                  const active = v.id === selectedID
+                  return (
+                    <li key={v.id}>
+                      <div
+                        className={cn(
+                          "group flex items-center gap-1 px-3 py-2",
+                          active && "bg-muted/40",
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSelectedID(v.id)}
+                          aria-pressed={active}
+                          className="focus-visible:ring-ring flex-1 rounded text-left text-xs focus:outline-none focus-visible:ring-2"
+                        >
+                          <div className="font-medium">{v.label}</div>
+                          <div className="text-muted-foreground text-[11px]">
+                            {new Date(v.createdAt).toLocaleString("pt-BR")}
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(v.id)}
+                          aria-label={`Excluir versão ${v.label}`}
+                          className="text-muted-foreground hover:text-destructive focus-visible:ring-ring inline-flex size-6 shrink-0 items-center justify-center rounded focus:outline-none focus-visible:ring-2"
+                        >
+                          <IconTrash className="size-3.5" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </aside>
+          <main className="flex min-h-0 flex-col">
+            <div className="border-border/40 flex items-center justify-between gap-2 border-b px-4 py-2">
+              <div className="min-w-0">
+                <div className="truncate text-xs font-semibold">
+                  {selected ? selected.label : "Selecione uma versão"}
+                </div>
+                <div className="text-muted-foreground text-[10px]">
+                  Diff em relação ao prompt atual
+                </div>
+              </div>
+              {selected && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onRestore(selected.payload)}
+                  className="gap-1.5"
+                >
+                  <IconRotate className="size-3.5" aria-hidden="true" />
+                  Restaurar
+                </Button>
+              )}
+            </div>
+            <pre
+              aria-label="Diff entre versões"
+              className="min-h-0 flex-1 overflow-auto p-4 font-mono text-[11px] leading-relaxed"
+            >
+              {selected ? renderDiff(diff) : <span className="text-muted-foreground">—</span>}
+            </pre>
+          </main>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+function renderDiff(lines: DiffLine[]) {
+  return lines.map((line, idx) => (
+    <span
+      key={idx}
+      className={cn(
+        "block whitespace-pre-wrap",
+        line.kind === "add" && "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300",
+        line.kind === "remove" && "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300",
+        line.kind === "context" && "text-muted-foreground",
+      )}
+    >
+      {line.kind === "add" ? "+ " : line.kind === "remove" ? "- " : "  "}
+      {line.value || " "}
+    </span>
+  ))
+}

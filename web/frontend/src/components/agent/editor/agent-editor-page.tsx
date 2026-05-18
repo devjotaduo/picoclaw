@@ -127,6 +127,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { IconCopy, IconDotsVertical } from "@tabler/icons-react"
 import { AgentWizard, type WizardDraft } from "./agent-wizard"
+import { ChatTestDrawer } from "./chat-test-drawer"
+import { GatewayStatusBadge } from "./gateway-status-badge"
+import { PromptPreview } from "./prompt-preview"
+import { appendVersion } from "./version-history"
+import { VersionHistoryDrawer } from "./version-history-drawer"
+import { IconHistory, IconExternalLink, IconMessageDots } from "@tabler/icons-react"
+import { Link } from "@tanstack/react-router"
 
 // ─── tab type ────────────────────────────────────────────────────────────────
 
@@ -852,6 +859,9 @@ export function AgentEditorPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [rawOpen, setRawOpen] = useState(false)
   const [activeTab, setActiveTab] = useTabSync("identity")
+  const [chatDrawerOpen, setChatDrawerOpen] = useState(false)
+  const [versionDrawerOpen, setVersionDrawerOpen] = useState(false)
+  const [advancedJsonMode, setAdvancedJsonMode] = useState(false)
   const [rawDraft, setRawDraft] = useState("")
   const [rawError, setRawError] = useState<string | null>(null)
 
@@ -901,6 +911,11 @@ export function AgentEditorPage() {
     onSuccess: (_result, appliedDraft) => {
       const agentId = appliedDraft.agent_id ?? selectedAgentId
       toast.success(t("pages.agent.editor.save_success"))
+      appendVersion(
+        agentId,
+        appliedDraft,
+        `Aplicado em ${new Date().toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`,
+      )
       setEditing(false)
       setDraft(null)
       void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })
@@ -1168,6 +1183,18 @@ export function AgentEditorPage() {
     duplicateMutation.mutate(source)
   }
 
+  function handleRestoreVersion(payload: TemplateApplyPayload) {
+    applyMutation.mutate(
+      substituteAgentPlaceholders({
+        ...payload,
+        agent_id: payload.agent_id ?? selectedAgentId,
+      }),
+      {
+        onSuccess: () => setVersionDrawerOpen(false),
+      },
+    )
+  }
+
   function handleSheetOpenChange(open: boolean) {
     if (!open && !applyMutation.isPending) { setEditing(false); setDraft(null) }
   }
@@ -1368,7 +1395,33 @@ export function AgentEditorPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader title={t("navigation.agent_editor")} />
+      <PageHeader title={t("navigation.agent_editor")}>
+        {selectedAgent && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setVersionDrawerOpen(true)}
+              className="h-8 gap-1.5"
+            >
+              <IconHistory className="size-4" aria-hidden="true" />
+              Versões
+            </Button>
+            <Button
+              type="button"
+              variant={chatDrawerOpen ? "default" : "outline"}
+              size="sm"
+              onClick={() => setChatDrawerOpen((o) => !o)}
+              aria-pressed={chatDrawerOpen}
+              className="h-8 gap-1.5"
+            >
+              <IconMessageDots className="size-4" aria-hidden="true" />
+              Chat de teste
+            </Button>
+          </>
+        )}
+      </PageHeader>
 
       <div className="flex-1 overflow-auto">
         <div className="mx-auto grid h-full w-full max-w-7xl gap-0 lg:grid-cols-[288px_minmax(0,1fr)]">
@@ -1568,6 +1621,8 @@ export function AgentEditorPage() {
                   onDiscard={handleDiscardOrchestration}
                   activeTab={activeTab}
                   onTabChange={setActiveTab}
+                  advancedJsonMode={advancedJsonMode}
+                  onAdvancedJsonModeChange={setAdvancedJsonMode}
                   messages={chatMessages}
                   chatInput={chatInput}
                   isSending={sendingChat}
@@ -1719,6 +1774,42 @@ export function AgentEditorPage() {
           onCancel={() => setDeactivateOpen(false)}
         />
       )}
+
+      {selectedAgent && (
+        <VersionHistoryDrawer
+          open={versionDrawerOpen}
+          agentID={selectedAgent.id}
+          currentPayload={configData.payload ?? null}
+          onRestore={handleRestoreVersion}
+          onOpenChange={setVersionDrawerOpen}
+        />
+      )}
+
+      {selectedAgent && (
+        <ChatTestDrawer
+          open={chatDrawerOpen}
+          agentName={selectedAgent.name || selectedAgent.id}
+          onOpenChange={setChatDrawerOpen}
+        >
+          <ChatTab
+            selectedAgentId={selectedAgentId}
+            selectedProfile={selectedProfile}
+            messages={chatMessages}
+            chatInput={chatInput}
+            isSending={sendingChat}
+            proposals={proposals}
+            quickPrompts={quickPrompts}
+            onChatInputChange={setChatInput}
+            onSend={handleSendChat}
+            onPromptSelect={setChatInput}
+            onProposalInspect={(proposal) =>
+              setChatInput(
+                `Revise esta proposta salva e me diga quais arquivos foram gerados, próximos ajustes e pendências:\n\n${JSON.stringify(proposal, null, 2)}`,
+              )
+            }
+          />
+        </ChatTestDrawer>
+      )}
     </div>
   )
 }
@@ -1777,6 +1868,8 @@ function UnifiedAgentEditor({
   onDiscard,
   activeTab,
   onTabChange,
+  advancedJsonMode,
+  onAdvancedJsonModeChange,
 }: {
   agent: AgentEditorAgent
   configured: boolean
@@ -1829,6 +1922,8 @@ function UnifiedAgentEditor({
   onDiscard: () => void
   activeTab: AgentEditorTab
   onTabChange: (tab: AgentEditorTab) => void
+  advancedJsonMode: boolean
+  onAdvancedJsonModeChange: (next: boolean) => void
 }) {
   void ready
   return (
@@ -1863,23 +1958,28 @@ function UnifiedAgentEditor({
             selectedAgentId={selectedAgentId}
             selectedRoleConfig={selectedRoleConfig}
             selectedRoleConfigDraft={selectedRoleConfigDraft}
+            advancedMode={advancedJsonMode}
             onUpdateRoleConfig={onUpdateRoleConfig}
             onRoleConfigDraftChange={onRoleConfigDraftChange}
+            onAdvancedModeChange={onAdvancedJsonModeChange}
           />
         </TabsContent>
 
         <TabsContent value="prompt" id="section-prompt">
-          <PromptWorkspaceSection
-            agent={agent}
-            configured={configured}
-            configData={configData}
-            resolvedPayload={resolvedPayload}
-            template={template}
-            onCreate={onCreate}
-            onConfigure={onConfigure}
-            onEditPrompt={onEditPrompt}
-            onOpenRawEditor={onOpenRawEditor}
-          />
+          <div className="space-y-4">
+            <PromptWorkspaceSection
+              agent={agent}
+              configured={configured}
+              configData={configData}
+              resolvedPayload={resolvedPayload}
+              template={template}
+              onCreate={onCreate}
+              onConfigure={onConfigure}
+              onEditPrompt={onEditPrompt}
+              onOpenRawEditor={onOpenRawEditor}
+            />
+            <PromptPreview payload={resolvedPayload ?? configData.payload ?? null} />
+          </div>
         </TabsContent>
 
         <TabsContent value="knowledge" id="section-knowledge">
@@ -1919,6 +2019,11 @@ function UnifiedAgentEditor({
         <TabsContent value="test" id="section-test">
           <section id="agent-chat-section" className="space-y-3">
             <SectionHeader title="Chat de teste" icon={IconMessageCircle} />
+            <p className="text-muted-foreground text-xs">
+              Dica: use o botão <strong>Chat de teste</strong> no topo da
+              página para manter o chat aberto enquanto edita outras
+              abas.
+            </p>
             <ChatTab
               selectedAgentId={selectedAgentId}
               selectedProfile={selectedProfile}
@@ -1981,6 +2086,12 @@ function IdentityProfileSection({
             <p className="text-muted-foreground text-sm">{agentRoleLabel(agent)}</p>
             <div className="flex flex-wrap items-center gap-1.5">
               <ReadyStatusBadges agent={agent} />
+              <GatewayStatusBadge
+                boundJID={agent.access?.whatsapp_allowed_senders?.[0]}
+                onLinkClick={() => {
+                  window.location.href = "/channels?focus=whatsapp"
+                }}
+              />
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span
@@ -2091,63 +2202,109 @@ function OperationalRoleSection({
   selectedAgentId,
   selectedRoleConfig,
   selectedRoleConfigDraft,
+  advancedMode,
   onUpdateRoleConfig,
   onRoleConfigDraftChange,
+  onAdvancedModeChange,
 }: {
   selectedAgentId: string
   selectedRoleConfig: RoleConfigDraft | null
   selectedRoleConfigDraft: string
+  advancedMode: boolean
   onUpdateRoleConfig: (updater: (c: RoleConfigDraft) => RoleConfigDraft) => void
   onRoleConfigDraftChange: (v: string) => void
+  onAdvancedModeChange: (next: boolean) => void
 }) {
+  const advancedToggleID = `${selectedAgentId}-advanced-mode`
+  const jsonError = useMemo(() => {
+    if (!advancedMode || !selectedRoleConfigDraft.trim()) return null
+    try {
+      const parsed = JSON.parse(selectedRoleConfigDraft) as unknown
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return "JSON deve ser um objeto"
+      }
+      return null
+    } catch (err) {
+      return err instanceof Error ? err.message : "JSON inválido"
+    }
+  }, [advancedMode, selectedRoleConfigDraft])
+
+  function handleToggle(next: boolean) {
+    if (!next && jsonError) {
+      toast.error(
+        `Não foi possível sair do modo avançado: ${jsonError}. Corrija o JSON ou descarte as alterações.`,
+      )
+      return
+    }
+    onAdvancedModeChange(next)
+  }
+
   return (
     <section className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
-      <div className="flex items-start gap-2">
-        <SectionHeader title="Papel operacional" icon={IconSparkles} />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label="O que é papel operacional"
-              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring focus-visible:ring-offset-background mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-            >
-              <span aria-hidden="true">?</span>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-xs text-xs">
-            Define a função do agente no negócio (atendente, vendas, marketing,
-            assistente). Campos como triagem, escalonamento e fonte de FAQ
-            ficam aqui, e são consumidos por canais e regras antes do prompt.
-          </TooltipContent>
-        </Tooltip>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-2">
+          <SectionHeader title="Papel operacional" icon={IconSparkles} />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="O que é papel operacional"
+                className="text-muted-foreground hover:text-foreground focus-visible:ring-ring focus-visible:ring-offset-background mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+              >
+                <span aria-hidden="true">?</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs text-xs">
+              Define a função do agente no negócio (atendente, vendas, marketing,
+              assistente). Campos como triagem, escalonamento e fonte de FAQ
+              ficam aqui, e são consumidos por canais e regras antes do prompt.
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        <label
+          htmlFor={advancedToggleID}
+          className="border-border/60 bg-muted/40 flex cursor-pointer items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium"
+        >
+          <Switch
+            id={advancedToggleID}
+            checked={advancedMode}
+            onCheckedChange={handleToggle}
+            aria-describedby={`${advancedToggleID}-desc`}
+          />
+          Modo avançado (JSON)
+        </label>
       </div>
-      <p className="text-muted-foreground mt-1 mb-3 text-xs">
-        Campos que orientam o papel sem misturar com o prompt renderizado do
-        workspace.
+      <p
+        id={`${advancedToggleID}-desc`}
+        className="text-muted-foreground mt-1 mb-3 text-xs"
+      >
+        {advancedMode
+          ? "Atenção: você está editando o JSON cru. Os campos guiados ficam bloqueados. Saída inválida impede salvar."
+          : "Campos guiados protegem contra erros. Ative o modo avançado apenas se precisar editar campos que não aparecem aqui."}
       </p>
-      {selectedRoleConfig ? (
+      {advancedMode ? (
+        <div className="space-y-2">
+          <Textarea
+            value={selectedRoleConfigDraft}
+            onChange={(e) => onRoleConfigDraftChange(e.target.value)}
+            className="min-h-64 font-mono text-xs"
+            spellCheck={false}
+            aria-label="JSON do papel operacional"
+            aria-invalid={jsonError ? true : undefined}
+          />
+          {jsonError && (
+            <p role="alert" className="text-destructive text-xs">
+              {jsonError}
+            </p>
+          )}
+        </div>
+      ) : selectedRoleConfig ? (
         <RoleSpecificConfigEditor config={selectedRoleConfig} onChange={onUpdateRoleConfig} />
       ) : (
         <div className="text-muted-foreground rounded-xl border border-dashed p-4 text-sm">
           Nenhum perfil operacional encontrado para {selectedAgentId}.
         </div>
       )}
-      <details className="mt-3 rounded-xl border border-border/60 bg-muted/20 p-3">
-        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-          Modo avançado · editar JSON do papel
-        </summary>
-        <p className="text-muted-foreground/80 mt-2 text-[11px]">
-          Edite com cuidado. Erros de JSON impedem o salvamento. Prefira os
-          campos guiados acima.
-        </p>
-        <Textarea
-          value={selectedRoleConfigDraft}
-          onChange={(e) => onRoleConfigDraftChange(e.target.value)}
-          className="mt-3 min-h-48 font-mono text-xs"
-          spellCheck={false}
-          aria-label="JSON do papel operacional"
-        />
-      </details>
     </section>
   )
 }
@@ -2228,14 +2385,21 @@ function PromptWorkspaceSection({
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="border-border/60 bg-muted/40 inline-flex cursor-help items-center gap-1.5 rounded-md border px-2 py-1 text-xs">
+              <Link
+                to="/agent/skills"
+                search={{ agent: agent.id }}
+                className="border-border/60 bg-muted/40 hover:bg-muted hover:border-foreground/30 focus-visible:ring-ring focus-visible:ring-offset-background inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+              >
                 Skills no prompt: {configured ? activeSkillCount : "—"}
-              </span>
+                <IconExternalLink
+                  className="text-muted-foreground size-3"
+                  aria-hidden="true"
+                />
+              </Link>
             </TooltipTrigger>
             <TooltipContent className="max-w-xs text-xs">
-              Capacidades extras (busca, RAG, ferramentas) ativadas no
-              AGENT.md. Cada skill é descrita no prompt para o LLM saber
-              quando usar.
+              Abrir o editor de skills filtrado por este agente. Cada skill é
+              descrita no prompt para o LLM saber quando usar.
             </TooltipContent>
           </Tooltip>
         </div>
