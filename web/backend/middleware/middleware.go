@@ -65,6 +65,34 @@ func Logger(next http.Handler) http.Handler {
 	})
 }
 
+// AuditLogger writes a structured INFO line for every mutating request
+// that includes the actor identity extracted from the trusted gateway
+// claims (when present). In standalone launcher mode the actor falls
+// back to "local". This is the light audit trail companion to the
+// controlplane AuditStore.
+func AuditLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+		switch r.Method {
+		case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		default:
+			return
+		}
+		actor, role := "local", "platform_admin"
+		if claims, ok := TrustedGatewayClaims(r); ok {
+			if claims.UserEmail != "" {
+				actor = claims.UserEmail
+			} else if claims.UserID != "" {
+				actor = claims.UserID
+			}
+			if claims.Role != "" {
+				role = claims.Role
+			}
+		}
+		logger.InfoC("audit", fmt.Sprintf("actor=%s role=%s %s %s", actor, role, r.Method, r.URL.Path))
+	})
+}
+
 // Recoverer recovers from panics in downstream handlers and returns a 500
 // Internal Server Error response.
 func Recoverer(next http.Handler) http.Handler {

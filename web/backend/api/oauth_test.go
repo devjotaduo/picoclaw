@@ -155,6 +155,91 @@ func TestOAuthSubmitAnthropicPasteExchangesAndPersists(t *testing.T) {
 	}
 }
 
+func TestOAuthProvidersAutoRefreshesAnthropicCredential(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+	resetOAuthHooks(t)
+
+	if err := auth.SetCredential(oauthProviderAnthropic, &auth.AuthCredential{
+		AccessToken:  "expired-anthropic-token",
+		RefreshToken: "anthropic-refresh-token",
+		ExpiresAt:    time.Now().Add(-time.Minute),
+		Provider:     oauthProviderAnthropic,
+		AuthMethod:   oauthMethodClaudeCode,
+	}); err != nil {
+		t.Fatalf("SetCredential: %v", err)
+	}
+
+	refreshCalls := 0
+	refreshedExpiresAt := time.Now().Add(time.Hour)
+	oauthRefreshAccessToken = func(
+		cred *auth.AuthCredential,
+		cfg auth.OAuthProviderConfig,
+	) (*auth.AuthCredential, error) {
+		refreshCalls++
+		if cfg.TokenURL != "https://console.anthropic.com/v1/oauth/token" {
+			t.Fatalf("TokenURL = %q, want Anthropic token endpoint", cfg.TokenURL)
+		}
+		if cred.RefreshToken != "anthropic-refresh-token" {
+			t.Fatalf("RefreshToken = %q, want anthropic-refresh-token", cred.RefreshToken)
+		}
+		return &auth.AuthCredential{
+			AccessToken:  "fresh-anthropic-token",
+			RefreshToken: "fresh-anthropic-refresh-token",
+			ExpiresAt:    refreshedExpiresAt,
+			Provider:     oauthProviderAnthropic,
+			AuthMethod:   cred.AuthMethod,
+		}, nil
+	}
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/oauth/providers", nil)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if refreshCalls != 1 {
+		t.Fatalf("refresh calls = %d, want 1", refreshCalls)
+	}
+
+	var providersResp struct {
+		Providers []oauthProviderStatus `json:"providers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &providersResp); err != nil {
+		t.Fatalf("unmarshal providers response: %v", err)
+	}
+
+	var anthropicStatus *oauthProviderStatus
+	for i := range providersResp.Providers {
+		if providersResp.Providers[i].Provider == oauthProviderAnthropic {
+			anthropicStatus = &providersResp.Providers[i]
+			break
+		}
+	}
+	if anthropicStatus == nil {
+		t.Fatal("anthropic provider status missing")
+	}
+	if anthropicStatus.Status != "connected" {
+		t.Fatalf("anthropic status = %q, want connected", anthropicStatus.Status)
+	}
+	if anthropicStatus.AuthMethod != oauthMethodClaudeCode {
+		t.Fatalf("anthropic auth_method = %q, want %q", anthropicStatus.AuthMethod, oauthMethodClaudeCode)
+	}
+
+	stored, err := auth.GetCredential(oauthProviderAnthropic)
+	if err != nil {
+		t.Fatalf("GetCredential: %v", err)
+	}
+	if stored == nil || stored.AccessToken != "fresh-anthropic-token" {
+		t.Fatalf("stored credential = %+v, want refreshed token", stored)
+	}
+}
+
 func TestOAuthBrowserFlowCreatedAndQueried(t *testing.T) {
 	configPath, cleanup := setupOAuthTestEnv(t)
 	defer cleanup()
@@ -538,6 +623,7 @@ func resetOAuthHooks(t *testing.T) {
 	origPollDeviceCodeOnce := oauthPollDeviceCodeOnce
 	origExchangeCodeForTokens := oauthExchangeCodeForTokens
 	origExchangeCodeForTokensWithState := oauthExchangeCodeForTokensWithState
+	origRefreshAccessToken := oauthRefreshAccessToken
 	origGetCredential := oauthGetCredential
 	origSetCredential := oauthSetCredential
 	origDeleteCredential := oauthDeleteCredential
@@ -555,6 +641,7 @@ func resetOAuthHooks(t *testing.T) {
 		oauthPollDeviceCodeOnce = origPollDeviceCodeOnce
 		oauthExchangeCodeForTokens = origExchangeCodeForTokens
 		oauthExchangeCodeForTokensWithState = origExchangeCodeForTokensWithState
+		oauthRefreshAccessToken = origRefreshAccessToken
 		oauthGetCredential = origGetCredential
 		oauthSetCredential = origSetCredential
 		oauthDeleteCredential = origDeleteCredential

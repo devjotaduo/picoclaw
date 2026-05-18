@@ -66,21 +66,22 @@ var oauthProviderLabels = map[string]string{
 }
 
 var (
-	oauthNow                      = time.Now
-	oauthGeneratePKCE             = auth.GeneratePKCE
-	oauthGenerateState            = auth.GenerateState
-	oauthBuildAuthorizeURL        = auth.BuildAuthorizeURL
-	oauthRequestDeviceCode        = auth.RequestDeviceCode
-	oauthPollDeviceCodeOnce       = auth.PollDeviceCodeOnce
+	oauthNow                            = time.Now
+	oauthGeneratePKCE                   = auth.GeneratePKCE
+	oauthGenerateState                  = auth.GenerateState
+	oauthBuildAuthorizeURL              = auth.BuildAuthorizeURL
+	oauthRequestDeviceCode              = auth.RequestDeviceCode
+	oauthPollDeviceCodeOnce             = auth.PollDeviceCodeOnce
 	oauthExchangeCodeForTokens          = auth.ExchangeCodeForTokens
 	oauthExchangeCodeForTokensWithState = auth.ExchangeCodeForTokensWithState
-	oauthGetCredential            = auth.GetCredential
-	oauthSetCredential            = auth.SetCredential
-	oauthDeleteCredential         = auth.DeleteCredential
-	oauthLoadConfig               = config.LoadConfig
-	oauthSaveConfig               = config.SaveConfig
-	oauthFetchAntigravityProject  = providers.FetchAntigravityProjectID
-	oauthFetchGoogleUserEmailFunc = fetchGoogleUserEmail
+	oauthRefreshAccessToken             = auth.RefreshAccessToken
+	oauthGetCredential                  = auth.GetCredential
+	oauthSetCredential                  = auth.SetCredential
+	oauthDeleteCredential               = auth.DeleteCredential
+	oauthLoadConfig                     = config.LoadConfig
+	oauthSaveConfig                     = config.SaveConfig
+	oauthFetchAntigravityProject        = providers.FetchAntigravityProjectID
+	oauthFetchGoogleUserEmailFunc       = fetchGoogleUserEmail
 )
 
 type oauthFlow struct {
@@ -150,6 +151,7 @@ func (h *Handler) handleListOAuthProviders(w http.ResponseWriter, r *http.Reques
 			http.Error(w, fmt.Sprintf("failed to load credentials: %v", err), http.StatusInternalServerError)
 			return
 		}
+		cred = h.refreshOAuthCredentialForStatus(provider, cred)
 
 		item := oauthProviderStatus{
 			Provider:    provider,
@@ -183,6 +185,53 @@ func (h *Handler) handleListOAuthProviders(w http.ResponseWriter, r *http.Reques
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"providers": providersResp,
 	})
+}
+
+func (h *Handler) refreshOAuthCredentialForStatus(provider string, cred *auth.AuthCredential) *auth.AuthCredential {
+	if cred == nil || !cred.NeedsRefresh() || strings.TrimSpace(cred.RefreshToken) == "" {
+		return cred
+	}
+
+	cfg, err := oauthConfigForProvider(provider)
+	if err != nil {
+		return cred
+	}
+
+	refreshed, err := oauthRefreshAccessToken(cred, cfg)
+	if err != nil {
+		logger.ErrorC("oauth", fmt.Sprintf("oauth warning: could not refresh %s credentials: %v", provider, err))
+		return cred
+	}
+	if refreshed == nil {
+		return cred
+	}
+
+	cp := *refreshed
+	cp.Provider = provider
+	if cp.AuthMethod == "" {
+		cp.AuthMethod = cred.AuthMethod
+	}
+	if cp.AuthMethod == "" {
+		cp.AuthMethod = "oauth"
+	}
+	if cp.RefreshToken == "" {
+		cp.RefreshToken = cred.RefreshToken
+	}
+	if cp.AccountID == "" {
+		cp.AccountID = cred.AccountID
+	}
+	if cp.Email == "" {
+		cp.Email = cred.Email
+	}
+	if cp.ProjectID == "" {
+		cp.ProjectID = cred.ProjectID
+	}
+
+	if err := oauthSetCredential(provider, &cp); err != nil {
+		logger.ErrorC("oauth", fmt.Sprintf("oauth warning: could not save refreshed %s credentials: %v", provider, err))
+		return cred
+	}
+	return &cp
 }
 
 func (h *Handler) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
