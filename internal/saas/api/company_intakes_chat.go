@@ -229,6 +229,23 @@ func (h *Handler) handleCompanyIntakeChat(w http.ResponseWriter, r *http.Request
 				continue
 			}
 			emit("tool_applied", map[string]any{"name": tc.Function.Name})
+
+			// Emit a snapshot of the canonical extracted fields right after the
+			// mutation lands. The browser uses this to render real values in the
+			// "O que entendi" panel instead of staying at "(salvando…)".
+			latest, lerr := h.CompanyIntakes.GetByToken(ctx, id, tokenHash)
+			if lerr == nil && latest != nil {
+				snap := answersSnapshot(latest)
+				emit("extracted", map[string]any{
+					"company_name": latest.CompanyName,
+					"contact_name": latest.ContactName,
+					"segments":     snap.segments,
+					"channels":     snap.channels,
+					"pains":        snap.pains,
+					"systems":      snap.systems,
+				})
+			}
+
 			toolResults = append(toolResults, chatStoredMessage{
 				Role:       "tool",
 				ToolCallID: tc.ID,
@@ -335,6 +352,36 @@ func streamOneTurn(
 	})
 	text = assistantText.String()
 	return text, toolCalls, finish, err
+}
+
+// extractedSnapshot is the typed shape we forward to the browser in the
+// `extracted` SSE event. The keys mirror clara.Answers so the front-end can
+// merge them into its existing ClaraExtracted state without a translation.
+type extractedSnapshot struct {
+	segments []string
+	channels []string
+	pains    []string
+	systems  []string
+}
+
+func answersSnapshot(intake *store.CompanyIntake) extractedSnapshot {
+	parsed, err := clara.ParseAnswers(intake.AnswersJSON)
+	if err != nil || parsed == nil {
+		return extractedSnapshot{}
+	}
+	return extractedSnapshot{
+		segments: nonNilStrings(parsed.Segments),
+		channels: nonNilStrings(parsed.Channels),
+		pains:    nonNilStrings(parsed.Pains),
+		systems:  nonNilStrings(parsed.Systems),
+	}
+}
+
+func nonNilStrings(in []string) []string {
+	if in == nil {
+		return []string{}
+	}
+	return in
 }
 
 // escapeJSON escapes a string for safe inclusion in a JSON literal.

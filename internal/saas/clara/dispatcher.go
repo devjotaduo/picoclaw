@@ -130,6 +130,13 @@ func Apply(name string, rawArgs json.RawMessage, current *Answers) (*IntakeMutat
 		}
 		current.Segments = mergeUnique(current.Segments, in.Segments)
 		current.BusinessModels = mergeUnique(current.BusinessModels, in.BusinessModels)
+		// Mirror to the legacy `business_type` scalar that the submit validator
+		// (validateIntakeMinimum) still requires. Without this, the agent flow
+		// would always 400 on /submit even after extracting the same data
+		// through set_business.
+		if bt := pickBusinessType(in.BusinessModels, in.Segments); bt != "" {
+			current.Extra["business_type"] = bt
+		}
 		m.AnswersDelta = current
 
 	case ToolSetPain:
@@ -212,6 +219,23 @@ func mergeUnique(base, add []string) []string {
 		out = append(out, v)
 	}
 	return out
+}
+
+// pickBusinessType collapses set_business inputs to the single-value
+// `business_type` string the legacy validator expects. Order of preference:
+// the first explicit business_model, the first segment, "outro" as fallback.
+func pickBusinessType(models, segments []string) string {
+	for _, v := range models {
+		if v = strings.TrimSpace(v); v != "" {
+			return v
+		}
+	}
+	for _, v := range segments {
+		if v = strings.TrimSpace(v); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // normalizeChannels maps free-form names to a small canonical set so the admin
