@@ -120,3 +120,57 @@ describe("buildFormFromSeed", () => {
     expect(form.behaviorBaseline).toEqual(beh);
   });
 });
+
+import { buildSeedFromForm } from "@/lib/launcher-profile-form";
+
+describe("buildSeedFromForm", () => {
+  it("preserves unknown config keys (round-trip)", () => {
+    const cfg = {
+      tools: { web: { sogou: { enabled: true } } },
+      ui: { show_model_selector: false, show_reasoning: true, show_tool_calls: false },
+      hooks: { enabled: true },
+    };
+    const form = buildFormFromSeed(PROFILE, seed({ config_json: cfg }));
+    const out = buildSeedFromForm(form);
+    expect(out.config_json.tools).toEqual(cfg.tools);
+    expect(out.config_json.hooks).toEqual(cfg.hooks);
+    expect((out.config_json.ui as Record<string, unknown>).show_model_selector).toBe(false);
+  });
+
+  it("serialises behavior toggles back to snake_case", () => {
+    const form = buildFormFromSeed(PROFILE, seed());
+    form.behavior.masterEnabled = false;
+    form.behavior.respondInDM = false;
+    form.behavior.outboundOnlyMode = true;
+    form.behavior.schedule.monday = { open: false, from: "09:00", to: "17:00" };
+    const out = buildSeedFromForm(form);
+    expect(out.behavior_json).toMatchObject({
+      master_enabled: false,
+      respond_in_dm: false,
+      outbound_only_mode: true,
+      schedule: { monday: { open: false, from: "09:00", to: "17:00" } },
+    });
+  });
+
+  it("rewrites agents.list while keeping defaults block intact", () => {
+    const cfg = {
+      agents: {
+        defaults: { provider: "openrouter", model_name: "x" },
+        list: [
+          {
+            id: "main",
+            name: "Ana",
+            model: "x",
+            role_config: { kind: "attendant", description: "" },
+          },
+        ],
+      },
+    };
+    const form = buildFormFromSeed(PROFILE, seed({ config_json: cfg }));
+    form.agents[0]!.name = "Ana 2";
+    const out = buildSeedFromForm(form);
+    const outAgents = out.config_json.agents as Record<string, unknown>;
+    expect((outAgents.defaults as Record<string, unknown>).provider).toBe("openrouter");
+    expect((outAgents.list as Array<Record<string, unknown>>)[0]!.name).toBe("Ana 2");
+  });
+});

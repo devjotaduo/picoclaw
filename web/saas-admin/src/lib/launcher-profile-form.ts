@@ -386,8 +386,176 @@ export function buildFormFromSeed(
   };
 }
 
-export function buildSeedFromForm(_form: LauncherProfileForm): SeedBundle {
-  throw new Error("buildSeedFromForm not implemented");
+function writeAgents(form: LauncherProfileForm, base: Record<string, unknown>): Record<string, unknown> {
+  const baseAgents = asRecord(base.agents);
+  const list = form.agents.map((agent) => {
+    let extras: Record<string, unknown> = {};
+    try {
+      extras = asRecord(JSON.parse(agent.extrasJSON || "{}"));
+    } catch {
+      extras = {};
+    }
+    const roleConfig = asRecord(extras.role_config);
+    const access = asRecord(extras.access);
+    const subagents = asRecord(extras.subagents);
+    return {
+      ...extras,
+      id: agent.id,
+      name: agent.name,
+      model: agent.model,
+      default: agent.default,
+      avatar: { ...agent.avatar },
+      skills: agent.skills,
+      workspace: agent.workspace,
+      subagents: {
+        ...subagents,
+        allow_agents: agent.subagentsAllow,
+      },
+      access,
+      role_config: {
+        ...roleConfig,
+        kind: agent.roleKind,
+        description: agent.description,
+      },
+    };
+  });
+  return { ...baseAgents, list };
+}
+
+function writeBehavior(form: LauncherProfileForm): Record<string, unknown> {
+  const base = form.behaviorBaseline;
+  const schedule: Record<string, unknown> = { ...asRecord(base.schedule) };
+  for (const day of WEEKDAYS) {
+    schedule[day] = { ...form.behavior.schedule[day] };
+  }
+  schedule.notes = form.behavior.scheduleNotes;
+  return {
+    ...base,
+    master_enabled: form.behavior.masterEnabled,
+    respond_in_dm: form.behavior.respondInDM,
+    respond_in_groups: form.behavior.respondInGroups,
+    group_mention_only: form.behavior.groupMentionOnly,
+    ignore_other_bots: form.behavior.ignoreOtherBots,
+    ignore_self_messages: form.behavior.ignoreSelfMessages,
+    ignore_forwarded_messages: form.behavior.ignoreForwardedMessages,
+    process_audio: form.behavior.processAudio,
+    process_documents: form.behavior.processDocuments,
+    process_images: form.behavior.processImages,
+    process_location: form.behavior.processLocation,
+    process_stickers: form.behavior.processStickers,
+    process_video: form.behavior.processVideo,
+    store_received_media: form.behavior.storeReceivedMedia,
+    mask_pii_in_replies: form.behavior.maskPIIInReplies,
+    outbound_only_mode: form.behavior.outboundOnlyMode,
+    business_hours_only: form.behavior.businessHoursOnly,
+    schedule,
+  };
+}
+
+function writeChannels(form: LauncherProfileForm, base: Record<string, unknown>): Record<string, unknown> {
+  let others: Record<string, unknown> = {};
+  try {
+    others = asRecord(JSON.parse(form.channels.othersJSON || "{}"));
+  } catch {
+    others = {};
+  }
+  const baseWa = asRecord(base.whatsapp);
+  const baseTg = asRecord(base.telegram);
+  const baseMx = asRecord(base.matrix);
+  return {
+    ...others,
+    whatsapp: {
+      ...baseWa,
+      enabled: form.channels.whatsapp.enabled,
+      type: "whatsapp_native",
+      settings: {
+        ...asRecord(baseWa.settings),
+        use_native: form.channels.whatsapp.useNative,
+        bridge_url: form.channels.whatsapp.bridgeURL,
+        session_store_path: form.channels.whatsapp.sessionStorePath,
+      },
+    },
+    telegram: {
+      ...baseTg,
+      enabled: form.channels.telegram.enabled,
+      type: "telegram",
+      settings: {
+        ...asRecord(baseTg.settings),
+        base_url: form.channels.telegram.baseURL,
+        proxy: form.channels.telegram.proxy,
+        use_markdown_v2: form.channels.telegram.useMarkdownV2,
+      },
+      typing: {
+        ...asRecord(baseTg.typing),
+        enabled: form.channels.telegram.typingEnabled,
+      },
+      placeholder: {
+        ...asRecord(baseTg.placeholder),
+        enabled: form.channels.telegram.placeholderEnabled,
+        text: form.channels.telegram.placeholderText
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line !== ""),
+      },
+    },
+    matrix: {
+      ...baseMx,
+      enabled: form.channels.matrix.enabled,
+      type: "matrix",
+      settings: {
+        ...asRecord(baseMx.settings),
+        homeserver: form.channels.matrix.homeserver,
+        user_id: form.channels.matrix.userID,
+        join_on_invite: form.channels.matrix.joinOnInvite,
+      },
+      group_trigger: {
+        ...asRecord(baseMx.group_trigger),
+        mention_only: form.channels.matrix.mentionOnly,
+      },
+    },
+  };
+}
+
+function writeModels(form: LauncherProfileForm): Array<Record<string, unknown>> {
+  return form.models.map((m) => {
+    let extras: Record<string, unknown> = {};
+    try {
+      extras = asRecord(JSON.parse(m.extrasJSON || "{}"));
+    } catch {
+      extras = {};
+    }
+    return {
+      ...extras,
+      provider: m.provider,
+      model: m.model,
+      model_name: m.modelName,
+      api_base: m.apiBase,
+      enabled: m.enabled,
+    };
+  });
+}
+
+export function buildSeedFromForm(form: LauncherProfileForm): SeedBundle {
+  const baseConfig = form.configBaseline;
+  const baseChannels = asRecord(baseConfig.channel_list);
+  const baseUi = asRecord(baseConfig.ui);
+  return {
+    config_json: {
+      ...baseConfig,
+      agents: writeAgents(form, baseConfig),
+      channel_list: writeChannels(form, baseChannels),
+      ui: {
+        ...baseUi,
+        show_model_selector: form.display.showModelSelector,
+        show_reasoning: form.display.showReasoning,
+        show_tool_calls: form.display.showToolCalls,
+      },
+      model_list: writeModels(form),
+    },
+    agent_md: form.agentMD,
+    soul_md: form.soulMD,
+    behavior_json: writeBehavior(form),
+  };
 }
 
 export function isFormDirty(form: LauncherProfileForm, baseline: LauncherProfileForm): boolean {
