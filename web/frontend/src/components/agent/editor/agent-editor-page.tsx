@@ -97,6 +97,7 @@ import {
   type ActiveConversation,
   DeactivateAgentDialog,
 } from "./deactivate-agent-dialog"
+import { AvatarUpload } from "./avatar-upload"
 import { LabelWithTooltip } from "./label-with-tooltip"
 import { ProgressChecklist } from "./progress-checklist"
 import { SaveBar } from "./save-bar"
@@ -115,8 +116,6 @@ import { jidToPhone } from "./whatsapp-format"
 import { WhatsAppGroupList } from "./whatsapp-group-list"
 import { WhatsAppPhoneList } from "./whatsapp-phone-list"
 import { WorkspaceDisplay } from "./workspace-display"
-import { ColorPicker, DEFAULT_FG_PRESETS } from "./color-picker"
-import { IconPicker } from "./icon-picker"
 import { TagInput } from "./tag-input"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 
@@ -1631,10 +1630,6 @@ export function AgentEditorPage() {
                                 <span className="size-1.5 shrink-0 rounded-full bg-red-400" />
                               )}
                             </div>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                              {agent.default && <DefaultBadge />}
-                              <ReadyStatusBadges agent={agent} compact />
-                            </div>
                             <p className="text-muted-foreground/70 mt-1 truncate text-[11px]">
                               {agentRoleLabel(agent)}
                             </p>
@@ -2051,12 +2046,6 @@ function UnifiedAgentEditor({
   void ready
   return (
     <div className="animate-in fade-in-0 slide-in-from-bottom-2 flex flex-col gap-6 pb-0 duration-300">
-      <ProgressChecklist
-        steps={checklistSteps}
-        activeTab={activeTab}
-        onStepClick={onTabChange}
-      />
-
       <Tabs
         value={activeTab}
         onValueChange={(v) => onTabChange(v as AgentEditorTab)}
@@ -2142,13 +2131,7 @@ function UnifiedAgentEditor({
         </TabsContent>
 
         <TabsContent value="test" id="section-test">
-          <section id="agent-chat-section" className="space-y-3">
-            <SectionHeader title="Chat de teste" icon={IconMessageCircle} />
-            <p className="text-muted-foreground text-xs">
-              Dica: use o botão <strong>Chat de teste</strong> no topo da
-              página para manter o chat aberto enquanto edita outras
-              abas.
-            </p>
+          <section id="agent-chat-section">
             <ChatTab
               selectedAgentId={selectedAgentId}
               selectedProfile={selectedProfile}
@@ -2301,58 +2284,16 @@ function IdentityProfileSection({
         {selectedProfile && (
           <div className="border-border/60 bg-background/70 rounded-xl border p-4">
             <SectionHeader title="Identidade" icon={IconUserShield} />
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-xs">Nome exibido</Label>
+                <Label className="text-xs">Nome do agente</Label>
                 <Input value={selectedProfile.name} onChange={(e) => onUpdateProfile({ name: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Imagem URL</Label>
-                <Input value={selectedProfile.imageURL} onChange={(e) => onUpdateProfile({ imageURL: e.target.value })} placeholder="https://..." />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <IconPicker
-                  id={`${agent.id}-icon`}
-                  label="Ícone"
-                  value={selectedProfile.icon}
-                  onChange={(v) => onUpdateProfile({ icon: v })}
-                  background={selectedProfile.background}
-                  foreground={selectedProfile.foreground}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <LabelWithTooltip
-                  htmlFor={`${agent.id}-initials`}
-                  tooltip="Letras mostradas no avatar quando não há imagem nem ícone. Até 4 caracteres."
-                >
-                  Iniciais
-                </LabelWithTooltip>
-                <Input
-                  id={`${agent.id}-initials`}
-                  value={selectedProfile.initials}
-                  onChange={(e) => onUpdateProfile({ initials: e.target.value.toUpperCase() })}
-                  maxLength={4}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <ColorPicker
-                  id={`${agent.id}-background`}
-                  label="Cor de fundo"
-                  value={selectedProfile.background}
-                  onChange={(hex) => onUpdateProfile({ background: hex })}
-                  contrastAgainst={selectedProfile.foreground}
-                  ariaDescription="Validação WCAG contra a cor do texto"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <ColorPicker
-                  id={`${agent.id}-foreground`}
-                  label="Cor do texto"
-                  value={selectedProfile.foreground}
-                  onChange={(hex) => onUpdateProfile({ foreground: hex })}
-                  presets={DEFAULT_FG_PRESETS}
-                  contrastAgainst={selectedProfile.background}
-                  ariaDescription="Validação WCAG contra a cor de fundo"
+                <Label className="text-xs">Imagem</Label>
+                <AvatarUpload
+                  value={selectedProfile.imageURL}
+                  onChange={(next) => onUpdateProfile({ imageURL: next })}
                 />
               </div>
             </div>
@@ -3052,36 +2993,17 @@ function ProfileTab({
               <p className="text-muted-foreground text-xs">{selectedAgentId}</p>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label className="text-xs">{t("pages.orchestration.agent_name", "Nome")}</Label>
+              <Label className="text-xs">{t("pages.orchestration.agent_name", "Nome do agente")}</Label>
               <Input value={selectedProfile.name} onChange={(e) => onUpdateProfile({ name: e.target.value })} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">{t("pages.orchestration.avatar_image", "Imagem URL")}</Label>
-              <Input value={selectedProfile.imageURL} onChange={(e) => onUpdateProfile({ imageURL: e.target.value })} placeholder="https://..." />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t("pages.orchestration.avatar_icon", "Ícone")}</Label>
-              <Input value={selectedProfile.icon} onChange={(e) => onUpdateProfile({ icon: e.target.value })} placeholder="headset, target, sparkles…" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t("pages.orchestration.avatar_initials", "Iniciais")}</Label>
-              <Input value={selectedProfile.initials} onChange={(e) => onUpdateProfile({ initials: e.target.value.toUpperCase() })} maxLength={4} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t("pages.orchestration.avatar_background", "Cor de fundo")}</Label>
-              <div className="flex items-center gap-2">
-                <input type="color" value={selectedProfile.background} onChange={(e) => onUpdateProfile({ background: e.target.value })} className="size-8 cursor-pointer rounded border border-border/60 bg-transparent p-0.5" />
-                <Input value={selectedProfile.background} onChange={(e) => onUpdateProfile({ background: e.target.value })} className="font-mono text-xs" />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t("pages.orchestration.avatar_foreground", "Cor do texto")}</Label>
-              <div className="flex items-center gap-2">
-                <input type="color" value={selectedProfile.foreground} onChange={(e) => onUpdateProfile({ foreground: e.target.value })} className="size-8 cursor-pointer rounded border border-border/60 bg-transparent p-0.5" />
-                <Input value={selectedProfile.foreground} onChange={(e) => onUpdateProfile({ foreground: e.target.value })} className="font-mono text-xs" />
-              </div>
+              <Label className="text-xs">{t("pages.orchestration.avatar_image", "Imagem")}</Label>
+              <AvatarUpload
+                value={selectedProfile.imageURL}
+                onChange={(next) => onUpdateProfile({ imageURL: next })}
+              />
             </div>
           </div>
         </div>
@@ -3198,88 +3120,171 @@ function ChatTab({
 }) {
   const { t } = useTranslation()
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+  }, [messages, isSending])
+
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = "0px"
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+  }, [chatInput])
 
   const agentName = selectedProfile?.name || selectedAgentId
+  const canSend = Boolean(chatInput.trim() && selectedAgentId && !isSending)
+
+  const handleSend = () => {
+    if (canSend) void onSend()
+  }
 
   return (
     <div className="animate-in fade-in-0 slide-in-from-bottom-2 flex h-full flex-col gap-4 duration-300">
-      <div className="border-border/40 bg-card/60 flex flex-col rounded-2xl border shadow-sm" style={{ minHeight: 480 }}>
-        {/* chat header */}
-        <div className="border-border/40 flex items-center gap-3 border-b px-4 py-3">
+      <div className="border-border/60 bg-card flex flex-col overflow-hidden rounded-xl border shadow-sm" style={{ minHeight: 560 }}>
+        {/* chat header — avatar + nome + status online */}
+        <div className="border-border/60 flex items-center gap-3 border-b bg-background/40 px-4 py-3">
           {selectedProfile && <ProfileAvatar profile={selectedProfile} />}
-          <div>
-            <p className="text-sm font-semibold">{agentName}</p>
-            <p className="text-muted-foreground text-xs">{selectedAgentId}</p>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="truncate text-sm font-semibold">{agentName}</p>
+              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+                <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                Online
+              </span>
+            </div>
+            <p className="text-muted-foreground truncate text-xs">Chat de teste · respostas não enviadas a usuários reais</p>
           </div>
         </div>
 
-        {/* quick prompts */}
-        {quickPrompts.length > 0 && (
-          <div className="border-border/40 flex flex-wrap gap-2 border-b px-4 py-2.5">
-            {quickPrompts.map((item) => {
-              const Icon = item.icon
-              return (
-                <Button key={item.label} type="button" variant="outline" size="sm" onClick={() => onPromptSelect(item.prompt)} className="h-7 gap-1.5 text-xs">
-                  <Icon className="size-3.5" />
-                  {item.label}
-                </Button>
-              )
-            })}
-          </div>
-        )}
-
         {/* messages */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto bg-muted/10 px-4 py-5">
           {messages.length === 0 ? (
-            <div className="flex h-full min-h-32 flex-col items-center justify-center gap-2 text-center">
-              <IconMessageCircle className="text-muted-foreground/40 size-10" />
-              <p className="text-muted-foreground text-sm">{t("pages.orchestration.empty_chat")}</p>
+            <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center gap-4 text-center">
+              <div className="bg-muted text-muted-foreground flex size-12 items-center justify-center rounded-full">
+                <IconMessageCircle className="size-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Comece uma conversa de teste</p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {t("pages.orchestration.empty_chat", "Selecione um agente interno e envie uma mensagem.")}
+                </p>
+              </div>
+              {quickPrompts.length > 0 && (
+                <div className="mt-2 grid w-full gap-2 sm:grid-cols-2">
+                  {quickPrompts.slice(0, 4).map((item) => {
+                    const Icon = item.icon
+                    return (
+                      <button
+                        key={item.label}
+                        type="button"
+                        onClick={() => onPromptSelect(item.prompt)}
+                        className="border-border/60 hover:border-primary/60 hover:bg-muted/60 focus-visible:ring-primary/30 group flex items-start gap-2 rounded-lg border bg-background px-3 py-2.5 text-left transition-colors focus:outline-none focus-visible:ring-2"
+                      >
+                        <Icon className="text-muted-foreground group-hover:text-foreground mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                        <span className="text-xs font-medium leading-snug">{item.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           ) : (
-            <div className="space-y-3">
-              {messages.map((msg, i) => (
-                <div
-                  key={`${msg.role}-${i}`}
-                  className={
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-sm px-4 py-2.5 text-sm"
-                      : "bg-muted mr-auto max-w-[86%] rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm whitespace-pre-wrap"
-                  }
-                >
-                  {msg.content}
+            <div className="mx-auto flex max-w-3xl flex-col gap-3">
+              {messages.map((msg, i) => {
+                const isUser = msg.role === "user"
+                return (
+                  <div key={`${msg.role}-${i}`} className={`flex ${isUser ? "justify-end" : "justify-start gap-2"}`}>
+                    {!isUser && selectedProfile && (
+                      <div className="mt-auto">
+                        <ProfileAvatar profile={selectedProfile} />
+                      </div>
+                    )}
+                    <div
+                      className={
+                        isUser
+                          ? "bg-primary text-primary-foreground max-w-[80%] rounded-2xl rounded-br-sm px-4 py-2.5 text-sm shadow-sm"
+                          : "bg-background border-border/60 max-w-[80%] rounded-2xl rounded-bl-sm border px-4 py-2.5 text-sm whitespace-pre-wrap shadow-sm"
+                      }
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
+                )
+              })}
+              {isSending && (
+                <div className="flex justify-start gap-2">
+                  {selectedProfile && (
+                    <div className="mt-auto">
+                      <ProfileAvatar profile={selectedProfile} />
+                    </div>
+                  )}
+                  <div className="bg-background border-border/60 flex items-center gap-1 rounded-2xl rounded-bl-sm border px-4 py-3 shadow-sm">
+                    <span className="bg-muted-foreground/60 size-1.5 animate-bounce rounded-full [animation-delay:-0.3s]" />
+                    <span className="bg-muted-foreground/60 size-1.5 animate-bounce rounded-full [animation-delay:-0.15s]" />
+                    <span className="bg-muted-foreground/60 size-1.5 animate-bounce rounded-full" />
+                  </div>
                 </div>
-              ))}
+              )}
               <div ref={messagesEndRef} />
             </div>
           )}
         </div>
 
+        {/* quick prompts as inline chips (only when messages exist) */}
+        {messages.length > 0 && quickPrompts.length > 0 && (
+          <div className="border-border/60 bg-background/60 flex flex-wrap gap-1.5 border-t px-4 py-2">
+            {quickPrompts.map((item) => {
+              const Icon = item.icon
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => onPromptSelect(item.prompt)}
+                  className="border-border/60 hover:bg-muted text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded-full border bg-transparent px-2.5 py-1 text-[11px] transition-colors"
+                >
+                  <Icon className="size-3" aria-hidden="true" />
+                  {item.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         {/* input */}
-        <div className="border-border/40 flex gap-2 border-t p-3">
-          <Textarea
-            value={chatInput}
-            onChange={(e) => onChatInputChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault()
-                void onSend()
-              }
-            }}
-            placeholder={`Mensagem para ${agentName}… (Ctrl+Enter para enviar)`}
-            className="min-h-16 resize-none text-sm"
-          />
-          <Button
-            className="h-16 w-12 shrink-0"
-            onClick={onSend}
-            disabled={!chatInput.trim() || !selectedAgentId || isSending}
-            aria-label={t("pages.orchestration.send")}
-          >
-            {isSending ? <IconLoader2 className="size-5 animate-spin" /> : <IconSend className="size-5" />}
-          </Button>
+        <div className="border-border/60 bg-background border-t p-3">
+          <div className="border-border/60 focus-within:border-primary/60 focus-within:ring-primary/20 flex items-end gap-2 rounded-xl border bg-background px-3 py-2 transition-colors focus-within:ring-2">
+            <Textarea
+              ref={textareaRef}
+              value={chatInput}
+              onChange={(e) => onChatInputChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault()
+                  handleSend()
+                }
+              }}
+              placeholder={`Mensagem para ${agentName}…`}
+              rows={1}
+              className="min-h-0 flex-1 resize-none border-0 bg-transparent px-0 py-1.5 text-sm shadow-none focus-visible:ring-0"
+            />
+            <Button
+              type="button"
+              size="icon"
+              className="size-9 shrink-0 rounded-lg"
+              onClick={handleSend}
+              disabled={!canSend}
+              aria-label={t("pages.orchestration.send", "Enviar")}
+            >
+              {isSending ? <IconLoader2 className="size-4 animate-spin" /> : <IconSend className="size-4" />}
+            </Button>
+          </div>
+          <p className="text-muted-foreground mt-1.5 text-[11px]">
+            <kbd className="bg-muted rounded px-1 py-0.5 font-mono text-[10px]">Enter</kbd> para enviar ·{" "}
+            <kbd className="bg-muted rounded px-1 py-0.5 font-mono text-[10px]">Shift</kbd> +{" "}
+            <kbd className="bg-muted rounded px-1 py-0.5 font-mono text-[10px]">Enter</kbd> nova linha
+          </p>
         </div>
       </div>
 
