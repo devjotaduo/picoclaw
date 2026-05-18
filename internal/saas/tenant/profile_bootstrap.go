@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/sipeed/picoclaw/internal/saas/config"
@@ -22,19 +21,25 @@ func EnsureDefaultLauncherProfile(ctx context.Context, cfg *config.Config, profi
 	if cfg == nil || profiles == nil {
 		return nil
 	}
-	if _, err := profiles.GetDefault(ctx); err == nil {
+	if existing, err := profiles.GetDefault(ctx); err == nil {
+		if existing.ID != defaultLauncherProfileID {
+			return nil
+		}
+		changed, normalizeErr := NormalizeDefaultLauncherProfileSeed(existing.SeedPath)
+		if normalizeErr != nil {
+			return fmt.Errorf("normalize default launcher profile: %w", normalizeErr)
+		}
+		if changed {
+			return profiles.Update(ctx, existing)
+		}
 		return nil
 	} else if !errors.Is(err, store.ErrLauncherProfileNotFound) {
 		return err
 	}
 
 	seedPath := filepath.Join(cfg.TenantProfileDir, defaultLauncherProfileID, "seed")
-	if cfg.TenantTemplateDir != "" {
-		if err := ImportStandaloneProfile(cfg.TenantTemplateDir, seedPath); err != nil {
-			return fmt.Errorf("bootstrap default launcher profile: %w", err)
-		}
-	} else if err := os.MkdirAll(seedPath, 0o755); err != nil {
-		return err
+	if err := InitializeDefaultLauncherProfileSeed(cfg.TenantTemplateDir, seedPath); err != nil {
+		return fmt.Errorf("bootstrap default launcher profile: %w", err)
 	}
 
 	rolePolicyJSON, err := store.MarshalRolePolicy(policy.DefaultRolePolicy())
@@ -55,6 +60,12 @@ func EnsureDefaultLauncherProfile(ctx context.Context, cfg *config.Config, profi
 		existing, getErr := profiles.Get(ctx, defaultLauncherProfileID)
 		if getErr != nil {
 			return err
+		}
+		if existing.SeedPath == "" {
+			existing.SeedPath = seedPath
+		}
+		if _, normalizeErr := NormalizeDefaultLauncherProfileSeed(existing.SeedPath); normalizeErr != nil {
+			return fmt.Errorf("normalize default launcher profile: %w", normalizeErr)
 		}
 		existing.IsDefault = true
 		if existing.RolePolicyJSON == nil {
