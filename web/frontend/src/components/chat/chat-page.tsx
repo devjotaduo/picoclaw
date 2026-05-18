@@ -1,10 +1,12 @@
 import { IconPlus } from "@tabler/icons-react"
+import { useQuery } from "@tanstack/react-query"
 import { useAtom } from "jotai"
 import { type ChangeEvent, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
 import { type AgentSummary, getInternalAgents } from "@/api/internal-agents"
+import { getLauncherPolicy } from "@/api/launcher-policy"
 import { AssistantMessage } from "@/components/chat/assistant-message"
 import {
   ChatComposer,
@@ -128,6 +130,11 @@ export function ChatPage() {
   const [showAssistantDetails, setShowAssistantDetails] = useAtom(
     showAssistantDetailsAtom,
   )
+  const launcherPolicyQ = useQuery({
+    queryKey: ["launcher-policy"],
+    queryFn: getLauncherPolicy,
+    staleTime: 30_000,
+  })
 
   const {
     messages,
@@ -156,6 +163,14 @@ export function ChatPage() {
   const hasDefaultModel = Boolean(defaultModelName)
   const canChooseModel =
     apiKeyModels.length > 0 || oauthModels.length > 0 || localModels.length > 0
+  const assistantDetailsPolicyReady = launcherPolicyQ.isSuccess
+  const canShowReasoning =
+    assistantDetailsPolicyReady &&
+    launcherPolicyQ.data.ui?.show_reasoning !== false
+  const canShowToolCalls =
+    assistantDetailsPolicyReady &&
+    launcherPolicyQ.data.ui?.show_tool_calls !== false
+  const canToggleAssistantDetails = canShowReasoning || canShowToolCalls
   const inputDisabledReason = resolveChatInputDisabledReason({
     hasDefaultModel,
     connectionState,
@@ -353,17 +368,19 @@ export function ChatPage() {
           )
         }
       >
-        <div className="border-border/60 hidden items-center gap-2 rounded-lg border px-3 py-1.5 sm:flex">
-          <span className="text-muted-foreground text-sm">
-            {t("chat.showAssistantDetails")}
-          </span>
-          <Switch
-            checked={showAssistantDetails}
-            onCheckedChange={setShowAssistantDetails}
-            aria-label={t("chat.showAssistantDetails")}
-            size="sm"
-          />
-        </div>
+        {canToggleAssistantDetails && (
+          <div className="border-border/60 hidden items-center gap-2 rounded-lg border px-3 py-1.5 sm:flex">
+            <span className="text-muted-foreground text-sm">
+              {t("chat.showAssistantDetails")}
+            </span>
+            <Switch
+              checked={showAssistantDetails}
+              onCheckedChange={setShowAssistantDetails}
+              aria-label={t("chat.showAssistantDetails")}
+              size="sm"
+            />
+          </div>
+        )}
 
         <Button
           variant="secondary"
@@ -395,7 +412,7 @@ export function ChatPage() {
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-6 [scrollbar-gutter:stable] md:px-8 lg:px-24 xl:px-48"
+        className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto px-4 py-6 md:px-8 lg:px-24 xl:px-48"
       >
         <div className="mx-auto flex w-full max-w-250 flex-col gap-8 pb-8">
           {messages.length === 0 && !isTyping && (
@@ -408,8 +425,14 @@ export function ChatPage() {
 
           {messages.map((msg) => {
             if (
-              !showAssistantDetails &&
-              (msg.kind === "thought" || msg.kind === "tool_calls")
+              msg.kind === "thought" &&
+              (!showAssistantDetails || !canShowReasoning)
+            ) {
+              return null
+            }
+            if (
+              msg.kind === "tool_calls" &&
+              (!showAssistantDetails || !canShowToolCalls)
             ) {
               return null
             }

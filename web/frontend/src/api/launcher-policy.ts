@@ -6,6 +6,10 @@ export interface LauncherPolicyResponse {
   role: string
   feature_ids: string[]
   features: Record<string, LauncherFeatureAccess>
+  ui?: {
+    show_reasoning?: boolean
+    show_tool_calls?: boolean
+  }
 }
 
 export async function getLauncherPolicy(): Promise<LauncherPolicyResponse> {

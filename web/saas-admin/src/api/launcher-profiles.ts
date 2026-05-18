@@ -1,7 +1,41 @@
 import { api } from "./client";
 
-type Access = "none" | "read" | "write";
+export type Access = "none" | "read" | "write";
 export type RolePolicy = Record<string, Record<string, Access>>;
+
+export type PolicyRole = {
+  id: string;
+  label: string;
+  description: string;
+};
+
+export type PolicyAccessLevel = {
+  id: Access;
+  label: string;
+  description: string;
+};
+
+export type PolicyFeatureGroup = {
+  id: string;
+  label: string;
+  description: string;
+};
+
+export type PolicyFeature = {
+  id: string;
+  label: string;
+  description: string;
+  group: string;
+  fallback?: string;
+};
+
+export type LauncherPolicyCatalog = {
+  roles: PolicyRole[];
+  access_levels: PolicyAccessLevel[];
+  groups: PolicyFeatureGroup[];
+  features: PolicyFeature[];
+  default_role_policy: RolePolicy;
+};
 
 export type LauncherProfile = {
   id: string;
@@ -35,6 +69,10 @@ export async function listLauncherProfiles() {
   return api<{ profiles: LauncherProfile[] }>("/api/v1/launcher-profiles");
 }
 
+export async function getLauncherPolicyCatalog() {
+  return api<LauncherPolicyCatalog>("/api/v1/launcher-policy/catalog");
+}
+
 export async function createLauncherProfile(input: LauncherProfileInput) {
   return api<LauncherProfile>("/api/v1/launcher-profiles", {
     method: "POST",
@@ -42,7 +80,10 @@ export async function createLauncherProfile(input: LauncherProfileInput) {
   });
 }
 
-export async function updateLauncherProfile(id: string, input: LauncherProfileInput) {
+export async function updateLauncherProfile(
+  id: string,
+  input: LauncherProfileInput,
+) {
   return api<LauncherProfile>(`/api/v1/launcher-profiles/${id}`, {
     method: "PUT",
     body: JSON.stringify(input),
@@ -54,16 +95,22 @@ export async function deleteLauncherProfile(id: string) {
 }
 
 export async function importStandaloneLauncherProfile(id: string) {
-  return api<LauncherProfile>(`/api/v1/launcher-profiles/${id}/import-standalone`, {
-    method: "POST",
-  });
+  return api<LauncherProfile>(
+    `/api/v1/launcher-profiles/${id}/import-standalone`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 export async function getLauncherProfileSeed(id: string) {
   return api<LauncherProfileSeed>(`/api/v1/launcher-profiles/${id}/seed`);
 }
 
-export async function updateLauncherProfileSeed(id: string, seed: LauncherProfileSeed) {
+export async function updateLauncherProfileSeed(
+  id: string,
+  seed: LauncherProfileSeed,
+) {
   return api<LauncherProfile>(`/api/v1/launcher-profiles/${id}/seed`, {
     method: "PUT",
     body: JSON.stringify(seed),

@@ -1103,6 +1103,10 @@
       "restrict_workspace_hint": "Permitir operações de arquivo apenas dentro do workspace.",
       "split_on_marker": "Modo Tagarela",
       "split_on_marker_hint": "Dividir mensagens longas em várias curtas, como em uma conversa real.",
+      "show_reasoning": "Show Reasoning",
+      "show_reasoning_hint": "Allow chat and history to display internal reasoning messages.",
+      "show_tool_calls": "Show Tool Calls",
+      "show_tool_calls_hint": "Allow chat and history to display called tools, arguments, and explanations.",
       "tool_feedback_enabled": "Feedback de Ferramentas",
       "tool_feedback_enabled_hint": "Enviar uma breve nota de execução no chat atual antes de cada ferramenta rodar.",
       "tool_feedback_separate_messages": "Mensagens de Feedback Separadas",
@@ -1206,6 +1210,7 @@
       "evolution_cold_path_times_hint": "Horários para o processamento cold-path agendado. Insira um valor HH:MM por linha.",
       "sections": {
         "agent": "Agente",
+        "interface": "Chat Interface",
         "runtime": "Runtime",
         "evolution": "Evolução",
         "exec": "Execução de Comandos",

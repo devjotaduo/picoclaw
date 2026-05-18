@@ -23,6 +23,7 @@ func DefaultConfig() *Config {
 		Isolation: IsolationConfig{
 			Enabled: false,
 		},
+		UI: DefaultUIConfig(),
 		Agents: AgentsConfig{
 			Defaults: AgentDefaults{
 				Workspace:                 workspacePath,

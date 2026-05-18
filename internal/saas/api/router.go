@@ -100,6 +100,7 @@ func (h *Handler) Routes() http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(h.requirePlatformAdmin)
 				r.Post("/tenants", h.handleCreateTenant)
+				r.Get("/launcher-policy/catalog", h.handleGetLauncherPolicyCatalog)
 				r.Get("/launcher-profiles", h.handleListLauncherProfiles)
 				r.Post("/launcher-profiles", h.handleCreateLauncherProfile)
 				r.Get("/launcher-profiles/{id}", h.handleGetLauncherProfile)

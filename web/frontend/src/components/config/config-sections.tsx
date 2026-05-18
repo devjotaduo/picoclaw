@@ -68,6 +68,33 @@ interface AgentDefaultsSectionProps {
   onFieldChange: UpdateCoreField
 }
 
+export function InterfaceSection({
+  form,
+  onFieldChange,
+}: AgentDefaultsSectionProps) {
+  const { t } = useTranslation()
+
+  return (
+    <ConfigSectionCard title={t("pages.config.sections.interface")}>
+      <SwitchCardField
+        label={t("pages.config.show_reasoning")}
+        hint={t("pages.config.show_reasoning_hint")}
+        layout="setting-row"
+        checked={form.showReasoning}
+        onCheckedChange={(checked) => onFieldChange("showReasoning", checked)}
+      />
+
+      <SwitchCardField
+        label={t("pages.config.show_tool_calls")}
+        hint={t("pages.config.show_tool_calls_hint")}
+        layout="setting-row"
+        checked={form.showToolCalls}
+        onCheckedChange={(checked) => onFieldChange("showToolCalls", checked)}
+      />
+    </ConfigSectionCard>
+  )
+}
+
 export function AgentDefaultsSection({
   form,
   onFieldChange,

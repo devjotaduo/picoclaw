@@ -1088,6 +1088,10 @@
       "restrict_workspace_hint": "仅允许在工作目录内执行文件操作",
       "split_on_marker": "连续短消息",
       "split_on_marker_hint": "像真人聊天一样，把长难句拆成多条短消息快速发出",
+      "show_reasoning": "显示推理",
+      "show_reasoning_hint": "允许聊天和历史记录显示内部推理消息",
+      "show_tool_calls": "显示工具调用",
+      "show_tool_calls_hint": "允许聊天和历史记录显示已调用的工具、参数和说明",
       "tool_feedback_enabled": "工具反馈",
       "tool_feedback_enabled_hint": "在每次执行工具前，先向当前会话发送一条简短的执行说明",
       "tool_feedback_separate_messages": "分开发送反馈消息",
@@ -1221,6 +1225,7 @@
       "mcp_server_headers_placeholder": "请求头 JSON 对象",
       "sections": {
         "agent": "智能体",
+        "interface": "聊天界面",
         "runtime": "运行时",
         "evolution": "自进化",
         "mcp": "MCP",

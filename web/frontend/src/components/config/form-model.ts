@@ -4,6 +4,8 @@ export interface CoreConfigForm {
   workspace: string
   restrictToWorkspace: boolean
   splitOnMarker: boolean
+  showReasoning: boolean
+  showToolCalls: boolean
   toolFeedbackEnabled: boolean
   toolFeedbackMaxArgsLength: string
   toolFeedbackSeparateMessages: boolean
@@ -100,6 +102,8 @@ export const EMPTY_FORM: CoreConfigForm = {
   workspace: "",
   restrictToWorkspace: true,
   splitOnMarker: false,
+  showReasoning: true,
+  showToolCalls: true,
   toolFeedbackEnabled: false,
   toolFeedbackMaxArgsLength: "300",
   toolFeedbackSeparateMessages: false,
@@ -227,6 +231,7 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
   const agents = asRecord(root.agents)
   const defaults = asRecord(agents.defaults)
   const session = asRecord(root.session)
+  const ui = asRecord(root.ui)
   const heartbeat = asRecord(root.heartbeat)
   const devices = asRecord(root.devices)
   const evolution = asRecord(root.evolution)
@@ -247,6 +252,14 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
       defaults.split_on_marker === undefined
         ? EMPTY_FORM.splitOnMarker
         : asBool(defaults.split_on_marker),
+    showReasoning:
+      ui.show_reasoning === undefined
+        ? EMPTY_FORM.showReasoning
+        : asBool(ui.show_reasoning),
+    showToolCalls:
+      ui.show_tool_calls === undefined
+        ? EMPTY_FORM.showToolCalls
+        : asBool(ui.show_tool_calls),
     toolFeedbackEnabled:
       toolFeedback.enabled === undefined
         ? EMPTY_FORM.toolFeedbackEnabled

@@ -411,8 +411,8 @@ func (h *Handler) findLegacyPicoSession(dir, sessionID string) (picoLegacySessio
 	return picoLegacySessionRef{}, os.ErrNotExist
 }
 
-func buildSessionListItem(sessionID string, sess sessionFile, toolFeedbackMaxArgsLength int) sessionListItem {
-	transcript := visibleSessionMessages(sess.Messages, toolFeedbackMaxArgsLength)
+func buildSessionListItem(sessionID string, sess sessionFile, toolFeedbackMaxArgsLength int, ui config.UIConfig) sessionListItem {
+	transcript := visibleSessionMessages(sess.Messages, toolFeedbackMaxArgsLength, ui)
 
 	preview := ""
 	for _, msg := range transcript {
@@ -484,18 +484,29 @@ func sessionChatMessagePreview(msg sessionChatMessage) string {
 	return ""
 }
 
-func visibleSessionMessages(messages []providers.Message, toolFeedbackMaxArgsLength int) []sessionChatMessage {
-	return sessionTranscriptMessages(messages, toolFeedbackMaxArgsLength, false)
+func visibleSessionMessages(messages []providers.Message, toolFeedbackMaxArgsLength int, ui config.UIConfig) []sessionChatMessage {
+	return sessionTranscriptMessages(messages, toolFeedbackMaxArgsLength, sessionTranscriptOptions{
+		includeThoughts:  false,
+		includeToolCalls: ui.ShowToolCalls,
+	})
 }
 
-func detailSessionMessages(messages []providers.Message, toolFeedbackMaxArgsLength int) []sessionChatMessage {
-	return sessionTranscriptMessages(messages, toolFeedbackMaxArgsLength, true)
+func detailSessionMessages(messages []providers.Message, toolFeedbackMaxArgsLength int, ui config.UIConfig) []sessionChatMessage {
+	return sessionTranscriptMessages(messages, toolFeedbackMaxArgsLength, sessionTranscriptOptions{
+		includeThoughts:  ui.ShowReasoning,
+		includeToolCalls: ui.ShowToolCalls,
+	})
+}
+
+type sessionTranscriptOptions struct {
+	includeThoughts  bool
+	includeToolCalls bool
 }
 
 func sessionTranscriptMessages(
 	messages []providers.Message,
 	toolFeedbackMaxArgsLength int,
-	includeThoughts bool,
+	options sessionTranscriptOptions,
 ) []sessionChatMessage {
 	transcript := make([]sessionChatMessage, 0, len(messages))
 
@@ -521,16 +532,19 @@ func sessionTranscriptMessages(
 			if messageutil.IsTransientAssistantThoughtMessage(msg) {
 				continue
 			}
-			if includeThoughts {
+			if options.includeThoughts {
 				if thoughtMsg, ok := assistantThoughtMessage(msg); ok {
 					transcript = append(transcript, thoughtMsg)
 				}
 			}
 
-			toolCallsMsg, hasToolCallsMsg := assistantToolCallsMessage(
-				msg.ToolCalls,
-				toolFeedbackMaxArgsLength,
-			)
+			toolCallsMsg, hasToolCallsMsg := sessionChatMessage{}, false
+			if options.includeToolCalls {
+				toolCallsMsg, hasToolCallsMsg = assistantToolCallsMessage(
+					msg.ToolCalls,
+					toolFeedbackMaxArgsLength,
+				)
+			}
 			visibleToolMessages := visibleAssistantToolMessages(msg.ToolCalls)
 
 			// Pico web chat can persist both visible `message` tool output and a
@@ -803,6 +817,7 @@ func (h *Handler) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to resolve sessions directory", http.StatusInternalServerError)
 		return
 	}
+	ui := h.launcherUIConfig()
 
 	if _, err := os.ReadDir(dir); err != nil {
 		// Directory doesn't exist yet = no sessions
@@ -821,7 +836,7 @@ func (h *Handler) handleListSessions(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			seen[ref.ID] = struct{}{}
-			items = append(items, buildSessionListItem(ref.ID, sess, toolFeedbackMaxArgsLength))
+			items = append(items, buildSessionListItem(ref.ID, sess, toolFeedbackMaxArgsLength, ui))
 		}
 	}
 
@@ -835,7 +850,7 @@ func (h *Handler) handleListSessions(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			seen[ref.ID] = struct{}{}
-			items = append(items, buildSessionListItem(ref.ID, sess, toolFeedbackMaxArgsLength))
+			items = append(items, buildSessionListItem(ref.ID, sess, toolFeedbackMaxArgsLength, ui))
 		}
 	}
 
@@ -918,7 +933,7 @@ func (h *Handler) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	messages := detailSessionMessages(sess.Messages, toolFeedbackMaxArgsLength)
+	messages := detailSessionMessages(sess.Messages, toolFeedbackMaxArgsLength, h.launcherUIConfig())
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
