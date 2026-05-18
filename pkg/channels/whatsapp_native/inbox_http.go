@@ -82,6 +82,8 @@ func (h *inboxHTTPHandler) routeChatSubresource(w http.ResponseWriter, r *http.R
 		h.sendManual(w, r, jid)
 	case tail == "read" && r.Method == http.MethodPost:
 		h.markRead(w, r, jid)
+	case tail == "unread" && r.Method == http.MethodPost:
+		h.markUnread(w, r, jid)
 	case tail == "avatar" && r.Method == http.MethodGet:
 		h.fetchAvatar(w, r, jid, false)
 	case tail == "avatar" && r.Method == http.MethodPost:
@@ -92,6 +94,13 @@ func (h *inboxHTTPHandler) routeChatSubresource(w http.ResponseWriter, r *http.R
 		h.saveProfile(w, r, jid)
 	case tail == "insights" && r.Method == http.MethodGet:
 		h.getInsights(w, r, jid)
+	case tail == "notes" && r.Method == http.MethodGet:
+		h.listNotes(w, r, jid)
+	case tail == "notes" && r.Method == http.MethodPost:
+		h.addNote(w, r, jid)
+	case strings.HasPrefix(tail, "notes/") && r.Method == http.MethodDelete:
+		idStr := strings.TrimPrefix(tail, "notes/")
+		h.deleteNote(w, r, jid, idStr)
 	default:
 		http.NotFound(w, r)
 	}
@@ -247,6 +256,82 @@ func (h *inboxHTTPHandler) markRead(w http.ResponseWriter, r *http.Request, jid 
 		h.pubsub.Publish(inboxEvent{Kind: "chat_update", Chat: chat})
 	}
 	writeJSON(w, map[string]any{"status": "ok"})
+}
+
+// POST /whatsapp_native/inbox/chats/{jid}/unread — operator-only "snooze".
+// Bumps unread_count to MAX(1, current), and publishes a chat_update so
+// every connected dashboard tab picks it up immediately.
+func (h *inboxHTTPHandler) markUnread(w http.ResponseWriter, r *http.Request, jid string) {
+	if err := h.store.MarkUnread(r.Context(), jid); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	chat, _ := h.store.GetChat(r.Context(), jid)
+	if chat != nil {
+		h.pubsub.Publish(inboxEvent{Kind: "chat_update", Chat: chat})
+	}
+	unread := 0
+	if chat != nil {
+		unread = chat.UnreadCount
+	}
+	writeJSON(w, map[string]any{"status": "ok", "unread_count": unread})
+}
+
+// GET /whatsapp_native/inbox/chats/{jid}/notes?limit=N
+func (h *inboxHTTPHandler) listNotes(w http.ResponseWriter, r *http.Request, jid string) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	notes, err := h.store.ListInternalNotes(r.Context(), jid, limit)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]any{"notes": notes})
+}
+
+// POST /whatsapp_native/inbox/chats/{jid}/notes  body: {"content","author"}
+func (h *inboxHTTPHandler) addNote(w http.ResponseWriter, r *http.Request, jid string) {
+	var body struct {
+		Content string `json:"content"`
+		Author  string `json:"author"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&body); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid body: "+err.Error())
+		return
+	}
+	content := strings.TrimSpace(body.Content)
+	if content == "" {
+		jsonError(w, http.StatusBadRequest, "content is required")
+		return
+	}
+	author := strings.TrimSpace(body.Author)
+	if author == "" {
+		author = "Operador"
+	}
+	note, err := h.store.AddInternalNote(r.Context(), inbox.InternalNote{
+		ChatJID: jid,
+		Content: content,
+		Author:  author,
+	})
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, note)
+}
+
+// DELETE /whatsapp_native/inbox/chats/{jid}/notes/{id}
+func (h *inboxHTTPHandler) deleteNote(w http.ResponseWriter, r *http.Request, jid, idStr string) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		jsonError(w, http.StatusBadRequest, "invalid note id")
+		return
+	}
+	if err := h.store.DeleteInternalNote(r.Context(), jid, id); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GET  /whatsapp_native/inbox/chats/{jid}/avatar  → cache-first
