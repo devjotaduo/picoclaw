@@ -25,6 +25,7 @@ export function PlatformDashboard() {
   const points = (series.data?.points ?? []).map((p) => ({
     day: p.day.slice(5, 10), // MM-DD
     cost: Number(p.cost_usd.toFixed(4)),
+    tokens: p.tokens,
   }));
 
   return (
@@ -101,6 +102,48 @@ export function PlatformDashboard() {
                 type="monotone"
                 dataKey="cost"
                 stroke="#22d3ee"
+                strokeWidth={1.5}
+                dot={false}
+                activeDot={{ r: 3 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/70 p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-sm font-medium">Daily tokens — last 30 days</span>
+        </div>
+        {series.isLoading ? (
+          <div className="flex h-40 items-center justify-center text-xs text-zinc-500">
+            Loading chart…
+          </div>
+        ) : points.length === 0 ? (
+          <div className="flex h-40 items-center justify-center text-xs text-zinc-500">
+            No usage data for the period.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={points} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+              <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#71717a" }} tickLine={false} />
+              <YAxis
+                tick={{ fontSize: 10, fill: "#71717a" }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v) => fmtTokens(Number(v))}
+              />
+              <Tooltip
+                contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", fontSize: 12 }}
+                labelStyle={{ color: "#a1a1aa" }}
+                itemStyle={{ color: "#e4e4e7" }}
+                formatter={(v) => [fmtTokens(Number(v)), "Tokens"]}
+              />
+              <Line
+                type="monotone"
+                dataKey="tokens"
+                stroke="#a78bfa"
                 strokeWidth={1.5}
                 dot={false}
                 activeDot={{ r: 3 }}

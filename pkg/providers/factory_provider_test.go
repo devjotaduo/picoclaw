@@ -502,6 +502,113 @@ func TestCreateProviderFromConfig_Anthropic(t *testing.T) {
 	}
 }
 
+func TestCreateProviderFromConfig_AnthropicUsesNativeMessagesAPI(t *testing.T) {
+	var gotPath, gotAPIKey, gotAuthorization string
+	var requestBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAPIKey = r.Header.Get("X-API-Key")
+		gotAuthorization = r.Header.Get("Authorization")
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(anthropicResponse))
+	}))
+	defer server.Close()
+
+	cfg := &config.ModelConfig{
+		ModelName: "test-anthropic-native",
+		Model:     "anthropic/claude-sonnet-4.6",
+		APIBase:   server.URL,
+	}
+	cfg.SetAPIKey("test-key")
+
+	provider, modelID, err := CreateProviderFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("CreateProviderFromConfig() error = %v", err)
+	}
+	_, err = provider.Chat(
+		t.Context(),
+		[]Message{{Role: "user", Content: "hi"}},
+		nil,
+		modelID,
+		map[string]any{"max_tokens": 1024},
+	)
+	if err != nil {
+		t.Fatalf("Chat() error = %v", err)
+	}
+
+	if gotPath != "/v1/messages" {
+		t.Fatalf("request path = %q, want /v1/messages", gotPath)
+	}
+	if gotAPIKey != "test-key" {
+		t.Fatalf("X-API-Key = %q, want test-key", gotAPIKey)
+	}
+	if gotAuthorization != "" {
+		t.Fatalf("Authorization header = %q, want empty", gotAuthorization)
+	}
+	if got := requestBody["model"]; got != "claude-sonnet-4-6" {
+		t.Fatalf("request model = %v, want claude-sonnet-4-6", got)
+	}
+}
+
+func TestCreateProviderFromConfig_AnthropicTokenAuthUsesStoredAPIKey(t *testing.T) {
+	origGetCredential := getCredential
+	getCredential = func(provider string) (*auth.AuthCredential, error) {
+		if provider != "anthropic" {
+			t.Fatalf("provider = %q, want anthropic", provider)
+		}
+		return &auth.AuthCredential{
+			AccessToken: "stored-anthropic-key",
+			Provider:    "anthropic",
+			AuthMethod:  "token",
+		}, nil
+	}
+	t.Cleanup(func() {
+		getCredential = origGetCredential
+	})
+
+	var gotAPIKey, gotAuthorization string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAPIKey = r.Header.Get("X-API-Key")
+		gotAuthorization = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(anthropicResponse))
+	}))
+	defer server.Close()
+
+	cfg := &config.ModelConfig{
+		ModelName:  "test-anthropic-token",
+		Model:      "anthropic/claude-sonnet-4.6",
+		APIBase:    server.URL,
+		AuthMethod: "token",
+	}
+
+	provider, modelID, err := CreateProviderFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("CreateProviderFromConfig() error = %v", err)
+	}
+	_, err = provider.Chat(
+		t.Context(),
+		[]Message{{Role: "user", Content: "hi"}},
+		nil,
+		modelID,
+		map[string]any{"max_tokens": 1024},
+	)
+	if err != nil {
+		t.Fatalf("Chat() error = %v", err)
+	}
+	if gotAPIKey != "stored-anthropic-key" {
+		t.Fatalf("X-API-Key = %q, want stored-anthropic-key", gotAPIKey)
+	}
+	if gotAuthorization != "" {
+		t.Fatalf("Authorization header = %q, want empty", gotAuthorization)
+	}
+}
+
 func TestCreateProviderFromConfig_Antigravity(t *testing.T) {
 	cfg := &config.ModelConfig{
 		ModelName: "test-antigravity",
@@ -1012,8 +1119,8 @@ func TestModelProviderOptions(t *testing.T) {
 	}
 	if option, ok := seen["github-copilot"]; !ok {
 		t.Fatal("github-copilot option missing")
-	} else if option.DefaultAPIBase != "localhost:4321" {
-		t.Fatalf("github-copilot default_api_base = %q, want %q", option.DefaultAPIBase, "localhost:4321")
+	} else if option.DefaultAPIBase != "" {
+		t.Fatalf("github-copilot default_api_base = %q, want empty", option.DefaultAPIBase)
 	}
 }
 
@@ -1194,6 +1301,7 @@ func TestCreateProviderFromConfig_UserAgent(t *testing.T) {
 			apiKey:   "test-key",
 			response: anthropicResponse,
 			wantUA:   defaultUA,
+			chatOpts: map[string]any{"max_tokens": 1024},
 		},
 		{
 			name:     "anthropic-messages default user agent",

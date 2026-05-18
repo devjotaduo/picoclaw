@@ -4,6 +4,7 @@ import { type ChangeEvent, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
+import { type AgentSummary, getInternalAgents } from "@/api/internal-agents"
 import { AssistantMessage } from "@/components/chat/assistant-message"
 import {
   ChatComposer,
@@ -16,6 +17,13 @@ import { TypingIndicator } from "@/components/chat/typing-indicator"
 import { UserMessage } from "@/components/chat/user-message"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useChatModels } from "@/hooks/use-chat-models"
 import { useGateway } from "@/hooks/use-gateway"
@@ -56,10 +64,12 @@ function resolveChatInputDisabledReason({
   hasDefaultModel,
   connectionState,
   gatewayState,
+  requiresWebSocket,
 }: {
   hasDefaultModel: boolean
   connectionState: ConnectionState
   gatewayState: GatewayState
+  requiresWebSocket: boolean
 }): ChatInputDisabledReason | null {
   if (gatewayState === "unknown") {
     return "gatewayUnknown"
@@ -85,15 +95,15 @@ function resolveChatInputDisabledReason({
     return "gatewayError"
   }
 
-  if (connectionState === "connecting") {
+  if (requiresWebSocket && connectionState === "connecting") {
     return "websocketConnecting"
   }
 
-  if (connectionState === "error") {
+  if (requiresWebSocket && connectionState === "error") {
     return "websocketError"
   }
 
-  if (connectionState === "disconnected") {
+  if (requiresWebSocket && connectionState === "disconnected") {
     return "websocketDisconnected"
   }
 
@@ -112,6 +122,9 @@ export function ChatPage() {
   const [hasScrolled, setHasScrolled] = useState(false)
   const [input, setInput] = useState("")
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
+  const [chatAgents, setChatAgents] = useState<AgentSummary[]>([])
+  const [mainAgentID, setMainAgentID] = useState("main")
+  const [chatAgentID, setChatAgentID] = useState("")
   const [showAssistantDetails, setShowAssistantDetails] = useAtom(
     showAssistantDetailsAtom,
   )
@@ -126,6 +139,8 @@ export function ChatPage() {
     switchSession,
     newChat,
   } = usePicoChat()
+
+  const selectedAgentID = chatAgentID || mainAgentID
 
   const { state: gwState } = useGateway()
   const isGatewayRunning = gwState === "running"
@@ -145,6 +160,7 @@ export function ChatPage() {
     hasDefaultModel,
     connectionState,
     gatewayState: gwState,
+    requiresWebSocket: true,
   })
   const canInput = inputDisabledReason === null
 
@@ -172,6 +188,33 @@ export function ChatPage() {
   }
 
   useEffect(() => {
+    let cancelled = false
+    getInternalAgents()
+      .then((next) => {
+        if (cancelled) {
+          return
+        }
+        const nextMainAgentID =
+          next.main_agent_id ||
+          next.agents.find((agent) => agent.default)?.id ||
+          "main"
+        setChatAgents(next.agents || [])
+        setMainAgentID(nextMainAgentID)
+        setChatAgentID((current) =>
+          current && next.agents.some((agent) => agent.id === current)
+            ? current
+            : nextMainAgentID,
+        )
+      })
+      .catch((error) => {
+        console.warn("Failed to load chat agents:", error)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (scrollRef.current) {
       if (isAtBottom) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -180,12 +223,22 @@ export function ChatPage() {
     }
   }, [messages, isTyping, isAtBottom])
 
+  const handleAgentChange = (agentID: string) => {
+    if (agentID === selectedAgentID) {
+      return
+    }
+    setChatAgentID(agentID)
+    setAttachments([])
+    void newChat()
+  }
+
   const handleSend = () => {
     if ((!input.trim() && attachments.length === 0) || !canInput) return
     if (
       sendMessage({
         content: input,
         attachments,
+        agentID: selectedAgentID,
       })
     ) {
       setInput("")
@@ -262,14 +315,41 @@ export function ChatPage() {
           hasScrolled ? "shadow-xs" : "shadow-none"
         }`}
         titleExtra={
-          canChooseModel && (
-            <ModelSelector
-              defaultModelName={defaultModelName}
-              apiKeyModels={apiKeyModels}
-              oauthModels={oauthModels}
-              localModels={localModels}
-              onValueChange={handleSetDefault}
-            />
+          (chatAgents.length > 0 || canChooseModel) && (
+            <div className="flex min-w-0 items-center gap-2">
+              {chatAgents.length > 0 && (
+                <Select
+                  value={selectedAgentID}
+                  onValueChange={handleAgentChange}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className="max-w-44 min-w-28"
+                    aria-label={t("chat.agentSelector")}
+                  >
+                    <SelectValue
+                      placeholder={t("chat.agentSelectorPlaceholder")}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {chatAgents.map((agent) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        <AgentSelectLabel agent={agent} />
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {canChooseModel && (
+                <ModelSelector
+                  defaultModelName={defaultModelName}
+                  apiKeyModels={apiKeyModels}
+                  oauthModels={oauthModels}
+                  localModels={localModels}
+                  onValueChange={handleSetDefault}
+                />
+              )}
+            </div>
           )
         }
       >
@@ -375,7 +455,13 @@ export function ChatPage() {
         onRemoveAttachment={handleRemoveAttachment}
         onSend={handleSend}
         onContextDetail={() => {
-          if (sendMessage({ content: "/context", attachments: [] })) {
+          if (
+            sendMessage({
+              content: "/context",
+              attachments: [],
+              agentID: selectedAgentID,
+            })
+          ) {
             setInput("")
           }
         }}
@@ -384,5 +470,32 @@ export function ChatPage() {
         contextUsage={contextUsage}
       />
     </div>
+  )
+}
+
+function AgentSelectLabel({ agent }: { agent: AgentSummary }) {
+  const initials =
+    agent.avatar?.initials || (agent.name || agent.id).slice(0, 2).toUpperCase()
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span
+        className="ring-border/50 flex size-5 shrink-0 items-center justify-center overflow-hidden rounded text-[9px] font-semibold ring-1"
+        style={{
+          backgroundColor: agent.avatar?.background || "#475569",
+          color: agent.avatar?.foreground || "#ffffff",
+        }}
+      >
+        {agent.avatar?.image_url ? (
+          <img
+            src={agent.avatar.image_url}
+            alt=""
+            className="size-full object-cover"
+          />
+        ) : (
+          initials
+        )}
+      </span>
+      <span className="truncate">{agent.name || agent.id}</span>
+    </span>
   )
 }

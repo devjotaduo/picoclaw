@@ -87,6 +87,20 @@ func isElevenLabsTranscriptionModel(modelCfg *config.ModelConfig) bool {
 	return protocol == "elevenlabs"
 }
 
+func isQwenASRTranscriptionModel(modelCfg *config.ModelConfig) bool {
+	if modelCfg == nil || modelCfg.APIKey() == "" {
+		return false
+	}
+
+	protocol, modelID := providers.ExtractProtocol(modelCfg)
+	switch protocol {
+	case "qwen", "qwen-portal", "qwen-intl", "qwen-international", "dashscope-intl", "qwen-us", "dashscope-us":
+	default:
+		return false
+	}
+	return strings.Contains(strings.ToLower(modelID), "qwen3-asr")
+}
+
 func transcriberFromModelConfig(modelCfg *config.ModelConfig) Transcriber {
 	if modelCfg == nil {
 		return nil
@@ -95,6 +109,9 @@ func transcriberFromModelConfig(modelCfg *config.ModelConfig) Transcriber {
 	if isElevenLabsTranscriptionModel(modelCfg) {
 		_, modelID := providers.ExtractProtocol(modelCfg)
 		return NewElevenLabsTranscriber(modelCfg.APIKey(), modelCfg.APIBase, modelID)
+	}
+	if isQwenASRTranscriptionModel(modelCfg) {
+		return NewQwenASRTranscriber(modelCfg)
 	}
 	if modelID := whisperModelID(modelCfg); modelID != "" {
 		return NewWhisperTranscriber(modelCfg)
@@ -113,6 +130,9 @@ func fallbackTranscriberFromModelConfig(modelCfg *config.ModelConfig) Transcribe
 	if isElevenLabsTranscriptionModel(modelCfg) {
 		_, modelID := providers.ExtractProtocol(modelCfg)
 		return NewElevenLabsTranscriber(modelCfg.APIKey(), modelCfg.APIBase, modelID)
+	}
+	if isQwenASRTranscriptionModel(modelCfg) {
+		return NewQwenASRTranscriber(modelCfg)
 	}
 	if modelID := whisperModelID(modelCfg); modelID != "" {
 		return NewWhisperTranscriber(modelCfg)

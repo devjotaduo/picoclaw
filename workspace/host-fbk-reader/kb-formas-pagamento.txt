@@ -1,0 +1,22 @@
+
+          ID CODIGO DESCRICAO            TIPO_PAGAMENTO                 VISIVEL GERA_PARCELAS 
+============ ====== ==================== ============================== ======= ============= 
+           1 01     DINHEIRO             DN                             S       N             
+           2 02     TEF                  TEF                            N       N             
+           3 03     CARTAO DE CREDITO    CC                             S       N             
+           4 04     CARTAO DE DEBITO     CD                             S       N             
+           5 05     PRAZO                PZ                             S       S             
+           6 06     CHEQUE               CH                             S       N             
+           7 07     VALE ALIMENTACAO     VA                             N       N             
+           8 08     VALE REFEICAO        VR                             N       N             
+           9 09     VALE PRESENTE        VP                             N       N             
+          10 10     VALE COMBUSTIVEL     VC                             N       N             
+          11 11     BOLETO               BO                             N       S             
+          12 12     CREDITO CLIENTE      CR                             S       N             
+          13 13     TROCA                TR                             S       N             
+          14 14     DEPOSITO BANCARIO    DB                             N       N             
+          15 15     PIX                  PX                             S       N             
+          16 16     TRANSF BANCARIA      TB                             N       N             
+          17 17     PROGRAMA FIDELIDADE  PF                             N       N             
+          18 18     OUTRO                OU                             N       N             
+

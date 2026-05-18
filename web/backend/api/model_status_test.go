@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sipeed/picoclaw/pkg/auth"
 	"github.com/sipeed/picoclaw/pkg/config"
 )
 
@@ -51,6 +52,39 @@ func TestRequiresRuntimeProbe_LMStudio(t *testing.T) {
 		APIBase: "https://api.example.com/v1",
 	}) {
 		t.Fatal("requiresRuntimeProbe(lmstudio with remote base) = true, want false")
+	}
+}
+
+func TestHasModelConfiguration_CopilotLocalBridgeDoesNotRequireStoredOAuth(t *testing.T) {
+	resetOAuthHooks(t)
+	resetModelProbeHooks(t)
+	oauthGetCredential = func(provider string) (*auth.AuthCredential, error) {
+		return nil, nil
+	}
+
+	model := &config.ModelConfig{
+		Model:      "github-copilot/gpt-5.4",
+		APIBase:    "http://127.0.0.1:4321",
+		AuthMethod: "oauth",
+	}
+	if !hasModelConfiguration(model) {
+		t.Fatal("hasModelConfiguration(copilot local bridge) = false, want true before runtime probe")
+	}
+}
+
+func TestHasModelConfiguration_CopilotWithoutBridgeRequiresStoredOAuth(t *testing.T) {
+	resetOAuthHooks(t)
+	resetModelProbeHooks(t)
+	oauthGetCredential = func(provider string) (*auth.AuthCredential, error) {
+		return nil, nil
+	}
+
+	model := &config.ModelConfig{
+		Model:      "github-copilot/gpt-5.4",
+		AuthMethod: "oauth",
+	}
+	if hasModelConfiguration(model) {
+		t.Fatal("hasModelConfiguration(copilot without bridge) = true, want false without stored credential")
 	}
 }
 

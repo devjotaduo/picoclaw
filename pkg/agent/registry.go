@@ -3,6 +3,7 @@ package agent
 import (
 	"sync"
 
+	"github.com/sipeed/picoclaw/internal/orchestrator"
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
@@ -42,8 +43,16 @@ func NewAgentRegistry(
 	} else {
 		for i := range agentConfigs {
 			ac := &agentConfigs[i]
-			id := routing.NormalizeAgentID(ac.ID)
+			if !ac.IsEnabled() {
+				logger.InfoCF("agent", "Skipped disabled agent", map[string]any{
+					"agent_id": routing.NormalizeAgentID(ac.ID),
+					"name":     ac.Name,
+				})
+				continue
+			}
+			id := orchestrator.CanonicalAgentID(ac.ID)
 			instance := NewAgentInstance(ac, &cfg.Agents.Defaults, cfg, provider)
+			instance.ID = id
 			registry.agents[id] = instance
 			logger.InfoCF("agent", "Registered agent",
 				map[string]any{
@@ -52,6 +61,15 @@ func NewAgentRegistry(
 					"workspace": instance.Workspace,
 					"model":     instance.Model,
 				})
+		}
+		if len(registry.agents) == 0 {
+			implicitAgent := &config.AgentConfig{
+				ID:      "main",
+				Default: true,
+			}
+			instance := NewAgentInstance(implicitAgent, &cfg.Agents.Defaults, cfg, provider)
+			registry.agents["main"] = instance
+			logger.WarnCF("agent", "Created implicit main agent because all configured agents are disabled", nil)
 		}
 	}
 
@@ -78,7 +96,7 @@ func NewAgentRegistry(
 func (r *AgentRegistry) GetAgent(agentID string) (*AgentInstance, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	id := routing.NormalizeAgentID(agentID)
+	id := orchestrator.CanonicalAgentID(agentID)
 	agent, ok := r.agents[id]
 	return agent, ok
 }
@@ -129,7 +147,7 @@ func (r *AgentRegistry) CanSpawnSubagent(parentAgentID, targetAgentID string) bo
 	if !ok {
 		return false
 	}
-	return agentAllowsSubagent(parent, routing.NormalizeAgentID(targetAgentID))
+	return agentAllowsSubagent(parent, orchestrator.CanonicalAgentID(targetAgentID))
 }
 
 func agentAllowsSubagent(parent *AgentInstance, targetNorm string) bool {
@@ -140,7 +158,7 @@ func agentAllowsSubagent(parent *AgentInstance, targetNorm string) bool {
 		if allowed == "*" {
 			return true
 		}
-		if routing.NormalizeAgentID(allowed) == targetNorm {
+		if orchestrator.CanonicalAgentID(allowed) == targetNorm {
 			return true
 		}
 	}

@@ -7,9 +7,12 @@ import {
   type OAuthProviderStatus,
   getOAuthFlow,
   getOAuthProviders,
+  importClaudeCode,
+  importGHCLI,
   loginOAuth,
   logoutOAuth,
   pollOAuthFlow,
+  submitOAuthFlow,
 } from "@/api/oauth"
 
 type FlowWatchMode = "" | "status" | "poll"
@@ -18,6 +21,7 @@ function getProviderLabel(provider: OAuthProvider | ""): string {
   if (provider === "openai") return "OpenAI"
   if (provider === "anthropic") return "Anthropic"
   if (provider === "google-antigravity") return "Google Antigravity"
+  if (provider === "github-copilot") return "GitHub Copilot"
   return ""
 }
 
@@ -37,6 +41,7 @@ export function useCredentialsPage() {
 
   const [openAIToken, setOpenAIToken] = useState("")
   const [anthropicToken, setAnthropicToken] = useState("")
+  const [copilotToken, setCopilotToken] = useState("")
 
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false)
   const [logoutConfirmProvider, setLogoutConfirmProvider] = useState<
@@ -45,6 +50,12 @@ export function useCredentialsPage() {
 
   const [deviceSheetOpen, setDeviceSheetOpen] = useState(false)
   const [deviceFlow, setDeviceFlow] = useState<OAuthFlowState | null>(null)
+
+  const [anthropicPasteOpen, setAnthropicPasteOpen] = useState(false)
+  const [anthropicAuthURL, setAnthropicAuthURL] = useState("")
+  const [anthropicFlowID, setAnthropicFlowID] = useState("")
+  const [submittingAnthropicPaste, setSubmittingAnthropicPaste] =
+    useState(false)
 
   const loadProviders = useCallback(async () => {
     try {
@@ -169,6 +180,7 @@ export function useCredentialsPage() {
   const openaiStatus = providersMap.get("openai")
   const anthropicStatus = providersMap.get("anthropic")
   const antigravityStatus = providersMap.get("google-antigravity")
+  const copilotStatus = providersMap.get("github-copilot")
 
   const bumpActionToken = useCallback(() => {
     actionTokenRef.current += 1
@@ -178,61 +190,6 @@ export function useCredentialsPage() {
   const isActionTokenCurrent = useCallback((token: number) => {
     return actionTokenRef.current === token
   }, [])
-
-  const startBrowserOAuth = useCallback(
-    async (provider: OAuthProvider) => {
-      const actionToken = bumpActionToken()
-      setActiveAction(`${provider}:browser`)
-      setError("")
-
-      const authTab = window.open("", "_blank")
-      if (!authTab) {
-        if (!isActionTokenCurrent(actionToken)) {
-          return
-        }
-        setActiveAction("")
-        setError(t("credentials.errors.popupBlocked"))
-        return
-      }
-
-      try {
-        const resp = await loginOAuth({ provider, method: "browser" })
-        if (!isActionTokenCurrent(actionToken)) {
-          authTab.close()
-          return
-        }
-        if (!resp.auth_url || !resp.flow_id) {
-          throw new Error(t("credentials.errors.invalidBrowserResponse"))
-        }
-
-        authTab.location.href = resp.auth_url
-
-        setActiveFlow({
-          flow_id: resp.flow_id,
-          provider,
-          method: "browser",
-          status: "pending",
-          expires_at: resp.expires_at,
-        })
-        setWatchFlowID(resp.flow_id)
-        setWatchMode("status")
-        setPollIntervalMs(2000)
-      } catch (err) {
-        if (!isActionTokenCurrent(actionToken)) {
-          authTab.close()
-          return
-        }
-        authTab.close()
-        setActiveAction("")
-        setError(
-          err instanceof Error
-            ? err.message
-            : t("credentials.errors.loginFailed"),
-        )
-      }
-    },
-    [bumpActionToken, isActionTokenCurrent, t],
-  )
 
   const startOpenAIDeviceCode = useCallback(async () => {
     const actionToken = bumpActionToken()
@@ -281,6 +238,148 @@ export function useCredentialsPage() {
     }
   }, [bumpActionToken, isActionTokenCurrent, t])
 
+  const startBrowserOAuth = useCallback(
+    async (provider: OAuthProvider) => {
+      // OpenAI browser OAuth only works with localhost redirect URIs (Codex client restriction).
+      // On a remote server, auto-fall back to device code which always works.
+      if (
+        provider === "openai" &&
+        window.location.hostname !== "localhost" &&
+        window.location.hostname !== "127.0.0.1"
+      ) {
+        await startOpenAIDeviceCode()
+        return
+      }
+
+      const actionToken = bumpActionToken()
+      setActiveAction(`${provider}:browser`)
+      setError("")
+
+      const authTab = window.open("", "_blank")
+      if (!authTab) {
+        if (!isActionTokenCurrent(actionToken)) {
+          return
+        }
+        setActiveAction("")
+        setError(t("credentials.errors.popupBlocked"))
+        return
+      }
+
+      try {
+        const resp = await loginOAuth({ provider, method: "browser" })
+        if (!isActionTokenCurrent(actionToken)) {
+          authTab.close()
+          return
+        }
+        if (!resp.auth_url || !resp.flow_id) {
+          throw new Error(t("credentials.errors.invalidBrowserResponse"))
+        }
+
+        authTab.location.href = resp.auth_url
+
+        const flow: OAuthFlowState = {
+          flow_id: resp.flow_id,
+          provider,
+          method: "browser",
+          status: "pending",
+          expires_at: resp.expires_at,
+          manual_paste: resp.manual_paste,
+        }
+        setActiveFlow(flow)
+
+        // Anthropic's OAuth has no HTTP callback into the launcher; we open a
+        // sheet asking the user to paste `code#state` back instead of polling.
+        if (resp.manual_paste) {
+          setAnthropicFlowID(resp.flow_id)
+          setAnthropicAuthURL(resp.auth_url)
+          setAnthropicPasteOpen(true)
+          return
+        }
+
+        setWatchFlowID(resp.flow_id)
+        setWatchMode("status")
+        setPollIntervalMs(2000)
+      } catch (err) {
+        if (!isActionTokenCurrent(actionToken)) {
+          authTab.close()
+          return
+        }
+        authTab.close()
+        setActiveAction("")
+        setError(
+          err instanceof Error
+            ? err.message
+            : t("credentials.errors.loginFailed"),
+        )
+      }
+    },
+    [bumpActionToken, isActionTokenCurrent, startOpenAIDeviceCode, t],
+  )
+
+  const submitAnthropicPaste = useCallback(
+    async (paste: string) => {
+      if (!anthropicFlowID) {
+        return
+      }
+      setSubmittingAnthropicPaste(true)
+      setError("")
+      try {
+        const flow = await submitOAuthFlow(anthropicFlowID, { paste })
+        setActiveFlow(flow)
+        if (flow.status === "success") {
+          setAnthropicPasteOpen(false)
+          setAnthropicAuthURL("")
+          setAnthropicFlowID("")
+          setActiveAction("")
+          await loadProviders()
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : t("credentials.errors.loginFailed"),
+        )
+      } finally {
+        setSubmittingAnthropicPaste(false)
+      }
+    },
+    [anthropicFlowID, loadProviders, t],
+  )
+
+  const importFromClaudeCode = useCallback(async () => {
+    setActiveAction("anthropic:claude_code")
+    setError("")
+    try {
+      await importClaudeCode()
+      await loadProviders()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("credentials.errors.loginFailed"),
+      )
+    } finally {
+      setActiveAction("")
+    }
+  }, [loadProviders, t])
+
+  const importFromGHCLI = useCallback(async () => {
+    setActiveAction("github-copilot:gh_cli")
+    setError("")
+    try {
+      await importGHCLI()
+      await loadProviders()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("credentials.errors.loginFailed"),
+      )
+    } finally {
+      setActiveAction("")
+    }
+  }, [loadProviders, t])
+
   const saveToken = useCallback(
     async (provider: OAuthProvider, token: string) => {
       const actionID = `${provider}:token`
@@ -294,6 +393,9 @@ export function useCredentialsPage() {
         }
         if (provider === "anthropic") {
           setAnthropicToken("")
+        }
+        if (provider === "github-copilot") {
+          setCopilotToken("")
         }
         await loadProviders()
       } catch (err) {
@@ -352,6 +454,27 @@ export function useCredentialsPage() {
     }
   }, [])
 
+  const handleAnthropicPasteOpenChange = useCallback(
+    (open: boolean) => {
+      setAnthropicPasteOpen(open)
+      if (open) {
+        return
+      }
+      setAnthropicAuthURL("")
+      setAnthropicFlowID("")
+      if (activeAction === "anthropic:browser") {
+        setActiveAction("")
+      }
+      if (
+        activeFlow?.provider === "anthropic" &&
+        activeFlow.status === "pending"
+      ) {
+        setActiveFlow(null)
+      }
+    },
+    [activeAction, activeFlow],
+  )
+
   const handleDeviceSheetOpenChange = useCallback(
     (open: boolean) => {
       setDeviceSheetOpen(open)
@@ -385,6 +508,9 @@ export function useCredentialsPage() {
     setActiveAction("")
     setDeviceSheetOpen(false)
     setDeviceFlow(null)
+    setAnthropicPasteOpen(false)
+    setAnthropicAuthURL("")
+    setAnthropicFlowID("")
     setActiveFlow((prev) => (prev?.status === "pending" ? null : prev))
   }, [bumpActionToken])
 
@@ -414,23 +540,33 @@ export function useCredentialsPage() {
     flowHint,
     openAIToken,
     anthropicToken,
+    copilotToken,
     openaiStatus,
     anthropicStatus,
     antigravityStatus,
+    copilotStatus,
     logoutDialogOpen,
     logoutConfirmProvider,
     logoutProviderLabel,
     deviceSheetOpen,
     deviceFlow,
+    anthropicPasteOpen,
+    anthropicAuthURL,
+    submittingAnthropicPaste,
     setOpenAIToken,
     setAnthropicToken,
+    setCopilotToken,
     startBrowserOAuth,
     startOpenAIDeviceCode,
+    importFromClaudeCode,
+    importFromGHCLI,
     stopLoading,
     saveToken,
     askLogout,
+    submitAnthropicPaste,
     handleConfirmLogout,
     handleLogoutDialogOpenChange,
     handleDeviceSheetOpenChange,
+    handleAnthropicPasteOpenChange,
   }
 }

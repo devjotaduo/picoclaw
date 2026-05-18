@@ -23,6 +23,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/identity"
 	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/routing"
 	"github.com/sipeed/picoclaw/pkg/utils"
 )
 
@@ -48,15 +49,15 @@ var allowedInlineImageMIMETypes = map[string]struct{}{
 // accepts inline as base64 data URLs. Anything outside this set is rejected
 // so the agent never has to deal with unbounded codecs from the browser.
 var allowedInlineAudioMIMETypes = map[string]struct{}{
-	"audio/webm":          {}, // MediaRecorder default on Chromium
+	"audio/webm":             {}, // MediaRecorder default on Chromium
 	"audio/webm;codecs=opus": {},
-	"audio/ogg":           {},
-	"audio/ogg;codecs=opus": {},
-	"audio/mpeg":          {}, // mp3
-	"audio/mp4":           {}, // m4a
-	"audio/wav":           {},
-	"audio/x-wav":         {},
-	"audio/wave":          {},
+	"audio/ogg":              {},
+	"audio/ogg;codecs=opus":  {},
+	"audio/mpeg":             {}, // mp3
+	"audio/mp4":              {}, // m4a
+	"audio/wav":              {},
+	"audio/x-wav":            {},
+	"audio/wave":             {},
 }
 
 func outboundMessageIsThought(msg bus.OutboundMessage) bool {
@@ -940,6 +941,9 @@ func (c *PicoChannel) handleMessageSend(pc *picoConn, msg PicoMessage) {
 		pc.writeJSON(errMsg)
 		return
 	}
+	if inlineMediaContainsAudio(media) {
+		content = ensureInlineAudioAnnotation(content)
+	}
 
 	if strings.TrimSpace(content) == "" && len(media) == 0 {
 		errMsg := newErrorWithPayload("empty_content", "message content is empty", map[string]any{
@@ -953,6 +957,10 @@ func (c *PicoChannel) handleMessageSend(pc *picoConn, msg PicoMessage) {
 	if sessionID == "" {
 		sessionID = pc.sessionID
 	}
+	agentID := ""
+	if rawAgentID, ok := msg.Payload["agent_id"].(string); ok {
+		agentID = routing.NormalizeAgentID(rawAgentID)
+	}
 
 	chatID := "pico:" + sessionID
 	senderID := "pico-user"
@@ -961,6 +969,9 @@ func (c *PicoChannel) handleMessageSend(pc *picoConn, msg PicoMessage) {
 		"platform":   "pico",
 		"session_id": sessionID,
 		"conn_id":    pc.id,
+	}
+	if agentID != "" {
+		metadata["agent_id"] = agentID
 	}
 
 	logger.DebugCF("pico", "Received message", map[string]any{
@@ -987,8 +998,33 @@ func (c *PicoChannel) handleMessageSend(pc *picoConn, msg PicoMessage) {
 		MessageID: msg.ID,
 		Raw:       metadata,
 	}
+	if agentID != "" {
+		inboundCtx.SpaceID = agentID
+		inboundCtx.SpaceType = "agent"
+	}
 
 	c.HandleInboundContext(c.ctx, chatID, content, media, inboundCtx, sender)
+}
+
+func inlineMediaContainsAudio(media []string) bool {
+	for _, ref := range media {
+		if strings.HasPrefix(strings.TrimSpace(ref), "data:audio/") {
+			return true
+		}
+	}
+	return false
+}
+
+func ensureInlineAudioAnnotation(content string) string {
+	trimmed := strings.TrimSpace(content)
+	lower := strings.ToLower(trimmed)
+	if strings.Contains(lower, "[audio") || strings.Contains(lower, "[voice") {
+		return content
+	}
+	if trimmed == "" {
+		return "[audio]"
+	}
+	return strings.TrimRight(content, "\n") + "\n[audio]"
 }
 
 // truncate truncates a string to maxLen runes.

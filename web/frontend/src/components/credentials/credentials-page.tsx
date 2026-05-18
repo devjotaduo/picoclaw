@@ -5,7 +5,9 @@ import { PageHeader } from "@/components/page-header"
 import { useCredentialsPage } from "@/hooks/use-credentials-page"
 
 import { AnthropicCredentialCard } from "./anthropic-credential-card"
+import { AnthropicPasteSheet } from "./anthropic-paste-sheet"
 import { AntigravityCredentialCard } from "./antigravity-credential-card"
+import { CopilotCredentialCard } from "./copilot-credential-card"
 import { DeviceCodeSheet } from "./device-code-sheet"
 import { LogoutConfirmDialog } from "./logout-confirm-dialog"
 import { OpenAICredentialCard } from "./openai-credential-card"
@@ -20,24 +22,34 @@ export function CredentialsPage() {
     flowHint,
     openAIToken,
     anthropicToken,
+    copilotToken,
     openaiStatus,
     anthropicStatus,
     antigravityStatus,
+    copilotStatus,
     logoutDialogOpen,
     logoutConfirmProvider,
     logoutProviderLabel,
     deviceSheetOpen,
     deviceFlow,
+    anthropicPasteOpen,
+    anthropicAuthURL,
+    submittingAnthropicPaste,
     setOpenAIToken,
     setAnthropicToken,
+    setCopilotToken,
     startBrowserOAuth,
     startOpenAIDeviceCode,
+    importFromClaudeCode,
+    importFromGHCLI,
     stopLoading,
     saveToken,
     askLogout,
+    submitAnthropicPaste,
     handleConfirmLogout,
     handleLogoutDialogOpenChange,
     handleDeviceSheetOpenChange,
+    handleAnthropicPasteOpenChange,
   } = useCredentialsPage()
 
   return (
@@ -93,6 +105,8 @@ export function CredentialsPage() {
                 void saveToken("anthropic", anthropicToken.trim())
               }
               onAskLogout={() => askLogout("anthropic")}
+              onImportClaudeCode={() => void importFromClaudeCode()}
+              onStartBrowserOAuth={() => void startBrowserOAuth("anthropic")}
             />
 
             <AntigravityCredentialCard
@@ -103,6 +117,19 @@ export function CredentialsPage() {
                 void startBrowserOAuth("google-antigravity")
               }
               onAskLogout={() => askLogout("google-antigravity")}
+            />
+
+            <CopilotCredentialCard
+              status={copilotStatus}
+              activeAction={activeAction}
+              token={copilotToken}
+              onTokenChange={setCopilotToken}
+              onStopLoading={stopLoading}
+              onSaveToken={() =>
+                void saveToken("github-copilot", copilotToken.trim())
+              }
+              onAskLogout={() => askLogout("github-copilot")}
+              onImportGHCLI={() => void importFromGHCLI()}
             />
           </div>
         )}
@@ -121,6 +148,15 @@ export function CredentialsPage() {
         flow={deviceFlow}
         flowHint={flowHint}
         onOpenChange={handleDeviceSheetOpenChange}
+      />
+
+      <AnthropicPasteSheet
+        open={anthropicPasteOpen}
+        authURL={anthropicAuthURL}
+        submitting={submittingAnthropicPaste}
+        flowHint={flowHint}
+        onOpenChange={handleAnthropicPasteOpenChange}
+        onSubmit={(paste) => void submitAnthropicPaste(paste)}
       />
     </div>
   )

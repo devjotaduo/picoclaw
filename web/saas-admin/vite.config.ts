@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 
+const saasApiTarget = process.env.VITE_SAAS_API_TARGET ?? "http://localhost:18801";
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -18,8 +20,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": "http://localhost:8080",
-      "/healthz": "http://localhost:8080",
+      "/api": saasApiTarget,
+      "/healthz": saasApiTarget,
     },
   },
 });

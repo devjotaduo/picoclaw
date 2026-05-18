@@ -82,6 +82,13 @@ func (t *AudioModelTranscriber) Transcribe(ctx context.Context, audioFilePath st
 	}
 
 	text := strings.TrimSpace(resp.Content)
+	if looksLikeAudioTranscriptionRefusal(text) {
+		logger.WarnCF("voice", "Audio model returned a refusal instead of a transcript", map[string]any{
+			"text_length":           len(text),
+			"transcription_preview": utils.Truncate(text, 50),
+		})
+		return nil, fmt.Errorf("audio model did not transcribe the audio")
+	}
 	logger.InfoCF("voice", "Audio model transcription completed successfully", map[string]any{
 		"text_length":           len(text),
 		"transcription_preview": utils.Truncate(text, 50),
@@ -92,4 +99,30 @@ func (t *AudioModelTranscriber) Transcribe(ctx context.Context, audioFilePath st
 
 func (t *AudioModelTranscriber) Name() string {
 	return "audio-model"
+}
+
+func looksLikeAudioTranscriptionRefusal(text string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(text))
+	if normalized == "" {
+		return false
+	}
+
+	refusalFragments := []string{
+		"can't transcribe audio",
+		"cannot transcribe audio",
+		"can't access audio",
+		"don't have access to audio",
+		"do not have access to audio",
+		"não consigo transcrever",
+		"nao consigo transcrever",
+		"não posso transcrever",
+		"nao posso transcrever",
+		"no puedo transcribir audio",
+	}
+	for _, fragment := range refusalFragments {
+		if strings.Contains(normalized, fragment) {
+			return true
+		}
+	}
+	return false
 }

@@ -150,7 +150,7 @@ var toolCatalog = []toolCatalogEntry{
 	},
 	{
 		Name:        "tenant_manager",
-		Description: "Apply controlled tenant workspace and orchestration changes from gerente.",
+		Description: "Apply controlled tenant workspace and orchestration changes from assistente.",
 		Category:    "agents",
 		ConfigKey:   "tenant_manager",
 	},

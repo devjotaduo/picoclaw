@@ -96,7 +96,7 @@ func SynthesizeAndStore(
 
 	fileExt := ".ogg"
 	contentType := "audio/ogg"
-	if provider.Name() == "mimo-tts" {
+	if provider.Name() == "mimo-tts" || provider.Name() == "openrouter-tts" {
 		fileExt = ".mp3"
 		contentType = "audio/mpeg"
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sipeed/picoclaw/internal/saas/auth"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 )
 
@@ -92,9 +93,9 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 	return p.Tenants.SetStatus(ctx, id, store.StatusActive, nil)
 }
 
-// Delete marks the tenant deleted and best-effort stops the container. The
-// remaining cleanup (LiteLLM key, volume tarball, volume rm) is handed off to
-// the reconciler which is idempotent and survives crashes mid-pipeline.
+// Delete marks the tenant deleting, removes all runtime resources, then hard
+// deletes the row so database relationships cascade. If the process dies after
+// SoftDelete, the reconciler resumes the same cleanup pipeline.
 func (p *Provisioner) Delete(ctx context.Context, id string) error {
 	t, err := p.Tenants.Get(ctx, id)
 	if err != nil {
@@ -103,10 +104,33 @@ func (p *Provisioner) Delete(ctx context.Context, id string) error {
 	if err := p.Tenants.SoftDelete(ctx, id); err != nil {
 		return err
 	}
-	if t.ContainerID != nil && *t.ContainerID != "" {
-		_ = p.Docker.Stop(ctx, *t.ContainerID, 30)
-		if err := p.Docker.Remove(ctx, *t.ContainerID); err != nil && !errors.Is(err, ErrContainerNotFound) {
+	if err := p.cleanupDeletedTenant(ctx, t); err != nil {
+		return err
+	}
+	if err := p.Tenants.DeleteCascade(ctx, id); err != nil && !errors.Is(err, store.ErrTenantNotFound) {
+		return err
+	}
+	return nil
+}
+
+func (p *Provisioner) cleanupDeletedTenant(ctx context.Context, t *store.Tenant) error {
+	if p.Docker != nil {
+		refs := []string{"tenant-" + t.ID}
+		if t.ContainerID != nil && *t.ContainerID != "" {
+			refs = append(refs, *t.ContainerID)
+		}
+		if err := p.Docker.RemoveTenantContainers(ctx, t.ID, refs...); err != nil {
 			return fmt.Errorf("docker remove: %w", err)
+		}
+	}
+	if p.LiteLLM != nil && t.LiteLLMKeyID != nil && *t.LiteLLMKeyID != "" {
+		if err := p.LiteLLM.DeleteKey(ctx, t.ID); err != nil {
+			return fmt.Errorf("litellm delete: %w", err)
+		}
+	}
+	if t.VolumePath != "" {
+		if err := RemoveVolume(ctx, t.VolumePath); err != nil {
+			return fmt.Errorf("volume cleanup: %w", err)
 		}
 	}
 	return nil
@@ -119,7 +143,7 @@ func (p *Provisioner) RotatePassword(ctx context.Context, id string) (string, er
 	if err != nil {
 		return "", err
 	}
-	password, err := generatePassword()
+	password, err := auth.GeneratePassword()
 	if err != nil {
 		return "", err
 	}
@@ -142,10 +166,4 @@ func (p *Provisioner) RotatePassword(ctx context.Context, id string) (string, er
 		return "", err
 	}
 	return password, nil
-}
-
-// generatePassword is a thin alias kept here to avoid an auth import cycle
-// from store consumers.
-func generatePassword() (string, error) {
-	return passwordGen()
 }

@@ -11,11 +11,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"go.mau.fi/whatsmeow"
-	"go.mau.fi/whatsmeow/types"
 
 	"github.com/sipeed/picoclaw/pkg/channels/whatsapp_native/inbox"
 	"github.com/sipeed/picoclaw/pkg/logger"
@@ -25,10 +23,10 @@ import (
 // chat/message/pause/send/SSE endpoint. Mounted by the channel manager via the
 // HealthChecker interface (we reuse it as a generic prefix handler).
 type inboxHTTPHandler struct {
-	channel  *WhatsAppNativeChannel
-	store    *inbox.Store
-	pubsub   *inboxPubSub
-	avatarMu sync.Mutex
+	channel *WhatsAppNativeChannel
+	store   *inbox.Store
+	pubsub  *inboxPubSub
+	avatars *avatarFetcher
 }
 
 const inboxBasePath = "/whatsapp_native/inbox"
@@ -59,7 +57,8 @@ func (h *inboxHTTPHandler) routeChatSubresource(w http.ResponseWriter, r *http.R
 	//   {jid}/pause            POST → toggle pause
 	//   {jid}/send             POST → send manual message
 	//   {jid}/read             POST → mark as read
-	//   {jid}/avatar           GET  → fetch/cache avatar info
+	//   {jid}/avatar           GET  → fetch/cache avatar info (cache-first)
+	//   {jid}/avatar           POST → force-refresh avatar from whatsmeow
 	//   {jid}/profile          GET/PUT → CRM-light contact profile
 	//   {jid}/insights         GET → latest structured extraction
 	parts := strings.SplitN(rest, "/", 2)
@@ -84,7 +83,9 @@ func (h *inboxHTTPHandler) routeChatSubresource(w http.ResponseWriter, r *http.R
 	case tail == "read" && r.Method == http.MethodPost:
 		h.markRead(w, r, jid)
 	case tail == "avatar" && r.Method == http.MethodGet:
-		h.fetchAvatar(w, r, jid)
+		h.fetchAvatar(w, r, jid, false)
+	case tail == "avatar" && r.Method == http.MethodPost:
+		h.fetchAvatar(w, r, jid, true)
 	case tail == "profile" && r.Method == http.MethodGet:
 		h.getProfile(w, r, jid)
 	case tail == "profile" && r.Method == http.MethodPut:
@@ -248,12 +249,15 @@ func (h *inboxHTTPHandler) markRead(w http.ResponseWriter, r *http.Request, jid 
 	writeJSON(w, map[string]any{"status": "ok"})
 }
 
-// GET /whatsapp_native/inbox/chats/{jid}/avatar
+// GET  /whatsapp_native/inbox/chats/{jid}/avatar  → cache-first
+// POST /whatsapp_native/inbox/chats/{jid}/avatar  → force refresh
 //
-// Returns the cached avatar URL or asks whatsmeow for a fresh one when the
-// cached entry is empty. The URL itself points to WhatsApp's CDN and is
-// short-lived; the frontend should follow the redirect / cache the bytes.
-func (h *inboxHTTPHandler) fetchAvatar(w http.ResponseWriter, r *http.Request, jid string) {
+// Returns the cached avatar URL or asks whatsmeow for a fresh one. The URL
+// itself points to WhatsApp's CDN and is short-lived; the frontend should
+// follow the redirect or cache the bytes. Force refresh bypasses cache and
+// also bypasses the per-JID throttle (used after profile-picture errors or
+// when the dashboard hits "reload").
+func (h *inboxHTTPHandler) fetchAvatar(w http.ResponseWriter, r *http.Request, jid string, force bool) {
 	chat, err := h.store.GetChat(r.Context(), jid)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
@@ -263,48 +267,39 @@ func (h *inboxHTTPHandler) fetchAvatar(w http.ResponseWriter, r *http.Request, j
 		jsonError(w, http.StatusNotFound, "chat not found")
 		return
 	}
-	if chat.AvatarURL != "" {
+	if !force && chat.AvatarURL != "" {
 		writeJSON(w, map[string]any{"url": chat.AvatarURL, "avatar_id": chat.AvatarID, "cached": true})
 		return
 	}
 
-	client := h.channel.Client()
-	if client == nil {
+	if h.avatars == nil {
+		jsonError(w, http.StatusServiceUnavailable, "avatar fetcher disabled")
+		return
+	}
+	if client := h.channel.Client(); client == nil {
 		jsonError(w, http.StatusServiceUnavailable, "whatsapp client not ready")
 		return
 	}
 
-	h.avatarMu.Lock()
-	defer h.avatarMu.Unlock()
-	// Re-check after acquiring the lock to avoid duplicate fetches when many
-	// dashboards open the same chat simultaneously.
-	if chat, err = h.store.GetChat(r.Context(), jid); err == nil && chat != nil && chat.AvatarURL != "" {
-		writeJSON(w, map[string]any{"url": chat.AvatarURL, "avatar_id": chat.AvatarID, "cached": true})
-		return
-	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
 
-	parsedJID, err := types.ParseJID(jid)
+	updated, err := h.avatars.Refresh(ctx, jid, force)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid jid: "+err.Error())
-		return
-	}
-	pic, err := client.GetProfilePictureInfo(r.Context(), parsedJID, &whatsmeow.GetProfilePictureParams{Preview: false})
-	if err != nil {
-		if errors.Is(err, whatsmeow.ErrProfilePictureNotSet) || errors.Is(err, whatsmeow.ErrProfilePictureUnauthorized) {
-			writeJSON(w, map[string]any{"url": "", "cached": false, "reason": err.Error()})
+		if errors.Is(err, whatsmeow.ErrProfilePictureNotSet) ||
+			errors.Is(err, whatsmeow.ErrProfilePictureUnauthorized) {
+			writeJSON(w, map[string]any{"url": "", "avatar_id": "", "cached": false, "reason": err.Error()})
 			return
 		}
+		logger.WarnCF("whatsapp", "inbox: failed to refresh avatar", map[string]any{"jid": jid, "error": err.Error()})
 		jsonError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	if pic == nil {
-		writeJSON(w, map[string]any{"url": "", "cached": false})
+	if updated == nil {
+		writeJSON(w, map[string]any{"url": "", "avatar_id": "", "cached": false})
 		return
 	}
-	if err := h.store.SetAvatar(r.Context(), jid, pic.URL, pic.ID); err != nil {
-		logger.WarnCF("whatsapp", "inbox: failed to cache avatar URL", map[string]any{"jid": jid, "error": err.Error()})
-	}
-	writeJSON(w, map[string]any{"url": pic.URL, "avatar_id": pic.ID, "cached": false})
+	writeJSON(w, map[string]any{"url": updated.AvatarURL, "avatar_id": updated.AvatarID, "cached": false})
 }
 
 // GET /whatsapp_native/inbox/events  (text/event-stream)

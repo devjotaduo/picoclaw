@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -100,6 +101,40 @@ func TestUserStore_CreatePlatformAdminAndFetch(t *testing.T) {
 	}
 	if u3.BcryptHash == nil || *u3.BcryptHash != "$2b$12$updated" {
 		t.Errorf("ResetPlatformAdminPassword did not replace hash: got %v", u3.BcryptHash)
+	}
+}
+
+func TestMigrateLegacyAdminsPreservesExistingUserPassword(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	email := uniqueEmail(t, "legacy-admin")
+	const legacyHash = "legacy-admin-hash"
+	const currentHash = "current-user-hash"
+
+	if _, err := db.Pool.Exec(ctx,
+		`INSERT INTO admins (email, bcrypt_hash) VALUES ($1, $2)`,
+		email, legacyHash,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx,
+		`INSERT INTO users (email, bcrypt_hash, status, platform_role) VALUES ($1, $2, 'active', 'platform_admin')`,
+		email, currentHash,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var got string
+	if err := db.Pool.QueryRow(ctx, `SELECT bcrypt_hash FROM users WHERE email = $1`, email).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != currentHash {
+		t.Fatalf("migration replaced current user password hash: got %q, want %q", got, currentHash)
 	}
 }
 
@@ -326,4 +361,79 @@ func TestMembershipStore_NotFound(t *testing.T) {
 	if err != store.ErrMembershipNotFound {
 		t.Errorf("want ErrMembershipNotFound, got %v", err)
 	}
+}
+
+func TestTenantStore_DeleteCascadeRemovesRelatedRows(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	tenants := &store.TenantStore{DB: db}
+	users := &store.UserStore{DB: db}
+	memberships := &store.MembershipStore{DB: db}
+	invites := &store.InviteStore{DB: db}
+	usage := &store.UsageStore{DB: db}
+	audit := &store.AuditStore{DB: db}
+
+	suffix := time.Now().UnixNano()
+	tenantID := fmt.Sprintf("cascade-%d", suffix)
+	ownerEmail := uniqueEmail(t, "cascade-owner")
+	tenant := &store.Tenant{
+		ID:             tenantID,
+		DisplayName:    "Cascade Tenant",
+		OwnerEmail:     ownerEmail,
+		Subdomain:      tenantID,
+		Status:         store.StatusActive,
+		ContainerImage: "picoclaw-launcher:test",
+		VolumePath:     "/tmp/" + tenantID,
+		MemLimitMB:     512,
+		CPUQuota:       0.5,
+	}
+	if err := tenants.Insert(ctx, tenant); err != nil {
+		t.Fatal(err)
+	}
+	owner, err := users.EnsureInvited(ctx, ownerEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := memberships.Upsert(ctx, owner.ID, tenantID, store.RoleTenantOwner); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := invites.Create(ctx, tenantID, uniqueEmail(t, "cascade-invite"), store.RoleViewer, owner.ID, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := usage.InsertIgnoreDup(ctx, &store.UsageLog{
+		TenantID:         tenantID,
+		Timestamp:        time.Now().UTC(),
+		Provider:         "test",
+		Model:            "test-model",
+		PromptTokens:     10,
+		CompletionTokens: 4,
+		CostUSD:          0.001,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := audit.Insert(ctx, &owner.ID, &tenantID, "tenant.delete", "tenant", tenantID); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tenants.DeleteCascade(ctx, tenantID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tenants.GetIncludingDeleted(ctx, tenantID); !errors.Is(err, store.ErrTenantNotFound) {
+		t.Fatalf("tenant should be deleted, got err=%v", err)
+	}
+
+	assertCount := func(table, where string, want int) {
+		t.Helper()
+		var got int
+		if err := db.Pool.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s", table, where), tenantID).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Fatalf("%s count = %d, want %d", table, got, want)
+		}
+	}
+	assertCount("tenant_memberships", "tenant_id = $1", 0)
+	assertCount("invites", "tenant_id = $1", 0)
+	assertCount("usage_logs", "tenant_id = $1", 0)
+	assertCount("audit_logs", "tenant_id IS NULL AND target_id = $1", 1)
 }

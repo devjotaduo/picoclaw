@@ -1,0 +1,4 @@
+interface:
+  display_name: "Read Host FBK"
+  short_description: "Le backups Firebird .fbk locais"
+  default_prompt: "Use $read-host-fbk para restaurar o Host.fbk e consultar os dados."

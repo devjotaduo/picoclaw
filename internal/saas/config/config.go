@@ -21,6 +21,7 @@ type Config struct {
 
 	LiteLLMURL       string
 	LiteLLMMasterKey string
+	IntakeLLMModel   string
 
 	TenantImage        string
 	TenantBaseDomain   string
@@ -30,6 +31,8 @@ type Config struct {
 	TenantNetworkEdge  string
 	TenantNetworkLLM   string
 	TenantCertResolver string // empty = no resolver label (Traefik falls back to default cert)
+
+	CompanyIntakeUploadDir string
 
 	CookieDomain string
 	CookieSecure bool
@@ -54,6 +57,7 @@ func Load() (*Config, error) {
 		DockerHost:          envOr("DOCKER_HOST", "unix:///var/run/docker.sock"),
 		LiteLLMURL:          os.Getenv("LITELLM_URL"),
 		LiteLLMMasterKey:    os.Getenv("LITELLM_MASTER_KEY"),
+		IntakeLLMModel:      os.Getenv("COMPANY_INTAKE_LLM_MODEL"),
 		TenantImage:         envOr("TENANT_IMAGE", "picoclaw-launcher:latest"),
 		TenantBaseDomain:    os.Getenv("TENANT_BASE_DOMAIN"),
 		TenantHostDataDir:   envOr("TENANT_HOST_DATA_DIR", "/srv/saas/tenants"),
@@ -62,9 +66,13 @@ func Load() (*Config, error) {
 		TenantNetworkEdge:   envOr("TENANT_NETWORK_EDGE", "saas_edge"),
 		TenantNetworkLLM:    envOr("TENANT_NETWORK_LLM", "saas_llm"),
 		TenantCertResolver:  envOr("TENANT_CERT_RESOLVER", "letsencrypt"),
-		CookieDomain:        os.Getenv("COOKIE_DOMAIN"),
-		CookieSecure:        envBool("COOKIE_SECURE", true),
-		OpenCRMURL:          envOr("OPENCRM_URL", "http://opencrm:8787"),
+		CompanyIntakeUploadDir: envOr(
+			"COMPANY_INTAKE_UPLOAD_DIR",
+			"/var/lib/picoclaw-saas/company-intakes/uploads",
+		),
+		CookieDomain: os.Getenv("COOKIE_DOMAIN"),
+		CookieSecure: envBool("COOKIE_SECURE", true),
+		OpenCRMURL:   envOr("OPENCRM_URL", "http://opencrm:8787"),
 	}
 
 	ttlHours := envInt("JWT_TTL_HOURS", 12)

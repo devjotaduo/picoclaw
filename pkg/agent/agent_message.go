@@ -127,13 +127,14 @@ func (al *AgentLoop) prepareInboundMessageForAgent(
 	msg bus.InboundMessage,
 ) bus.InboundMessage {
 	msg = bus.NormalizeInboundMessage(msg)
+	shouldSendDeferredAudioPlaceholder := audioAnnotationRe.MatchString(msg.Content) && len(msg.Media) > 0
 
 	var hadAudio bool
 	msg, hadAudio = al.transcribeAudioInMessage(ctx, msg)
 
 	// For audio messages the placeholder was deferred by the channel.
 	// Now that transcription (and optional feedback) is done, send it.
-	if hadAudio && al.channelManager != nil {
+	if (hadAudio || shouldSendDeferredAudioPlaceholder) && al.channelManager != nil {
 		al.channelManager.SendPlaceholder(ctx, msg.Channel, msg.ChatID)
 	}
 

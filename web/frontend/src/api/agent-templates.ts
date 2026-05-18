@@ -92,13 +92,75 @@ export interface AgentConfigResponse {
 export interface AgentSummary {
   id: string
   name?: string
+  avatar?: {
+    type?: "preset" | "image" | string
+    icon?: string
+    initials?: string
+    background?: string
+    foreground?: string
+    image_url?: string
+  }
+  role_config?: {
+    version?: number
+    kind?: string
+    description?: string
+    profile?: Record<string, unknown>
+    marketing?: {
+      platforms?: string[]
+      deliverables?: string[]
+      approval_mode?: string
+      public_publish_dir?: string
+      requires_human_review?: boolean
+    }
+    sales?: Record<string, unknown>
+    attendant?: Record<string, unknown>
+    assistant?: Record<string, unknown>
+  }
   default: boolean
+  active: boolean
   workspace: string
+  configured?: boolean
+  template_id?: string
+  applied_at?: number
+  model?: string
+  skills?: string[]
+}
+
+export interface AgentAccessConfig {
+  panel_enabled?: boolean
+  panel_roles?: string[]
+  whatsapp_direct_enabled?: boolean
+  whatsapp_allowed_senders?: string[]
+  whatsapp_allowed_chats?: string[]
+}
+
+export interface AgentEditorPromptState {
   configured: boolean
   template_id?: string
   applied_at?: number
   model?: string
   skills?: string[]
+  payload?: TemplateApplyPayload
+}
+
+export interface AgentEditorAgent extends AgentSummary {
+  name: string
+  allowed: boolean
+  access?: AgentAccessConfig
+  subagents?: {
+    allow_agents?: string[]
+  }
+  prompt: AgentEditorPromptState
+}
+
+export interface AgentEditorStateResponse {
+  role: string
+  agents: AgentEditorAgent[]
+  main_agent_id: string
+  main_allow_agents: string[]
+  admin_whatsapp_jids: string[]
+  assistant_whatsapp_jids?: string[]
+  assistant_whatsapp_chats?: string[]
 }
 
 export interface AgentsResponse {
@@ -108,12 +170,15 @@ export interface AgentsResponse {
 export interface CreateAgentInput {
   id: string
   name: string
+  avatar?: AgentSummary["avatar"]
   default?: boolean
 }
 
 export interface UpdateAgentInput {
   name?: string
+  avatar?: AgentSummary["avatar"]
   default?: boolean
+  active?: boolean
 }
 
 export async function getAgentConfig(
@@ -136,6 +201,14 @@ export async function listAgents(): Promise<AgentsResponse> {
     throw new Error(await extractErrorMessage(res))
   }
   return res.json() as Promise<AgentsResponse>
+}
+
+export async function getAgentEditorState(): Promise<AgentEditorStateResponse> {
+  const res = await launcherFetch("/api/agent/editor-state")
+  if (!res.ok) {
+    throw new Error(await extractErrorMessage(res))
+  }
+  return res.json() as Promise<AgentEditorStateResponse>
 }
 
 export async function createAgent(

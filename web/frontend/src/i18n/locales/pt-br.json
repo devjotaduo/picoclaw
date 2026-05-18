@@ -80,6 +80,10 @@
     "deleteSession": "Excluir sessão",
     "messagesCount": "{{count}} mensagens",
     "noModel": "Selecionar modelo",
+    "agentSelector": "Selecionar agente",
+    "agentSelectorPlaceholder": "Agente",
+    "agentAttachmentsUnsupported": "Envios com mídia ficam disponíveis no chat principal. Para agentes internos, envie texto.",
+    "agentSendFailed": "Falha ao enviar mensagem para o agente.",
     "inputDisabled": {
       "notConnected": "O Gateway não está rodando. Inicie-o para conversar.",
       "noModel": "Nenhum modelo padrão configurado. Vá para a página de Modelos para definir um."
@@ -144,6 +148,9 @@
     "cancel": "Cancelar",
     "save": "Salvar",
     "saving": "Salvando...",
+    "loading": "Carregando...",
+    "refresh": "Atualizar",
+    "sending": "Enviando...",
     "reset": "Redefinir",
     "confirm": "Confirmar",
     "saveChangesTitle": "Você tem alterações de configuração não salvas",
@@ -171,6 +178,9 @@
       },
       "antigravity": {
         "description": "Usa OAuth via navegador para o Google Cloud Code Assist."
+      },
+      "copilot": {
+        "description": "Importe seu token do GitHub via gh CLI ou insira manualmente."
       }
     },
     "status": {
@@ -184,7 +194,9 @@
       "deviceCode": "Device Code",
       "stopLoading": "Parar Carregamento",
       "saveToken": "Salvar",
-      "logout": "Sair"
+      "logout": "Sair",
+      "importClaudeCode": "Importar do Claude Code",
+      "importGHCLI": "Importar do GitHub CLI"
     },
     "logoutDialog": {
       "title": "Sair do provedor?",
@@ -192,7 +204,8 @@
     },
     "fields": {
       "openaiToken": "Token OpenAI",
-      "anthropicToken": "Token Anthropic"
+      "anthropicToken": "Token Anthropic",
+      "githubToken": "Token do GitHub (ghp_... ou gho_...)"
     },
     "labels": {
       "account": "Conta",
@@ -222,6 +235,14 @@
       "url": "URL de Verificação",
       "polling": "Verificando status do login...",
       "open": "Abrir Página de Verificação"
+    },
+    "anthropicPaste": {
+      "title": "Login Anthropic via navegador",
+      "description": "Após autorizar em claude.ai, copie o código exibido na página de callback e cole abaixo.",
+      "openAuth": "Abrir página de autorização",
+      "codeLabel": "Código (formato: code#state)",
+      "hint": "A URL final será https://console.anthropic.com/oauth/code/callback?code=XXX#YYY — copie tudo após ?code= (incluindo o # e o state).",
+      "submit": "Concluir login"
     }
   },
   "models": {
@@ -515,8 +536,19 @@
   "pages": {
     "orchestration": {
       "agents": "Agentes internos",
+      "profile": "Perfil",
+      "agent_name": "Nome",
+      "avatar_icon": "Ícone",
+      "avatar_initials": "Iniciais",
+      "avatar_background": "Fundo",
+      "avatar_foreground": "Texto",
+      "avatar_image": "Imagem URL",
       "main_allowlist": "Permissões do main",
-      "admin_jids_placeholder": "JIDs WhatsApp administrativos, um por linha",
+      "main_agent": "Agente main",
+      "main_agent_placeholder": "Selecionar agente main",
+      "assistant_jids": "Números autorizados da Sofia",
+      "assistant_chats": "Grupos autorizados da Sofia",
+      "admin_jids_placeholder": "JIDs WhatsApp da Sofia, um por linha",
       "saved": "Orquestração salva",
       "internal": "Interno",
       "available": "Disponível",
@@ -526,6 +558,34 @@
       "empty_proposals": "Nenhuma proposta salva."
     },
     "agent": {
+      "whatsapp": {
+        "chats": "Conversas",
+        "search_placeholder": "Buscar nome, telefone…",
+        "placeholder": "Mensagem manual… (Ctrl+Enter para enviar)",
+        "no_messages": "Sem mensagens nessa conversa ainda.",
+        "empty_title": "Selecione uma conversa para começar",
+        "empty_description": "Escolha um contato na lista à esquerda para visualizar as mensagens e responder em tempo real.",
+        "agent_active": "Agente ativo",
+        "agent_paused": "Pausado",
+        "agent_auto_paused": "Pausado automaticamente",
+        "agent_resume": "Retomar",
+        "connection_online": "Online",
+        "connection_reconnecting": "Reconectando…",
+        "connection_offline": "Offline",
+        "connection_connecting": "Conectando…",
+        "status_pending": "Enviando…",
+        "status_sent": "Enviado",
+        "status_delivered": "Entregue",
+        "status_read": "Lido",
+        "status_error": "Falha no envio",
+        "settings_menu": "Configurações da caixa",
+        "refresh_chats": "Atualizar conversas",
+        "stop_gateway": "Parar gateway WhatsApp",
+        "stop_gateway_confirm_title": "Parar gateway WhatsApp?",
+        "stop_gateway_confirm_description": "O gateway para de receber e enviar mensagens imediatamente. As conversas existentes continuam salvas, mas o agente automático fica indisponível até o gateway ser reiniciado.",
+        "new_messages_singular": "1 nova mensagem",
+        "new_messages_plural": "{{count}} novas mensagens"
+      },
       "load_error": "Falha ao carregar informações de suporte do agente.",
       "skills": {
         "empty": "Nenhuma skill disponível no momento.",
@@ -631,6 +691,14 @@
       "editor": {
         "loading": "Carregando…",
         "edit": "Editar configurações",
+        "active": "Ativo",
+        "inactive": "Inativo",
+        "activate_agent": "Ativar agente",
+        "deactivate_agent": "Desativar agente",
+        "activate_success": "Agente ativado.",
+        "deactivate_success": "Agente desativado.",
+        "toggle_active_error": "Não foi possível alterar o status do agente.",
+        "default_agent_must_stay_active": "O agente padrão precisa continuar ativo.",
         "raw_json": "JSON bruto",
         "raw_json_title": "JSON bruto do agente",
         "raw_json_description": "Editor avançado do payload exato salvo no workspace deste agente.",
@@ -646,6 +714,7 @@
         "empty_description": "Aplique um template para gerar a configuração inicial do agente. Depois disso, você pode voltar aqui para editar tudo: horários, profissionais, produtos, skills, comportamento, etc.",
         "go_to_templates": "Ir para Templates",
         "summary": {
+          "status": "Status",
           "template": "Template aplicado",
           "tone": "Tom",
           "language": "Idioma",
@@ -654,8 +723,37 @@
           "products": "Produtos",
           "skills_active": "Skills ativas",
           "applied_at": "Última aplicação",
-          "disabled": "desativado"
-        }
+          "disabled": "desativado",
+          "agent_id": "ID do agente",
+          "workspace": "Workspace"
+        },
+        "agents": "Agentes",
+        "new_agent": "Novo agente",
+        "create_title": "Novo agente",
+        "create_description": "Crie um agente e escolha o template para seus arquivos iniciais de workspace.",
+        "create_agent": "Criar agente",
+        "create_success": "Agente criado.",
+        "create_error": "Não foi possível criar o agente.",
+        "delete_agent": "Remover agente",
+        "delete_confirm": "Remover este agente da configuração? Os arquivos de workspace serão preservados.",
+        "delete_success": "Agente removido da configuração.",
+        "delete_error": "Não foi possível remover o agente.",
+        "configured": "Configurado",
+        "not_configured": "Rascunho",
+        "default": "Padrão",
+        "configure_agent": "Configurar",
+        "empty_agent_title": "Agente sem template",
+        "empty_agent_description": "Crie ou aplique um template para gerar o workspace do agente (AGENT.md, SOUL.md, behavior.json).",
+        "agent_name": "Nome do agente",
+        "agent_name_placeholder": "Assistente de vendas",
+        "agent_id": "ID do agente",
+        "agent_id_hint": "ID de runtime:",
+        "starting_template": "Template inicial",
+        "section_identity": "Identidade",
+        "section_workspace": "Workspace",
+        "section_capabilities": "Capacidades",
+        "section_danger": "Zona de risco",
+        "danger_description": "Estas ações afetam o comportamento do agente em todos os canais."
       },
       "template_editor": {
         "search_placeholder": "Buscar templates",
@@ -693,6 +791,14 @@
           "enabled": "Ativa",
           "visible_label": "Visível no template",
           "visible_hint": "(mostrar como capacidade pública do agente)"
+        },
+        "style": {
+          "emoji_policy": "Uso de emojis",
+          "emoji_policy_hint": "Escolha se o agente pode usar emoji de forma rara ou se deve evitar totalmente.",
+          "emoji_minimal": "Poucos emojis quando fizer sentido",
+          "emoji_none": "Não usar nenhum emoji",
+          "do": "Faça",
+          "dont": "Não faça"
         },
         "categories": {
           "all": "Todas",
@@ -779,6 +885,8 @@
           "identity_description": "Nome do agente, mensagem de apresentação, tom e idioma.",
           "company": "Empresa",
           "company_description": "Informações da empresa que serão referenciadas pelo agente.",
+          "knowledge_base": "Base de conhecimento",
+          "knowledge_base_description": "Contexto oficial e perguntas frequentes que o agente deve usar como fonte de verdade.",
           "personality": "Personalidade",
           "personality_description": "Traços de personalidade que o agente demonstra nas conversas (gravado em SOUL.md).",
           "functions": "Funções e capacidades",
@@ -804,6 +912,18 @@
           "company_general_info": "Informações gerais",
           "company_general_info_hint": "Contexto extra que o agente deve conhecer: endereço, redes sociais, missão, observações importantes, política de feriados, etc.",
           "company_general_info_placeholder": "Ex.: Endereço: Rua X, 123. Estacionamento gratuito por 2h com selo. Atendimento bilíngue (PT/EN). Site: www.exemplo.com.br"
+        },
+        "knowledge_base": {
+          "overview": "Contexto oficial",
+          "overview_hint": "Políticas, observações, regras comerciais e informações importantes que não cabem nos campos estruturados.",
+          "overview_placeholder": "Ex.: Entregas na região central são combinadas com o setor comercial. Produtos sob consulta não devem ter preço estimado.",
+          "faqs": "Perguntas frequentes",
+          "faqs_hint": "Adicione perguntas e respostas oficiais para dúvidas recorrentes.",
+          "faq_item": "FAQ {{number}}",
+          "question_placeholder": "Pergunta",
+          "answer_placeholder": "Resposta oficial",
+          "add_faq": "Adicionar FAQ",
+          "remove_faq": "Remover FAQ"
         },
         "company": {
           "schedule": {

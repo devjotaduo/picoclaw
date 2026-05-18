@@ -5,6 +5,7 @@ export type ApiError = { error: string; status: number };
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(path, {
+    ...init,
     credentials: "include",
     // Bypass the HTTP cache — these endpoints reflect mutable per-tenant state
     // and we don't want a stale GET response right after a PUT/POST.
@@ -13,7 +14,6 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
     },
-    ...init,
   });
   if (resp.status === 204) {
     return undefined as T;

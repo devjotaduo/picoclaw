@@ -18,17 +18,6 @@ type UsageLog struct {
 
 type UsageStore struct{ DB *DB }
 
-func (s *UsageStore) Insert(ctx context.Context, u *UsageLog) error {
-	const q = `
-		INSERT INTO usage_logs (tenant_id, ts, provider, model, prompt_tokens, completion_tokens, cost_usd)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`
-	_, err := s.DB.Pool.Exec(ctx, q,
-		u.TenantID, u.Timestamp, u.Provider, u.Model,
-		u.PromptTokens, u.CompletionTokens, u.CostUSD,
-	)
-	return err
-}
-
 // InsertIgnoreDup inserts if (tenant_id, ts, model, prompt_tokens, completion_tokens)
 // is new. Avoids double-counting when the poller is restarted with overlapping windows.
 func (s *UsageStore) InsertIgnoreDup(ctx context.Context, u *UsageLog) (bool, error) {

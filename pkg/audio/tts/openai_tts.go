@@ -16,11 +16,13 @@ import (
 )
 
 type OpenAITTSProvider struct {
-	apiKey     string
-	apiBase    string
-	voice      string
-	model      string
-	httpClient *http.Client
+	apiKey         string
+	apiBase        string
+	voice          string
+	model          string
+	responseFormat string
+	name           string
+	httpClient     *http.Client
 }
 
 func NewOpenAITTSProvider(apiKey string, apiBase string, proxyURL string, model string) *OpenAITTSProvider {
@@ -74,18 +76,26 @@ func NewOpenAITTSProvider(apiKey string, apiBase string, proxyURL string, model 
 	if model == "" {
 		model = "tts-1"
 	}
+	name := "openai-tts"
+	responseFormat := "opus"
+	if strings.Contains(strings.ToLower(apiBase), "openrouter.ai") {
+		name = "openrouter-tts"
+		responseFormat = "mp3"
+	}
 
 	return &OpenAITTSProvider{
-		apiKey:     apiKey,
-		apiBase:    apiBase,
-		voice:      "alloy",
-		model:      model,
-		httpClient: client,
+		apiKey:         apiKey,
+		apiBase:        apiBase,
+		voice:          "alloy",
+		model:          model,
+		responseFormat: responseFormat,
+		name:           name,
+		httpClient:     client,
 	}
 }
 
 func (t *OpenAITTSProvider) Name() string {
-	return "openai-tts"
+	return t.name
 }
 
 func (t *OpenAITTSProvider) Synthesize(ctx context.Context, text string) (io.ReadCloser, error) {
@@ -95,7 +105,7 @@ func (t *OpenAITTSProvider) Synthesize(ctx context.Context, text string) (io.Rea
 		"model":           t.model,
 		"input":           text,
 		"voice":           t.voice,
-		"response_format": "opus",
+		"response_format": t.responseFormat,
 	}
 
 	jsonData, err := json.Marshal(reqBody)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,6 +34,10 @@ func NewWhatsAppChannel(
 	cfg *config.WhatsAppSettings,
 	bus *bus.MessageBus,
 ) (*WhatsAppChannel, error) {
+	groupTrigger := bc.GroupTrigger
+	if !groupTrigger.MentionOnly && len(groupTrigger.Prefixes) == 0 {
+		groupTrigger.MentionOnly = true
+	}
 	base := channels.NewBaseChannel(
 		"whatsapp",
 		cfg,
@@ -40,6 +45,7 @@ func NewWhatsAppChannel(
 		bc.AllowFrom,
 		channels.WithMaxMessageLength(65536),
 		channels.WithReasoningChannelID(bc.ReasoningChannelID),
+		channels.WithGroupTrigger(groupTrigger),
 	)
 
 	return &WhatsAppChannel{
@@ -256,6 +262,14 @@ func (c *WhatsAppChannel) handleIncomingMessage(msg map[string]any) {
 		inboundCtx.ChatType = "direct"
 	} else {
 		inboundCtx.ChatType = "group"
+		allow, stripped := c.ShouldRespondInGroup(false, content)
+		if !allow {
+			return
+		}
+		content = stripped
+		if strings.TrimSpace(content) == "" {
+			return
+		}
 	}
 
 	c.HandleInboundContext(c.ctx, chatID, content, mediaPaths, inboundCtx, sender)

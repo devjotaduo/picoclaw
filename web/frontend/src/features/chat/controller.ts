@@ -1,6 +1,7 @@
 import { getDefaultStore } from "jotai"
 import { toast } from "sonner"
 
+import { sendInternalAgentTurn } from "@/api/internal-agents"
 import {
   loadSessionMessages,
   mergeHistoryMessages,
@@ -318,11 +319,18 @@ export async function hydrateActiveSession() {
 interface SendChatMessageInput {
   content: string
   attachments?: ChatAttachment[]
+  agentID?: string
+}
+
+interface SendAgentChatMessageInput {
+  agentID: string
+  content: string
 }
 
 export function sendChatMessage({
   content,
   attachments = [],
+  agentID,
 }: SendChatMessageInput) {
   if (!wsRef || wsRef.readyState !== WebSocket.OPEN) {
     console.warn("WebSocket not connected")
@@ -361,14 +369,19 @@ export function sendChatMessage({
   }))
 
   try {
+    const payload: Record<string, unknown> = {
+      content: normalizedContent,
+      media: normalizedAttachments.map((attachment) => attachment.url),
+    }
+    const normalizedAgentID = agentID?.trim()
+    if (normalizedAgentID) {
+      payload.agent_id = normalizedAgentID
+    }
     socket.send(
       JSON.stringify({
         type: "message.send",
         id,
-        payload: {
-          content: normalizedContent,
-          media: normalizedAttachments.map((attachment) => attachment.url),
-        },
+        payload,
       }),
     )
     return true
@@ -378,6 +391,73 @@ export function sendChatMessage({
       messages: prev.messages.filter((message) => message.id !== id),
       isTyping: false,
     }))
+    return false
+  }
+}
+
+export async function sendAgentChatMessage({
+  agentID,
+  content,
+}: SendAgentChatMessageInput): Promise<boolean> {
+  const normalizedAgentID = agentID.trim()
+  const normalizedContent = content.trim()
+  if (!normalizedAgentID || !normalizedContent) {
+    return false
+  }
+
+  const sessionId = activeSessionIdRef
+  const userMessageID = `msg-${++msgIdCounter}-${Date.now()}`
+
+  updateChatStore((prev) => ({
+    messages: [
+      ...prev.messages,
+      {
+        id: userMessageID,
+        role: "user",
+        content: normalizedContent,
+        timestamp: Date.now(),
+      },
+    ],
+    isTyping: true,
+  }))
+
+  try {
+    const response = await sendInternalAgentTurn(
+      normalizedAgentID,
+      normalizedContent,
+      sessionId,
+    )
+
+    if (sessionId !== activeSessionIdRef) {
+      return true
+    }
+
+    updateChatStore((prev) => ({
+      messages: [
+        ...prev.messages,
+        {
+          id: `msg-${++msgIdCounter}-${Date.now()}`,
+          role: "assistant",
+          content: response.content,
+          timestamp: Date.now(),
+        },
+      ],
+      isTyping: false,
+    }))
+    return true
+  } catch (error) {
+    console.error("Failed to send agent message:", error)
+    if (sessionId === activeSessionIdRef) {
+      updateChatStore((prev) => ({
+        messages: prev.messages.filter(
+          (message) => message.id !== userMessageID,
+        ),
+        isTyping: false,
+      }))
+    }
+    toast.error(
+      error instanceof Error ? error.message : i18n.t("chat.agentSendFailed"),
+    )
     return false
   }
 }

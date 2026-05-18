@@ -77,6 +77,22 @@ func TestBuildParams_ToolCallMessage(t *testing.T) {
 	}
 }
 
+func TestBuildParams_SkipsEmptyAssistantMessage(t *testing.T) {
+	messages := []Message{
+		{Role: "user", Content: "First"},
+		{Role: "assistant"},
+		{Role: "assistant", ToolCalls: []ToolCall{{ID: "ignored", Name: ""}}},
+		{Role: "user", Content: "Second"},
+	}
+	params, err := buildParams(messages, nil, "claude-sonnet-4.6", map[string]any{})
+	if err != nil {
+		t.Fatalf("buildParams() error: %v", err)
+	}
+	if len(params.Messages) != 2 {
+		t.Fatalf("len(Messages) = %d, want 2", len(params.Messages))
+	}
+}
+
 func TestBuildParams_WithTools(t *testing.T) {
 	tools := []ToolDefinition{
 		{

@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -38,6 +39,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/identity"
 	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/media"
 	"github.com/sipeed/picoclaw/pkg/utils"
 )
 
@@ -52,9 +54,9 @@ const (
 
 // qrSnapshot captures the latest QR / pairing state for HTTP exposure.
 type qrSnapshot struct {
-	Status      string    // "wait" | "scanned" | "confirmed" | "expired" | "error" | "idle"
-	DataURI     string    // base64 PNG data URI when Status == "wait"
-	PhoneNumber string    // populated once paired
+	Status      string // "wait" | "scanned" | "confirmed" | "expired" | "error" | "idle"
+	DataURI     string // base64 PNG data URI when Status == "wait"
+	PhoneNumber string // populated once paired
 	UpdatedAt   time.Time
 	ExpiresAt   time.Time
 	Error       string
@@ -125,6 +127,7 @@ type WhatsAppNativeChannel struct {
 	pauseCheck PauseChecker
 
 	inboxHandler *inboxHTTPHandler // optional; nil when persistence is disabled
+	avatars      *avatarFetcher    // optional; nil when persistence is disabled
 }
 
 // AddObserver registers an observer that will receive every inbound and
@@ -173,7 +176,18 @@ func NewWhatsAppNativeChannel(
 	bus *bus.MessageBus,
 	storePath string,
 ) (channels.Channel, error) {
-	base := channels.NewBaseChannel(name, cfg, bus, bc.AllowFrom, channels.WithMaxMessageLength(65536))
+	groupTrigger := bc.GroupTrigger
+	if !groupTrigger.MentionOnly && len(groupTrigger.Prefixes) == 0 {
+		groupTrigger.MentionOnly = true
+	}
+	base := channels.NewBaseChannel(
+		name,
+		cfg,
+		bus,
+		bc.AllowFrom,
+		channels.WithMaxMessageLength(65536),
+		channels.WithGroupTrigger(groupTrigger),
+	)
 	if storePath == "" {
 		storePath = "whatsapp"
 	}
@@ -202,10 +216,12 @@ func NewWhatsAppNativeChannel(
 			}
 			return paused
 		}
+		c.avatars = newAvatarFetcher(c, store, pubsub)
 		c.inboxHandler = &inboxHTTPHandler{
 			channel: c,
 			store:   store,
 			pubsub:  pubsub,
+			avatars: c.avatars,
 		}
 	}
 
@@ -419,9 +435,14 @@ func (c *WhatsAppNativeChannel) Stop(ctx context.Context) error {
 }
 
 func (c *WhatsAppNativeChannel) eventHandler(evt any) {
-	switch evt.(type) {
+	switch e := evt.(type) {
 	case *events.Message:
-		c.handleIncoming(evt.(*events.Message))
+		c.handleIncoming(e)
+	case *events.Picture:
+		// Contact or group photo changed; refresh the cached URL out of band.
+		if c.avatars != nil {
+			c.avatars.scheduleRefresh(e.JID.String())
+		}
 	case *events.Disconnected:
 		logger.InfoCF("whatsapp", "WhatsApp disconnected, will attempt reconnection", nil)
 		c.reconnectMu.Lock()
@@ -492,12 +513,39 @@ func (c *WhatsAppNativeChannel) reconnectWithBackoff() {
 	}
 }
 
+func (c *WhatsAppNativeChannel) messageMentionsSelf(msg *waE2E.Message) bool {
+	if msg == nil {
+		return false
+	}
+	c.mu.Lock()
+	var selfJID string
+	var selfUser string
+	if c.client != nil && c.client.Store != nil && c.client.Store.ID != nil {
+		selfJID = c.client.Store.ID.String()
+		selfUser = c.client.Store.ID.User
+	}
+	c.mu.Unlock()
+	if selfJID == "" && selfUser == "" {
+		return false
+	}
+	var mentioned []string
+	if ext := msg.GetExtendedTextMessage(); ext != nil && ext.GetContextInfo() != nil {
+		mentioned = append(mentioned, ext.GetContextInfo().GetMentionedJID()...)
+	}
+	for _, jid := range mentioned {
+		jid = strings.TrimSpace(jid)
+		if jid == "" {
+			continue
+		}
+		if strings.EqualFold(jid, selfJID) || strings.EqualFold(strings.TrimSuffix(jid, "@s.whatsapp.net"), selfUser) {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *WhatsAppNativeChannel) handleIncoming(evt *events.Message) {
 	if evt.Message == nil {
-		return
-	}
-	// Ignore group messages — channel handles direct chats only.
-	if evt.Info.Chat.Server == types.GroupServer {
 		return
 	}
 	senderID := evt.Info.Sender.String()
@@ -510,6 +558,20 @@ func (c *WhatsAppNativeChannel) handleIncoming(evt *events.Message) {
 
 	if content == "" {
 		return
+	}
+	peerKind := "direct"
+	mentioned := false
+	if evt.Info.Chat.Server == types.GroupServer {
+		peerKind = "group"
+		mentioned = c.messageMentionsSelf(evt.Message)
+		allow, stripped := c.ShouldRespondInGroup(mentioned, content)
+		if !allow {
+			return
+		}
+		content = stripped
+		if strings.TrimSpace(content) == "" {
+			return
+		}
 	}
 
 	var mediaPaths []string
@@ -527,10 +589,6 @@ func (c *WhatsAppNativeChannel) handleIncoming(evt *events.Message) {
 		metadata["peer_id"] = senderID
 	}
 
-	peerKind := "direct"
-	if evt.Info.Chat.Server == types.GroupServer {
-		peerKind = "group"
-	}
 	messageID := evt.Info.ID
 	sender := bus.SenderInfo{
 		Platform:    "whatsapp",
@@ -569,6 +627,13 @@ func (c *WhatsAppNativeChannel) handleIncoming(evt *events.Message) {
 		})
 	}
 
+	// First-touch avatar resolution: now that the inbox observer created
+	// the chat row, kick off a background fetch if the photo isn't cached.
+	// No-op when persistence is disabled or the chat already has a URL.
+	if c.avatars != nil {
+		c.avatars.ensure(c.runCtx, chatID)
+	}
+
 	if paused {
 		logger.DebugCF(
 			"whatsapp",
@@ -584,6 +649,7 @@ func (c *WhatsAppNativeChannel) handleIncoming(evt *events.Message) {
 		SenderID:  senderID,
 		MessageID: messageID,
 		ChatType:  peerKind,
+		Mentioned: mentioned,
 		Raw:       metadata,
 	}
 
@@ -592,6 +658,11 @@ func (c *WhatsAppNativeChannel) handleIncoming(evt *events.Message) {
 
 func (c *WhatsAppNativeChannel) Send(ctx context.Context, msg bus.OutboundMessage) ([]string, error) {
 	return c.sendWithSource(ctx, msg, "agent")
+}
+
+// SendMedia sends media attachments as native WhatsApp messages.
+func (c *WhatsAppNativeChannel) SendMedia(ctx context.Context, msg bus.OutboundMediaMessage) ([]string, error) {
+	return c.sendMediaWithSource(ctx, msg, "agent")
 }
 
 // SendManual sends a message tagged as authored by a human operator. Observers
@@ -661,6 +732,253 @@ func (c *WhatsAppNativeChannel) sendWithSource(ctx context.Context, msg bus.Outb
 		})
 	}
 	return nil, nil
+}
+
+func (c *WhatsAppNativeChannel) sendMediaWithSource(ctx context.Context, msg bus.OutboundMediaMessage, source string) ([]string, error) {
+	if !c.IsRunning() {
+		return nil, channels.ErrNotRunning
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	c.mu.Lock()
+	client := c.client
+	c.mu.Unlock()
+
+	if client == nil || !client.IsConnected() {
+		return nil, fmt.Errorf("whatsapp connection not established: %w", channels.ErrTemporary)
+	}
+	if client.Store.ID == nil {
+		return nil, fmt.Errorf("whatsapp not yet paired (QR login pending): %w", channels.ErrTemporary)
+	}
+
+	to, err := parseJID(msg.ChatID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid chat id %q: %w", msg.ChatID, err)
+	}
+
+	store := c.GetMediaStore()
+	if store == nil {
+		return nil, fmt.Errorf("no media store available: %w", channels.ErrSendFailed)
+	}
+
+	messageIDs := make([]string, 0, len(msg.Parts))
+	for _, part := range msg.Parts {
+		localPath, meta, err := store.ResolveWithMeta(part.Ref)
+		if err != nil {
+			logger.ErrorCF("whatsapp", "Failed to resolve media ref", map[string]any{
+				"ref":   part.Ref,
+				"error": err.Error(),
+			})
+			continue
+		}
+
+		data, err := os.ReadFile(localPath)
+		if err != nil {
+			logger.ErrorCF("whatsapp", "Failed to read media file", map[string]any{
+				"path":  localPath,
+				"error": err.Error(),
+			})
+			continue
+		}
+		if len(data) == 0 {
+			logger.ErrorCF("whatsapp", "Skipping empty media file", map[string]any{"path": localPath})
+			continue
+		}
+
+		filename := whatsappMediaFilename(part, meta, localPath)
+		contentType := whatsappMediaContentType(part, meta, localPath, data)
+		mediaType := whatsappMediaType(part, contentType)
+		observerContent := whatsappMediaObserverContent(part, filename, mediaType)
+		messageID := client.GenerateMessageID()
+
+		uploadResp, err := client.Upload(ctx, data, mediaType)
+		if err != nil {
+			for _, obs := range c.snapshotObservers() {
+				obs.OnOutbound(ctx, OutboundObservation{
+					ChatJID:   msg.ChatID,
+					Source:    source,
+					MessageID: messageID,
+					Content:   observerContent,
+					Timestamp: time.Now(),
+					Error:     err,
+				})
+			}
+			return nil, fmt.Errorf("whatsapp upload media: %w", channels.ErrTemporary)
+		}
+
+		waMsg := buildWhatsAppMediaMessage(part, filename, contentType, mediaType, uploadResp)
+		_, sendErr := client.SendMessage(ctx, to, waMsg, whatsmeow.SendRequestExtra{ID: messageID})
+		if sendErr != nil {
+			for _, obs := range c.snapshotObservers() {
+				obs.OnOutbound(ctx, OutboundObservation{
+					ChatJID:   msg.ChatID,
+					Source:    source,
+					MessageID: messageID,
+					Content:   observerContent,
+					Timestamp: time.Now(),
+					Error:     sendErr,
+				})
+			}
+			return nil, fmt.Errorf("whatsapp send media: %w", channels.ErrTemporary)
+		}
+
+		for _, obs := range c.snapshotObservers() {
+			obs.OnOutbound(ctx, OutboundObservation{
+				ChatJID:   msg.ChatID,
+				Source:    source,
+				MessageID: messageID,
+				Content:   observerContent,
+				Timestamp: time.Now(),
+			})
+		}
+		messageIDs = append(messageIDs, messageID)
+	}
+
+	if len(messageIDs) == 0 {
+		return nil, fmt.Errorf("no deliverable media parts: %w", channels.ErrSendFailed)
+	}
+	return messageIDs, nil
+}
+
+func whatsappMediaFilename(part bus.MediaPart, meta media.MediaMeta, localPath string) string {
+	filename := strings.TrimSpace(part.Filename)
+	if filename == "" {
+		filename = strings.TrimSpace(meta.Filename)
+	}
+	if filename == "" {
+		filename = filepath.Base(localPath)
+	}
+	if filename == "." || filename == string(filepath.Separator) {
+		return "attachment"
+	}
+	return filename
+}
+
+func whatsappMediaContentType(part bus.MediaPart, meta media.MediaMeta, localPath string, data []byte) string {
+	contentType := strings.TrimSpace(part.ContentType)
+	if contentType == "" {
+		contentType = strings.TrimSpace(meta.ContentType)
+	}
+	if contentType == "" {
+		contentType = strings.TrimSpace(mime.TypeByExtension(filepath.Ext(localPath)))
+	}
+	if contentType == "" && len(data) > 0 {
+		contentType = http.DetectContentType(data)
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	return contentType
+}
+
+func whatsappMediaType(part bus.MediaPart, contentType string) whatsmeow.MediaType {
+	switch strings.ToLower(strings.TrimSpace(part.Type)) {
+	case "image":
+		return whatsmeow.MediaImage
+	case "audio":
+		return whatsmeow.MediaAudio
+	case "video":
+		return whatsmeow.MediaVideo
+	case "file", "document":
+		return whatsmeow.MediaDocument
+	}
+
+	switch {
+	case strings.HasPrefix(contentType, "image/"):
+		return whatsmeow.MediaImage
+	case strings.HasPrefix(contentType, "audio/"):
+		return whatsmeow.MediaAudio
+	case strings.HasPrefix(contentType, "video/"):
+		return whatsmeow.MediaVideo
+	default:
+		return whatsmeow.MediaDocument
+	}
+}
+
+func buildWhatsAppMediaMessage(
+	part bus.MediaPart,
+	filename string,
+	contentType string,
+	mediaType whatsmeow.MediaType,
+	resp whatsmeow.UploadResponse,
+) *waE2E.Message {
+	caption := strings.TrimSpace(part.Caption)
+	switch mediaType {
+	case whatsmeow.MediaImage:
+		image := &waE2E.ImageMessage{
+			URL:           proto.String(resp.URL),
+			DirectPath:    proto.String(resp.DirectPath),
+			Mimetype:      proto.String(contentType),
+			MediaKey:      resp.MediaKey,
+			FileEncSHA256: resp.FileEncSHA256,
+			FileSHA256:    resp.FileSHA256,
+			FileLength:    proto.Uint64(resp.FileLength),
+		}
+		if caption != "" {
+			image.Caption = proto.String(caption)
+		}
+		return &waE2E.Message{ImageMessage: image}
+	case whatsmeow.MediaVideo:
+		video := &waE2E.VideoMessage{
+			URL:           proto.String(resp.URL),
+			DirectPath:    proto.String(resp.DirectPath),
+			Mimetype:      proto.String(contentType),
+			MediaKey:      resp.MediaKey,
+			FileEncSHA256: resp.FileEncSHA256,
+			FileSHA256:    resp.FileSHA256,
+			FileLength:    proto.Uint64(resp.FileLength),
+		}
+		if caption != "" {
+			video.Caption = proto.String(caption)
+		}
+		return &waE2E.Message{VideoMessage: video}
+	case whatsmeow.MediaAudio:
+		return &waE2E.Message{AudioMessage: &waE2E.AudioMessage{
+			URL:           proto.String(resp.URL),
+			DirectPath:    proto.String(resp.DirectPath),
+			Mimetype:      proto.String(contentType),
+			MediaKey:      resp.MediaKey,
+			FileEncSHA256: resp.FileEncSHA256,
+			FileSHA256:    resp.FileSHA256,
+			FileLength:    proto.Uint64(resp.FileLength),
+		}}
+	default:
+		doc := &waE2E.DocumentMessage{
+			URL:           proto.String(resp.URL),
+			DirectPath:    proto.String(resp.DirectPath),
+			Mimetype:      proto.String(contentType),
+			Title:         proto.String(filename),
+			FileName:      proto.String(filename),
+			MediaKey:      resp.MediaKey,
+			FileEncSHA256: resp.FileEncSHA256,
+			FileSHA256:    resp.FileSHA256,
+			FileLength:    proto.Uint64(resp.FileLength),
+		}
+		if caption != "" {
+			doc.Caption = proto.String(caption)
+		}
+		return &waE2E.Message{DocumentMessage: doc}
+	}
+}
+
+func whatsappMediaObserverContent(part bus.MediaPart, filename string, mediaType whatsmeow.MediaType) string {
+	if caption := strings.TrimSpace(part.Caption); caption != "" {
+		return caption
+	}
+	switch mediaType {
+	case whatsmeow.MediaImage:
+		return "[image] " + filename
+	case whatsmeow.MediaAudio:
+		return "[audio] " + filename
+	case whatsmeow.MediaVideo:
+		return "[video] " + filename
+	default:
+		return "[file] " + filename
+	}
 }
 
 // storeQRCode encodes the raw QR string as a PNG data URI and updates the snapshot.
@@ -736,7 +1054,8 @@ func (c *WhatsAppNativeChannel) HealthPath() string {
 //	POST /whatsapp_native/inbox/chats/{jid}/pause     → toggle agent pause
 //	POST /whatsapp_native/inbox/chats/{jid}/send      → send manual reply
 //	POST /whatsapp_native/inbox/chats/{jid}/read      → reset unread
-//	GET  /whatsapp_native/inbox/chats/{jid}/avatar    → fetch/cache avatar
+//	GET  /whatsapp_native/inbox/chats/{jid}/avatar    → fetch/cache avatar (cache-first)
+//	POST /whatsapp_native/inbox/chats/{jid}/avatar    → force-refresh avatar
 //	GET  /whatsapp_native/inbox/events                → SSE stream
 func (c *WhatsAppNativeChannel) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/whatsapp_native/")

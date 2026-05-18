@@ -223,6 +223,14 @@
       "url": "验证地址",
       "polling": "正在轮询登录状态...",
       "open": "打开验证页面"
+    },
+    "anthropicPaste": {
+      "title": "Anthropic 浏览器登录",
+      "description": "在 claude.ai 授权后，复制回调页面显示的代码并粘贴到下方。",
+      "openAuth": "打开授权页面",
+      "codeLabel": "代码 (格式: code#state)",
+      "hint": "最终 URL 是 https://console.anthropic.com/oauth/code/callback?code=XXX#YYY — 复制 ?code= 后的全部内容（包括 # 和 state）。",
+      "submit": "完成登录"
     }
   },
   "models": {
@@ -617,8 +625,17 @@
   "pages": {
     "orchestration": {
       "agents": "内部智能体",
+      "profile": "资料",
+      "agent_name": "名称",
+      "avatar_icon": "图标",
+      "avatar_initials": "首字母",
+      "avatar_background": "背景",
+      "avatar_foreground": "文字",
+      "avatar_image": "图片 URL",
       "main_allowlist": "主智能体权限",
-      "admin_jids_placeholder": "管理员 WhatsApp JID，每行一个",
+      "assistant_jids": "Sofia 授权号码",
+      "assistant_chats": "Sofia 授权群组",
+      "admin_jids_placeholder": "Sofia WhatsApp JID，每行一个",
       "saved": "编排已保存",
       "internal": "内部",
       "available": "可用",
@@ -733,6 +750,14 @@
       "editor": {
         "loading": "加载中…",
         "edit": "编辑配置",
+        "active": "已启用",
+        "inactive": "已停用",
+        "activate_agent": "启用智能体",
+        "deactivate_agent": "停用智能体",
+        "activate_success": "智能体已启用。",
+        "deactivate_success": "智能体已停用。",
+        "toggle_active_error": "无法更新智能体状态。",
+        "default_agent_must_stay_active": "默认智能体必须保持启用。",
         "raw_json": "原始 JSON",
         "raw_json_title": "智能体原始 JSON",
         "raw_json_description": "用于编辑保存到该智能体工作区的完整配置载荷。",
@@ -748,6 +773,7 @@
         "empty_description": "请先应用一个模板以生成初始配置；之后可在此处编辑全部内容：排班、专业人员、产品、技能、行为等。",
         "go_to_templates": "前往模板",
         "summary": {
+          "status": "状态",
           "template": "已应用模板",
           "tone": "语气",
           "language": "语言",

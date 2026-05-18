@@ -28,13 +28,130 @@ func TestOAuthLoginRejectsUnsupportedMethod(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/api/oauth/login",
-		strings.NewReader(`{"provider":"anthropic","method":"browser"}`),
+		strings.NewReader(`{"provider":"anthropic","method":"device_code"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+func TestOAuthAnthropicBrowserFlowIsManualPaste(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+	resetOAuthHooks(t)
+
+	oauthGeneratePKCE = func() (auth.PKCECodes, error) {
+		return auth.PKCECodes{CodeVerifier: "verifier-a", CodeChallenge: "challenge-a"}, nil
+	}
+	oauthGenerateState = func() (string, error) { return "state-a", nil }
+	oauthBuildAuthorizeURL = func(cfg auth.OAuthProviderConfig, pkce auth.PKCECodes, state, redirectURI string) string {
+		if redirectURI != auth.AnthropicPasteRedirectURI {
+			t.Fatalf("redirect_uri = %q, want %q", redirectURI, auth.AnthropicPasteRedirectURI)
+		}
+		return "https://claude.ai/oauth/authorize?state=" + state
+	}
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/oauth/login",
+		strings.NewReader(`{"provider":"anthropic","method":"browser"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var loginResp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &loginResp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got, _ := loginResp["manual_paste"].(bool); !got {
+		t.Fatalf("manual_paste = %v, want true (resp=%v)", loginResp["manual_paste"], loginResp)
+	}
+	if got, _ := loginResp["redirect_uri"].(string); got != auth.AnthropicPasteRedirectURI {
+		t.Fatalf("redirect_uri = %q, want %q", got, auth.AnthropicPasteRedirectURI)
+	}
+}
+
+func TestOAuthSubmitAnthropicPasteExchangesAndPersists(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+	resetOAuthHooks(t)
+
+	oauthExchangeCodeForTokensWithState = func(
+		cfg auth.OAuthProviderConfig, code, codeVerifier, state, redirectURI string,
+	) (*auth.AuthCredential, error) {
+		if code != "abc123" {
+			t.Fatalf("code = %q, want abc123", code)
+		}
+		if state != "state-a" {
+			t.Fatalf("state = %q, want state-a (must be forwarded to anthropic /v1/oauth/token)", state)
+		}
+		if redirectURI != auth.AnthropicPasteRedirectURI {
+			t.Fatalf("redirect_uri = %q, want anthropic paste URI", redirectURI)
+		}
+		return &auth.AuthCredential{
+			AccessToken:  "sk-ant-oat01-test",
+			RefreshToken: "sk-ant-ort01-test",
+			Provider:     oauthProviderAnthropic,
+			AuthMethod:   "oauth",
+		}, nil
+	}
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	now := time.Now()
+	h.storeOAuthFlow(&oauthFlow{
+		ID:           "anth-flow",
+		Provider:     oauthProviderAnthropic,
+		Method:       oauthMethodBrowser,
+		Status:       oauthFlowPending,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+		ExpiresAt:    now.Add(10 * time.Minute),
+		CodeVerifier: "verifier-a",
+		OAuthState:   "state-a",
+		RedirectURI:  auth.AnthropicPasteRedirectURI,
+		ManualPaste:  true,
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/oauth/flows/anth-flow/submit",
+		strings.NewReader(`{"paste":"abc123#state-a"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var flowResp oauthFlowResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &flowResp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if flowResp.Status != oauthFlowSuccess {
+		t.Fatalf("flow status = %q, want %q", flowResp.Status, oauthFlowSuccess)
+	}
+
+	cred, err := auth.GetCredential(oauthProviderAnthropic)
+	if err != nil {
+		t.Fatalf("GetCredential: %v", err)
+	}
+	if cred == nil || cred.AccessToken != "sk-ant-oat01-test" {
+		t.Fatalf("credential = %+v, want access token persisted", cred)
 	}
 }
 
@@ -262,6 +379,116 @@ func TestOAuthLogoutClearsAuthMethodForExplicitProviderField(t *testing.T) {
 	}
 }
 
+func TestGitHubCopilotLoginCreatesNativeCopilotModel(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+	resetOAuthHooks(t)
+
+	h := NewHandler(configPath)
+	if err := h.persistCredentialAndConfig(oauthProviderGitHubCopilot, oauthMethodGHCLI, &auth.AuthCredential{
+		AccessToken: "gho-test",
+		AuthMethod:  oauthMethodGHCLI,
+	}); err != nil {
+		t.Fatalf("persistCredentialAndConfig error: %v", err)
+	}
+
+	updated, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig error: %v", err)
+	}
+	var got *config.ModelConfig
+	for _, m := range updated.ModelList {
+		if m.ModelName == "copilot-gpt-4.1" {
+			got = m
+			break
+		}
+	}
+	if got == nil {
+		t.Fatalf("copilot model was not created")
+	}
+	if got.Provider != "github-copilot" {
+		t.Fatalf("provider = %q, want github-copilot", got.Provider)
+	}
+	if got.Model != "gpt-4.1" {
+		t.Fatalf("model = %q, want gpt-4.1", got.Model)
+	}
+	if got.APIBase != "" {
+		t.Fatalf("api_base = %q, want empty", got.APIBase)
+	}
+	if got.ConnectMode != "grpc" {
+		t.Fatalf("connect_mode = %q, want grpc", got.ConnectMode)
+	}
+	if got.AuthMethod != oauthMethodGHCLI {
+		t.Fatalf("auth_method = %q, want %q", got.AuthMethod, oauthMethodGHCLI)
+	}
+	if got.APIKey() != "" {
+		t.Fatalf("api key should not be written into github-copilot model config")
+	}
+}
+
+func TestGitHubCopilotLoginMigratesLegacyGitHubModelsConfig(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+	resetOAuthHooks(t)
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig error: %v", err)
+	}
+	cfg.ModelList = append(cfg.ModelList, &config.ModelConfig{
+		ModelName:  "github-gpt-4o",
+		Provider:   "github-models",
+		Model:      "gpt-4o",
+		APIBase:    "https://models.inference.ai.azure.com",
+		AuthMethod: "token",
+		APIKeys:    config.SimpleSecureStrings("legacy-token"),
+	})
+	if err = config.SaveConfig(configPath, cfg); err != nil {
+		t.Fatalf("SaveConfig error: %v", err)
+	}
+
+	h := NewHandler(configPath)
+	if err = h.persistCredentialAndConfig(oauthProviderGitHubCopilot, oauthMethodGHCLI, &auth.AuthCredential{
+		AccessToken: "gho-test",
+		AuthMethod:  oauthMethodGHCLI,
+	}); err != nil {
+		t.Fatalf("persistCredentialAndConfig error: %v", err)
+	}
+
+	updated, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig error: %v", err)
+	}
+	var got *config.ModelConfig
+	for _, m := range updated.ModelList {
+		if m.ModelName == "github-gpt-4o" {
+			got = m
+			break
+		}
+	}
+	if got == nil {
+		t.Fatalf("legacy github model missing after migration")
+	}
+	if got.Provider != "github-copilot" {
+		t.Fatalf("provider = %q, want github-copilot", got.Provider)
+	}
+	if got.Model != "gpt-4.1" {
+		t.Fatalf("model = %q, want gpt-4.1", got.Model)
+	}
+	if got.APIBase != "" {
+		t.Fatalf("api_base = %q, want empty", got.APIBase)
+	}
+	if got.ConnectMode != "grpc" {
+		t.Fatalf("connect_mode = %q, want grpc", got.ConnectMode)
+	}
+	if got.AuthMethod != oauthMethodGHCLI {
+		t.Fatalf("auth_method = %q, want %q", got.AuthMethod, oauthMethodGHCLI)
+	}
+	if got.APIKey() != "" {
+		t.Fatalf("legacy github-models API key should be removed after migration")
+	}
+}
+
 func setupOAuthTestEnv(t *testing.T) (string, func()) {
 	t.Helper()
 
@@ -310,6 +537,7 @@ func resetOAuthHooks(t *testing.T) {
 	origRequestDeviceCode := oauthRequestDeviceCode
 	origPollDeviceCodeOnce := oauthPollDeviceCodeOnce
 	origExchangeCodeForTokens := oauthExchangeCodeForTokens
+	origExchangeCodeForTokensWithState := oauthExchangeCodeForTokensWithState
 	origGetCredential := oauthGetCredential
 	origSetCredential := oauthSetCredential
 	origDeleteCredential := oauthDeleteCredential
@@ -326,6 +554,7 @@ func resetOAuthHooks(t *testing.T) {
 		oauthRequestDeviceCode = origRequestDeviceCode
 		oauthPollDeviceCodeOnce = origPollDeviceCodeOnce
 		oauthExchangeCodeForTokens = origExchangeCodeForTokens
+		oauthExchangeCodeForTokensWithState = origExchangeCodeForTokensWithState
 		oauthGetCredential = origGetCredential
 		oauthSetCredential = origSetCredential
 		oauthDeleteCredential = origDeleteCredential

@@ -1,8 +1,10 @@
-import { Link, Outlet, useLocation } from "react-router-dom";
-import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, SlidersHorizontal, ClipboardList, UserCog, LayoutDashboard } from "lucide-react";
+import { Link, Outlet, useLocation, useParams } from "react-router-dom";
+import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, SlidersHorizontal, ClipboardList, UserCog, LayoutDashboard, FileText } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { getTenant } from "@/api/tenants";
 
 export type CrmView = "contacts" | "companies" | "deals";
 
@@ -15,8 +17,24 @@ const CRM_VIEWS: { view: CrmView; label: string; icon: React.ReactNode }[] = [
 export function Layout() {
   const { signOut, status } = useAuth();
   const loc = useLocation();
+  const params = useParams<{ id?: string }>();
   const inCrm = loc.pathname.startsWith("/crm");
   const inProfiles = loc.pathname.startsWith("/launcher-profiles");
+  const inTenant = loc.pathname.startsWith("/tenants/");
+  // When navigating within a tenant route, params.id may not be populated here
+  // since Layout renders outside the nested route. Extract id from pathname directly.
+  const tenantIdFromPath = inTenant
+    ? (loc.pathname.split("/")[2] ?? null)
+    : null;
+  const tenantId = params.id ?? tenantIdFromPath;
+
+  const tenantQuery = useQuery({
+    queryKey: ["tenant", tenantId],
+    queryFn: () => getTenant(tenantId!),
+    enabled: !!tenantId,
+    staleTime: 60_000,
+  });
+  const tenantData = tenantQuery.data;
   const isPlatformAdmin =
     status.state === "authenticated" && status.me.platform_role === "platform_admin";
 
@@ -37,9 +55,20 @@ export function Layout() {
             Tenants
           </SideLink>
 
+          {tenantId && tenantData && (
+            <div className="mx-4 mb-1 truncate rounded bg-zinc-800/50 px-2 py-1 text-[10px] text-zinc-400">
+              {tenantData.subdomain}
+            </div>
+          )}
+
           {isPlatformAdmin && (
             <SideLink to="/launcher-profiles" icon={<SlidersHorizontal className="h-4 w-4" />} active={inProfiles}>
               Launcher profiles
+            </SideLink>
+          )}
+          {isPlatformAdmin && (
+            <SideLink to="/intakes" icon={<FileText className="h-4 w-4" />} active={loc.pathname === "/intakes"}>
+              Pré-cadastros
             </SideLink>
           )}
           {isPlatformAdmin && (

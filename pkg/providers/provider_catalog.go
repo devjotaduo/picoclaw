@@ -50,7 +50,7 @@ var attachedModelProviderMetaByName = map[string]attachedModelProviderMeta{
 	"claude-cli": {createAllowed: true, defaultModelAllowed: true},
 	"codex-cli":  {createAllowed: true, defaultModelAllowed: true},
 	"github-copilot": {
-		protocolMeta:        protocolMeta{defaultAPIBase: "localhost:4321"},
+		protocolMeta:        protocolMeta{},
 		createAllowed:       true,
 		defaultModelAllowed: true,
 	},

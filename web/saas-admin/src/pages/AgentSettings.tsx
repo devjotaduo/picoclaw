@@ -139,13 +139,26 @@ export function AgentSettings() {
         </div>
       </header>
 
+      {/* Sticky save bar — only visible when there are unsaved changes */}
+      {dirty && (
+        <div className="sticky top-0 z-20 mb-4 flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-950/40 px-4 py-2 backdrop-blur">
+          <span className="text-xs text-amber-300">You have unsaved changes.</span>
+          <Button size="sm" onClick={() => saveM.mutate()} disabled={saveM.isPending}>
+            <Save className="h-3.5 w-3.5" />
+            {saveM.isPending ? "Saving…" : "Save now"}
+          </Button>
+        </div>
+      )}
+
       <Card className="mb-4">
         <CardHeader>
           <CardTitle>Identity</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
-            <Label htmlFor="agent-name">Name</Label>
+            <Label htmlFor="agent-name">
+              Name <span className="text-zinc-500 text-xs">*</span>
+            </Label>
             <Input
               id="agent-name"
               value={form.name}
@@ -210,7 +223,14 @@ export function AgentSettings() {
       <Card className="mb-4">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Skills enabled in this agent</span>
+            <span className="flex items-center gap-2">
+              Skills enabled in this agent
+              {allSkills.length > 0 && (
+                <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-normal text-zinc-400">
+                  {activeSkills.size} of {allSkills.length} enabled
+                </span>
+              )}
+            </span>
             <Link to={`/tenants/${id}/skills`} className="text-xs font-normal text-zinc-500 hover:text-zinc-200">
               Manage all skills →
             </Link>

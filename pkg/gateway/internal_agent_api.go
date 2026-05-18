@@ -10,10 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/sipeed/picoclaw/internal/orchestrator"
 	"github.com/sipeed/picoclaw/pkg/agent"
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/channels"
-	"github.com/sipeed/picoclaw/pkg/routing"
 )
 
 type internalAgentTurnRequest struct {
@@ -56,7 +56,7 @@ func handleInternalAgentTurn(w http.ResponseWriter, r *http.Request, al *agent.A
 		writeInternalAgentError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	agentID := routing.NormalizeAgentID(body.AgentID)
+	agentID := orchestrator.CanonicalAgentID(body.AgentID)
 	content := strings.TrimSpace(body.Content)
 	if agentID == "" || content == "" {
 		writeInternalAgentError(w, http.StatusBadRequest, "agent_id and content are required")

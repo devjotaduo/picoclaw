@@ -1,4 +1,4 @@
-const BASE = "/api/v1";
+import { api } from "./client";
 
 export interface PlatformStats {
   active_tenants: number;
@@ -24,34 +24,22 @@ export interface PlatformUser {
 }
 
 export async function getPlatformStats(): Promise<PlatformStats> {
-  const res = await fetch(`${BASE}/platform/stats`, { credentials: "include" });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return api<PlatformStats>("/api/v1/platform/stats");
 }
 
 export async function getPlatformTimeseries(days = 30): Promise<{ points: TimeseriesPoint[] }> {
-  const res = await fetch(`${BASE}/platform/usage-timeseries?days=${days}`, {
-    credentials: "include",
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return api<{ points: TimeseriesPoint[] }>(`/api/v1/platform/usage-timeseries?days=${days}`);
 }
 
 export async function listUsers(): Promise<{ users: PlatformUser[] }> {
-  const res = await fetch(`${BASE}/users`, { credentials: "include" });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return api<{ users: PlatformUser[] }>("/api/v1/users");
 }
 
 export async function invitePlatformAdmin(
   email: string,
 ): Promise<{ token: string; email: string; expires_at: string }> {
-  const res = await fetch(`${BASE}/platform/invite-admin`, {
+  return api<{ token: string; email: string; expires_at: string }>("/api/v1/platform/invite-admin", {
     method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
 }

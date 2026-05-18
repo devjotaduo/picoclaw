@@ -216,10 +216,16 @@ func (h *launcherAuthHandlers) handleSetup(w http.ResponseWriter, r *http.Reques
 	}
 
 	// If already initialized, require an active session (change-password flow).
+	// In trusted-gateway mode the controlplane provides auth via HMAC headers
+	// (validated by the middleware); no local session cookie is issued in that
+	// path, so we also accept requests that carry valid gateway claims.
 	if initialized {
 		authed := false
 		if c, err := r.Cookie(middleware.LauncherDashboardCookieName); err == nil {
 			authed = subtle.ConstantTimeCompare([]byte(c.Value), []byte(h.sessionCookie)) == 1
+		}
+		if !authed {
+			_, authed = middleware.TrustedGatewayClaims(r)
 		}
 		if !authed {
 			w.WriteHeader(http.StatusUnauthorized)

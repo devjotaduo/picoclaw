@@ -1,5 +1,23 @@
+import {
+  IconBrandWhatsapp,
+  IconBuilding,
+  IconCamera,
+  IconCheck,
+  IconCircleOff,
+  IconInbox,
+  IconInfoCircle,
+  IconLoader2,
+  IconMapPin,
+  IconMessageCircle,
+  IconPhone,
+  IconRefresh,
+  IconSearch,
+  IconTags,
+  IconUser,
+  IconX,
+} from "@tabler/icons-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
@@ -9,28 +27,53 @@ import {
   type WhatsAppContactProfile,
   type WhatsAppConversationInsight,
   type WhatsAppMessage,
+  fetchWhatsAppAvatar,
   getWhatsAppContactProfile,
   getWhatsAppConversationInsight,
   listWhatsAppChats,
   listWhatsAppMessages,
   markWhatsAppChatRead,
-  openInboxStream,
   pauseWhatsAppChat,
+  saveWhatsAppContactProfile,
   sendWhatsAppManual,
 } from "@/api/whatsapp"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import { Textarea } from "@/components/ui/textarea"
+import { useAgentAutoPause } from "@/hooks/whatsapp/use-agent-auto-pause"
+import { useInboxConnection } from "@/hooks/whatsapp/use-inbox-connection"
+import { usePendingMessages } from "@/hooks/whatsapp/use-pending-messages"
+import { formatJID } from "@/lib/whatsapp/format"
+
+import { ChatHeader } from "./chat/chat-header"
+import { ContactAvatar } from "./chat/contact-avatar"
+import { ConversationListItem } from "./chat/conversation-list-item"
+import { InboxSettingsMenu } from "./chat/inbox-settings-menu"
+import { MessageList } from "./chat/message-list"
+import { TagList } from "./chat/tag-list"
 
 const CHATS_QUERY_KEY = ["whatsapp", "chats"]
 const messagesQueryKey = (jid: string) => ["whatsapp", "messages", jid]
+
+// ─── main page ────────────────────────────────────────────────────────────────
 
 export function WhatsAppInboxPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [selectedJID, setSelectedJID] = useState<string | null>(null)
   const [draft, setDraft] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [mobileView, setMobileView] = useState<"list" | "chat">("list")
 
   const chatsQuery = useQuery({
     queryKey: CHATS_QUERY_KEY,
@@ -44,10 +87,9 @@ export function WhatsAppInboxPage() {
     enabled: !!selectedJID,
   })
 
-  // Live updates via SSE — bypasses React Query polling so messages appear
-  // the moment whatsmeow receives them.
-  useEffect(() => {
-    const close = openInboxStream((evt: InboxEvent) => {
+  // Live SSE updates with connection-status tracking.
+  const handleInboxEvent = useCallback(
+    (evt: InboxEvent) => {
       if (evt.kind === "message" && evt.message) {
         const jid = evt.message.chat_jid
         queryClient.setQueryData<WhatsAppMessage[]>(
@@ -55,13 +97,20 @@ export function WhatsAppInboxPage() {
           (prev) => {
             if (!prev) return prev
             if (prev.some((m) => m.id === evt.message!.id)) return prev
-            return [evt.message!, ...prev]
+            // Drop matching optimistic entries (negative id with same content).
+            const cleaned = prev.filter(
+              (m) =>
+                !(
+                  m.id < 0 &&
+                  m.direction === "out" &&
+                  m.content.trim() === evt.message!.content.trim()
+                ),
+            )
+            return [evt.message!, ...cleaned]
           },
         )
       }
       if (evt.chat) {
-        // Merge the updated chat row into the cached list while preserving
-        // ordering (the backend already orders by last_message_ts DESC).
         queryClient.setQueryData<WhatsAppChat[]>(CHATS_QUERY_KEY, (prev) => {
           if (!prev) return prev
           const others = prev.filter((c) => c.jid !== evt.chat!.jid)
@@ -70,11 +119,15 @@ export function WhatsAppInboxPage() {
           return next
         })
       }
-    })
-    return close
-  }, [queryClient])
+    },
+    [queryClient],
+  )
+  const { status: connectionStatus } = useInboxConnection(handleInboxEvent)
 
-  // Mark-read on chat open: bumps unread back to 0 and refreshes the row.
+  // Track optimistic message keys so MessageBubble renders the clock icon.
+  const { pending: pendingIds, add: addPending } = usePendingMessages()
+
+  // Mark read on chat open.
   useEffect(() => {
     if (!selectedJID) return
     markWhatsAppChatRead(selectedJID)
@@ -95,59 +148,145 @@ export function WhatsAppInboxPage() {
   const pauseMutation = useMutation({
     mutationFn: ({ jid, paused }: { jid: string; paused: boolean }) =>
       pauseWhatsAppChat(jid, paused),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
+      // Optimistically update the chat cache so the toggle feels instant.
+      queryClient.setQueryData<WhatsAppChat[]>(CHATS_QUERY_KEY, (prev) => {
+        if (!prev) return prev
+        return prev.map((c) =>
+          c.jid === vars.jid ? { ...c, paused: vars.paused } : c,
+        )
+      })
       void queryClient.invalidateQueries({ queryKey: CHATS_QUERY_KEY })
     },
-    onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : String(err))
-    },
+    onError: (err: unknown) =>
+      toast.error(err instanceof Error ? err.message : String(err)),
   })
 
   const sendMutation = useMutation({
     mutationFn: ({ jid, content }: { jid: string; content: string }) =>
       sendWhatsAppManual(jid, content),
-    onSuccess: () => {
-      setDraft("")
-      if (selectedJID) {
-        void queryClient.invalidateQueries({
-          queryKey: messagesQueryKey(selectedJID),
-        })
-      }
+    onMutate: ({ jid, content }) => {
+      const tempId = -Date.now()
+      addPending(tempId)
+      queryClient.setQueryData<WhatsAppMessage[]>(
+        messagesQueryKey(jid),
+        (prev) => {
+          const optimistic: WhatsAppMessage = {
+            id: tempId,
+            chat_jid: jid,
+            direction: "out",
+            source: "human",
+            content,
+            ts: Date.now(),
+            delivered: false,
+            status: "pending",
+          }
+          return prev ? [optimistic, ...prev] : [optimistic]
+        },
+      )
+      return { tempId }
     },
-    onError: (err: unknown) => {
+    onSuccess: (_data, vars) => {
+      setDraft("")
+      void queryClient.invalidateQueries({
+        queryKey: messagesQueryKey(vars.jid),
+      })
+    },
+    onError: (err: unknown, vars, context) => {
       toast.error(err instanceof Error ? err.message : String(err))
+      // Roll back the optimistic bubble.
+      if (context?.tempId != null) {
+        queryClient.setQueryData<WhatsAppMessage[]>(
+          messagesQueryKey(vars.jid),
+          (prev) => prev?.filter((m) => m.id !== context.tempId) ?? prev,
+        )
+      }
     },
   })
 
+  const handleAutoPauseChange = useCallback(
+    (paused: boolean) => {
+      if (selectedJID) pauseMutation.mutate({ jid: selectedJID, paused })
+    },
+    [pauseMutation, selectedJID],
+  )
+
+  // Auto-pause lives at the page level so we can render the chip in the
+  // header while the textarea (which fires `notifyTyping`) lives in the
+  // composer. The hook itself only flips server state through onChange.
+  const { autoPaused, notifyTyping, resumeNow } = useAgentAutoPause({
+    paused: selectedChat?.paused ?? false,
+    onChange: handleAutoPauseChange,
+    enabled: !!selectedChat,
+  })
+
+  function handleSelectChat(jid: string) {
+    setSelectedJID(jid)
+    setDraft("")
+    setMobileView("chat")
+  }
+  function handleBackToList() {
+    setMobileView("list")
+  }
+
+  const unreadTotal = useMemo(
+    () => sortedChats.reduce((sum, c) => sum + (c.unread_count > 0 ? 1 : 0), 0),
+    [sortedChats],
+  )
+
   return (
     <div className="flex h-full flex-col">
-      <PageHeader title={t("navigation.whatsapp_inbox", "WhatsApp Inbox")} />
+      <PageHeader title={t("navigation.whatsapp_inbox", "Caixa WhatsApp")}>
+        <InboxSettingsMenu
+          onRefresh={() =>
+            void queryClient.invalidateQueries({ queryKey: CHATS_QUERY_KEY })
+          }
+          isRefreshing={chatsQuery.isFetching}
+        />
+      </PageHeader>
+
       <div className="flex-1 overflow-hidden">
-        <div className="grid h-full grid-cols-[320px_1fr] border-t">
-          <ChatsSidebar
+        <div className="h-full lg:grid lg:grid-cols-[340px_minmax(0,1fr)]">
+          <ConversationList
             chats={sortedChats}
             selectedJID={selectedJID}
-            onSelect={setSelectedJID}
+            onSelect={handleSelectChat}
             loading={chatsQuery.isLoading}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            unreadTotal={unreadTotal}
+            hidden={mobileView === "chat"}
           />
-          <ConversationPane
+
+          <ConversationPanel
             chat={selectedChat}
             messages={messagesQuery.data ?? []}
             loadingMessages={messagesQuery.isLoading}
             draft={draft}
-            onDraftChange={setDraft}
+            onDraftChange={(v) => {
+              setDraft(v)
+              if (v.trim()) notifyTyping()
+            }}
             onSend={() => {
               if (selectedJID && draft.trim()) {
-                sendMutation.mutate({ jid: selectedJID, content: draft.trim() })
+                sendMutation.mutate({
+                  jid: selectedJID,
+                  content: draft.trim(),
+                })
               }
             }}
             sending={sendMutation.isPending}
             onTogglePause={(paused) => {
-              if (selectedJID) {
+              if (selectedJID)
                 pauseMutation.mutate({ jid: selectedJID, paused })
-              }
             }}
             togglingPause={pauseMutation.isPending}
+            connectionStatus={connectionStatus}
+            autoPaused={autoPaused}
+            onResume={resumeNow}
+            pendingIds={pendingIds}
+            onBack={handleBackToList}
+            hidden={mobileView === "list"}
           />
         </div>
       </div>
@@ -155,123 +294,173 @@ export function WhatsAppInboxPage() {
   )
 }
 
-interface ChatsSidebarProps {
-  chats: WhatsAppChat[]
-  selectedJID: string | null
-  onSelect: (jid: string) => void
-  loading: boolean
-}
+// ─── conversation list (left panel) ──────────────────────────────────────────
 
-function ChatsSidebar({
+function ConversationList({
   chats,
   selectedJID,
   onSelect,
   loading,
-}: ChatsSidebarProps) {
+  searchQuery,
+  onSearchChange,
+  unreadTotal,
+  hidden,
+}: {
+  chats: WhatsAppChat[]
+  selectedJID: string | null
+  onSelect: (jid: string) => void
+  loading: boolean
+  searchQuery: string
+  onSearchChange: (v: string) => void
+  unreadTotal: number
+  hidden: boolean
+}) {
   const { t } = useTranslation()
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  const filteredChats = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return chats
+    return chats.filter(
+      (c) =>
+        (c.display_name ?? "").toLowerCase().includes(q) ||
+        (c.push_name ?? "").toLowerCase().includes(q) ||
+        formatJID(c.jid).toLowerCase().includes(q),
+    )
+  }, [chats, searchQuery])
+
+  const hasSearch = searchQuery.trim() !== ""
 
   return (
-    <aside className="bg-muted/20 flex h-full min-h-0 flex-col border-r">
-      <div className="border-b px-4 py-3">
-        <h2 className="text-sm font-semibold tracking-tight">
-          {t("pages.agent.whatsapp.chats", "Conversas")}
-        </h2>
-        <p className="text-muted-foreground text-xs">
-          {chats.length} {t("pages.agent.whatsapp.chats_count", "contatos")}
-        </p>
+    <aside
+      className={`border-border/40 bg-background flex h-full min-h-0 flex-col border-r ${
+        hidden ? "hidden lg:flex" : "flex"
+      }`}
+      aria-label="Lista de conversas"
+    >
+      <div className="border-border/40 flex items-center justify-between gap-2 border-b px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-[#25d366]/10">
+            <IconBrandWhatsapp className="size-4 text-[#25d366]" />
+          </div>
+          <div>
+            <h2 className="text-sm leading-none font-semibold">
+              {t("pages.agent.whatsapp.chats", "Conversas")}
+            </h2>
+            <p className="text-foreground/65 mt-0.5 text-[12px]">
+              {loading ? "…" : `${chats.length} contatos`}
+              {unreadTotal > 0 && (
+                <span className="ml-1.5 font-medium text-[#25d366]">
+                  · {unreadTotal} não lidas
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {loading && chats.length === 0 ? (
-          <div className="text-muted-foreground p-4 text-sm">
-            {t("common.loading", "Carregando...")}
-          </div>
-        ) : chats.length === 0 ? (
-          <div className="text-muted-foreground p-4 text-sm">
-            {t(
-              "pages.agent.whatsapp.empty",
-              "Nenhuma conversa ainda. Quando alguém mandar mensagem, aparece aqui.",
+
+      <div className="border-border/40 border-b px-3 py-2.5">
+        <div className="relative">
+          <IconSearch className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+          <input
+            ref={searchRef}
+            type="search"
+            role="searchbox"
+            aria-label="Buscar conversas"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder={t(
+              "pages.agent.whatsapp.search_placeholder",
+              "Buscar nome, telefone…",
             )}
-          </div>
+            className="border-border/60 bg-muted/30 placeholder:text-muted-foreground/60 focus:ring-primary/20 w-full rounded-xl border py-2 pr-8 pl-8 text-xs outline-none transition-shadow focus:ring-2"
+          />
+          {hasSearch && (
+            <button
+              type="button"
+              onClick={() => {
+                onSearchChange("")
+                searchRef.current?.focus()
+              }}
+              className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2 transition-colors"
+              aria-label="Limpar busca"
+            >
+              <IconX className="size-3.5" />
+            </button>
+          )}
+        </div>
+        {hasSearch && (
+          <p className="text-foreground/55 mt-1.5 px-1 text-[11px]">
+            {filteredChats.length === 0
+              ? "Nenhum contato encontrado"
+              : `${filteredChats.length} de ${chats.length} conversa${filteredChats.length !== 1 ? "s" : ""}`}
+          </p>
+        )}
+      </div>
+
+      <div
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        role="list"
+        aria-label="Conversas"
+      >
+        {loading && chats.length === 0 ? (
+          <ConversationListSkeleton />
+        ) : chats.length === 0 ? (
+          <EmptyListState />
+        ) : filteredChats.length === 0 ? (
+          <SearchEmptyState query={searchQuery} />
         ) : (
-          <ul className="divide-border/40 divide-y">
-            {chats.map((chat) => (
-              <ChatRow
+          <div className="space-y-0 py-1">
+            {filteredChats.map((chat) => (
+              <ConversationListItem
                 key={chat.jid}
                 chat={chat}
-                active={chat.jid === selectedJID}
-                onClick={() => onSelect(chat.jid)}
+                selected={chat.jid === selectedJID}
+                onSelect={() => onSelect(chat.jid)}
               />
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </aside>
   )
 }
 
-function ChatRow({
-  chat,
-  active,
-  onClick,
-}: {
-  chat: WhatsAppChat
-  active: boolean
-  onClick: () => void
-}) {
-  const displayName = chat.display_name || chat.push_name || formatJID(chat.jid)
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onClick}
-        className={
-          "flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors " +
-          (active ? "bg-primary/10" : "hover:bg-muted/40")
-        }
-      >
-        <Avatar name={displayName} url={chat.avatar_url} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-sm font-medium">{displayName}</span>
-            <span className="text-muted-foreground shrink-0 text-[10px]">
-              {formatRelativeTS(chat.last_message_ts)}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            {chat.paused ? (
-              <span className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-amber-600 uppercase ring-1 ring-amber-500/30 ring-inset dark:text-amber-400">
-                pausado
-              </span>
-            ) : null}
-            <p className="text-muted-foreground line-clamp-1 flex-1 text-xs">
-              {chat.last_direction === "out" ? "✓ " : ""}
-              {chat.last_preview || "—"}
-            </p>
-            {chat.unread_count > 0 && !active ? (
-              <span className="bg-primary text-primary-foreground shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
-                {chat.unread_count}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      </button>
-    </li>
-  )
-}
+// ─── conversation panel (right) ──────────────────────────────────────────────
 
-interface ConversationPaneProps {
+function ConversationPanel(props: {
   chat: WhatsAppChat | null
   messages: WhatsAppMessage[]
   loadingMessages: boolean
   draft: string
-  onDraftChange: (value: string) => void
+  onDraftChange: (v: string) => void
   onSend: () => void
   sending: boolean
   onTogglePause: (paused: boolean) => void
   togglingPause: boolean
+  connectionStatus: ReturnType<typeof useInboxConnection>["status"]
+  autoPaused: boolean
+  onResume: () => void
+  pendingIds: ReadonlySet<number | string>
+  onBack: () => void
+  hidden: boolean
+}) {
+  if (!props.chat) {
+    return (
+      <section
+        className={`bg-muted/5 flex h-full items-center justify-center ${
+          props.hidden ? "hidden lg:flex" : "flex"
+        }`}
+        aria-label="Painel de conversa"
+      >
+        <EmptyConversationState />
+      </section>
+    )
+  }
+  return <ConversationView {...props} chat={props.chat} />
 }
 
-function ConversationPane({
+function ConversationView({
   chat,
   messages,
   loadingMessages,
@@ -281,133 +470,169 @@ function ConversationPane({
   sending,
   onTogglePause,
   togglingPause,
-}: ConversationPaneProps) {
+  connectionStatus,
+  autoPaused,
+  onResume,
+  pendingIds,
+  onBack,
+  hidden,
+}: {
+  chat: WhatsAppChat
+  messages: WhatsAppMessage[]
+  loadingMessages: boolean
+  draft: string
+  onDraftChange: (v: string) => void
+  onSend: () => void
+  sending: boolean
+  onTogglePause: (paused: boolean) => void
+  togglingPause: boolean
+  connectionStatus: ReturnType<typeof useInboxConnection>["status"]
+  autoPaused: boolean
+  onResume: () => void
+  pendingIds: ReadonlySet<number | string>
+  onBack: () => void
+  hidden: boolean
+}) {
   const { t } = useTranslation()
-  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const queryClient = useQueryClient()
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false)
 
-  useEffect(() => {
-    // Auto-scroll to the bottom on new messages — messages are stored newest
-    // first but we reverse for display so the newest is at the bottom.
-    if (!scrollRef.current) return
-    scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [messages.length, chat?.jid])
+  const displayName = chat.display_name || chat.push_name || formatJID(chat.jid)
+  const orderedMessages = useMemo(() => [...messages].reverse(), [messages])
 
-  const activeJID = chat?.jid ?? ""
+  const avatarQuery = useQuery({
+    queryKey: ["whatsapp", "avatar", chat.jid],
+    queryFn: () => fetchWhatsAppAvatar(chat.jid),
+    retry: false,
+    staleTime: 4 * 60 * 1000,
+  })
+  const avatarUrl = avatarQuery.data?.url ?? chat.avatar_url
+
+  const refreshAvatarMutation = useMutation({
+    mutationFn: () => fetchWhatsAppAvatar(chat.jid, true),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["whatsapp", "avatar", chat.jid], data)
+      toast.success("Foto de perfil atualizada")
+    },
+    onError: () => toast.error("Não foi possível atualizar a foto"),
+  })
+
   const profileQuery = useQuery({
-    queryKey: ["whatsapp", "profile", activeJID],
-    queryFn: () => getWhatsAppContactProfile(activeJID),
-    enabled: activeJID !== "",
+    queryKey: ["whatsapp", "profile", chat.jid],
+    queryFn: () => getWhatsAppContactProfile(chat.jid),
     retry: false,
   })
   const insightQuery = useQuery({
-    queryKey: ["whatsapp", "insights", activeJID],
-    queryFn: () => getWhatsAppConversationInsight(activeJID),
-    enabled: activeJID !== "",
+    queryKey: ["whatsapp", "insights", chat.jid],
+    queryFn: () => getWhatsAppConversationInsight(chat.jid),
     retry: false,
   })
 
-  if (!chat) {
-    return (
-      <section className="text-muted-foreground flex h-full items-center justify-center p-6 text-sm">
-        {t(
-          "pages.agent.whatsapp.select_chat",
-          "Selecione uma conversa à esquerda para começar.",
-        )}
-      </section>
-    )
-  }
-
-  const displayName = chat.display_name || chat.push_name || formatJID(chat.jid)
-  const orderedMessages = [...messages].reverse()
-
   return (
-    <section className="flex h-full min-h-0 flex-col">
-      <header className="flex items-center justify-between gap-3 border-b px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Avatar name={displayName} url={chat.avatar_url} />
-          <div>
-            <h3 className="text-sm font-semibold tracking-tight">
-              {displayName}
-            </h3>
-            <p className="text-muted-foreground text-xs">
-              {formatJID(chat.jid)}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 text-xs">
-          <span
-            className={
-              chat.paused
-                ? "font-medium text-amber-600 dark:text-amber-400"
-                : "text-muted-foreground"
-            }
-          >
-            {chat.paused
-              ? t("pages.agent.whatsapp.agent_paused", "Agente pausado")
-              : t("pages.agent.whatsapp.agent_active", "Agente ativo")}
-          </span>
-          <Switch
-            checked={chat.paused}
-            disabled={togglingPause}
-            onCheckedChange={(value) => onTogglePause(value)}
-            aria-label="pause agent"
-          />
-        </div>
-      </header>
-      <ContactContextStrip
-        profile={profileQuery.data ?? null}
-        insight={insightQuery.data ?? null}
+    <section
+      className={`flex h-full min-h-0 flex-col ${hidden ? "hidden lg:flex" : "flex"}`}
+      aria-label={`Conversa com ${displayName}`}
+    >
+      <ChatHeader
+        chat={chat}
+        displayName={displayName}
+        avatarUrl={avatarUrl}
+        avatarLoading={avatarQuery.isFetching || refreshAvatarMutation.isPending}
+        autoPaused={autoPaused}
+        connectionStatus={connectionStatus}
+        togglingPause={togglingPause}
+        onTogglePause={onTogglePause}
+        onResume={onResume}
+        onBack={onBack}
+        onOpenProfile={() => setProfileSheetOpen(true)}
+        onRefreshAvatar={() => refreshAvatarMutation.mutate()}
       />
 
-      <div
-        ref={scrollRef}
-        className="bg-muted/10 min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4"
-      >
-        {loadingMessages ? (
-          <p className="text-muted-foreground text-sm">
-            {t("common.loading", "Carregando...")}
-          </p>
-        ) : orderedMessages.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            {t(
-              "pages.agent.whatsapp.no_messages",
-              "Sem mensagens nessa conversa ainda.",
-            )}
-          </p>
-        ) : (
-          orderedMessages.map((msg) => <Bubble key={msg.id} msg={msg} />)
-        )}
-      </div>
+      <ContactProfileSheet
+        open={profileSheetOpen}
+        onOpenChange={setProfileSheetOpen}
+        chat={chat}
+        avatarUrl={avatarUrl}
+        avatarLoading={avatarQuery.isFetching || refreshAvatarMutation.isPending}
+        onRefreshAvatar={() => refreshAvatarMutation.mutate()}
+        profile={profileQuery.data ?? null}
+        insight={insightQuery.data ?? null}
+        onProfileSaved={(updated) => {
+          queryClient.setQueryData(
+            ["whatsapp", "profile", chat.jid],
+            updated,
+          )
+        }}
+      />
 
-      <footer className="bg-background border-t px-4 py-3">
-        {chat.paused ? null : (
-          <p className="text-muted-foreground mb-2 text-[11px]">
-            {t(
-              "pages.agent.whatsapp.warning_not_paused",
-              "Atenção: o agente está ativo. Pause antes de responder manualmente para evitar respostas duplicadas.",
-            )}
-          </p>
-        )}
+      <ContactContextBar
+        profile={profileQuery.data ?? null}
+        insight={insightQuery.data ?? null}
+        onOpenProfile={() => setProfileSheetOpen(true)}
+      />
+
+      {loadingMessages ? (
+        <div className="bg-muted/5 min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          <MessageListSkeleton />
+        </div>
+      ) : (
+        <MessageList
+          messages={orderedMessages}
+          resetKey={chat.jid}
+          pendingIds={pendingIds}
+          empty={
+            <div className="space-y-2 text-center">
+              <IconMessageCircle className="text-muted-foreground/30 mx-auto size-10" />
+              <p className="text-foreground/60 text-sm">
+                {t(
+                  "pages.agent.whatsapp.no_messages",
+                  "Sem mensagens nessa conversa ainda.",
+                )}
+              </p>
+            </div>
+          }
+        />
+      )}
+
+      <footer className="border-border/40 bg-background border-t">
         <form
-          className="flex items-center gap-2"
+          className="flex items-end gap-2 px-3 py-3"
           onSubmit={(e) => {
             e.preventDefault()
             if (draft.trim()) onSend()
           }}
+          aria-label="Formulário de envio de mensagem"
         >
-          <Input
+          <Textarea
             value={draft}
             onChange={(e) => onDraftChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault()
+                if (draft.trim()) onSend()
+              }
+            }}
             placeholder={t(
               "pages.agent.whatsapp.placeholder",
-              "Mensagem manual (estilo atendente)…",
+              "Mensagem manual… (Ctrl+Enter para enviar)",
             )}
             disabled={sending}
+            rows={1}
+            className="min-h-10 max-h-32 flex-1 resize-none rounded-xl text-sm"
+            aria-label="Campo de mensagem"
           />
-          <Button type="submit" disabled={!draft.trim() || sending}>
-            {sending
-              ? t("common.sending", "Enviando…")
-              : t("pages.agent.whatsapp.send", "Enviar")}
+          <Button
+            type="submit"
+            size="icon"
+            disabled={!draft.trim() || sending}
+            className="h-10 w-10 shrink-0 rounded-xl bg-[#25d366] text-white hover:bg-[#1da851]"
+            aria-label={sending ? "Enviando" : "Enviar mensagem"}
+          >
+            {sending ? (
+              <IconLoader2 className="size-4 animate-spin" />
+            ) : (
+              <IconCheck className="size-4" />
+            )}
           </Button>
         </form>
       </footer>
@@ -415,147 +640,607 @@ function ConversationPane({
   )
 }
 
-function ContactContextStrip({
+// ─── contact context bar ──────────────────────────────────────────────────────
+
+function ContactContextBar({
   profile,
   insight,
+  onOpenProfile,
 }: {
   profile: WhatsAppContactProfile | null
   insight: WhatsAppConversationInsight | null
+  onOpenProfile?: () => void
 }) {
   if (!profile && !insight) return null
-  const labels = [
-    profile?.intent || insight?.intent,
-    profile?.lead_stage || insight?.lead_stage,
-    profile?.priority || insight?.priority,
-    profile?.consent_status && profile.consent_status !== "unknown"
-      ? profile.consent_status
-      : "",
-  ].filter((label): label is string => Boolean(label))
+
+  const leadStage = profile?.lead_stage || insight?.lead_stage
+  const priority = profile?.priority || insight?.priority
+  const intent = profile?.intent || insight?.intent
+  const nextAction = insight?.next_action || profile?.next_action
+  const tags = profile?.tags ?? []
+
+  const stageBg: Record<string, string> = {
+    qualified:
+      "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-800",
+    lead: "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:ring-blue-800",
+    nurturing:
+      "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:ring-amber-800",
+  }
+  const priorityBg: Record<string, string> = {
+    high: "bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/40 dark:text-red-400 dark:ring-red-800",
+    medium: "bg-orange-50 text-orange-700 ring-orange-200",
+    low: "bg-gray-50 text-gray-600 ring-gray-200",
+  }
+  const stageClass = leadStage
+    ? (stageBg[leadStage] ?? "bg-muted text-muted-foreground ring-border")
+    : ""
+  const priorityClass = priority
+    ? (priorityBg[priority] ?? "bg-muted text-muted-foreground ring-border")
+    : ""
 
   return (
-    <div className="border-b px-4 py-2">
-      <div className="flex flex-wrap items-center gap-2">
-        {profile?.name || profile?.phone ? (
-          <span className="text-xs font-medium">
-            {profile.name || profile.phone}
+    <button
+      type="button"
+      onClick={onOpenProfile}
+      className="border-border/40 bg-muted/20 hover:bg-muted/40 group w-full cursor-pointer border-b px-4 py-2 text-left transition-colors"
+      aria-label="Ver perfil completo do contato"
+    >
+      <div className="flex flex-wrap items-center gap-1.5">
+        {intent && (
+          <span className="bg-muted text-muted-foreground ring-border rounded-full px-2 py-0.5 text-[10px] font-medium ring-1">
+            {intent}
           </span>
-        ) : null}
-        {labels.map((label) => (
+        )}
+        {leadStage && (
           <span
-            key={label}
-            className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium uppercase"
+            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${stageClass}`}
           >
-            {label}
+            {leadStage}
           </span>
-        ))}
-        {profile?.tags?.slice(0, 4).map((tag) => (
+        )}
+        {priority && priority !== "none" && (
           <span
-            key={tag}
-            className="bg-primary/10 text-primary rounded px-1.5 py-0.5 text-[10px] font-medium"
+            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${priorityClass}`}
           >
-            {tag}
+            {priority}
           </span>
-        ))}
+        )}
+        <TagList tags={tags} limit={3} />
+        {insight?.needs_handoff && (
+          <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:ring-violet-800">
+            handoff
+          </span>
+        )}
+        <IconInfoCircle
+          className="text-muted-foreground/40 group-hover:text-muted-foreground ml-auto size-3 shrink-0 transition-colors"
+          aria-hidden="true"
+        />
       </div>
-      {insight?.next_action || profile?.next_action ? (
-        <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">
-          {insight?.next_action || profile?.next_action}
+      {nextAction && (
+        <p className="text-foreground/60 mt-1 line-clamp-1 text-[11px]">
+          <span className="bg-muted text-foreground/75 mr-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+            <IconInfoCircle className="size-2.5" aria-hidden="true" />
+            Próximo
+          </span>
+          {nextAction}
         </p>
-      ) : null}
-    </div>
+      )}
+    </button>
   )
 }
 
-function Bubble({ msg }: { msg: WhatsAppMessage }) {
-  const isOut = msg.direction === "out"
-  const isHuman = msg.source === "human"
-  const align = isOut ? "items-end" : "items-start"
-  const bubble = isOut
-    ? isHuman
-      ? "bg-sky-500/15 text-foreground"
-      : "bg-emerald-500/15 text-foreground"
-    : "bg-card text-foreground"
-  const label = isOut ? (isHuman ? "Você" : "Agente") : ""
+// ─── contact profile sheet ───────────────────────────────────────────────────
+
+const LEAD_STAGES = ["new", "lead", "nurturing", "qualified", "closed", "lost"]
+const PRIORITIES = ["none", "low", "medium", "high"]
+const CONSENT_STATUSES = ["unknown", "opted_in", "opted_out"]
+
+function ContactProfileSheet({
+  open,
+  onOpenChange,
+  chat,
+  avatarUrl,
+  avatarLoading,
+  onRefreshAvatar,
+  profile,
+  insight,
+  onProfileSaved,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  chat: WhatsAppChat
+  avatarUrl?: string
+  avatarLoading?: boolean
+  onRefreshAvatar: () => void
+  profile: WhatsAppContactProfile | null
+  insight: WhatsAppConversationInsight | null
+  onProfileSaved: (p: WhatsAppContactProfile) => void
+}) {
+  const displayName = chat.display_name || chat.push_name || formatJID(chat.jid)
+  const [draft, setDraft] = useState<Partial<WhatsAppContactProfile>>({})
+  const [tagsInput, setTagsInput] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (profile) {
+      setDraft({
+        display_name: profile.display_name ?? "",
+        name: profile.name ?? "",
+        city: profile.city ?? "",
+        company: profile.company ?? "",
+        interest: profile.interest ?? "",
+        lead_stage: profile.lead_stage,
+        priority: profile.priority,
+        consent_status: profile.consent_status,
+        summary: profile.summary ?? "",
+        next_action: profile.next_action ?? "",
+        assigned_to: profile.assigned_to ?? "",
+        follow_up_reason: profile.follow_up_reason ?? "",
+      })
+      setTagsInput((profile.tags ?? []).join(", "))
+    }
+  }, [profile, open])
+
+  const field = (key: keyof typeof draft) => ({
+    value: (draft[key] as string) ?? "",
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setDraft((prev) => ({ ...prev, [key]: e.target.value })),
+  })
+
+  async function handleSave() {
+    if (!profile) return
+    setSaving(true)
+    try {
+      const tags = tagsInput
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+      const updated = await saveWhatsAppContactProfile({
+        ...profile,
+        ...draft,
+        tags,
+      })
+      onProfileSaved(updated)
+      toast.success("Perfil salvo")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao salvar perfil")
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
-    <div className={`flex flex-col gap-0.5 ${align}`}>
-      <div
-        className={`${bubble} max-w-[75%] rounded-lg px-3 py-2 text-sm shadow-sm`}
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
       >
-        {label ? (
-          <div className="text-muted-foreground mb-0.5 text-[10px] tracking-wider uppercase">
-            {label}
+        <SheetHeader className="border-border/40 shrink-0 border-b px-5 py-4">
+          <SheetTitle className="text-base">Perfil do Contato</SheetTitle>
+        </SheetHeader>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="border-border/40 bg-muted/20 flex flex-col items-center gap-3 border-b px-5 py-6">
+            <div className="group relative">
+              <ContactAvatar name={displayName} url={avatarUrl} size="lg" />
+              <button
+                type="button"
+                onClick={onRefreshAvatar}
+                disabled={avatarLoading}
+                className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100 disabled:cursor-not-allowed"
+                aria-label="Atualizar foto"
+              >
+                {avatarLoading ? (
+                  <IconLoader2 className="size-5 animate-spin text-white" />
+                ) : (
+                  <IconCamera className="size-5 text-white" />
+                )}
+              </button>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold">{displayName}</p>
+              <div className="mt-1 flex items-center justify-center gap-1.5">
+                <IconPhone className="text-muted-foreground size-3" />
+                <p className="text-foreground/65 text-xs">
+                  {formatJID(chat.jid)}
+                </p>
+              </div>
+            </div>
           </div>
-        ) : null}
-        <div className="break-words whitespace-pre-wrap">{msg.content}</div>
-        {msg.error ? (
-          <div className="text-destructive mt-1 text-[10px]">
-            falha: {msg.error}
-          </div>
-        ) : null}
-      </div>
-      <div className="text-muted-foreground text-[10px]">
-        {formatClock(msg.ts)}
-      </div>
-    </div>
+
+          {!profile ? (
+            <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+              <IconUser className="text-muted-foreground/30 size-8" />
+              <p className="text-foreground/60 text-sm">
+                Perfil ainda não disponível
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-5 px-5 py-4">
+              <fieldset className="space-y-3">
+                <legend className="text-foreground/60 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+                  <IconUser className="size-3.5" />
+                  Identidade
+                </legend>
+                <div className="space-y-2">
+                  <div>
+                    <Label className="text-xs">Nome no dashboard</Label>
+                    <Input
+                      className="mt-1 h-8 text-sm"
+                      placeholder="Ex: João Silva"
+                      {...field("display_name")}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Nome real</Label>
+                    <Input
+                      className="mt-1 h-8 text-sm"
+                      placeholder="Nome completo"
+                      {...field("name")}
+                    />
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset className="space-y-3">
+                <legend className="text-foreground/60 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+                  <IconBuilding className="size-3.5" />
+                  Empresa & Localização
+                </legend>
+                <div className="space-y-2">
+                  <div>
+                    <Label className="flex items-center gap-1 text-xs">
+                      <IconBuilding className="size-3" />
+                      Empresa
+                    </Label>
+                    <Input
+                      className="mt-1 h-8 text-sm"
+                      placeholder="Nome da empresa"
+                      {...field("company")}
+                    />
+                  </div>
+                  <div>
+                    <Label className="flex items-center gap-1 text-xs">
+                      <IconMapPin className="size-3" />
+                      Cidade
+                    </Label>
+                    <Input
+                      className="mt-1 h-8 text-sm"
+                      placeholder="Cidade"
+                      {...field("city")}
+                    />
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset className="space-y-3">
+                <legend className="text-foreground/60 text-xs font-semibold tracking-wide uppercase">
+                  CRM
+                </legend>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Estágio</Label>
+                    <select
+                      className="border-input bg-background focus:ring-ring mt-1 h-8 w-full rounded-md border px-2 text-sm focus:ring-2 focus:outline-none"
+                      value={draft.lead_stage ?? profile.lead_stage}
+                      onChange={(e) =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          lead_stage: e.target.value,
+                        }))
+                      }
+                    >
+                      {LEAD_STAGES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Prioridade</Label>
+                    <select
+                      className="border-input bg-background focus:ring-ring mt-1 h-8 w-full rounded-md border px-2 text-sm focus:ring-2 focus:outline-none"
+                      value={draft.priority ?? profile.priority}
+                      onChange={(e) =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          priority: e.target.value,
+                        }))
+                      }
+                    >
+                      {PRIORITIES.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Consentimento</Label>
+                  <select
+                    className="border-input bg-background focus:ring-ring mt-1 h-8 w-full rounded-md border px-2 text-sm focus:ring-2 focus:outline-none"
+                    value={draft.consent_status ?? profile.consent_status}
+                    onChange={(e) =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        consent_status: e.target.value,
+                      }))
+                    }
+                  >
+                    {CONSENT_STATUSES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-xs">Interesse</Label>
+                  <Input
+                    className="mt-1 h-8 text-sm"
+                    placeholder="Produto ou serviço de interesse"
+                    {...field("interest")}
+                  />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1 text-xs">
+                    <IconTags className="size-3" />
+                    Tags (separadas por vírgula)
+                  </Label>
+                  <Input
+                    className="mt-1 h-8 text-sm"
+                    placeholder="vip, interessado, follow-up"
+                    value={tagsInput}
+                    onChange={(e) => setTagsInput(e.target.value)}
+                  />
+                </div>
+              </fieldset>
+
+              <fieldset className="space-y-3">
+                <legend className="text-foreground/60 text-xs font-semibold tracking-wide uppercase">
+                  Ações
+                </legend>
+                <div>
+                  <Label className="text-xs">Próxima ação</Label>
+                  <Input
+                    className="mt-1 h-8 text-sm"
+                    placeholder="Ex: Ligar na segunda-feira"
+                    {...field("next_action")}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Responsável</Label>
+                  <Input
+                    className="mt-1 h-8 text-sm"
+                    placeholder="Nome do atendente"
+                    {...field("assigned_to")}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Motivo do follow-up</Label>
+                  <Input
+                    className="mt-1 h-8 text-sm"
+                    placeholder="Motivo para contato futuro"
+                    {...field("follow_up_reason")}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Resumo</Label>
+                  <Textarea
+                    className="mt-1 max-h-28 min-h-16 resize-none text-sm"
+                    placeholder="Observações sobre o contato"
+                    value={(draft.summary as string) ?? ""}
+                    onChange={(e) =>
+                      setDraft((prev) => ({ ...prev, summary: e.target.value }))
+                    }
+                  />
+                </div>
+              </fieldset>
+
+              {insight && (
+                <fieldset className="bg-muted/30 space-y-2 rounded-xl p-3">
+                  <legend className="text-foreground/60 text-xs font-semibold tracking-wide uppercase">
+                    Análise do Agente (somente leitura)
+                  </legend>
+                  {insight.summary && (
+                    <p className="text-foreground/65 text-xs leading-relaxed">
+                      {insight.summary}
+                    </p>
+                  )}
+                  {insight.products.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-foreground/60 text-[10px] font-semibold uppercase">
+                        Produtos mencionados
+                      </p>
+                      {insight.products.map((p, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs">
+                          <span className="font-medium">{p.product}</span>
+                          {p.quantity && (
+                            <span className="text-foreground/60">
+                              × {p.quantity}
+                            </span>
+                          )}
+                          {p.price_text && (
+                            <span className="text-foreground/60">
+                              {p.price_text}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {Object.keys(insight.collected_fields ?? {}).length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-foreground/60 text-[10px] font-semibold uppercase">
+                        Campos coletados
+                      </p>
+                      {Object.entries(insight.collected_fields).map(
+                        ([k, v]) => (
+                          <div key={k} className="flex gap-2 text-xs">
+                            <span className="text-foreground/60 capitalize">
+                              {k}:
+                            </span>
+                            <span>{v}</span>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  )}
+                  {insight.missing_fields.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      <p className="text-foreground/60 w-full text-[10px] font-semibold uppercase">
+                        Faltando
+                      </p>
+                      {insight.missing_fields.map((f) => (
+                        <span
+                          key={f}
+                          className="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] text-orange-700 ring-1 ring-orange-200 dark:bg-orange-950/40 dark:text-orange-400"
+                        >
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </fieldset>
+              )}
+            </div>
+          )}
+        </div>
+
+        <SheetFooter className="border-border/40 shrink-0 gap-2 border-t px-5 py-3">
+          <SheetClose asChild>
+            <Button variant="outline" size="sm" className="flex-1">
+              Cancelar
+            </Button>
+          </SheetClose>
+          <Button
+            size="sm"
+            className="flex-1"
+            disabled={!profile || saving}
+            onClick={() => void handleSave()}
+          >
+            {saving && <IconLoader2 className="mr-1.5 size-3.5 animate-spin" />}
+            Salvar
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   )
 }
 
-function Avatar({ name, url }: { name: string; url?: string }) {
-  if (url) {
-    return (
-      <img
-        src={url}
-        alt={name}
-        className="size-10 shrink-0 rounded-full object-cover"
-        referrerPolicy="no-referrer"
-      />
-    )
-  }
-  const initials = name
-    .split(/\s+/)
-    .map((part) => part[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase()
+// ─── empty states & skeletons ────────────────────────────────────────────────
+
+function EmptyConversationState() {
   return (
-    <div className="bg-primary/15 text-primary flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
-      {initials || "?"}
+    <div className="animate-in fade-in-0 slide-in-from-bottom-2 flex max-w-sm flex-col items-center gap-4 px-6 text-center duration-300">
+      <div className="flex size-20 items-center justify-center rounded-2xl bg-[#25d366]/10">
+        <IconBrandWhatsapp className="size-10 text-[#25d366]" />
+      </div>
+      <div className="space-y-1.5">
+        <h3 className="text-foreground text-base font-semibold">
+          Selecione uma conversa para começar
+        </h3>
+        <p className="text-foreground/60 text-sm leading-relaxed">
+          Escolha um contato na lista à esquerda para visualizar as mensagens
+          e responder em tempo real.
+        </p>
+      </div>
+      <div className="bg-muted/40 w-full space-y-2 rounded-xl p-4 text-left">
+        <p className="text-foreground/60 text-xs font-medium tracking-wide uppercase">
+          Dicas rápidas
+        </p>
+        <div className="text-foreground/60 space-y-1.5 text-xs">
+          <div className="flex items-center gap-2">
+            <IconCircleOff className="size-3.5 shrink-0 text-amber-500" />
+            <span>
+              Comece a digitar e o agente é pausado automaticamente
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <IconCheck className="size-3.5 shrink-0 text-[#25d366]" />
+            <span>Ctrl+Enter envia a mensagem manualmente</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <IconInbox className="text-primary size-3.5 shrink-0" />
+            <span>
+              Conversas com badge verde têm mensagens não lidas
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
 
-function formatJID(jid: string): string {
-  const [user] = jid.split("@")
-  if (!user) return jid
-  if (/^\d+$/.test(user)) {
-    return `+${user}`
-  }
-  return user
+function EmptyListState() {
+  return (
+    <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+      <div className="bg-muted flex size-14 items-center justify-center rounded-xl">
+        <IconMessageCircle className="text-muted-foreground size-7" />
+      </div>
+      <div className="space-y-1">
+        <p className="text-foreground text-sm font-medium">
+          Nenhuma conversa ainda
+        </p>
+        <p className="text-foreground/60 max-w-xs text-xs leading-relaxed">
+          Quando alguém enviar uma mensagem, ela aparecerá aqui automaticamente.
+        </p>
+      </div>
+    </div>
+  )
 }
 
-function formatRelativeTS(ts: number): string {
-  if (!ts) return ""
-  const d = new Date(ts)
-  const now = new Date()
-  const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  if (sameDay) {
-    return formatClock(ts)
-  }
-  return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
-    .toString()
-    .padStart(2, "0")}`
+function SearchEmptyState({ query }: { query: string }) {
+  return (
+    <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+      <div className="bg-muted flex size-12 items-center justify-center rounded-xl">
+        <IconSearch className="text-muted-foreground size-6" />
+      </div>
+      <div className="space-y-1">
+        <p className="text-foreground text-sm font-medium">Nenhum resultado</p>
+        <p className="text-foreground/60 text-xs">
+          Nenhuma conversa encontrada para{" "}
+          <span className="font-medium">"{query}"</span>
+        </p>
+      </div>
+    </div>
+  )
 }
 
-function formatClock(ts: number): string {
-  if (!ts) return ""
-  const d = new Date(ts)
-  return `${d.getHours().toString().padStart(2, "0")}:${d
-    .getMinutes()
-    .toString()
-    .padStart(2, "0")}`
+function ConversationListSkeleton() {
+  return (
+    <div className="space-y-0 py-1">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="flex items-center gap-3 px-3 py-3">
+          <div className="bg-muted size-11 animate-pulse rounded-full" />
+          <div className="flex-1 space-y-2">
+            <div className="flex justify-between">
+              <div className="bg-muted h-3.5 w-28 animate-pulse rounded" />
+              <div className="bg-muted h-3 w-8 animate-pulse rounded" />
+            </div>
+            <div className="bg-muted h-3 w-40 animate-pulse rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MessageListSkeleton() {
+  return (
+    <div className="flex flex-col gap-2">
+      {[1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className={`flex ${i % 2 === 0 ? "justify-end" : "justify-start"}`}
+        >
+          <div
+            className={`bg-muted h-12 animate-pulse rounded-2xl ${i % 2 === 0 ? "w-48 rounded-tr-sm" : "w-64 rounded-tl-sm"}`}
+          />
+        </div>
+      ))}
+    </div>
+  )
 }

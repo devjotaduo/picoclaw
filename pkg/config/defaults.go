@@ -28,7 +28,7 @@ func DefaultConfig() *Config {
 				Workspace:                 workspacePath,
 				RestrictToWorkspace:       true,
 				Provider:                  "",
-				MaxTokens:                 32768,
+				MaxTokens:                 8192,
 				Temperature:               nil, // nil means use provider default
 				MaxToolIterations:         50,
 				SummarizeMessageThreshold: 20,
@@ -210,11 +210,10 @@ func DefaultConfig() *Config {
 
 			// GitHub Copilot - https://github.com/settings/tokens
 			{
-				ModelName:  "copilot-gpt-5.4",
+				ModelName:  "copilot-gpt-4.1",
 				Provider:   "github-copilot",
-				Model:      "gpt-5.4",
-				APIBase:    "http://localhost:4321",
-				AuthMethod: "oauth",
+				Model:      "gpt-4.1",
+				AuthMethod: "gh_cli",
 			},
 
 			// Ollama (local) - https://ollama.com
@@ -482,6 +481,12 @@ func DefaultConfig() *Config {
 				Enabled: true,
 			},
 			WhatsAppReportQuery: ToolConfig{
+				Enabled: true,
+			},
+			CustomerLookup: ToolConfig{
+				Enabled: true,
+			},
+			ProductLookup: ToolConfig{
 				Enabled: true,
 			},
 			WebFetch: ToolConfig{

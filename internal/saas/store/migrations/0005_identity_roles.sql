@@ -72,7 +72,7 @@ INSERT INTO users (email, bcrypt_hash, status, platform_role, created_at, last_l
 SELECT email, bcrypt_hash, 'active', 'platform_admin', created_at, last_login
 FROM admins
 ON CONFLICT (email) DO UPDATE
-SET bcrypt_hash = excluded.bcrypt_hash,
+SET bcrypt_hash = COALESCE(users.bcrypt_hash, excluded.bcrypt_hash),
     status = 'active',
     platform_role = 'platform_admin',
     last_login = COALESCE(users.last_login, excluded.last_login);
@@ -89,4 +89,3 @@ FROM tenants t
 JOIN users u ON u.email = lower(t.owner_email)
 WHERE t.owner_email <> ''
 ON CONFLICT (user_id, tenant_id) DO NOTHING;
-

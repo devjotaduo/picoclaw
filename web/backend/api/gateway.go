@@ -1209,11 +1209,6 @@ func (e *preconditionFailedError) Error() string {
 	return e.reason
 }
 
-// IsBadRequest returns true if the error should result in a 400 Bad Request status
-func (e *preconditionFailedError) IsBadRequest() bool {
-	return true
-}
-
 // handleGatewayRestart stops the gateway (if running) and starts a new instance.
 //
 //	POST /api/gateway/restart

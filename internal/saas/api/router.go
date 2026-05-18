@@ -12,33 +12,35 @@ import (
 )
 
 type Handler struct {
-	Cfg           *config.Config
-	Users         *store.UserStore
-	Sessions      *store.SessionStore
-	Memberships   *store.MembershipStore
-	Invites       *store.InviteStore
-	Audit         *store.AuditStore
-	Tenants       *store.TenantStore
-	Profiles      *store.LauncherProfileStore
-	Usage         *store.UsageStore
-	Provisioner   *tenant.Provisioner
-	LoginAttempts *loginAttempts
-	CRM           *crmClient
+	Cfg            *config.Config
+	Users          *store.UserStore
+	Sessions       *store.SessionStore
+	Memberships    *store.MembershipStore
+	Invites        *store.InviteStore
+	Audit          *store.AuditStore
+	Tenants        *store.TenantStore
+	Profiles       *store.LauncherProfileStore
+	CompanyIntakes *store.CompanyIntakeStore
+	Usage          *store.UsageStore
+	Provisioner    *tenant.Provisioner
+	LoginAttempts  *loginAttempts
+	CRM            *crmClient
 }
 
 func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner) *Handler {
 	h := &Handler{
-		Cfg:           cfg,
-		Users:         &store.UserStore{DB: db},
-		Sessions:      &store.SessionStore{DB: db},
-		Memberships:   &store.MembershipStore{DB: db},
-		Invites:       &store.InviteStore{DB: db},
-		Audit:         &store.AuditStore{DB: db},
-		Tenants:       &store.TenantStore{DB: db},
-		Profiles:      &store.LauncherProfileStore{DB: db},
-		Usage:         &store.UsageStore{DB: db},
-		Provisioner:   prov,
-		LoginAttempts: newLoginAttempts(),
+		Cfg:            cfg,
+		Users:          &store.UserStore{DB: db},
+		Sessions:       &store.SessionStore{DB: db},
+		Memberships:    &store.MembershipStore{DB: db},
+		Invites:        &store.InviteStore{DB: db},
+		Audit:          &store.AuditStore{DB: db},
+		Tenants:        &store.TenantStore{DB: db},
+		Profiles:       &store.LauncherProfileStore{DB: db},
+		CompanyIntakes: &store.CompanyIntakeStore{DB: db},
+		Usage:          &store.UsageStore{DB: db},
+		Provisioner:    prov,
+		LoginAttempts:  newLoginAttempts(),
 	}
 	if cfg.OpenCRMURL != "" {
 		h.CRM = newCRMClient(cfg.OpenCRMURL)
@@ -70,6 +72,13 @@ func (h *Handler) Routes() http.Handler {
 		r.Post("/auth/login", h.handleLogin)
 		r.Post("/auth/accept-invite", h.handleAcceptInvite)
 		r.Post("/admin/login", h.handleLogin)
+		r.Post("/public/company-intakes", h.handleCreateCompanyIntake)
+		r.Get("/public/company-intakes/{id}", h.handleGetPublicCompanyIntake)
+		r.Put("/public/company-intakes/{id}/answers", h.handleSaveCompanyIntakeAnswers)
+		r.Post("/public/company-intakes/{id}/attachments", h.handleUploadCompanyIntakeAttachment)
+		r.Post("/public/company-intakes/{id}/audio-transcript", h.handleSaveCompanyIntakeAudioTranscript)
+		r.Post("/public/company-intakes/{id}/report", h.handleGenerateCompanyIntakeReport)
+		r.Post("/public/company-intakes/{id}/submit", h.handleSubmitCompanyIntake)
 
 		r.Group(func(r chi.Router) {
 			r.Use(h.requireAuth)
@@ -107,6 +116,11 @@ func (h *Handler) Routes() http.Handler {
 				r.Get("/platform/usage-timeseries", h.handlePlatformTimeseries)
 				r.Get("/users", h.handleListUsers)
 				r.Post("/platform/invite-admin", h.handleInvitePlatformAdmin)
+				r.Get("/company-intakes", h.handleListCompanyIntakes)
+				r.Get("/company-intakes/{id}", h.handleGetCompanyIntake)
+				r.Patch("/company-intakes/{id}", h.handleUpdateCompanyIntakeStatus)
+				r.Post("/company-intakes/{id}/link-tenant", h.handleLinkCompanyIntakeTenant)
+				r.Get("/company-intakes/{id}/attachments/{attachmentId}", h.handleDownloadCompanyIntakeAttachment)
 			})
 
 			r.Group(func(r chi.Router) {

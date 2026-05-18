@@ -87,6 +87,10 @@ func (p *Provider) Chat(
 		opts = append(opts,
 			option.WithAuthToken(tok),
 			option.WithHeader("anthropic-beta", anthropicBetaHeader),
+			option.WithHeader("anthropic-version", "2023-06-01"),
+			// The Claude OAuth client expects a claude-cli style User-Agent;
+			// match the format Anthropic's own CLI emits.
+			option.WithHeader("User-Agent", "claude-cli/1.0.0 (external, cli)"),
 		)
 	}
 
@@ -196,8 +200,14 @@ func buildParams(
 					}
 					blocks = append(blocks, anthropic.NewToolUseBlock(tc.ID, args, tc.Name))
 				}
+				if len(blocks) == 0 {
+					continue
+				}
 				anthropicMessages = append(anthropicMessages, anthropic.NewAssistantMessage(blocks...))
 			} else {
+				if msg.Content == "" {
+					continue
+				}
 				anthropicMessages = append(anthropicMessages,
 					anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Content)),
 				)

@@ -12,7 +12,7 @@ import {
   saveTemplateOverride,
 } from "@/api/agent-templates"
 import { getAppConfig } from "@/api/channels"
-import { getSkills, type SkillSupportItem } from "@/api/skills"
+import { type SkillSupportItem, getSkills } from "@/api/skills"
 
 import { AGENT_TEMPLATES } from "./catalog"
 import { compareTemplates, sortCategories } from "./category-utils"
@@ -23,9 +23,22 @@ import type {
   AgentTemplate,
   TemplateApplyPayload,
   TemplateCategory,
+  TemplateKnowledgeBase,
   TemplateLayoutMode,
   TemplateSkillConfig,
 } from "./types"
+
+function cloneKnowledgeBase(
+  knowledgeBase?: TemplateKnowledgeBase,
+): TemplateKnowledgeBase {
+  return {
+    overview: knowledgeBase?.overview ?? "",
+    faqs: (knowledgeBase?.faqs ?? []).map((faq) => ({
+      question: faq.question ?? "",
+      answer: faq.answer ?? "",
+    })),
+  }
+}
 
 export function templateToDraft(
   template: AgentTemplate,
@@ -66,7 +79,9 @@ export function templateToDraft(
       ]),
     ),
     response_examples: { ...template.response_examples },
+    knowledge_base: cloneKnowledgeBase(template.knowledge_base),
     style_guide: {
+      emoji_policy: template.style_guide.emoji_policy ?? "minimal",
       do: [...template.style_guide.do],
       dont: [...template.style_guide.dont],
     },
@@ -106,9 +121,10 @@ export function templateToDraft(
       handoff_keywords: [...DEFAULT_BEHAVIOR.handoff_keywords],
     },
   }
-  // Resolve {agent.name} / {company.name} so the editor and the rendered
-  // AGENT.md don't ship literal placeholders to the runtime / channels.
-  return substituteAgentPlaceholders(draft)
+  // Keep catalog placeholders in the editable draft. They are resolved only
+  // when applying, so changing the configured agent/company names stays in
+  // sync with presentation, examples, fallback text, and behavior replies.
+  return draft
 }
 
 export function defaultTemplateSkillConfigs(
@@ -176,7 +192,9 @@ function templateFromDraft(
       ]),
     ),
     response_examples: { ...draft.response_examples },
+    knowledge_base: cloneKnowledgeBase(draft.knowledge_base),
     style_guide: {
+      emoji_policy: draft.style_guide.emoji_policy ?? "minimal",
       do: [...draft.style_guide.do],
       dont: [...draft.style_guide.dont],
     },
@@ -268,25 +286,25 @@ export function useTemplatesPage() {
 
   const applyMutation = useMutation({
     mutationFn: applyAgentTemplate,
-    onSuccess: () => {
+    onSuccess: (_response, appliedPayload) => {
       toast.success(t("pages.agent.templates.apply_success"))
       // Immediately populate the agent-config cache so any component that reads
       // it (e.g. the editor page) sees the new data without waiting for a refetch.
-      if (draft) {
+      if (appliedPayload) {
         queryClient.setQueryData<AgentConfigResponse>(
           ["agent-config"],
           (old) => ({
             ...old,
             configured: true,
-            payload: draft,
+            payload: appliedPayload,
           }),
         )
         queryClient.setQueryData<AgentConfigResponse>(
-          ["agent-config", draft.agent_id ?? "main"],
+          ["agent-config", appliedPayload.agent_id ?? "main"],
           (old) => ({
             ...old,
             configured: true,
-            payload: draft,
+            payload: appliedPayload,
           }),
         )
       }
@@ -418,7 +436,10 @@ export function useTemplatesPage() {
     if (overrideSkillConfigs !== undefined || draft.skill_configs.length > 0) {
       return
     }
-    const defaults = defaultTemplateSkillConfigs(selectedTemplate, installedSkills)
+    const defaults = defaultTemplateSkillConfigs(
+      selectedTemplate,
+      installedSkills,
+    )
     if (defaults.length === 0) return
     setDraft((current) =>
       current?.template_id === selectedTemplate.id &&
@@ -433,7 +454,11 @@ export function useTemplatesPage() {
     setDraft(
       templateToDraft(
         template,
-        skillConfigsForTemplate(template, installedSkills, overrides[template.id]),
+        skillConfigsForTemplate(
+          template,
+          installedSkills,
+          overrides[template.id],
+        ),
       ),
     )
   }
@@ -447,7 +472,7 @@ export function useTemplatesPage() {
 
   function handleApply() {
     if (!draft) return
-    applyMutation.mutate(draft)
+    applyMutation.mutate(substituteAgentPlaceholders(draft))
   }
 
   function handleSaveTemplate() {

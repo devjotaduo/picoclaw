@@ -1,11 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router"
-
-import { OrchestrationPage } from "@/components/agent/orchestration/orchestration-page"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/agent/orchestration")({
-  component: OrchestrationRoute,
+  beforeLoad: () => {
+    throw redirect({ to: "/agent/editor" })
+  },
+  component: () => null,
 })
-
-function OrchestrationRoute() {
-  return <OrchestrationPage />
-}

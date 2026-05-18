@@ -7,7 +7,6 @@ import (
 
 	"github.com/sipeed/picoclaw/internal/orchestrator"
 	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/routing"
 )
 
 type toolDiscoveryPromptContributor struct {
@@ -158,31 +157,24 @@ func (c privilegedWhatsAppAgentDiscoveryPromptContributor) ContributePrompt(
 	_ context.Context,
 	req PromptBuildRequest,
 ) ([]PromptPart, error) {
-	if routing.NormalizeAgentID(c.agentID) != orchestrator.AgentMain {
+	if orchestrator.CanonicalAgentID(c.agentID) != orchestrator.AgentAssistant {
 		return nil, nil
 	}
 	if strings.ToLower(strings.TrimSpace(req.Channel)) != "whatsapp" {
 		return nil, nil
 	}
-	if !orchestrator.WhatsAppAdminSenderAllowed(c.cfg, req.SenderID) {
+	if !orchestrator.WhatsAppAssistantSenderAllowed(c.cfg, req.SenderID) {
 		return nil, nil
 	}
 	if c.registry == nil {
 		return nil, nil
 	}
-	descriptors := c.registry.ListAgents("")
-	filtered := descriptors[:0]
-	for _, descriptor := range descriptors {
-		if routing.NormalizeAgentID(descriptor.ID) == orchestrator.AgentMain {
-			continue
-		}
-		filtered = append(filtered, descriptor)
-	}
+	filtered := c.registry.ListSpawnableAgents(orchestrator.AgentAssistant)
 	content := formatAgentDiscoverySection(filtered)
 	if strings.TrimSpace(content) == "" {
 		return nil, nil
 	}
-	content += "\n\nThis WhatsApp sender is registered as an internal/admin number. The main agent may delegate to any listed internal agent, including marketing and gerente, while still mediating the final WhatsApp response."
+	content += "\n\nThis WhatsApp sender is registered for the private owner assistant. The assistant may delegate to the listed internal agents while keeping the final response in the assistant voice."
 
 	return []PromptPart{
 		{

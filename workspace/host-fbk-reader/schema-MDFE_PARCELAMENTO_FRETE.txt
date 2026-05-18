@@ -1,0 +1,9 @@
+
+FIELD_NAME                      FIELD_TYPE                FIELD_LENGTH FIELD_SCALE FIELD_POSITION     NOT_NULL 
+=============================== ========================= ============ =========== ============== ============ 
+ID                              INTEGER                              4           0              0            1 
+ID_MDFE                         INTEGER                              4           0              1            0 
+PARCELA                         INTEGER                              4           0              2            0 
+VENCIMENTO                      DATE                                 4           0              3            0 
+VALOR                           DECIMAL                              8          -6              4            0 
+

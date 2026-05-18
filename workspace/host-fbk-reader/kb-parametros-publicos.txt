@@ -1,0 +1,5 @@
+
+          ID NFE_MODO_FRETE TIPO_COBRANCA        DESCONTO_GERAL DESCONTO_PRODUTO DESCONTO_GRUPO_PRODUTO PRODUTOS_SEM_ESTOQUE UTILIZA_ORCAMENTO_APRAZO CONSIDERAR_ESTOQUE_PENDENTE_ORC MOBILE_ALTERAR_PRECO MOBILE_ALTERAR_ESTOQUE MOBILE_INSERCAO_VENDA DT_UPDT_PRODUTOS VERSAO_BANCO         
+============ ============== ==================== ============== ================ ====================== ==================== ======================== =============================== ==================== ====================== ===================== ================ ==================== 
+           1              0 CARTEIRA             Sup            Nao              Nao                    Nao                  SIM                      SIM                             S                    S                      ForcaVenda                      <null> 9102                 
+

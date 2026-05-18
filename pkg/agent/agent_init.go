@@ -5,6 +5,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sipeed/picoclaw/internal/orchestrator"
@@ -17,7 +18,6 @@ import (
 	runtimeevents "github.com/sipeed/picoclaw/pkg/events"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
-	"github.com/sipeed/picoclaw/pkg/routing"
 	"github.com/sipeed/picoclaw/pkg/skills"
 	"github.com/sipeed/picoclaw/pkg/state"
 	"github.com/sipeed/picoclaw/pkg/tools"
@@ -111,21 +111,67 @@ func canMainDelegateToAnyForAdminWhatsApp(
 	currentAgentID, targetAgentID string,
 	registry *AgentRegistry,
 ) bool {
-	if currentAgentID != orchestrator.AgentMain {
+	currentAgentID = orchestrator.CanonicalAgentID(currentAgentID)
+	if currentAgentID != orchestrator.AgentAssistant {
 		return false
 	}
 	if tools.ToolChannel(ctx) != "whatsapp" {
 		return false
 	}
-	if !orchestrator.WhatsAppAdminSenderAllowed(cfg, tools.ToolSenderID(ctx)) {
+	if !orchestrator.WhatsAppAssistantSenderAllowed(cfg, tools.ToolSenderID(ctx)) {
 		return false
 	}
-	targetAgentID = routing.NormalizeAgentID(targetAgentID)
+	targetAgentID = orchestrator.CanonicalAgentID(targetAgentID)
 	if targetAgentID == "" || targetAgentID == currentAgentID {
 		return false
 	}
-	_, ok := registry.GetAgent(targetAgentID)
-	return ok
+	return registry.CanSpawnSubagent(currentAgentID, targetAgentID)
+}
+
+func resolveImageGenerationToolConfig(cfg *config.Config) config.ImageGenerationToolsConfig {
+	if cfg == nil {
+		return config.ImageGenerationToolsConfig{}
+	}
+	toolCfg := cfg.Tools.ImageGeneration
+	modelRef := strings.TrimSpace(toolCfg.Model)
+	if modelRef == "" {
+		return toolCfg
+	}
+
+	if mc, err := cfg.GetModelConfig(modelRef); err == nil {
+		return imageGenerationConfigFromModel(toolCfg, mc, true)
+	}
+	for i := range cfg.ModelList {
+		if strings.TrimSpace(cfg.ModelList[i].Model) == modelRef {
+			return imageGenerationConfigFromModel(toolCfg, cfg.ModelList[i], false)
+		}
+	}
+	return toolCfg
+}
+
+func imageGenerationConfigFromModel(
+	toolCfg config.ImageGenerationToolsConfig,
+	modelCfg *config.ModelConfig,
+	replaceModelRef bool,
+) config.ImageGenerationToolsConfig {
+	if modelCfg == nil {
+		return toolCfg
+	}
+	if strings.TrimSpace(toolCfg.APIBase) == "" || toolCfg.APIBase == "https://api.openai.com/v1" {
+		toolCfg.APIBase = providers.ResolveAPIBase(modelCfg)
+	}
+	if toolCfg.APIKey.String() == "" && modelCfg.APIKey() != "" {
+		toolCfg.APIKey = *config.NewSecureString(modelCfg.APIKey())
+	}
+	if replaceModelRef {
+		_, modelID := providers.ExtractProtocol(modelCfg)
+		if strings.TrimSpace(modelID) != "" {
+			toolCfg.Model = modelID
+		} else {
+			toolCfg.Model = strings.TrimSpace(modelCfg.Model)
+		}
+	}
+	return toolCfg
 }
 
 func registerSharedTools(
@@ -244,13 +290,19 @@ func registerSharedTools(
 			agent.Tools.Register(tools.NewSaveMarketingProposalTool(agent.Workspace))
 		}
 		if cfg.Tools.IsToolEnabled("generate_image") {
-			agent.Tools.Register(tools.NewGenerateImageTool(agent.Workspace, cfg.Tools.ImageGeneration))
+			agent.Tools.Register(tools.NewGenerateImageTool(agent.Workspace, resolveImageGenerationToolConfig(cfg)))
 		}
 		if cfg.Tools.IsToolEnabled("tenant_manager") {
 			agent.Tools.Register(tools.NewTenantManagerTool(""))
 		}
 		if cfg.Tools.IsToolEnabled("whatsapp_report_query") {
 			agent.Tools.Register(tools.NewWhatsAppReportQueryTool())
+		}
+		if cfg.Tools.IsToolEnabled("customer_lookup") {
+			agent.Tools.Register(tools.NewCustomerLookupTool(agent.Workspace))
+		}
+		if cfg.Tools.IsToolEnabled("product_lookup") {
+			agent.Tools.Register(tools.NewProductLookupTool(agent.Workspace))
 		}
 
 		if ttsProvider != nil {

@@ -28,7 +28,41 @@ type OAuthProviderConfig struct {
 	Scopes       string
 	Originator   string
 	Port         int
+
+	// AuthorizePath overrides the default `/oauth/authorize` path on Issuer.
+	AuthorizePath string
+	// UseJSONBody sends token requests as JSON instead of form-encoded
+	// (required by Anthropic's OAuth endpoint).
+	UseJSONBody bool
+	// ExtraAuthorizeParams are merged into the authorize URL query string.
+	ExtraAuthorizeParams map[string]string
+	// ProviderName overrides the provider stored on returned credentials.
+	ProviderName string
 }
+
+// AnthropicOAuthConfig returns the OAuth configuration used by the Claude Code
+// CLI. The flow is paste-based: redirect to console.anthropic.com/oauth/code/callback
+// and the user copies `code#state` back into the dashboard. Token requests use
+// a JSON body, not form-encoded.
+func AnthropicOAuthConfig() OAuthProviderConfig {
+	return OAuthProviderConfig{
+		Issuer:        "https://claude.ai",
+		AuthorizePath: "/oauth/authorize",
+		TokenURL:      "https://console.anthropic.com/v1/oauth/token",
+		ClientID:      "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+		Scopes:        "org:create_api_key user:profile user:inference",
+		UseJSONBody:   true,
+		ProviderName:  "anthropic",
+		ExtraAuthorizeParams: map[string]string{
+			"code": "true",
+		},
+	}
+}
+
+// AnthropicPasteRedirectURI is the only redirect URI accepted by the Claude Code
+// OAuth client for non-loopback flows. After authorizing, the user is redirected
+// to a page that displays `code#state` for them to paste back.
+const AnthropicPasteRedirectURI = "https://console.anthropic.com/oauth/code/callback"
 
 type LoginBrowserOptions struct {
 	NoBrowser bool
@@ -440,14 +474,17 @@ func RefreshAccessToken(cred *AuthCredential, cfg OAuthProviderConfig) (*AuthCre
 		return nil, fmt.Errorf("no refresh token available")
 	}
 
-	data := url.Values{
-		"client_id":     {cfg.ClientID},
-		"grant_type":    {"refresh_token"},
-		"refresh_token": {cred.RefreshToken},
-		"scope":         {"openid profile email"},
+	fields := map[string]string{
+		"client_id":     cfg.ClientID,
+		"grant_type":    "refresh_token",
+		"refresh_token": cred.RefreshToken,
 	}
-	if cfg.ClientSecret != "" {
-		data.Set("client_secret", cfg.ClientSecret)
+	// Anthropic's refresh endpoint rejects the OpenID scope hint; only send a
+	// scope when the provider explicitly configures one and it isn't Anthropic.
+	if cfg.Scopes != "" && !strings.Contains(strings.ToLower(cfg.TokenURL), "anthropic") {
+		fields["scope"] = cfg.Scopes
+	} else if cfg.Scopes == "" {
+		fields["scope"] = "openid profile email"
 	}
 
 	tokenURL := cfg.Issuer + "/oauth/token"
@@ -455,18 +492,9 @@ func RefreshAccessToken(cred *AuthCredential, cfg OAuthProviderConfig) (*AuthCre
 		tokenURL = cfg.TokenURL
 	}
 
-	resp, err := http.PostForm(tokenURL, data)
+	body, err := postTokenRequest(tokenURL, cfg, fields)
 	if err != nil {
 		return nil, fmt.Errorf("refreshing token: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading token refresh response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token refresh failed: %s", string(body))
 	}
 
 	refreshed, err := parseTokenResponse(body, cred.Provider)
@@ -484,6 +512,9 @@ func RefreshAccessToken(cred *AuthCredential, cfg OAuthProviderConfig) (*AuthCre
 	}
 	if cred.ProjectID != "" && refreshed.ProjectID == "" {
 		refreshed.ProjectID = cred.ProjectID
+	}
+	if cred.AuthMethod != "" {
+		refreshed.AuthMethod = cred.AuthMethod
 	}
 	return refreshed, nil
 }
@@ -503,16 +534,22 @@ func buildAuthorizeURL(cfg OAuthProviderConfig, pkce PKCECodes, state, redirectU
 		"state":                 {state},
 	}
 
-	isGoogle := strings.Contains(strings.ToLower(cfg.Issuer), "accounts.google.com")
-	if isGoogle {
-		// Google OAuth requires these for refresh token support
+	issuer := strings.ToLower(cfg.Issuer)
+	isGoogle := strings.Contains(issuer, "accounts.google.com")
+	isAnthropic := strings.Contains(issuer, "claude.ai") || strings.Contains(issuer, "anthropic")
+
+	switch {
+	case isGoogle:
+		// Google OAuth requires these for refresh token support.
 		params.Set("access_type", "offline")
 		params.Set("prompt", "consent")
-	} else {
+	case isAnthropic:
+		// Anthropic accepts a vanilla PKCE flow; do not inject OpenAI params.
+	default:
 		// OpenAI-specific parameters
 		params.Set("id_token_add_organizations", "true")
 		params.Set("codex_cli_simplified_flow", "true")
-		if strings.Contains(strings.ToLower(cfg.Issuer), "auth.openai.com") {
+		if strings.Contains(issuer, "auth.openai.com") {
 			params.Set("originator", "picoclaw")
 		}
 		if cfg.Originator != "" {
@@ -520,52 +557,105 @@ func buildAuthorizeURL(cfg OAuthProviderConfig, pkce PKCECodes, state, redirectU
 		}
 	}
 
-	// Google uses /auth path, OpenAI uses /oauth/authorize
-	if isGoogle {
-		return cfg.Issuer + "/auth?" + params.Encode()
+	for k, v := range cfg.ExtraAuthorizeParams {
+		params.Set(k, v)
 	}
-	return cfg.Issuer + "/oauth/authorize?" + params.Encode()
+
+	path := cfg.AuthorizePath
+	if path == "" {
+		if isGoogle {
+			path = "/auth"
+		} else {
+			path = "/oauth/authorize"
+		}
+	}
+	return cfg.Issuer + path + "?" + params.Encode()
 }
 
 // ExchangeCodeForTokens exchanges an authorization code for tokens.
 func ExchangeCodeForTokens(cfg OAuthProviderConfig, code, codeVerifier, redirectURI string) (*AuthCredential, error) {
-	data := url.Values{
-		"grant_type":    {"authorization_code"},
-		"code":          {code},
-		"redirect_uri":  {redirectURI},
-		"client_id":     {cfg.ClientID},
-		"code_verifier": {codeVerifier},
-	}
-	if cfg.ClientSecret != "" {
-		data.Set("client_secret", cfg.ClientSecret)
-	}
+	return ExchangeCodeForTokensWithState(cfg, code, codeVerifier, "", redirectURI)
+}
 
+// ExchangeCodeForTokensWithState is like ExchangeCodeForTokens but also forwards
+// the OAuth `state` value in the token request body. Required by Anthropic's
+// token endpoint, which validates `state` in addition to PKCE.
+func ExchangeCodeForTokensWithState(
+	cfg OAuthProviderConfig, code, codeVerifier, state, redirectURI string,
+) (*AuthCredential, error) {
 	tokenURL := cfg.Issuer + "/oauth/token"
 	if cfg.TokenURL != "" {
 		tokenURL = cfg.TokenURL
 	}
 
-	// Determine provider name from config
-	provider := "openai"
-	if cfg.TokenURL != "" && strings.Contains(cfg.TokenURL, "googleapis.com") {
-		provider = "google-antigravity"
+	provider := cfg.ProviderName
+	if provider == "" {
+		provider = "openai"
+		if strings.Contains(cfg.TokenURL, "googleapis.com") {
+			provider = "google-antigravity"
+		}
 	}
 
-	resp, err := http.PostForm(tokenURL, data)
+	fields := map[string]string{
+		"grant_type":    "authorization_code",
+		"code":          code,
+		"redirect_uri":  redirectURI,
+		"client_id":     cfg.ClientID,
+		"code_verifier": codeVerifier,
+	}
+	if state != "" {
+		fields["state"] = state
+	}
+
+	body, err := postTokenRequest(tokenURL, cfg, fields)
 	if err != nil {
 		return nil, fmt.Errorf("exchanging code for tokens: %w", err)
+	}
+	return parseTokenResponse(body, provider)
+}
+
+func postTokenRequest(tokenURL string, cfg OAuthProviderConfig, fields map[string]string) ([]byte, error) {
+	if cfg.ClientSecret != "" {
+		fields["client_secret"] = cfg.ClientSecret
+	}
+
+	var (
+		resp *http.Response
+		err  error
+	)
+	if cfg.UseJSONBody {
+		payload, marshalErr := json.Marshal(fields)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		req, reqErr := http.NewRequest(http.MethodPost, tokenURL, strings.NewReader(string(payload)))
+		if reqErr != nil {
+			return nil, reqErr
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err = client.Do(req)
+	} else {
+		form := url.Values{}
+		for k, v := range fields {
+			form.Set(k, v)
+		}
+		resp, err = http.PostForm(tokenURL, form)
+	}
+	if err != nil {
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("reading token exchange response: %w", err)
+		return nil, fmt.Errorf("reading token response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token exchange failed: %s", string(body))
+		return nil, fmt.Errorf("token request failed (%d): %s", resp.StatusCode, string(body))
 	}
-
-	return parseTokenResponse(body, provider)
+	return body, nil
 }
 
 func parseTokenResponse(body []byte, provider string) (*AuthCredential, error) {

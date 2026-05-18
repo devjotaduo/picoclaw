@@ -76,6 +76,21 @@ func TestDetectTranscriber(t *testing.T) {
 			wantName: "whisper",
 		},
 		{
+			name: "voice model name alias selects Qwen ASR transcriber",
+			cfg: &config.Config{
+				Voice: config.VoiceConfig{ModelName: "qwen-asr"},
+				ModelList: []*config.ModelConfig{
+					{
+						ModelName: "qwen-asr",
+						Provider:  "qwen-intl",
+						Model:     "qwen3-asr-flash",
+						APIKeys:   config.SimpleSecureStrings("sk-qwen-model"),
+					},
+				},
+			},
+			wantName: "qwen-asr",
+		},
+		{
 			name: "openai whisper alias selects whisper transcriber",
 			cfg: &config.Config{
 				Voice: config.VoiceConfig{ModelName: "my-asr-model"},

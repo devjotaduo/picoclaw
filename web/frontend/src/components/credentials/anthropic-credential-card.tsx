@@ -1,4 +1,5 @@
 import {
+  IconBrandChrome,
   IconKey,
   IconLoader2,
   IconPlayerStopFilled,
@@ -20,6 +21,8 @@ interface AnthropicCredentialCardProps {
   onStopLoading: () => void
   onSaveToken: () => void
   onAskLogout: () => void
+  onImportClaudeCode: () => void
+  onStartBrowserOAuth: () => void
 }
 
 export function AnthropicCredentialCard({
@@ -30,10 +33,13 @@ export function AnthropicCredentialCard({
   onStopLoading,
   onSaveToken,
   onAskLogout,
+  onImportClaudeCode,
+  onStartBrowserOAuth,
 }: AnthropicCredentialCardProps) {
   const { t } = useTranslation()
   const actionBusy = activeAction !== ""
   const tokenLoading = activeAction === "anthropic:token"
+  const browserLoading = activeAction === "anthropic:browser"
   const stopLabel = t("credentials.actions.stopLoading")
 
   return (
@@ -50,9 +56,34 @@ export function AnthropicCredentialCard({
       status={status?.status ?? "not_logged_in"}
       authMethod={status?.auth_method}
       actions={
-        <div className="border-muted flex h-[120px] flex-col justify-center rounded-lg border p-3">
-          <div className="flex h-full flex-col gap-3">
-            <div className="flex h-full items-center gap-2">
+        <div className="border-muted flex flex-col rounded-lg border p-3">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                disabled={actionBusy}
+                onClick={onStartBrowserOAuth}
+              >
+                {browserLoading && (
+                  <IconLoader2 className="size-4 animate-spin" />
+                )}
+                <IconBrandChrome className="size-4" />
+                {t("credentials.actions.browser")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={actionBusy}
+                onClick={onImportClaudeCode}
+              >
+                {activeAction === "anthropic:claude_code" && (
+                  <IconLoader2 className="size-4 animate-spin" />
+                )}
+                <IconSparkles className="size-4" />
+                {t("credentials.actions.importClaudeCode")}
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
               <Input
                 value={token}
                 onChange={(e) => onTokenChange(e.target.value)}

@@ -23,14 +23,14 @@ func resetModelProbeHooks(t *testing.T) {
 	origOpenAIProbe := probeOpenAICompatibleModelFunc
 	origCommandProbe := probeCommandAvailableFunc
 	origNow := modelProbeNowFunc
-	resetModelProbeCache()
+	modelProbeState.resetForTest()
 	t.Cleanup(func() {
 		probeTCPServiceFunc = origTCPProbe
 		probeOllamaModelFunc = origOllamaProbe
 		probeOpenAICompatibleModelFunc = origOpenAIProbe
 		probeCommandAvailableFunc = origCommandProbe
 		modelProbeNowFunc = origNow
-		resetModelProbeCache()
+		modelProbeState.resetForTest()
 	})
 }
 
@@ -1800,8 +1800,8 @@ func TestHandleListModels_ReturnsProviderOptionsWithoutPersistingLegacyMigration
 	}
 	if option, ok := optionsByID["github-copilot"]; !ok {
 		t.Fatal("github-copilot provider option missing")
-	} else if option.DefaultAPIBase != "localhost:4321" {
-		t.Fatalf("github-copilot default_api_base = %q, want %q", option.DefaultAPIBase, "localhost:4321")
+	} else if option.DefaultAPIBase != "" {
+		t.Fatalf("github-copilot default_api_base = %q, want empty", option.DefaultAPIBase)
 	}
 	if option, ok := optionsByID["elevenlabs"]; !ok {
 		t.Fatal("elevenlabs provider option missing")

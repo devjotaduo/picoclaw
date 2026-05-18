@@ -3,6 +3,7 @@ package reconciler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"path/filepath"
 	"time"
@@ -26,11 +27,12 @@ type Reconciler struct {
 	DB               *store.DB
 	Docker           DockerOps
 	LiteLLM          *litellm.Client
-	BackupDir        string // /srv/saas/backups/deleted
+	BackupDir        string // legacy; retained for older archive-based cleanup callers
 	HostDataDir      string // /srv/saas/tenants
 	Interval         time.Duration
 	StartFailCap     int           // give up auto-starting after N consecutive failures
 	ProvisionTimeout time.Duration // mark stuck provisions as error after this
+	fails            startTracker
 }
 
 // Run loops forever until ctx is cancelled, ticking the reconciler.
@@ -74,8 +76,6 @@ func (s *startTracker) clear(id string) {
 	delete(s.fails, id)
 }
 
-var failsTracker = &startTracker{}
-
 func (r *Reconciler) tick(ctx context.Context) {
 	r.reconcileActive(ctx)
 	r.reconcileDeleting(ctx)
@@ -107,21 +107,21 @@ func (r *Reconciler) reconcileActive(ctx context.Context) {
 			continue
 		}
 		if running {
-			failsTracker.clear(t.ID)
+			r.fails.clear(t.ID)
 			continue
 		}
 		// Container exists but isn't running — try to start it.
 		if err := r.Docker.Start(ctx, *t.ContainerID); err != nil {
-			n := failsTracker.bump(t.ID)
+			n := r.fails.bump(t.ID)
 			log.Printf("reconciler: %s: start failed (attempt %d): %v", t.ID, n, err)
 			if n >= r.StartFailCap {
 				msg := "container failed to start " + err.Error()
 				_ = ts.SetStatus(ctx, t.ID, store.StatusError, &msg)
-				failsTracker.clear(t.ID)
+				r.fails.clear(t.ID)
 			}
 		} else {
 			log.Printf("reconciler: %s: restarted container %s", t.ID, *t.ContainerID)
-			failsTracker.clear(t.ID)
+			r.fails.clear(t.ID)
 		}
 	}
 }
@@ -144,27 +144,50 @@ func (r *Reconciler) reconcileDeleting(ctx context.Context) {
 }
 
 func (r *Reconciler) completeCleanup(ctx context.Context, t *store.Tenant) error {
-	if t.ContainerID != nil && *t.ContainerID != "" {
-		_ = r.Docker.Stop(ctx, *t.ContainerID, 10)
-		if err := r.Docker.Remove(ctx, *t.ContainerID); err != nil && !errors.Is(err, tenant.ErrContainerNotFound) {
-			return err
+	for _, ref := range cleanupContainerRefs(t) {
+		_ = r.Docker.Stop(ctx, ref, 10)
+		if err := r.Docker.Remove(ctx, ref); err != nil && !errors.Is(err, tenant.ErrContainerNotFound) {
+			return fmt.Errorf("docker remove %s: %w", ref, err)
 		}
 	}
 	if r.LiteLLM != nil && t.LiteLLMKeyID != nil && *t.LiteLLMKeyID != "" {
 		if err := r.LiteLLM.DeleteKey(ctx, t.ID); err != nil {
-			log.Printf("reconciler: %s: litellm delete (non-fatal): %v", t.ID, err)
+			return fmt.Errorf("litellm delete: %w", err)
 		}
 	}
 	if t.VolumePath != "" {
-		if err := tenant.ArchiveAndRemoveVolume(ctx, t.ID, t.VolumePath, r.BackupDir); err != nil {
-			return err
+		if err := tenant.RemoveVolume(ctx, t.VolumePath); err != nil {
+			return fmt.Errorf("volume cleanup: %w", err)
 		}
 	}
-	return (&store.TenantStore{DB: r.DB}).MarkCleanupCompleted(ctx, t.ID)
+	if err := (&store.TenantStore{DB: r.DB}).DeleteCascade(ctx, t.ID); err != nil && !errors.Is(err, store.ErrTenantNotFound) {
+		return fmt.Errorf("delete tenant row: %w", err)
+	}
+	return nil
+}
+
+func cleanupContainerRefs(t *store.Tenant) []string {
+	seen := map[string]struct{}{}
+	var refs []string
+	add := func(ref string) {
+		if ref == "" {
+			return
+		}
+		if _, ok := seen[ref]; ok {
+			return
+		}
+		seen[ref] = struct{}{}
+		refs = append(refs, ref)
+	}
+	add("tenant-" + t.ID)
+	if t.ContainerID != nil {
+		add(*t.ContainerID)
+	}
+	return refs
 }
 
 // reconcileOrphans kills any container with picoclaw.saas.managed=true whose tenant
-// doesn't exist in the DB (or is already soft-deleted+cleaned).
+// doesn't exist in the DB.
 func (r *Reconciler) reconcileOrphans(ctx context.Context) {
 	ts := &store.TenantStore{DB: r.DB}
 	r.reconcileOrphansAgainstDB(ctx, r.Docker, func(id string) (alive, cleaned, found bool) {

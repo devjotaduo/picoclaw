@@ -20,6 +20,7 @@ import { Link, useRouterState } from "@tanstack/react-router"
 import * as React from "react"
 import { useTranslation } from "react-i18next"
 
+import { type AgentSummary, getInternalAgents } from "@/api/internal-agents"
 import {
   type LauncherFeatureAccess,
   getLauncherPolicy,
@@ -72,59 +73,58 @@ interface SidebarAgentOption {
   label: string
   shortLabel: string
   initials: string
+  imageURL: string
+  background: string
+  foreground: string
   accentClassName: string
 }
 
 const selectedAgentStorageKey = "picoclaw.sidebar.selectedAgent"
 
-const sidebarAgentOptions: SidebarAgentOption[] = [
-  {
-    id: "claude-opus",
-    label: "Claude Opus",
-    shortLabel: "Opus",
-    initials: "CO",
-    accentClassName:
-      "bg-orange-500/15 text-orange-700 ring-orange-500/25 dark:text-orange-300",
-  },
-  {
-    id: "claude-sonnet",
-    label: "Claude Sonnet",
-    shortLabel: "Sonnet",
-    initials: "CS",
-    accentClassName:
-      "bg-rose-500/15 text-rose-700 ring-rose-500/25 dark:text-rose-300",
-  },
-  {
-    id: "gpt-5-5",
-    label: "GPT-5.5",
-    shortLabel: "GPT",
-    initials: "G5",
-    accentClassName:
-      "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:text-emerald-300",
-  },
-  {
-    id: "gemini-flash",
-    label: "Gemini Flash",
-    shortLabel: "Gemini",
-    initials: "GF",
-    accentClassName:
-      "bg-sky-500/15 text-sky-700 ring-sky-500/25 dark:text-sky-300",
-  },
+const AGENT_ACCENT_CLASSES = [
+  "bg-orange-500/15 text-orange-700 ring-orange-500/25 dark:text-orange-300",
+  "bg-rose-500/15 text-rose-700 ring-rose-500/25 dark:text-rose-300",
+  "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:text-emerald-300",
+  "bg-sky-500/15 text-sky-700 ring-sky-500/25 dark:text-sky-300",
+  "bg-violet-500/15 text-violet-700 ring-violet-500/25 dark:text-violet-300",
 ]
 
-function getStoredSidebarAgentID() {
-  const fallback = sidebarAgentOptions[0].id
-  if (typeof window === "undefined") {
-    return fallback
-  }
+function getAgentInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return "??"
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
+  return (words[0][0] + words[1][0]).toUpperCase()
+}
 
+function getAgentAccentClass(index: number): string {
+  return AGENT_ACCENT_CLASSES[index % AGENT_ACCENT_CLASSES.length]
+}
+
+function agentToSidebarOption(
+  agent: AgentSummary,
+  index: number,
+): SidebarAgentOption {
+  const initials = agent.avatar?.initials || getAgentInitials(agent.name)
+  const words = agent.name.trim().split(/\s+/).filter(Boolean)
+  const shortLabel = words[0] ?? agent.id
+  return {
+    id: agent.id,
+    label: agent.name,
+    shortLabel,
+    initials,
+    imageURL: agent.avatar?.image_url ?? "",
+    background: agent.avatar?.background ?? "",
+    foreground: agent.avatar?.foreground ?? "",
+    accentClassName: getAgentAccentClass(index),
+  }
+}
+
+function getStoredSidebarAgentID(): string {
+  if (typeof window === "undefined") return ""
   try {
-    const stored = window.localStorage.getItem(selectedAgentStorageKey)
-    return stored && sidebarAgentOptions.some((agent) => agent.id === stored)
-      ? stored
-      : fallback
+    return window.localStorage.getItem(selectedAgentStorageKey) ?? ""
   } catch {
-    return fallback
+    return ""
   }
 }
 
@@ -152,6 +152,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { i18n, t } = useTranslation()
   const { isMobile, setOpenMobile } = useSidebar()
   const currentPath = routerState.location.pathname
+  const [agentOptions, setAgentOptions] = React.useState<SidebarAgentOption[]>(
+    [],
+  )
   const [selectedAgentID, setSelectedAgentID] = React.useState(
     getStoredSidebarAgentID,
   )
@@ -187,6 +190,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }, [])
 
+  React.useEffect(() => {
+    let active = true
+    getInternalAgents()
+      .then((data) => {
+        if (!active) return
+        const options = data.agents.map(agentToSidebarOption)
+        setAgentOptions(options)
+        setSelectedAgentID((current) => {
+          const stored = current || getStoredSidebarAgentID()
+          if (stored && options.some((a) => a.id === stored)) return stored
+          return options[0]?.id ?? ""
+        })
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
+
   const canRead = React.useCallback(
     (feature: string) => {
       if (!features) {
@@ -206,9 +228,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const selectedAgent = React.useMemo(
     () =>
-      sidebarAgentOptions.find((agent) => agent.id === selectedAgentID) ??
-      sidebarAgentOptions[0],
-    [selectedAgentID],
+      agentOptions.find((agent) => agent.id === selectedAgentID) ??
+      agentOptions[0] ??
+      null,
+    [agentOptions, selectedAgentID],
   )
 
   const handleAgentChange = React.useCallback((agentID: string) => {
@@ -275,13 +298,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/agent/editor",
             icon: IconRobot,
             feature: "agent_editor",
-            translateTitle: true,
-          },
-          {
-            title: "navigation.orchestration",
-            url: "/agent/orchestration",
-            icon: IconRobot,
-            feature: "internal_agents",
             translateTitle: true,
           },
           {
@@ -400,6 +416,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         <SidebarMenuItem key={item.title}>
                           {item.feature === "agent_editor" ? (
                             <AgentSelectorNavItem
+                              agentOptions={agentOptions}
                               isActive={isActive}
                               item={item}
                               onAgentChange={handleAgentChange}
@@ -484,16 +501,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 }
 
 interface AgentSelectorNavItemProps {
+  agentOptions: SidebarAgentOption[]
   isActive: boolean
   item: NavItem
   onAgentChange: (agentID: string) => void
   onNavigate: () => void
-  selectedAgent: SidebarAgentOption
+  selectedAgent: SidebarAgentOption | null
   selectedAgentID: string
   title: string
 }
 
 function AgentSelectorNavItem({
+  agentOptions,
   isActive,
   item,
   onAgentChange,
@@ -502,6 +521,19 @@ function AgentSelectorNavItem({
   selectedAgentID,
   title,
 }: AgentSelectorNavItemProps) {
+  const displayInitials = selectedAgent?.initials ?? "..."
+  const displayLabel = selectedAgent?.label ?? "..."
+  const displayShortLabel = selectedAgent?.shortLabel ?? "..."
+  const displayAccent =
+    selectedAgent?.accentClassName ??
+    "bg-muted text-muted-foreground ring-border/50"
+  const displayAvatarStyle = selectedAgent?.background
+    ? {
+        backgroundColor: selectedAgent.background,
+        color: selectedAgent.foreground || "#ffffff",
+      }
+    : undefined
+
   return (
     <div
       className={cn(
@@ -518,52 +550,82 @@ function AgentSelectorNavItem({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label={`Select agent: ${selectedAgent.label}`}
+                aria-label={`Select agent: ${displayLabel}`}
                 className={cn(
                   "hover:bg-background/70 focus-visible:ring-ring relative flex size-8 items-center justify-center rounded-md text-[10px] font-semibold ring-1 transition-colors focus-visible:ring-2 focus-visible:outline-hidden",
-                  selectedAgent.accentClassName,
+                  selectedAgent?.background ? "" : displayAccent,
                 )}
+                style={displayAvatarStyle}
                 data-testid="agent-selector-trigger"
+                disabled={agentOptions.length === 0}
               >
-                {selectedAgent.initials}
-                <IconChevronDown className="absolute right-0.5 bottom-0.5 size-2.5 opacity-70" />
+                {selectedAgent?.imageURL ? (
+                  <img
+                    src={selectedAgent.imageURL}
+                    alt=""
+                    className="size-full rounded-md object-cover"
+                  />
+                ) : (
+                  displayInitials
+                )}
+                {agentOptions.length > 1 && (
+                  <IconChevronDown className="absolute right-0.5 bottom-0.5 size-2.5 opacity-70" />
+                )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              side="right"
-              className="w-52"
-              data-testid="agent-selector-menu"
-            >
-              <DropdownMenuRadioGroup
-                value={selectedAgentID}
-                onValueChange={onAgentChange}
+            {agentOptions.length > 1 && (
+              <DropdownMenuContent
+                align="start"
+                side="right"
+                className="w-52"
+                data-testid="agent-selector-menu"
               >
-                {sidebarAgentOptions.map((agent) => (
-                  <DropdownMenuRadioItem
-                    key={agent.id}
-                    value={agent.id}
-                    data-testid={`agent-option-${agent.id}`}
-                  >
-                    <span
-                      className={cn(
-                        "flex size-6 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold ring-1",
-                        agent.accentClassName,
-                      )}
+                <DropdownMenuRadioGroup
+                  value={selectedAgentID}
+                  onValueChange={onAgentChange}
+                >
+                  {agentOptions.map((agent) => (
+                    <DropdownMenuRadioItem
+                      key={agent.id}
+                      value={agent.id}
+                      data-testid={`agent-option-${agent.id}`}
                     >
-                      {agent.initials}
-                    </span>
-                    <span className="truncate">{agent.label}</span>
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
+                      <span
+                        className={cn(
+                          "flex size-6 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold ring-1",
+                          agent.background ? "" : agent.accentClassName,
+                        )}
+                        style={
+                          agent.background
+                            ? {
+                                backgroundColor: agent.background,
+                                color: agent.foreground || "#ffffff",
+                              }
+                            : undefined
+                        }
+                      >
+                        {agent.imageURL ? (
+                          <img
+                            src={agent.imageURL}
+                            alt=""
+                            className="size-full rounded-md object-cover"
+                          />
+                        ) : (
+                          agent.initials
+                        )}
+                      </span>
+                      <span className="truncate">{agent.label}</span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            )}
           </DropdownMenu>
           <span
             className="bg-background/70 text-foreground/70 ring-border/50 max-w-9 rounded px-1 text-[9px] leading-4 font-medium ring-1 group-data-[collapsible=icon]:hidden"
             data-testid="selected-agent-badge"
           >
-            {selectedAgent.shortLabel}
+            {displayShortLabel}
           </span>
         </div>
         <Link
@@ -580,7 +642,7 @@ function AgentSelectorNavItem({
             {title}
           </span>
           <span className="text-muted-foreground/70 block truncate text-[11px] leading-4">
-            {selectedAgent.label}
+            {displayLabel}
           </span>
         </Link>
       </div>

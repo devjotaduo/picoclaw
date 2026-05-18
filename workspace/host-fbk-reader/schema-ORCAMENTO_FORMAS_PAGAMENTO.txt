@@ -1,0 +1,14 @@
+
+FIELD_NAME                      FIELD_TYPE                FIELD_LENGTH FIELD_SCALE FIELD_POSITION     NOT_NULL 
+=============================== ========================= ============ =========== ============== ============ 
+ID                              INTEGER                              4           0              0            1 
+CODIGO                          CHAR                                 3           0              1            0 
+DESCRICAO                       VARCHAR                             20           0              2            0 
+TEF                             CHAR                                 1           0              3            0 
+IMPRIME_VINCULADO               CHAR                                 1           0              4            0 
+PERMITE_TROCO                   CHAR                                 1           0              5            0 
+TEF_TIPO_GP                     CHAR                                 1           0              6            0 
+GERA_PARCELAS                   CHAR                                 1           0              7            0 
+TIPO_PAGAMENTO                  VARCHAR                             30           0              8            0 
+VISIVEL                         CHAR                                 1           0              9            0 
+

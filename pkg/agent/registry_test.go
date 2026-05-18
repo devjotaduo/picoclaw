@@ -84,6 +84,22 @@ func TestNewAgentRegistry_ExplicitAgents(t *testing.T) {
 	}
 }
 
+func TestNewAgentRegistry_SkipsDisabledAgents(t *testing.T) {
+	disabled := false
+	cfg := testCfg([]config.AgentConfig{
+		{ID: "sales", Default: true},
+		{ID: "support", Enabled: &disabled},
+	})
+	registry := NewAgentRegistry(cfg, &mockRegistryProvider{})
+
+	if _, ok := registry.GetAgent("support"); ok {
+		t.Fatal("disabled agent should not be registered")
+	}
+	if agent := registry.GetDefaultAgent(); agent == nil || agent.ID != "sales" {
+		t.Fatalf("default agent = %+v, want sales", agent)
+	}
+}
+
 func TestAgentRegistry_GetAgent_Normalize(t *testing.T) {
 	cfg := testCfg([]config.AgentConfig{
 		{ID: "my-agent", Default: true},
@@ -106,10 +122,29 @@ func TestAgentRegistry_GetDefaultAgent(t *testing.T) {
 	})
 	registry := NewAgentRegistry(cfg, &mockRegistryProvider{})
 
-	// GetDefaultAgent first checks for "main", then returns any
+	// GetDefaultAgent follows the configured default flag.
 	agent := registry.GetDefaultAgent()
 	if agent == nil {
 		t.Fatal("expected a default agent")
+	}
+	if agent.ID != "beta" {
+		t.Errorf("agent.ID = %q, want beta", agent.ID)
+	}
+}
+
+func TestAgentRegistry_GetDefaultAgentRespectsDefaultWhenMainExists(t *testing.T) {
+	cfg := testCfg([]config.AgentConfig{
+		{ID: "main"},
+		{ID: "gerente", Default: true},
+	})
+	registry := NewAgentRegistry(cfg, &mockRegistryProvider{})
+
+	agent := registry.GetDefaultAgent()
+	if agent == nil {
+		t.Fatal("expected a default agent")
+	}
+	if agent.ID != "assistente" {
+		t.Errorf("agent.ID = %q, want assistente", agent.ID)
 	}
 }
 

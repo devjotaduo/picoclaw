@@ -1,0 +1,11 @@
+
+FIELD_NAME                      FIELD_TYPE                FIELD_LENGTH FIELD_SCALE FIELD_POSITION     NOT_NULL 
+=============================== ========================= ============ =========== ============== ============ 
+ID                              INTEGER                              4           0              0            1 
+ID_PRODUTO                      INTEGER                              4           0              1            0 
+ID_GRADE                        INTEGER                              4           0              2            0 
+ESTOQUE                         NUMERIC                              8          -4              3            0 
+BARRAS                          VARCHAR                             30           0              4            0 
+DT_ALTERACAO                    DATE                                 4           0              5            0 
+HR_ALTERACAO                    TIME                                 4           0              6            0 
+

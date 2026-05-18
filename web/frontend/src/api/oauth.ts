@@ -1,7 +1,7 @@
 import { launcherFetch } from "@/api/http"
 
-export type OAuthProvider = "openai" | "anthropic" | "google-antigravity"
-export type OAuthMethod = "browser" | "device_code" | "token"
+export type OAuthProvider = "openai" | "anthropic" | "google-antigravity" | "github-copilot"
+export type OAuthMethod = "browser" | "device_code" | "token" | "claude_code" | "gh_cli"
 
 export interface OAuthProviderStatus {
   provider: OAuthProvider
@@ -26,6 +26,7 @@ export interface OAuthFlowState {
   user_code?: string
   verify_url?: string
   interval?: number
+  manual_paste?: boolean
 }
 
 export interface OAuthLoginRequest {
@@ -44,6 +45,8 @@ export interface OAuthLoginResponse {
   verify_url?: string
   interval?: number
   expires_at?: string
+  manual_paste?: boolean
+  redirect_uri?: string
 }
 
 interface OAuthProvidersResponse {
@@ -86,6 +89,50 @@ export async function pollOAuthFlow(flowID: string): Promise<OAuthFlowState> {
     `/api/oauth/flows/${encodeURIComponent(flowID)}/poll`,
     {
       method: "POST",
+    },
+  )
+}
+
+export async function submitOAuthFlow(
+  flowID: string,
+  payload: { code?: string; state?: string; paste?: string },
+): Promise<OAuthFlowState> {
+  return request<OAuthFlowState>(
+    `/api/oauth/flows/${encodeURIComponent(flowID)}/submit`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export async function importGHCLI(): Promise<{
+  status: string
+  provider: string
+  method: string
+}> {
+  return request<{ status: string; provider: string; method: string }>(
+    "/api/oauth/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "github-copilot", method: "gh_cli" }),
+    },
+  )
+}
+
+export async function importClaudeCode(): Promise<{
+  status: string
+  provider: string
+  method: string
+}> {
+  return request<{ status: string; provider: string; method: string }>(
+    "/api/oauth/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "anthropic", method: "claude_code" }),
     },
   )
 }

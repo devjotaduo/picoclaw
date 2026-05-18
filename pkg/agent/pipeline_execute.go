@@ -201,7 +201,7 @@ toolLoop:
 						})
 					}
 
-					if len(hookResult.Media) > 0 && hookResult.ResponseHandled {
+					if len(hookResult.Media) > 0 && (hookResult.ResponseHandled || hookResult.DeliverMedia) {
 						parts := make([]bus.MediaPart, 0, len(hookResult.Media))
 						for _, ref := range hookResult.Media {
 							part := bus.MediaPart{Ref: ref}
@@ -240,7 +240,7 @@ toolLoop:
 									})
 								hookResult.IsError = true
 								hookResult.ForLLM = fmt.Sprintf("failed to deliver attachment: %v", err)
-							} else {
+							} else if hookResult.ResponseHandled {
 								handledAttachments = append(
 									handledAttachments,
 									buildProviderAttachments(al.mediaStore, hookResult.Media)...,
@@ -577,7 +577,7 @@ toolLoop:
 			toolResult = tools.ErrorResult("hook returned nil tool result")
 		}
 
-		if len(toolResult.Media) > 0 && toolResult.ResponseHandled {
+		if len(toolResult.Media) > 0 && (toolResult.ResponseHandled || toolResult.DeliverMedia) {
 			parts := make([]bus.MediaPart, 0, len(toolResult.Media))
 			for _, ref := range toolResult.Media {
 				part := bus.MediaPart{Ref: ref}
@@ -614,8 +614,14 @@ toolLoop:
 							"chat_id":  ts.chatID,
 							"error":    err.Error(),
 						})
-					toolResult = tools.ErrorResult(fmt.Sprintf("failed to deliver attachment: %v", err)).WithError(err)
-				} else {
+					if toolResult.ResponseHandled {
+						toolResult = tools.ErrorResult(fmt.Sprintf("failed to deliver attachment: %v", err)).WithError(err)
+					} else {
+						toolResult.IsError = true
+						toolResult.ForLLM = strings.TrimSpace(toolResult.ForLLM) +
+							fmt.Sprintf("\nFailed to deliver generated media to chat: %v", err)
+					}
+				} else if toolResult.ResponseHandled {
 					handledAttachments = append(
 						handledAttachments,
 						buildProviderAttachments(al.mediaStore, toolResult.Media)...,

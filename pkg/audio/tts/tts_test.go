@@ -113,6 +113,21 @@ func TestOpenAITTSProvider_SynthesizeSuccess(t *testing.T) {
 	}
 }
 
+func TestOpenAITTSProvider_OpenRouterUsesMP3(t *testing.T) {
+	t.Parallel()
+
+	provider := NewOpenAITTSProvider("key", "https://openrouter.ai/api/v1", "", "openai/gpt-4o-mini-tts")
+	if provider.Name() != "openrouter-tts" {
+		t.Fatalf("Name() = %q, want openrouter-tts", provider.Name())
+	}
+	if provider.responseFormat != "mp3" {
+		t.Fatalf("responseFormat = %q, want mp3", provider.responseFormat)
+	}
+	if provider.apiBase != "https://openrouter.ai/api/v1/audio/speech" {
+		t.Fatalf("apiBase = %q, want OpenRouter speech endpoint", provider.apiBase)
+	}
+}
+
 func TestOpenAITTSProvider_SynthesizeNon200(t *testing.T) {
 	t.Parallel()
 
@@ -221,6 +236,38 @@ func TestSynthesizeAndStore_UsesMp3MetadataForMimo(t *testing.T) {
 	ref, err := SynthesizeAndStore(
 		context.Background(),
 		stubTTSProvider{name: "mimo-tts"},
+		store,
+		"hello",
+		"",
+		"discord",
+		"chat123",
+	)
+	if err != nil {
+		t.Fatalf("SynthesizeAndStore failed: %v", err)
+	}
+
+	path, meta, err := store.ResolveWithMeta(ref)
+	if err != nil {
+		t.Fatalf("ResolveWithMeta failed: %v", err)
+	}
+	if meta.ContentType != "audio/mpeg" {
+		t.Fatalf("ContentType = %q, want %q", meta.ContentType, "audio/mpeg")
+	}
+	if filepath.Ext(path) != ".mp3" {
+		t.Fatalf("stored file extension = %q, want %q", filepath.Ext(path), ".mp3")
+	}
+	if filepath.Ext(meta.Filename) != ".mp3" {
+		t.Fatalf("filename extension = %q, want %q", filepath.Ext(meta.Filename), ".mp3")
+	}
+}
+
+func TestSynthesizeAndStore_UsesMp3MetadataForOpenRouter(t *testing.T) {
+	t.Parallel()
+
+	store := media.NewFileMediaStore()
+	ref, err := SynthesizeAndStore(
+		context.Background(),
+		stubTTSProvider{name: "openrouter-tts"},
 		store,
 		"hello",
 		"",

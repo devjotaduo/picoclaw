@@ -1,6 +1,6 @@
 import { api } from "./client";
 
-export type Access = "none" | "read" | "write";
+type Access = "none" | "read" | "write";
 export type RolePolicy = Record<string, Record<string, Access>>;
 
 export type LauncherProfile = {
@@ -23,7 +23,7 @@ export type LauncherProfileSeed = {
   behavior_json?: unknown;
 };
 
-export type LauncherProfileInput = {
+type LauncherProfileInput = {
   name: string;
   slug?: string;
   description?: string;

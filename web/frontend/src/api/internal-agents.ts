@@ -1,15 +1,26 @@
 import { launcherFetch } from "@/api/http"
 
-export interface AgentAccessConfig {
+interface AgentAccessConfig {
   panel_enabled?: boolean
   panel_roles?: string[]
   whatsapp_direct_enabled?: boolean
   whatsapp_allowed_senders?: string[]
+  whatsapp_allowed_chats?: string[]
+}
+
+export interface AgentAvatarConfig {
+  type?: "preset" | "image" | string
+  icon?: string
+  initials?: string
+  background?: string
+  foreground?: string
+  image_url?: string
 }
 
 export interface AgentSummary {
   id: string
   name: string
+  avatar?: AgentAvatarConfig
   workspace?: string
   default?: boolean
   allowed: boolean
@@ -17,16 +28,37 @@ export interface AgentSummary {
   subagents?: {
     allow_agents?: string[]
   }
+  role_config?: Record<string, unknown>
 }
 
 export interface InternalAgentsResponse {
   role: string
   agents: AgentSummary[]
+  main_agent_id: string
   main_allow_agents: string[]
   admin_whatsapp_jids: string[]
+  assistant_whatsapp_jids?: string[]
+  assistant_whatsapp_chats?: string[]
 }
 
-export interface AgentTurnResponse {
+export interface UpdateInternalAgentOrchestrationPayload {
+  main_agent_id?: string
+  main_allow_agents?: string[]
+  admin_whatsapp_jids?: string[]
+  assistant_whatsapp_jids?: string[]
+  assistant_whatsapp_chats?: string[]
+  agent_access?: Record<string, AgentAccessConfig>
+  agent_profiles?: Record<
+    string,
+    {
+      name?: string
+      avatar?: AgentAvatarConfig
+    }
+  >
+  agent_role_configs?: Record<string, Record<string, unknown>>
+}
+
+interface AgentTurnResponse {
   agent_id: string
   session_id: string
   content: string
@@ -41,10 +73,7 @@ export async function getInternalAgents(): Promise<InternalAgentsResponse> {
 }
 
 export async function updateInternalAgentOrchestration(
-  payload: Pick<
-    InternalAgentsResponse,
-    "main_allow_agents" | "admin_whatsapp_jids"
-  >,
+  payload: UpdateInternalAgentOrchestrationPayload,
 ): Promise<InternalAgentsResponse> {
   const res = await launcherFetch("/api/internal-agents/orchestration", {
     method: "PUT",

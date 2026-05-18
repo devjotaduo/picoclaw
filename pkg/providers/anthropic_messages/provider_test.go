@@ -118,6 +118,52 @@ func TestBuildRequestBody(t *testing.T) {
 			},
 		},
 		{
+			name: "normalizes dotted model alias",
+			messages: []Message{
+				{Role: "user", Content: "Test"},
+			},
+			model: "claude-sonnet-4.6",
+			options: map[string]any{
+				"max_tokens": 8192,
+			},
+			want: map[string]any{
+				"model":      "claude-sonnet-4-6",
+				"max_tokens": int64(8192),
+				"messages": []any{
+					map[string]any{
+						"role":    "user",
+						"content": "Test",
+					},
+				},
+			},
+		},
+		{
+			name: "skips empty assistant message",
+			messages: []Message{
+				{Role: "user", Content: "First"},
+				{Role: "assistant"},
+				{Role: "user", Content: "Second"},
+			},
+			model: "test-model",
+			options: map[string]any{
+				"max_tokens": 8192,
+			},
+			want: map[string]any{
+				"model":      "test-model",
+				"max_tokens": int64(8192),
+				"messages": []any{
+					map[string]any{
+						"role":    "user",
+						"content": "First",
+					},
+					map[string]any{
+						"role":    "user",
+						"content": "Second",
+					},
+				},
+			},
+		},
+		{
 			name: "missing max_tokens returns error",
 			messages: []Message{
 				{Role: "user", Content: "Test"},

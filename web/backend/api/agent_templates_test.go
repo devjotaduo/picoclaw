@@ -83,9 +83,23 @@ func buildSampleRequest() agentTemplateApplyRequest {
 			Routing:       "Vou encaminhar para o setor responsável.",
 			Closing:       "Combinado, qualquer dúvida pode falar por aqui.",
 		},
+		KnowledgeBase: agentTemplateKnowledgeBase{
+			Overview: "A Clínica Sol atende consultas particulares e convênios cadastrados. Retornos devem ser confirmados com a recepção.",
+			FAQs: []agentTemplateKnowledgeFAQ{
+				{
+					Question: "Vocês atendem sem agendamento?",
+					Answer:   "Atendimento sem agendamento depende de disponibilidade da recepção no dia.",
+				},
+				{
+					Question: "",
+					Answer:   "",
+				},
+			},
+		},
 		StyleGuide: agentTemplateStyleGuide{
-			Do:   []string{"Usar tom acolhedor", "Confirmar antes de finalizar"},
-			Dont: []string{"Não dar diagnóstico"},
+			EmojiPolicy: "none",
+			Do:          []string{"Usar tom acolhedor", "Confirmar antes de finalizar"},
+			Dont:        []string{"Não dar diagnóstico"},
 		},
 		FallbackPolicy: agentTemplateFallbackPolicy{
 			MaxClarifyingQuestions: 2,
@@ -168,6 +182,7 @@ func TestApplyAgentTemplate_WritesWorkspaceFiles(t *testing.T) {
 		"name: clinica-sol",
 		"description: >",
 		"Olá! Sou a recepção da Clínica Sol.",
+		"You are Clínica Sol, the customer service attendant for Clínica Sol.",
 		"## Mission / Capabilities",
 		"- Agendar consultas",
 		"## Restrictions",
@@ -181,6 +196,27 @@ func TestApplyAgentTemplate_WritesWorkspaceFiles(t *testing.T) {
 		"skills:",
 		"  - agendamento",
 		"  - faq-medico",
+		"## Interaction Rules",
+		"Write like a real human attendant on WhatsApp",
+		"Do not end every answer with a generic help menu",
+		"Do not use emojis at all in any reply",
+		"When the user repeats a question, answer with context",
+		"When asked for contact channels, provide the configured company contact first",
+		"Never claim partnerships, installers, professionals, stock, prices, delivery terms, payment conditions, discounts, price-match policies, loyalty rules, or deadlines",
+		"## Configuration Source of Truth",
+		"generated from the current template configuration",
+		"knowledge base, products, services, professionals",
+		"If a configured field is blank, disabled, hidden, marked \"preço sob consulta\", or not listed here, treat it as unconfirmed",
+		"If an FAQ conflicts with a structured product, service, price, schedule, permission, or approval rule rendered in this file, the more specific structured configuration wins.",
+		"Response examples are style references only",
+		"Configured tone: formal — be professional, discreet, precise, and warm without sounding stiff; keep short answers short.",
+		"Configured values are decision principles",
+		"## Knowledge Base",
+		"### Official Context",
+		"A Clínica Sol atende consultas particulares e convênios cadastrados. Retornos devem ser confirmados com a recepção.",
+		"### Official FAQs",
+		"**Q: Vocês atendem sem agendamento?**",
+		"A: Atendimento sem agendamento depende de disponibilidade da recepção no dia.",
 		"## Conversation Flow",
 		"- Cumprimentar com acolhimento",
 		"## Style Guide",
@@ -239,6 +275,9 @@ func TestApplyAgentTemplate_WritesWorkspaceFiles(t *testing.T) {
 			t.Errorf("AGENT.md missing %q\n---\n%s", needle, agentMD)
 		}
 	}
+	if strings.Contains(agentMD, "**Q: **") {
+		t.Errorf("AGENT.md should ignore empty FAQ entries\n%s", agentMD)
+	}
 	frontEnd := strings.Index(agentMD[3:], "---")
 	if frontEnd < 0 {
 		t.Fatalf("AGENT.md frontmatter not delimited:\n%s", agentMD)
@@ -271,6 +310,114 @@ func TestApplyAgentTemplate_WritesWorkspaceFiles(t *testing.T) {
 	}
 }
 
+func TestAgentEditorStateMergesProfilePromptAndRouting(t *testing.T) {
+	h, workspace := setupTemplateHandler(t)
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	marketingWorkspace := filepath.Join(t.TempDir(), "workspace-marketing")
+	cfg.Agents.List = []config.AgentConfig{
+		{
+			ID:        "main",
+			Name:      "Ana",
+			Default:   true,
+			Workspace: workspace,
+			Subagents: &config.SubagentsConfig{AllowAgents: []string{"vendas"}},
+		},
+		{
+			ID:        "marketing",
+			Name:      "Maya",
+			Workspace: marketingWorkspace,
+			RoleConfig: &config.AgentRoleConfig{
+				Kind:        "marketing",
+				Description: "Especialista de marketing",
+				Marketing:   &config.MarketingAgentRoleConfig{PublicPublishDir: "public/marketing"},
+			},
+		},
+	}
+	if err := config.SaveConfig(h.configPath, cfg); err != nil {
+		t.Fatalf("SaveConfig() error = %v", err)
+	}
+	if err := saveAgentConfig(marketingWorkspace, &agentTemplateApplyRequest{
+		AgentID:      "marketing",
+		TemplateID:   "atendente-geral",
+		Name:         "Atendente Geral",
+		Presentation: "Payload legado de atendimento.",
+		Language:     "pt-br",
+		Tone:         "friendly",
+		Model:        "gpt-test",
+		SkillConfigs: []agentTemplateSkillConfig{{Name: "agendamento", Enabled: true, Visible: true}},
+	}); err != nil {
+		t.Fatalf("saveAgentConfig() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/editor-state", nil)
+	rec := httptest.NewRecorder()
+	h.handleGetAgentEditorState(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var resp agentEditorStateResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	var marketing *agentEditorStateAgent
+	for i := range resp.Agents {
+		if resp.Agents[i].ID == "marketing" {
+			marketing = &resp.Agents[i]
+			break
+		}
+	}
+	if marketing == nil {
+		t.Fatalf("marketing agent not returned: %#v", resp.Agents)
+	}
+	if marketing.Name != "Maya" {
+		t.Fatalf("Name = %q, want config profile name Maya", marketing.Name)
+	}
+	if marketing.RoleConfig == nil || marketing.RoleConfig.Kind != "marketing" {
+		t.Fatalf("RoleConfig = %#v, want marketing role config", marketing.RoleConfig)
+	}
+	if !marketing.Prompt.Configured || marketing.Prompt.TemplateID != "atendente-geral" {
+		t.Fatalf("Prompt = %#v, want configured legacy prompt", marketing.Prompt)
+	}
+	if marketing.Prompt.Payload == nil || marketing.Prompt.Payload.Name != "Atendente Geral" {
+		t.Fatalf("Prompt.Payload = %#v, want legacy payload preserved", marketing.Prompt.Payload)
+	}
+	if got := resp.MainAllowAgents; len(got) != 1 || got[0] != "vendas" {
+		t.Fatalf("MainAllowAgents = %#v, want [vendas]", got)
+	}
+}
+
+func TestApplyAgentTemplate_KnowledgeBaseOmittedDoesNotRender(t *testing.T) {
+	h, workspace := setupTemplateHandler(t)
+	req := buildSampleRequest()
+
+	encoded, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(encoded, &body); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+	delete(body, "knowledge_base")
+
+	rec := postApplyTemplate(t, h, body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	agentBytes, err := os.ReadFile(filepath.Join(workspace, "AGENT.md"))
+	if err != nil {
+		t.Fatalf("read AGENT.md: %v", err)
+	}
+	agentMD := string(agentBytes)
+	if strings.Contains(agentMD, "## Knowledge Base") {
+		t.Fatalf("AGENT.md should not render empty/omitted knowledge base\n%s", agentMD)
+	}
+}
+
 func TestApplyAgentTemplate_PersistsAgentConfigAndActiveTemplateID(t *testing.T) {
 	h, workspace := setupTemplateHandler(t)
 	req := buildSampleRequest()
@@ -299,6 +446,9 @@ func TestApplyAgentTemplate_PersistsAgentConfigAndActiveTemplateID(t *testing.T)
 	}
 	if len(saved.Products) != 1 {
 		t.Fatalf("saved products = %+v, want one product", saved.Products)
+	}
+	if saved.KnowledgeBase.Overview == "" || len(saved.KnowledgeBase.FAQs) != 2 {
+		t.Fatalf("saved knowledge base did not round-trip: %+v", saved.KnowledgeBase)
 	}
 	if saved.TemplateID != req.TemplateID ||
 		saved.ShortDescription != req.ShortDescription ||
@@ -434,6 +584,90 @@ func TestApplyAgentTemplate_WritesNamedAgentWorkspaceAndConfig(t *testing.T) {
 	}
 }
 
+func TestApplyAgentTemplate_InternalSpecialistsUseRoleSpecificRenderers(t *testing.T) {
+	h, mainWorkspace := setupTemplateHandler(t)
+	cases := []struct {
+		agentID     string
+		name        string
+		mustContain []string
+		mustNot     []string
+	}{
+		{
+			agentID: "vendas",
+			name:    "Leo",
+			mustContain: []string{
+				"Consultor comercial especialista",
+				"tools:",
+				"  - read_file",
+				"  - append_file",
+				"RESUMO_COMERCIAL",
+				"ESTAGIO",
+				"PROXIMA_ACAO",
+				"DADOS_FALTANTES",
+			},
+			mustNot: []string{"customer service attendant", "## Mission / Capabilities", "Write like a real human attendant on WhatsApp"},
+		},
+		{
+			agentID: "marketing",
+			name:    "Maya",
+			mustContain: []string{
+				"Especialista de marketing",
+				"  - generate_image",
+				"  - save_marketing_proposal",
+				"ENTREGA",
+				"ARQUIVOS",
+				"URL",
+				"PENDENCIAS",
+				"public/marketing",
+				"/public/marketing/<arquivo>",
+			},
+			mustNot: []string{"customer service attendant", "## Mission / Capabilities", "Write like a real human attendant on WhatsApp"},
+		},
+		{
+			agentID: "assistente",
+			name:    "Sofia",
+			mustContain: []string{
+				"Assistente privada do dono",
+				"  - tenant_manager",
+				"  - whatsapp_report_query",
+				"  - spawn",
+				"  - subagent",
+				"Do not act as a public customer-service attendant",
+				"Coordinate Ana for public attendance/triage, Leo for sales, and Maya for marketing.",
+			},
+			mustNot: []string{"You are Sofia, the customer service attendant", "generate_image", "save_marketing_proposal", "## Mission / Capabilities"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.agentID, func(t *testing.T) {
+			req := buildSampleRequest()
+			req.AgentID = tc.agentID
+			req.Name = tc.name
+			rec := postApplyTemplate(t, h, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+			}
+			agentPath := filepath.Join(filepath.Dir(mainWorkspace), "workspace-"+tc.agentID, "AGENT.md")
+			agentBytes, err := os.ReadFile(agentPath)
+			if err != nil {
+				t.Fatalf("read %s: %v", agentPath, err)
+			}
+			agentMD := string(agentBytes)
+			for _, want := range tc.mustContain {
+				if !strings.Contains(agentMD, want) {
+					t.Fatalf("%s AGENT.md missing %q:\n%s", tc.agentID, want, agentMD)
+				}
+			}
+			for _, forbidden := range tc.mustNot {
+				if strings.Contains(agentMD, forbidden) {
+					t.Fatalf("%s AGENT.md contains forbidden %q:\n%s", tc.agentID, forbidden, agentMD)
+				}
+			}
+		})
+	}
+}
+
 func TestAgentCRUD_ManagesConfigListWithoutDeletingWorkspace(t *testing.T) {
 	h, mainWorkspace := setupTemplateHandler(t)
 
@@ -493,6 +727,94 @@ func TestAgentCRUD_ManagesConfigListWithoutDeletingWorkspace(t *testing.T) {
 	}
 	if len(cfg.Agents.List) != 1 || cfg.Agents.List[0].ID != "main" || !cfg.Agents.List[0].Default {
 		t.Fatalf("expected only default main after delete, got %+v", cfg.Agents.List)
+	}
+}
+
+func TestAgentCRUD_TogglesActiveState(t *testing.T) {
+	h, _ := setupTemplateHandler(t)
+
+	createBody := bytes.NewBufferString(`{"id":"vendas","name":"Vendas"}`)
+	createReq := httptest.NewRequest(http.MethodPost, "/api/agents", createBody)
+	createRec := httptest.NewRecorder()
+	h.handleCreateAgent(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/agents: expected 201, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+	var created agentSummary
+	if err := json.NewDecoder(createRec.Body).Decode(&created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if !created.Active {
+		t.Fatalf("created agent should be active: %+v", created)
+	}
+
+	activeFalse := false
+	updatePayload, _ := json.Marshal(updateAgentRequest{Active: &activeFalse})
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/agents/vendas", bytes.NewReader(updatePayload))
+	updateReq.SetPathValue("agentID", "vendas")
+	updateRec := httptest.NewRecorder()
+	h.handleUpdateAgent(updateRec, updateReq)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("PUT /api/agents/vendas inactive: expected 200, got %d: %s", updateRec.Code, updateRec.Body.String())
+	}
+	var inactive agentSummary
+	if err := json.NewDecoder(updateRec.Body).Decode(&inactive); err != nil {
+		t.Fatalf("decode inactive response: %v", err)
+	}
+	if inactive.Active || inactive.Default {
+		t.Fatalf("agent should be inactive and non-default: %+v", inactive)
+	}
+
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	idx := findAgentConfigIndex(cfg, "vendas")
+	if idx < 0 || cfg.Agents.List[idx].IsEnabled() {
+		t.Fatalf("saved agent should be disabled, got idx=%d list=%+v", idx, cfg.Agents.List)
+	}
+
+	makeDefault := true
+	defaultPayload, _ := json.Marshal(updateAgentRequest{Default: &makeDefault})
+	defaultReq := httptest.NewRequest(http.MethodPut, "/api/agents/vendas", bytes.NewReader(defaultPayload))
+	defaultReq.SetPathValue("agentID", "vendas")
+	defaultRec := httptest.NewRecorder()
+	h.handleUpdateAgent(defaultRec, defaultReq)
+	if defaultRec.Code != http.StatusBadRequest {
+		t.Fatalf("inactive agent should not become default, got %d: %s", defaultRec.Code, defaultRec.Body.String())
+	}
+
+	activeTrue := true
+	activatePayload, _ := json.Marshal(updateAgentRequest{Active: &activeTrue})
+	activateReq := httptest.NewRequest(http.MethodPut, "/api/agents/vendas", bytes.NewReader(activatePayload))
+	activateReq.SetPathValue("agentID", "vendas")
+	activateRec := httptest.NewRecorder()
+	h.handleUpdateAgent(activateRec, activateReq)
+	if activateRec.Code != http.StatusOK {
+		t.Fatalf("PUT /api/agents/vendas active: expected 200, got %d: %s", activateRec.Code, activateRec.Body.String())
+	}
+	var active agentSummary
+	if err := json.NewDecoder(activateRec.Body).Decode(&active); err != nil {
+		t.Fatalf("decode active response: %v", err)
+	}
+	if !active.Active {
+		t.Fatalf("agent should be active again: %+v", active)
+	}
+
+	defaultReq = httptest.NewRequest(http.MethodPut, "/api/agents/vendas", bytes.NewReader(defaultPayload))
+	defaultReq.SetPathValue("agentID", "vendas")
+	defaultRec = httptest.NewRecorder()
+	h.handleUpdateAgent(defaultRec, defaultReq)
+	if defaultRec.Code != http.StatusOK {
+		t.Fatalf("active agent should become default, got %d: %s", defaultRec.Code, defaultRec.Body.String())
+	}
+
+	updateReq = httptest.NewRequest(http.MethodPut, "/api/agents/vendas", bytes.NewReader(updatePayload))
+	updateReq.SetPathValue("agentID", "vendas")
+	updateRec = httptest.NewRecorder()
+	h.handleUpdateAgent(updateRec, updateReq)
+	if updateRec.Code != http.StatusBadRequest {
+		t.Fatalf("default agent should not be deactivated, got %d: %s", updateRec.Code, updateRec.Body.String())
 	}
 }
 
@@ -1071,6 +1393,80 @@ func TestApplyAgentTemplate_ProductsSection_HidesPrice(t *testing.T) {
 	}
 	if !strings.Contains(agentMD, "preço sob consulta") {
 		t.Errorf("product without visible price should mention \"preço sob consulta\"\n%s", agentMD)
+	}
+}
+
+func TestApplyAgentTemplate_BarateiroQuoteGuardrails(t *testing.T) {
+	h, workspace := setupTemplateHandler(t)
+	req := buildSampleRequest()
+	req.TemplateID = "atendente-loja"
+	req.Name = "Carlão"
+	req.Presentation = "Oi, sou o Carlão, do Barateiro da Construção."
+	req.Tone = "friendly"
+	req.CompanyInfo = agentTemplateCompanyInfo{
+		Name:    "Barateiro da Construção",
+		Hours:   "Seg-Sáb 7h-18h, Dom 7h-12h",
+		Contact: "contato@barateiro.example",
+	}
+	req.KnowledgeBase = agentTemplateKnowledgeBase{}
+	req.Modules.ProductsEnabled = true
+	req.Products = []agentTemplateProduct{
+		{
+			Name:      "Cimento CP II",
+			Details:   "Saco 50kg",
+			Price:     "R$ 50,00",
+			ShowPrice: true,
+		},
+		{
+			Name:      "Areia média",
+			Details:   "Venda por metro cúbico; preço varia conforme quantidade e entrega",
+			ShowPrice: false,
+		},
+		{
+			Name:      "Brita nº1",
+			Details:   "Venda por metro cúbico; preço varia conforme quantidade e entrega",
+			ShowPrice: false,
+		},
+	}
+
+	rec := postApplyTemplate(t, h, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	agentBytes, err := os.ReadFile(filepath.Join(workspace, "AGENT.md"))
+	if err != nil {
+		t.Fatalf("read AGENT.md: %v", err)
+	}
+	agentMD := string(agentBytes)
+
+	mustContain := []string{
+		"You are Carlão, the customer service attendant for Barateiro da Construção.",
+		"Avoid repeated closings, canned offers that start with \"Se quiser\" or \"É só\"",
+		"When a user term looks misspelled, ambiguous, or close to multiple products/services, confirm your interpretation briefly",
+		"Never promise exact callback windows such as \"10 minutes\" or \"15 minutes\"",
+		"For quotes and budgets, only calculate totals with confirmed prices and confirmed quantities",
+		"If an item is \"preço sob consulta\", variable by unit, missing a quantity, or missing an official price, do not estimate it and do not include it in the total",
+		"When a price comes from a tool result, table, or official context after being previously unknown, state the calculation basis",
+		"Treat the configured company, contact, schedule, knowledge base, products, services, professionals, tools, integrations, permission level, approval rules, values, tone, and style guide as the current source of truth",
+		"Configured tone: friendly — be close, natural, helpful, and human without overusing enthusiasm, emojis, jokes, or repeated closings.",
+		"## Products & Pricing",
+		"- **Cimento CP II** (R$ 50,00): Saco 50kg",
+		"- **Areia média**: Venda por metro cúbico; preço varia conforme quantidade e entrega — preço sob consulta",
+		"- **Brita nº1**: Venda por metro cúbico; preço varia conforme quantidade e entrega — preço sob consulta",
+		"Do not estimate, calculate, or include \"preço sob consulta\" items in a total",
+		"give a partial total for confirmed items and list the unpriced items as pending confirmation",
+	}
+	for _, needle := range mustContain {
+		if !strings.Contains(agentMD, needle) {
+			t.Errorf("AGENT.md missing %q\n---\n%s", needle, agentMD)
+		}
+	}
+
+	for _, forbidden := range []string{"R$ 1.267,50", "R$ 1.210,00", "R$ 3.227,50"} {
+		if strings.Contains(agentMD, forbidden) {
+			t.Errorf("AGENT.md should not contain invented quote value %q\n%s", forbidden, agentMD)
+		}
 	}
 }
 

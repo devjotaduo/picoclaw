@@ -63,6 +63,7 @@ var protocolMetaByName = map[string]protocolMeta{
 	"mimo":                     {defaultAPIBase: "https://api.xiaomimimo.com/v1"},
 	"anthropic":                {defaultAPIBase: "https://api.anthropic.com/v1"},
 	"anthropic-messages":       {defaultAPIBase: "https://api.anthropic.com/v1"},
+	"github-models":            {defaultAPIBase: "https://models.inference.ai.azure.com"},
 }
 
 // createClaudeAuthProvider creates a Claude provider using OAuth credentials from auth store.
@@ -242,7 +243,8 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 		"ollama", "moonshot", "shengsuanyun", "deepseek", "cerebras",
 		"vivgrid", "volcengine", "vllm", "qwen", "qwen-portal", "qwen-intl", "qwen-international", "dashscope-intl",
 		"qwen-us", "dashscope-us", "mistral", "avian", "longcat", "modelscope", "novita",
-		"coding-plan", "alibaba-coding", "qwen-coding", "zai", "mimo":
+		"coding-plan", "alibaba-coding", "qwen-coding", "zai", "mimo",
+		"github-models":
 		// All other OpenAI-compatible HTTP providers
 		if cfg.APIKey() == "" && cfg.APIBase == "" && !isEmptyAPIKeyAllowed(protocol) {
 			return nil, "", fmt.Errorf("api_key or api_base is required for HTTP-based protocol %q", protocol)
@@ -312,7 +314,7 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 		return finalizeProviderFromConfig(provider, modelID, cfg)
 
 	case "anthropic":
-		if authMethod == "oauth" || authMethod == "token" {
+		if authMethod == "oauth" || authMethod == "claude_code" {
 			// Use OAuth credentials from auth store
 			provider, err := createClaudeAuthProvider()
 			if err != nil {
@@ -320,23 +322,32 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 			}
 			return finalizeProviderFromConfig(provider, modelID, cfg)
 		}
-		// Use API key with HTTP API
 		apiBase := common.NormalizeBaseURL(cfg.APIBase, "https://api.anthropic.com/v1", true)
+		if authMethod == "token" {
+			cred, err := getCredential("anthropic")
+			if err != nil {
+				return nil, "", fmt.Errorf("loading auth credentials: %w", err)
+			}
+			if cred == nil || strings.TrimSpace(cred.AccessToken) == "" {
+				return nil, "", fmt.Errorf("no API token for anthropic. Run: picoclaw auth login --provider anthropic")
+			}
+			return finalizeProviderFromConfig(anthropicmessages.NewProviderWithTimeout(
+				cred.AccessToken,
+				apiBase,
+				userAgent,
+				cfg.RequestTimeout,
+			), modelID, cfg)
+		}
+		// Use API key with Anthropic's native Messages API.
 		if cfg.APIKey() == "" {
 			return nil, "", fmt.Errorf("api_key is required for anthropic protocol (model: %s)", cfg.Model)
 		}
-		provider := NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
+		return finalizeProviderFromConfig(anthropicmessages.NewProviderWithTimeout(
 			cfg.APIKey(),
 			apiBase,
-			cfg.Proxy,
-			cfg.MaxTokensField,
 			userAgent,
 			cfg.RequestTimeout,
-			cfg.ExtraBody,
-			cfg.CustomHeaders,
-		)
-		provider.SetProviderName(protocol)
-		return finalizeProviderFromConfig(provider, modelID, cfg)
+		), modelID, cfg)
 
 	case "anthropic-messages":
 		// Anthropic Messages API with native format (HTTP-based, no SDK)
@@ -388,15 +399,23 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 		return finalizeProviderFromConfig(NewCodexCliProvider(workspace), modelID, cfg)
 
 	case "github-copilot", "copilot":
-		apiBase := cfg.APIBase
-		if apiBase == "" {
-			apiBase = "localhost:4321"
-		}
+		apiBase := strings.TrimSpace(cfg.APIBase)
 		connectMode := cfg.ConnectMode
 		if connectMode == "" {
 			connectMode = "grpc"
 		}
-		provider, err := NewGitHubCopilotProvider(apiBase, connectMode, modelID)
+		var githubToken string
+		if apiBase == "" && (authMethod == "gh_cli" || authMethod == "token" || authMethod == "oauth") {
+			cred, err := getCredential("github-copilot")
+			if err != nil {
+				return nil, "", fmt.Errorf("loading github-copilot credentials: %w", err)
+			}
+			if cred == nil || strings.TrimSpace(cred.AccessToken) == "" {
+				return nil, "", fmt.Errorf("no credentials for github-copilot. Run: picoclaw auth login --provider github-copilot")
+			}
+			githubToken = cred.AccessToken
+		}
+		provider, err := NewGitHubCopilotProvider(apiBase, connectMode, modelID, githubToken)
 		if err != nil {
 			return nil, "", err
 		}

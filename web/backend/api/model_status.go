@@ -73,10 +73,6 @@ func newModelProbeCacheState() *modelProbeCacheState {
 	return &modelProbeCacheState{cache: map[string]*modelProbeCacheEntry{}}
 }
 
-func resetModelProbeCache() {
-	modelProbeState.resetForTest()
-}
-
 func (s *modelProbeCacheState) resetForTest() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -89,7 +85,7 @@ func hasModelConfiguration(m *config.ModelConfig) bool {
 	authMethod := strings.ToLower(strings.TrimSpace(m.AuthMethod))
 	apiKey := strings.TrimSpace(m.APIKey())
 
-	if authMethod == "oauth" || authMethod == "token" {
+	if authMethod == "oauth" || authMethod == "token" || authMethod == "gh_cli" || authMethod == "claude_code" {
 		if configured, checked := hasStoredOAuthCredential(m); checked {
 			return configured
 		}
@@ -166,6 +162,10 @@ func requiresRuntimeProbe(m *config.ModelConfig) bool {
 	}
 
 	protocol := modelProtocol(m)
+
+	if (protocol == "github-copilot" || protocol == "copilot") && strings.TrimSpace(m.APIBase) == "" {
+		return false
+	}
 
 	switch protocol {
 	case "claude-cli", "claudecli", "codex-cli", "codexcli", "github-copilot", "copilot":
@@ -479,6 +479,11 @@ func oauthProviderForModel(m *config.ModelConfig) (string, bool) {
 		return oauthProviderAnthropic, true
 	case "antigravity", "google-antigravity":
 		return oauthProviderGoogleAntigravity, true
+	case "github-copilot", "copilot":
+		if strings.TrimSpace(m.APIBase) != "" {
+			return "", false
+		}
+		return oauthProviderGitHubCopilot, true
 	default:
 		return "", false
 	}

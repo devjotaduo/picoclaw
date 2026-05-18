@@ -150,7 +150,3 @@ func (s *LauncherProfileStore) List(ctx context.Context) ([]*LauncherProfile, er
 	return out, rows.Err()
 }
 
-func (s *LauncherProfileStore) SetVersion(ctx context.Context, id string, version int64) error {
-	_, err := s.DB.Pool.Exec(ctx, `UPDATE launcher_profiles SET version = $2, updated_at = now() WHERE id = $1`, id, version)
-	return err
-}

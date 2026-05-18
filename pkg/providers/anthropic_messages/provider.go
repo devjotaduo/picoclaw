@@ -168,7 +168,7 @@ func buildRequestBody(
 	}
 
 	result := map[string]any{
-		"model":      model,
+		"model":      strings.ReplaceAll(model, ".", "-"),
 		"max_tokens": int64(maxTokens),
 		"messages":   []any{},
 	}
@@ -250,6 +250,10 @@ func buildRequestBody(
 					"input": input,
 				}
 				content = append(content, toolUse)
+			}
+
+			if len(content) == 0 {
+				continue
 			}
 
 			apiMessages = append(apiMessages, map[string]any{

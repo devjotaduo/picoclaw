@@ -1,14 +1,17 @@
 import {
   IconBolt,
+  IconBook2,
   IconCalendarStats,
   IconCheck,
   IconLoader2,
   IconPackage,
   IconPhoto,
+  IconPlus,
   IconPower,
   IconSend,
   IconShieldLock,
   IconSparkles,
+  IconX,
 } from "@tabler/icons-react"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -43,10 +46,13 @@ import { TemplateIcon } from "./template-icon"
 import type {
   AgentTemplate,
   CompanyScheduleStructured,
+  EmojiPolicy,
   PermissionLevel,
   TemplateApplyPayload,
   TemplateBehavior,
   TemplateFallbackPolicy,
+  TemplateKnowledgeBase,
+  TemplateKnowledgeBaseFAQ,
   TemplateLanguage,
   TemplateModules,
   TemplatePriorityRules,
@@ -180,6 +186,46 @@ export function TemplateConfigSheet({
     onDraftChange({
       ...draft,
       response_examples: { ...draft.response_examples, [key]: value },
+    })
+  }
+
+  function updateKnowledgeBase(patch: Partial<TemplateKnowledgeBase>) {
+    if (!draft) return
+    onDraftChange({
+      ...draft,
+      knowledge_base: {
+        ...draft.knowledge_base,
+        ...patch,
+      },
+    })
+  }
+
+  function updateKnowledgeBaseFAQ(
+    index: number,
+    key: keyof TemplateKnowledgeBaseFAQ,
+    value: string,
+  ) {
+    if (!draft) return
+    updateKnowledgeBase({
+      faqs: draft.knowledge_base.faqs.map((faq, faqIndex) =>
+        faqIndex === index ? { ...faq, [key]: value } : faq,
+      ),
+    })
+  }
+
+  function addKnowledgeBaseFAQ() {
+    if (!draft) return
+    updateKnowledgeBase({
+      faqs: [...draft.knowledge_base.faqs, { question: "", answer: "" }],
+    })
+  }
+
+  function removeKnowledgeBaseFAQ(index: number) {
+    if (!draft) return
+    updateKnowledgeBase({
+      faqs: draft.knowledge_base.faqs.filter(
+        (_, faqIndex) => faqIndex !== index,
+      ),
     })
   }
 
@@ -808,6 +854,127 @@ export function TemplateConfigSheet({
                 </Field>
               </ConfigSection>
 
+              <ConfigSection
+                title={t(
+                  "pages.agent.templates.sections.knowledge_base",
+                  "Base de conhecimento",
+                )}
+                description={t(
+                  "pages.agent.templates.sections.knowledge_base_description",
+                  "Contexto oficial e perguntas frequentes que o agente deve usar como fonte de verdade.",
+                )}
+                accent="info"
+                icon={<IconBook2 className="size-4" />}
+              >
+                <Field
+                  label={t(
+                    "pages.agent.templates.knowledge_base.overview",
+                    "Contexto oficial",
+                  )}
+                  description={t(
+                    "pages.agent.templates.knowledge_base.overview_hint",
+                    "Políticas, observações, regras comerciais e informações importantes que não cabem nos campos estruturados.",
+                  )}
+                >
+                  <Textarea
+                    value={draft.knowledge_base.overview}
+                    onChange={(event) =>
+                      updateKnowledgeBase({ overview: event.target.value })
+                    }
+                    rows={5}
+                    placeholder={t(
+                      "pages.agent.templates.knowledge_base.overview_placeholder",
+                      "Ex.: Entregas na região central são combinadas com o setor comercial. Produtos sob consulta não devem ter preço estimado.",
+                    )}
+                  />
+                </Field>
+                <Field
+                  label={t(
+                    "pages.agent.templates.knowledge_base.faqs",
+                    "Perguntas frequentes",
+                  )}
+                  description={t(
+                    "pages.agent.templates.knowledge_base.faqs_hint",
+                    "Adicione perguntas e respostas oficiais para dúvidas recorrentes.",
+                  )}
+                >
+                  <div className="space-y-3">
+                    {draft.knowledge_base.faqs.map((faq, index) => (
+                      <div
+                        key={index}
+                        className="border-border/50 bg-muted/10 space-y-3 rounded-lg border p-3"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground text-xs font-medium">
+                            {t(
+                              "pages.agent.templates.knowledge_base.faq_item",
+                              {
+                                defaultValue: "FAQ {{number}}",
+                                number: index + 1,
+                              },
+                            )}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            type="button"
+                            className="text-muted-foreground hover:text-destructive shrink-0"
+                            onClick={() => removeKnowledgeBaseFAQ(index)}
+                            title={t(
+                              "pages.agent.templates.knowledge_base.remove_faq",
+                              "Remover FAQ",
+                            )}
+                          >
+                            <IconX className="size-4" />
+                          </Button>
+                        </div>
+                        <Input
+                          value={faq.question}
+                          onChange={(event) =>
+                            updateKnowledgeBaseFAQ(
+                              index,
+                              "question",
+                              event.target.value,
+                            )
+                          }
+                          placeholder={t(
+                            "pages.agent.templates.knowledge_base.question_placeholder",
+                            "Pergunta",
+                          )}
+                        />
+                        <Textarea
+                          value={faq.answer}
+                          onChange={(event) =>
+                            updateKnowledgeBaseFAQ(
+                              index,
+                              "answer",
+                              event.target.value,
+                            )
+                          }
+                          rows={3}
+                          placeholder={t(
+                            "pages.agent.templates.knowledge_base.answer_placeholder",
+                            "Resposta oficial",
+                          )}
+                        />
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addKnowledgeBaseFAQ}
+                    >
+                      <IconPlus className="size-3.5" />
+                      {t(
+                        "pages.agent.templates.knowledge_base.add_faq",
+                        "Adicionar FAQ",
+                      )}
+                    </Button>
+                  </div>
+                </Field>
+              </ConfigSection>
+
               {draft.modules.professionals_enabled ? (
                 <ConfigSection
                   title={t("pages.agent.templates.professionals.title")}
@@ -957,6 +1124,41 @@ export function TemplateConfigSheet({
                   "Regras editoriais do que o agente deve e não deve fazer.",
                 )}
               >
+                <Field
+                  label={t(
+                    "pages.agent.templates.style.emoji_policy",
+                    "Uso de emojis",
+                  )}
+                  description={t(
+                    "pages.agent.templates.style.emoji_policy_hint",
+                    "Escolha se o agente pode usar emoji de forma rara ou se deve evitar totalmente.",
+                  )}
+                >
+                  <Select
+                    value={draft.style_guide.emoji_policy ?? "minimal"}
+                    onValueChange={(value) =>
+                      updateStyleGuide("emoji_policy", value as EmojiPolicy)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="minimal">
+                        {t(
+                          "pages.agent.templates.style.emoji_minimal",
+                          "Poucos emojis quando fizer sentido",
+                        )}
+                      </SelectItem>
+                      <SelectItem value="none">
+                        {t(
+                          "pages.agent.templates.style.emoji_none",
+                          "Não usar nenhum emoji",
+                        )}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
                 <Field label={t("pages.agent.templates.style.do", "Faça")}>
                   <EditableList
                     items={draft.style_guide.do}

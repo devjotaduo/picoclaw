@@ -8,6 +8,8 @@ export type TemplateTone = "formal" | "friendly" | "neutral"
 
 export type TemplateLanguage = "pt-br" | "en" | "zh"
 
+export type EmojiPolicy = "minimal" | "none"
+
 export type ConfidenceLevel = "low" | "medium" | "high"
 export type PriorityLevel = "low" | "medium" | "high"
 export type PermissionLevel =
@@ -67,7 +69,18 @@ export interface TemplateResponseExamples {
   closing: string
 }
 
+export interface TemplateKnowledgeBaseFAQ {
+  question: string
+  answer: string
+}
+
+export interface TemplateKnowledgeBase {
+  overview: string
+  faqs: TemplateKnowledgeBaseFAQ[]
+}
+
 export interface TemplateStyleGuide {
+  emoji_policy?: EmojiPolicy
   do: string[]
   dont: string[]
 }
@@ -236,6 +249,7 @@ export interface AgentTemplate {
   conversation_flow: string[]
   required_fields_by_intent: Record<string, string[]>
   response_examples: TemplateResponseExamples
+  knowledge_base: TemplateKnowledgeBase
   style_guide: TemplateStyleGuide
   fallback_policy: TemplateFallbackPolicy
   handoff_summary_template: TemplateHandoffSummary
@@ -276,6 +290,7 @@ export interface TemplateApplyPayload {
   conversation_flow: string[]
   required_fields_by_intent: Record<string, string[]>
   response_examples: TemplateResponseExamples
+  knowledge_base: TemplateKnowledgeBase
   style_guide: TemplateStyleGuide
   fallback_policy: TemplateFallbackPolicy
   handoff_summary_template: TemplateHandoffSummary

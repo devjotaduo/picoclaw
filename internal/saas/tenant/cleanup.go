@@ -11,6 +11,23 @@ import (
 	"time"
 )
 
+// RemoveVolume deletes the tenant bind-mount directory. It is idempotent: if
+// the directory is already gone, cleanup is complete.
+func RemoveVolume(ctx context.Context, volumeDir string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if _, err := os.Stat(volumeDir); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("stat volume: %w", err)
+	}
+	if err := os.RemoveAll(volumeDir); err != nil {
+		return fmt.Errorf("remove volume: %w", err)
+	}
+	return ctx.Err()
+}
+
 // ArchiveAndRemoveVolume tars+gzips volumeDir into <backupDir>/<tenantID>-<ts>.tar.gz
 // and then removes the volume. Idempotent: if volumeDir doesn't exist, returns
 // nil. The tarball is timestamped so re-runs don't clobber.

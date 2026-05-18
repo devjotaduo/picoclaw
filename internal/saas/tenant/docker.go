@@ -2,6 +2,7 @@ package tenant
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -120,11 +121,46 @@ func (d *DockerClient) Start(ctx context.Context, id string) error {
 }
 
 func (d *DockerClient) Remove(ctx context.Context, id string) error {
-	err := d.cli.ContainerRemove(ctx, id, container.RemoveOptions{Force: true})
+	err := d.cli.ContainerRemove(ctx, id, container.RemoveOptions{Force: true, RemoveVolumes: true})
 	if isNotFound(err) {
 		return ErrContainerNotFound
 	}
 	return err
+}
+
+func (d *DockerClient) RemoveTenantContainers(ctx context.Context, tenantID string, refs ...string) error {
+	targets := map[string]struct{}{}
+	add := func(ref string) {
+		ref = strings.TrimSpace(ref)
+		if ref != "" {
+			targets[ref] = struct{}{}
+		}
+	}
+	for _, ref := range refs {
+		add(ref)
+	}
+
+	managed, err := d.ListManaged(ctx)
+	if err != nil && len(targets) == 0 {
+		return fmt.Errorf("list managed containers: %w", err)
+	}
+	if err == nil {
+		for _, c := range managed {
+			if c.TenantID != tenantID {
+				continue
+			}
+			add(c.ID)
+			add(c.Name)
+		}
+	}
+
+	for ref := range targets {
+		_ = d.Stop(ctx, ref, 10)
+		if err := d.Remove(ctx, ref); err != nil && !errors.Is(err, ErrContainerNotFound) {
+			return err
+		}
+	}
+	return nil
 }
 
 func (d *DockerClient) Inspect(ctx context.Context, id string) (running bool, err error) {

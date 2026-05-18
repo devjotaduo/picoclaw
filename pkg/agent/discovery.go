@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sipeed/picoclaw/internal/orchestrator"
 	"github.com/sipeed/picoclaw/pkg/routing"
 )
 
@@ -206,7 +207,7 @@ func (r *AgentRegistry) defaultAgentIDLocked() string {
 			if !agentCfg.Default {
 				continue
 			}
-			id := routing.NormalizeAgentID(agentCfg.ID)
+			id := orchestrator.CanonicalAgentID(agentCfg.ID)
 			if _, ok := r.agents[id]; ok {
 				return id
 			}
@@ -214,7 +215,7 @@ func (r *AgentRegistry) defaultAgentIDLocked() string {
 		if _, ok := r.agents[routing.DefaultAgentID]; ok {
 			return routing.DefaultAgentID
 		}
-		id := routing.NormalizeAgentID(r.cfg.Agents.List[0].ID)
+		id := orchestrator.CanonicalAgentID(r.cfg.Agents.List[0].ID)
 		if _, ok := r.agents[id]; ok {
 			return id
 		}

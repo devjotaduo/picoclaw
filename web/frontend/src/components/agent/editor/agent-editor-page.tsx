@@ -3,27 +3,49 @@ import {
   IconAlertTriangle,
   IconBraces,
   IconCheck,
+  IconDeviceFloppy,
   IconEdit,
+  IconFileDescription,
+  IconHeadset,
   IconLoader2,
+  IconMessageCircle,
+  IconPhoto,
+  IconPlayerPause,
+  IconPlayerPlay,
   IconPlus,
+  IconRefresh,
+  IconRobot,
+  IconSearch,
+  IconSend,
+  IconSettings,
+  IconShield,
   IconSparkles,
+  IconTargetArrow,
   IconTrash,
+  IconUserShield,
   IconUsers,
+  IconWorldWww,
 } from "@tabler/icons-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
 import {
   type AgentConfigResponse,
+  type AgentEditorAgent,
   type AgentSummary,
   applyAgentTemplate,
   createAgent,
   deleteAgent,
-  getAgentConfig,
-  listAgents,
+  getAgentEditorState,
+  updateAgent,
 } from "@/api/agent-templates"
+import {
+  getInternalAgentProposals,
+  sendInternalAgentTurn,
+  updateInternalAgentOrchestration,
+} from "@/api/internal-agents"
 import { getSkills } from "@/api/skills"
 import { CodeEditor } from "@/components/code-editor"
 import { PageHeader } from "@/components/page-header"
@@ -46,16 +68,100 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 import { AGENT_TEMPLATES, getTemplateById } from "../templates/catalog"
 import { substituteAgentPlaceholders } from "../templates/substitute-placeholders"
 import { TemplateConfigSheet } from "../templates/template-config-sheet"
 import { DEFAULT_BEHAVIOR } from "../templates/types"
-import type { AgentTemplate, TemplateApplyPayload } from "../templates/types"
+import type {
+  AgentTemplate,
+  TemplateApplyPayload,
+  TemplateKnowledgeBase,
+} from "../templates/types"
 import {
   defaultTemplateSkillConfigs,
   templateToDraft,
 } from "../templates/use-templates-page"
+
+// ─── tab type ────────────────────────────────────────────────────────────────
+
+type ActiveTab = "config" | "profile" | "chat"
+
+// ─── orchestration-specific types ────────────────────────────────────────────
+
+type ChatMessage = { role: "user" | "assistant"; content: string }
+
+type AgentProfileDraft = {
+  name: string
+  icon: string
+  initials: string
+  background: string
+  foreground: string
+  imageURL: string
+}
+
+type RoleConfigDraft = Record<string, unknown>
+
+type MarketingRoleConfig = {
+  platforms?: string[]
+  deliverables?: string[]
+  approval_mode?: string
+  public_publish_dir?: string
+  brand_kit?: {
+    colors?: string[]
+    fonts?: string[]
+    tone?: string
+    visual_style?: string
+  }
+  content_pillars?: string[]
+  audiences?: unknown[]
+  cadence?: {
+    posts_per_week?: number
+    campaigns_per_month?: number
+    planning_horizon?: string
+  }
+  trend_sources?: string[]
+  competitors?: string[]
+  default_image_sizes?: Record<string, string>
+  requires_human_review?: boolean
+}
+
+type SalesRoleConfig = {
+  funnel_stages?: string[]
+  qualification_fields?: string[]
+  followup_cadence?: string[]
+  crm_integration?: string
+  price_policy_source?: string
+  handoff_rules?: string[]
+}
+
+type AttendantRoleConfig = {
+  departments?: string[]
+  triage_fields?: string[]
+  escalation_rules?: string[]
+  scheduling_enabled?: boolean
+  faq_source?: string
+}
+
+type AssistantRoleConfig = {
+  authorized_scopes?: string[]
+  report_cadence?: string[]
+  can_edit_agents?: boolean
+  can_call_agents?: string[]
+  requires_confirmation?: string[]
+  audit_level?: string
+}
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
 
 function normalizeAgentIDPreview(input: string): string {
   const normalized = input
@@ -68,9 +174,336 @@ function normalizeAgentIDPreview(input: string): string {
   return normalized || "main"
 }
 
-// The backend serializes `agent_config.json` with Go's `omitempty`, so empty
-// arrays and zero-valued objects come back as `undefined`. The sheet expects
-// every array/object key to be present, so we hydrate the holes here.
+function agentInitials(agent: AgentSummary): string {
+  const name = agent.name || agent.id
+  const parts = name.split(/[\s_-]+/).filter(Boolean)
+  if (parts.length >= 2) {
+    return (parts[0]![0]! + parts[1]![0]!).toUpperCase()
+  }
+  return name.slice(0, 2).toUpperCase()
+}
+
+function defaultAvatarForAgent(agent: AgentSummary) {
+  switch (agent.id) {
+    case "main":
+      return {
+        icon: "headset",
+        initials: "AN",
+        background: "#2563eb",
+        foreground: "#ffffff",
+        image_url: "",
+      }
+    case "vendas":
+      return {
+        icon: "target",
+        initials: "LE",
+        background: "#16a34a",
+        foreground: "#ffffff",
+        image_url: "",
+      }
+    case "marketing":
+      return {
+        icon: "sparkles",
+        initials: "MA",
+        background: "#f43f5e",
+        foreground: "#ffffff",
+        image_url: "",
+      }
+    case "assistente":
+      return {
+        icon: "assistant",
+        initials: "SO",
+        background: "#7c3aed",
+        foreground: "#ffffff",
+        image_url: "",
+      }
+    default:
+      return {
+        icon: "robot",
+        initials: agentInitials(agent),
+        background: "#475569",
+        foreground: "#ffffff",
+        image_url: "",
+      }
+  }
+}
+
+function iconForAvatar(icon?: string) {
+  switch ((icon || "").trim().toLowerCase()) {
+    case "headset":
+      return IconHeadset
+    case "target":
+    case "sales":
+      return IconTargetArrow
+    case "sparkles":
+    case "marketing":
+      return IconSparkles
+    case "assistant":
+    case "shield":
+      return IconUserShield
+    case "robot":
+      return IconRobot
+    case "site":
+    case "world":
+      return IconWorldWww
+    default:
+      return null
+  }
+}
+
+function agentRoleLabel(agent: AgentSummary): string {
+  switch (agent.id) {
+    case "main":
+      return "Atendente principal"
+    case "vendas":
+      return "Consultor de vendas"
+    case "marketing":
+      return "Especialista de marketing"
+    case "assistente":
+      return "Assistente do dono"
+    default:
+      return agent.role_config?.description || agent.template_id || "Agente"
+  }
+}
+
+function marketingPublishDir(agent: AgentSummary): string {
+  return agent.role_config?.marketing?.public_publish_dir || "public/marketing"
+}
+
+function splitLines(value: string): string[] {
+  return value
+    .split(/\r?\n|,/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+function lines(value?: unknown): string {
+  return Array.isArray(value) ? value.map(String).join("\n") : ""
+}
+
+function parseRoleConfigDraft(draft: string): RoleConfigDraft | null {
+  try {
+    const parsed = JSON.parse(draft || "{}") as unknown
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return null
+    return parsed as RoleConfigDraft
+  } catch {
+    return null
+  }
+}
+
+function proposalKind(proposal: unknown): string {
+  if (!proposal || typeof proposal !== "object") return ""
+  const r = proposal as Record<string, unknown>
+  return typeof r.kind === "string" ? r.kind : ""
+}
+
+function proposalTitle(proposal: unknown): string {
+  if (!proposal || typeof proposal !== "object") return "Proposta"
+  const r = proposal as Record<string, unknown>
+  for (const key of ["title", "name", "campaign_name"]) {
+    const v = r[key]
+    if (typeof v === "string" && v.trim()) return v
+  }
+  return proposalKind(proposal) || "Proposta"
+}
+
+function proposalAssets(proposal: unknown): string[] {
+  if (!proposal || typeof proposal !== "object") return []
+  const assets = (proposal as Record<string, unknown>).asset_paths
+  return Array.isArray(assets)
+    ? assets.filter((x): x is string => typeof x === "string")
+    : []
+}
+
+function proposalPublicURLs(proposal: unknown): string[] {
+  if (!proposal || typeof proposal !== "object") return []
+  const urls = (proposal as Record<string, unknown>).public_urls
+  return Array.isArray(urls)
+    ? urls.filter((x): x is string => typeof x === "string")
+    : []
+}
+
+function profileDraftFromInternal(agent: AgentEditorAgent): AgentProfileDraft {
+  const fallbacksByID: Record<string, AgentProfileDraft> = {
+    main: { name: "Ana", icon: "headset", initials: "AN", background: "#2563eb", foreground: "#ffffff", imageURL: "" },
+    vendas: { name: "Leo", icon: "target", initials: "LE", background: "#16a34a", foreground: "#ffffff", imageURL: "" },
+    marketing: { name: "Maya", icon: "sparkles", initials: "MA", background: "#f43f5e", foreground: "#ffffff", imageURL: "" },
+    assistente: { name: "Sofia", icon: "assistant", initials: "SO", background: "#7c3aed", foreground: "#ffffff", imageURL: "" },
+  }
+  const fallback = fallbacksByID[agent.id] ?? {
+    name: agent.name || agent.id,
+    icon: "robot",
+    initials: (agent.name || agent.id).slice(0, 2).toUpperCase(),
+    background: "#475569",
+    foreground: "#ffffff",
+    imageURL: "",
+  }
+  return {
+    name: agent.name || fallback.name,
+    icon: agent.avatar?.icon || fallback.icon,
+    initials: agent.avatar?.initials || fallback.initials,
+    background: agent.avatar?.background || fallback.background,
+    foreground: agent.avatar?.foreground || fallback.foreground,
+    imageURL: agent.avatar?.image_url || fallback.imageURL,
+  }
+}
+
+const quickPromptsByAgent: Record<
+  string,
+  Array<{ icon: React.ElementType; label: string; prompt: string }>
+> = {
+  marketing: [
+    {
+      icon: IconWorldWww,
+      label: "Testar site",
+      prompt:
+        "Crie um site simples de uma página para uma empresa fictícia chamada Studio Solar, com hero, benefícios, planos sob consulta e contato pelo WhatsApp a confirmar. Salve em public/marketing/site-studio-solar.html e registre proposta kind site.",
+    },
+    {
+      icon: IconFileDescription,
+      label: "Testar catálogo",
+      prompt:
+        "Crie um catálogo HTML simples para a empresa fictícia Café Aurora com 3 produtos: Espresso R$8, Capuccino R$12 e Cold Brew R$15. Salve em public/marketing/catalogo-cafe-aurora.html e registre proposta kind catalog.",
+    },
+    {
+      icon: IconPhoto,
+      label: "Campanha",
+      prompt:
+        "Crie uma campanha curta para Instagram para uma empresa fictícia de serviços locais, com ideia visual, legenda, CTA e próximos passos. Não gere imagem agora.",
+    },
+  ],
+}
+
+function agentKind(agentID: string): "attendant" | "sales" | "marketing" | "assistant" | "custom" {
+  switch (agentID) {
+    case "main":
+      return "attendant"
+    case "vendas":
+      return "sales"
+    case "marketing":
+      return "marketing"
+    case "assistente":
+      return "assistant"
+    default:
+      return "custom"
+  }
+}
+
+function promptEditLabel(agent: AgentSummary): string {
+  const name = agent.name || agent.id
+  switch (agent.id) {
+    case "main":
+      return `Editar atendimento da ${name}`
+    case "vendas":
+      return `Editar vendas do ${name}`
+    case "marketing":
+      return `Editar marketing da ${name}`
+    case "assistente":
+      return `Editar assistente ${name}`
+    default:
+      return `Editar prompt de ${name}`
+  }
+}
+
+function promptSheetTitle(agent?: AgentSummary | null): string {
+  if (!agent) return "Prompt do agente"
+  const name = agent.name || agent.id
+  switch (agent.id) {
+    case "vendas":
+      return `${name}: vendas e follow-up`
+    case "marketing":
+      return `${name}: marketing, sites e catálogos`
+    case "assistente":
+      return `${name}: assistente privada`
+    case "main":
+      return `${name}: atendimento público`
+    default:
+      return `${name}: prompt do workspace`
+  }
+}
+
+function rolePromptDefaults(agent: AgentSummary): Pick<
+  TemplateApplyPayload,
+  "template_id" | "short_description" | "presentation" | "functions" | "prohibitions" | "protections" | "approval_required_for"
+> {
+  switch (agent.id) {
+    case "vendas":
+      return {
+        template_id: "especialista-vendas",
+        short_description: "Consultor comercial subagente para qualificação, venda e follow-up.",
+        presentation: "Sou o Leo, consultor comercial. Qualifico oportunidades, trato objeções, organizo follow-up e devolvo um resumo comercial objetivo.",
+        functions: ["Qualificar leads", "Classificar estágio do funil", "Sugerir próxima ação", "Preparar resumo comercial"],
+        prohibitions: ["Não fazer suporte operacional", "Não criar campanhas de marketing", "Não prometer preço sem fonte confirmada"],
+        protections: ["Encaminhar exceções comerciais para aprovação humana", "Registrar dados faltantes antes de avançar"],
+        approval_required_for: ["desconto", "condição comercial especial", "contrato", "promessa de prazo"],
+      }
+    case "marketing":
+      return {
+        template_id: "especialista-marketing",
+        short_description: "Especialista de marketing para campanhas, posts, imagens, catálogos HTML e sites simples.",
+        presentation: "Sou a Maya, especialista de marketing. Crio campanhas, posts, calendários, catálogos HTML e sites simples para aprovação.",
+        functions: ["Criar posts e campanhas", "Gerar ideias visuais", "Salvar catálogos e sites em public/marketing", "Apontar pendências para aprovação"],
+        prohibitions: ["Não atender cliente final", "Não vender no lugar do Leo", "Não publicar sem aprovação quando a regra exigir"],
+        protections: ["Usar a pasta pública configurada", "Registrar arquivos e URLs gerados", "Pedir aprovação quando houver risco de marca"],
+        approval_required_for: ["publicação externa", "uso de imagem sensível", "promoção com preço", "campanha paga"],
+      }
+    case "assistente":
+      return {
+        template_id: "assistente-dono",
+        short_description: "Assistente privada do dono para organização, relatórios, documentos e coordenação dos agentes.",
+        presentation: "Sou a Sofia, assistente privada do dono. Organizo agenda, relatórios, documentos, workspace e coordeno Ana, Leo e Maya quando necessário.",
+        functions: ["Organizar agenda e relatórios", "Editar workspace autorizado", "Coordenar agentes internos", "Solicitar confirmação para mudanças sensíveis"],
+        prohibitions: ["Não agir como atendente pública", "Não atender WhatsApp público", "Não executar mudanças sensíveis sem confirmação"],
+        protections: ["Verificar autorização do solicitante", "Registrar decisões importantes", "Pedir confirmação antes de alterar agentes ou permissões"],
+        approval_required_for: ["alterar agentes", "alterar permissões", "apagar arquivos", "enviar relatório externo"],
+      }
+    default:
+      return {
+        template_id: "atendente-geral",
+        short_description: "Atendente principal para dúvidas, triagem, encaminhamento e agendamento.",
+        presentation: "Olá! Sou a Ana, atendente principal. Posso responder dúvidas, coletar dados iniciais e encaminhar para o setor certo.",
+        functions: ["Responder dúvidas gerais", "Fazer triagem", "Encaminhar para vendas", "Apoiar agendamentos"],
+        prohibitions: ["Não inventar informação", "Não chamar marketing ou assistente pelo WhatsApp público"],
+        protections: ["Encaminhar casos sensíveis para humano", "Pedir dados mínimos antes de acionar vendas"],
+        approval_required_for: ["informação sensível", "exceção comercial", "assunto jurídico"],
+      }
+  }
+}
+
+function defaultDraftForAgent(
+  agent: AgentSummary,
+  installedSkills: Parameters<typeof defaultTemplateSkillConfigs>[1],
+): TemplateApplyPayload {
+  const baseTemplate = AGENT_TEMPLATES[0]
+  const base = baseTemplate
+    ? templateToDraft(baseTemplate, defaultTemplateSkillConfigs(baseTemplate, installedSkills))
+    : hydrateAgentPayload({} as TemplateApplyPayload)
+  const defaults = rolePromptDefaults(agent)
+  return hydrateAgentPayload({
+    ...base,
+    ...defaults,
+    agent_id: agent.id,
+    name: agent.name || base.name || agent.id,
+    company_info: {
+      ...base.company_info,
+      name: base.company_info?.name || "{company.name}",
+    },
+  })
+}
+
+function hydrateKnowledgeBase(
+  knowledgeBase?: TemplateKnowledgeBase,
+): TemplateKnowledgeBase {
+  return {
+    overview: knowledgeBase?.overview ?? "",
+    faqs: (knowledgeBase?.faqs ?? []).map((faq) => ({
+      question: faq.question ?? "",
+      answer: faq.answer ?? "",
+    })),
+  }
+}
+
 function hydrateAgentPayload(raw: TemplateApplyPayload): TemplateApplyPayload {
   return {
     ...raw,
@@ -84,46 +517,28 @@ function hydrateAgentPayload(raw: TemplateApplyPayload): TemplateApplyPayload {
     conversation_flow: raw.conversation_flow ?? [],
     required_fields_by_intent: raw.required_fields_by_intent ?? {},
     response_examples: {
-      ...{
-        greeting: "",
-        clarification: "",
-        unknown_answer: "",
-        routing: "",
-        closing: "",
-      },
+      ...{ greeting: "", clarification: "", unknown_answer: "", routing: "", closing: "" },
       ...raw.response_examples,
     },
+    knowledge_base: hydrateKnowledgeBase(raw.knowledge_base),
     style_guide: {
+      emoji_policy: raw.style_guide?.emoji_policy ?? "minimal",
       do: raw.style_guide?.do ?? [],
       dont: raw.style_guide?.dont ?? [],
     },
     fallback_policy: {
-      max_clarifying_questions:
-        raw.fallback_policy?.max_clarifying_questions ?? 0,
+      max_clarifying_questions: raw.fallback_policy?.max_clarifying_questions ?? 0,
       when_unsure: raw.fallback_policy?.when_unsure ?? "",
       when_to_route: raw.fallback_policy?.when_to_route ?? [],
       route_message: raw.fallback_policy?.route_message ?? "",
     },
     handoff_summary_template: raw.handoff_summary_template ?? {
-      cliente: "",
-      contato: "",
-      motivo: "",
-      resumo: "",
-      dados_coletados: "",
-      urgencia: "",
-      setor_destino: "",
-      proxima_acao: "",
+      cliente: "", contato: "", motivo: "", resumo: "", dados_coletados: "",
+      urgencia: "", setor_destino: "", proxima_acao: "",
     },
     structured_output_template: raw.structured_output_template ?? {
-      intent: "",
-      confidence: "",
-      collected_fields: {},
-      missing_fields: [],
-      needs_routing: false,
-      target_sector: "",
-      priority: "",
-      summary: "",
-      next_action: "",
+      intent: "", confidence: "", collected_fields: {}, missing_fields: [],
+      needs_routing: false, target_sector: "", priority: "", summary: "", next_action: "",
     },
     priority_rules: {
       high: raw.priority_rules?.high ?? [],
@@ -161,103 +576,296 @@ function hydrateAgentPayload(raw: TemplateApplyPayload): TemplateApplyPayload {
   }
 }
 
-// Hydrate + substitute placeholders together so the sheet sees fully resolved
-// text, even for configs that were saved before the substitution helper
-// existed.
 function prepareDraftForEdit(
   raw: TemplateApplyPayload,
   agentId: string,
 ): TemplateApplyPayload {
-  return {
-    ...substituteAgentPlaceholders(hydrateAgentPayload(raw)),
-    agent_id: agentId,
-  }
+  return { ...substituteAgentPlaceholders(hydrateAgentPayload(raw)), agent_id: agentId }
 }
+
+// ─── shared UI sub-components ─────────────────────────────────────────────────
+
+function AgentAvatar({
+  agent,
+  size = "md",
+}: {
+  agent: AgentSummary
+  size?: "sm" | "md" | "lg"
+}) {
+  const sizeClasses = { sm: "size-8 text-xs", md: "size-10 text-sm", lg: "size-14 text-base" }
+  const fallback = defaultAvatarForAgent(agent)
+  const avatar = agent.avatar ?? fallback
+  const Icon = iconForAvatar(avatar.icon || fallback.icon)
+  const imageURL = avatar.image_url?.trim()
+  const initials = avatar.initials?.trim() || fallback.initials
+  return (
+    <div
+      className={`${sizeClasses[size]} ring-border/50 flex shrink-0 items-center justify-center overflow-hidden rounded-xl font-semibold ring-1`}
+      style={{ backgroundColor: avatar.background || fallback.background, color: avatar.foreground || fallback.foreground }}
+      aria-hidden="true"
+    >
+      {imageURL ? (
+        <img src={imageURL} alt="" className="size-full object-cover" />
+      ) : Icon ? (
+        <Icon className={size === "lg" ? "size-7" : "size-4"} />
+      ) : (
+        initials
+      )}
+    </div>
+  )
+}
+
+function ProfileAvatar({ profile }: { profile: AgentProfileDraft }) {
+  const Icon = iconForAvatar(profile.icon)
+  const imageURL = profile.imageURL.trim()
+  const initials = profile.initials.trim() || profile.name.slice(0, 2).toUpperCase()
+  return (
+    <span
+      className="ring-border/50 flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl text-sm font-semibold ring-1"
+      style={{ backgroundColor: profile.background || "#475569", color: profile.foreground || "#ffffff" }}
+      aria-hidden="true"
+    >
+      {imageURL ? (
+        <img src={imageURL} alt="" className="size-full object-cover" />
+      ) : Icon ? (
+        <Icon className="size-4" />
+      ) : (
+        initials
+      )}
+    </span>
+  )
+}
+
+function StatusBadge({ active }: { active: boolean }) {
+  const { t } = useTranslation()
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+        active
+          ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-800"
+          : "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-400 dark:ring-red-800"
+      }`}
+    >
+      <span className={`size-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-red-500"}`} />
+      {active ? t("pages.agent.editor.active", "Ativo") : t("pages.agent.editor.inactive", "Inativo")}
+    </span>
+  )
+}
+
+function ConfigBadge({ configured }: { configured: boolean }) {
+  const { t } = useTranslation()
+  if (configured) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:ring-blue-800">
+        {t("pages.agent.editor.configured", "Configurado")}
+      </span>
+    )
+  }
+  return (
+    <Badge variant="secondary" className="rounded-full text-xs">
+      {t("pages.agent.editor.not_configured", "Rascunho")}
+    </Badge>
+  )
+}
+
+function ReadyStatusBadges({
+  agent,
+  compact = false,
+}: {
+  agent: AgentEditorAgent
+  compact?: boolean
+}) {
+  const profileReady = Boolean(agent.name?.trim() && agent.role_config?.kind)
+  const promptReady = agent.prompt?.configured ?? false
+  const routingReady = Boolean(agent.access || agent.subagents || agent.default)
+  const items = [
+    { label: compact ? "Perfil" : "Perfil pronto", ready: profileReady },
+    { label: compact ? "Prompt" : "Prompt pronto", ready: promptReady },
+    { label: compact ? "Rotas" : "Roteamento pronto", ready: routingReady },
+  ]
+  return (
+    <>
+      {items.map((item) => (
+        <span
+          key={item.label}
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${
+            item.ready
+              ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-800"
+              : "bg-muted text-muted-foreground ring-border"
+          }`}
+        >
+          {item.label}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function DefaultBadge() {
+  const { t } = useTranslation()
+  return (
+    <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:ring-violet-800">
+      {t("pages.agent.editor.default", "Padrão")}
+    </span>
+  )
+}
+
+function InfoCard({ label, value, mono = false }: { label: string; value: string | undefined | null; mono?: boolean }) {
+  return (
+    <div className="bg-muted/30 hover:bg-muted/50 min-w-0 rounded-xl border border-transparent px-4 py-3 transition-colors">
+      <p className="text-muted-foreground mb-1 text-[10px] font-medium tracking-wider uppercase">{label}</p>
+      <p className={`text-foreground min-w-0 truncate text-sm font-medium ${mono ? "font-mono text-xs" : ""}`} title={value || "—"}>
+        {value || "—"}
+      </p>
+    </div>
+  )
+}
+
+function SectionHeader({ title, icon: Icon }: { title: string; icon: React.ElementType }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Icon className="text-muted-foreground size-3.5" />
+      <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">{title}</h3>
+    </div>
+  )
+}
+
+function TabBar({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: { id: ActiveTab; label: string; icon: React.ElementType }[]
+  active: ActiveTab
+  onChange: (tab: ActiveTab) => void
+}) {
+  return (
+    <div className="border-border/40 flex border-b">
+      {tabs.map((tab) => {
+        const Icon = tab.icon
+        const isActive = tab.id === active
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => onChange(tab.id)}
+            className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+              isActive
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Icon className="size-3.5" />
+            {tab.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── main page ────────────────────────────────────────────────────────────────
 
 export function AgentEditorPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const agentsQuery = useQuery({
-    queryKey: ["agents"],
-    queryFn: listAgents,
-  })
-  const agents = useMemo(
-    () => agentsQuery.data?.agents ?? [],
-    [agentsQuery.data?.agents],
-  )
-  const firstAgentId =
-    agents.find((agent) => agent.default)?.id ?? agents[0]?.id ?? "main"
+  // ── editor state ──────────────────────────────────────────────────────────
+  const editorStateQuery = useQuery({ queryKey: ["agent-editor-state"], queryFn: getAgentEditorState })
+  const agents = useMemo(() => editorStateQuery.data?.agents ?? [], [editorStateQuery.data?.agents])
+  const firstAgentId = agents.find((a) => a.default)?.id ?? agents[0]?.id ?? "main"
+
   const [selectedAgentId, setSelectedAgentId] = useState(firstAgentId)
+  const [searchQuery, setSearchQuery] = useState("")
+  const prevAgentIdRef = useRef(selectedAgentId)
 
   useEffect(() => {
     if (agents.length === 0) return
-    if (!agents.some((agent) => agent.id === selectedAgentId)) {
-      setSelectedAgentId(firstAgentId)
-    }
+    if (!agents.some((a) => a.id === selectedAgentId)) setSelectedAgentId(firstAgentId)
   }, [agents, firstAgentId, selectedAgentId])
 
-  const selectedAgent =
-    agents.find((agent) => agent.id === selectedAgentId) ?? agents[0] ?? null
+  useEffect(() => {
+    prevAgentIdRef.current = selectedAgentId
+  }, [selectedAgentId])
 
-  const configQuery = useQuery({
-    queryKey: ["agent-config", selectedAgentId],
-    queryFn: () => getAgentConfig(selectedAgentId),
-    enabled: selectedAgentId.trim() !== "",
-  })
-  const skillsQuery = useQuery({ queryKey: ["skills"], queryFn: getSkills })
-
-  const installedSkills = useMemo(
-    () => skillsQuery.data?.skills ?? [],
-    [skillsQuery.data?.skills],
+  const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? agents[0] ?? null
+  const selectedPrompt = selectedAgent?.prompt
+  const configData = useMemo<AgentConfigResponse>(
+    () => ({
+      configured: selectedPrompt?.configured ?? false,
+      payload: selectedPrompt?.payload,
+      applied_at: selectedPrompt?.applied_at,
+    }),
+    [selectedPrompt],
   )
+  const skillsQuery = useQuery({ queryKey: ["skills"], queryFn: getSkills })
+  const installedSkills = useMemo(() => skillsQuery.data?.skills ?? [], [skillsQuery.data?.skills])
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<TemplateApplyPayload | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [newAgentName, setNewAgentName] = useState("")
   const [newAgentID, setNewAgentID] = useState("")
-  const [newAgentTemplateID, setNewAgentTemplateID] = useState(
-    AGENT_TEMPLATES[0]?.id ?? "",
-  )
+  const [newAgentTemplateID, setNewAgentTemplateID] = useState(AGENT_TEMPLATES[0]?.id ?? "")
   const [rawOpen, setRawOpen] = useState(false)
   const [rawDraft, setRawDraft] = useState("")
   const [rawError, setRawError] = useState<string | null>(null)
 
-  // The catalog supplies the template metadata (icon, short_description) that
-  // the sheet uses for its header. When creating a fresh agent, the draft owns
-  // this id before a persisted config exists.
   const template = useMemo<AgentTemplate | null>(() => {
-    const id = draft?.template_id ?? configQuery.data?.payload?.template_id
+    const id = draft?.template_id ?? selectedPrompt?.payload?.template_id ?? selectedPrompt?.template_id
     if (!id) return null
     return getTemplateById(id) ?? AGENT_TEMPLATES[0] ?? null
-  }, [configQuery.data?.payload?.template_id, draft?.template_id])
+  }, [draft?.template_id, selectedPrompt?.payload?.template_id, selectedPrompt?.template_id])
 
+  // ── orchestration state ───────────────────────────────────────────────────
+  const [mainAgentID, setMainAgentID] = useState("main")
+  const [mainAllowAgents, setMainAllowAgents] = useState<string[]>([])
+  const [assistantJIDs, setAssistantJIDs] = useState("")
+  const [assistantChats, setAssistantChats] = useState("")
+  const [profiles, setProfiles] = useState<Record<string, AgentProfileDraft>>({})
+  const [roleConfigDrafts, setRoleConfigDrafts] = useState<Record<string, string>>({})
+
+  // chat state — reset when agent changes
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState("")
+  const [chatSessionID, setChatSessionID] = useState<string | undefined>()
+  const [proposals, setProposals] = useState<unknown[]>([])
+
+  useEffect(() => {
+    const data = editorStateQuery.data
+    if (!data) return
+    const nextMain = data.main_agent_id || data.agents.find((a) => a.default)?.id || "main"
+    setMainAgentID(nextMain)
+    setMainAllowAgents((data.main_allow_agents || []).filter((id) => id !== nextMain))
+    setAssistantJIDs((data.assistant_whatsapp_jids || data.admin_whatsapp_jids || []).join("\n"))
+    setAssistantChats((data.assistant_whatsapp_chats || []).join("\n"))
+    setProfiles(Object.fromEntries(data.agents.map((a) => [a.id, profileDraftFromInternal(a)])))
+    setRoleConfigDrafts(Object.fromEntries(data.agents.map((a) => [a.id, JSON.stringify(a.role_config ?? {}, null, 2)])))
+  }, [editorStateQuery.data])
+
+  useEffect(() => {
+    setChatMessages([])
+    setChatSessionID(undefined)
+    setProposals([])
+    if (!selectedAgentId) return
+    getInternalAgentProposals(selectedAgentId).then(setProposals).catch(() => setProposals([]))
+  }, [selectedAgentId])
+
+  // ── mutations ─────────────────────────────────────────────────────────────
   const applyMutation = useMutation({
     mutationFn: applyAgentTemplate,
     onSuccess: (_result, appliedDraft) => {
       const agentId = appliedDraft.agent_id ?? selectedAgentId
       toast.success(t("pages.agent.editor.save_success"))
-      queryClient.setQueryData<AgentConfigResponse>(
-        ["agent-config", agentId],
-        (old) => ({
-          ...old,
-          configured: true,
-          payload: appliedDraft,
-        }),
-      )
       setEditing(false)
       setDraft(null)
+      void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })
       void queryClient.invalidateQueries({ queryKey: ["agents"] })
-      void queryClient.invalidateQueries({
-        queryKey: ["agent-config", agentId],
-      })
+      void queryClient.invalidateQueries({ queryKey: ["agent-config", agentId] })
       void queryClient.invalidateQueries({ queryKey: ["config"] })
     },
     onError: (err) => {
-      toast.error(
-        err instanceof Error ? err.message : t("pages.agent.editor.save_error"),
-      )
+      toast.error(err instanceof Error ? err.message : t("pages.agent.editor.save_error"))
     },
   })
 
@@ -265,68 +873,109 @@ export function AgentEditorPage() {
     mutationFn: async () => {
       const name = newAgentName.trim()
       const rawID = newAgentID.trim() || name
-      const template =
-        getTemplateById(newAgentTemplateID) ?? AGENT_TEMPLATES[0] ?? null
-      if (!template) {
-        throw new Error("No agent template available.")
-      }
+      const tmpl = getTemplateById(newAgentTemplateID) ?? AGENT_TEMPLATES[0] ?? null
+      if (!tmpl) throw new Error("No agent template available.")
       const created = await createAgent({ id: rawID, name })
-      return { created, template }
+      return { created, template: tmpl }
     },
-    onSuccess: ({ created, template }) => {
-      toast.success(t("pages.agent.editor.create_success", "Agent created."))
+    onSuccess: ({ created, template: tmpl }) => {
+      toast.success(t("pages.agent.editor.create_success", "Agente criado."))
       setCreateOpen(false)
       setSelectedAgentId(created.id)
-      const nextDraft = templateToDraft(
-        template,
-        defaultTemplateSkillConfigs(template, installedSkills),
-      )
-      setDraft({
-        ...nextDraft,
-        agent_id: created.id,
-        name: created.name || nextDraft.name,
-      })
+      const nextDraft = templateToDraft(tmpl, defaultTemplateSkillConfigs(tmpl, installedSkills))
+      setDraft({ ...nextDraft, agent_id: created.id, name: created.name || nextDraft.name })
       setEditing(true)
       setNewAgentName("")
       setNewAgentID("")
+      void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })
       void queryClient.invalidateQueries({ queryKey: ["agents"] })
     },
     onError: (err) => {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : t("pages.agent.editor.create_error", "Could not create agent."),
-      )
+      toast.error(err instanceof Error ? err.message : t("pages.agent.editor.create_error", "Não foi possível criar o agente."))
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: deleteAgent,
     onSuccess: (_result, agentId) => {
-      toast.success(
-        t("pages.agent.editor.delete_success", "Agent removed from config."),
-      )
-      if (selectedAgentId === agentId) {
-        setSelectedAgentId("main")
-      }
+      toast.success(t("pages.agent.editor.delete_success", "Agente removido da configuração."))
+      if (selectedAgentId === agentId) setSelectedAgentId("main")
+      void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })
       void queryClient.invalidateQueries({ queryKey: ["agents"] })
       void queryClient.invalidateQueries({ queryKey: ["config"] })
     },
     onError: (err) => {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : t("pages.agent.editor.delete_error", "Could not remove agent."),
-      )
+      toast.error(err instanceof Error ? err.message : t("pages.agent.editor.delete_error", "Não foi possível remover o agente."))
     },
   })
 
+  const activeMutation = useMutation({
+    mutationFn: ({ agentId, active }: { agentId: string; active: boolean }) =>
+      updateAgent(agentId, { active }),
+    onSuccess: (updated) => {
+      toast.success(updated.active
+        ? t("pages.agent.editor.activate_success", "Agente ativado.")
+        : t("pages.agent.editor.deactivate_success", "Agente desativado."))
+      void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })
+      void queryClient.invalidateQueries({ queryKey: ["agents"] })
+      void queryClient.invalidateQueries({ queryKey: ["config"] })
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : t("pages.agent.editor.toggle_active_error", "Não foi possível alterar o status do agente."))
+    },
+  })
+
+  const saveOrchestrationMutation = useMutation({
+    mutationFn: async () => {
+      const parsedRoleConfigs: Record<string, Record<string, unknown>> = {}
+      for (const [id, draftStr] of Object.entries(roleConfigDrafts)) {
+        const trimmed = draftStr.trim()
+        if (!trimmed) continue
+        const parsed = JSON.parse(trimmed) as unknown
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error(t("pages.orchestration.role_config_invalid", "Perfil operacional deve ser um objeto JSON."))
+        }
+        parsedRoleConfigs[id] = parsed as Record<string, unknown>
+      }
+      return updateInternalAgentOrchestration({
+        main_agent_id: mainAgentID,
+        main_allow_agents: mainAllowAgents,
+        assistant_whatsapp_jids: splitLines(assistantJIDs),
+        assistant_whatsapp_chats: splitLines(assistantChats),
+        agent_profiles: Object.fromEntries(
+          Object.entries(profiles).map(([id, p]) => [
+            id,
+            {
+              name: p.name.trim(),
+              avatar: {
+                type: p.imageURL.trim() ? "image" : "preset",
+                icon: p.icon.trim(),
+                initials: p.initials.trim().slice(0, 4).toUpperCase(),
+                background: p.background.trim(),
+                foreground: p.foreground.trim(),
+                image_url: p.imageURL.trim(),
+              },
+            },
+          ]),
+        ),
+        agent_role_configs: parsedRoleConfigs,
+      })
+    },
+    onSuccess: () => {
+      toast.success(t("pages.orchestration.saved"))
+      void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })
+      void queryClient.invalidateQueries({ queryKey: ["agents"] })
+      void queryClient.invalidateQueries({ queryKey: ["config"] })
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : String(err))
+    },
+  })
+
+  // ── editor handlers ───────────────────────────────────────────────────────
   function handleEdit() {
-    const payload = configQuery.data?.payload
+    const payload = configData.payload
     if (!payload) return
-    // Deep clone + hydrate so the in-sheet edits don't mutate the cache and
-    // every array/object the sheet relies on is present (the Go backend uses
-    // omitempty for empty collections).
     const cloned = JSON.parse(JSON.stringify(payload)) as TemplateApplyPayload
     setDraft(prepareDraftForEdit(cloned, selectedAgentId))
     setEditing(true)
@@ -335,74 +984,39 @@ export function AgentEditorPage() {
   function parseRawDraft(): TemplateApplyPayload | null {
     try {
       const parsed = JSON.parse(rawDraft) as unknown
-      if (
-        parsed === null ||
-        typeof parsed !== "object" ||
-        Array.isArray(parsed)
-      ) {
-        setRawError(
-          t("pages.agent.editor.raw_object_required", {
-            defaultValue: "Agent configuration must be a JSON object.",
-          }),
-        )
+      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+        setRawError(t("pages.agent.editor.raw_object_required", { defaultValue: "A configuração do agente precisa ser um objeto JSON." }))
         return null
       }
       const payload = hydrateAgentPayload(parsed as TemplateApplyPayload)
       setRawError(null)
-      return {
-        ...payload,
-        agent_id: payload.agent_id ?? selectedAgentId,
-      }
+      return { ...payload, agent_id: payload.agent_id ?? selectedAgentId }
     } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : t("pages.agent.editor.raw_unknown_error", {
-              defaultValue: "Unknown parse error",
-            })
-      setRawError(
-        t("pages.agent.editor.raw_invalid_json", {
-          defaultValue: "Invalid JSON: {{message}}",
-          message,
-        }),
-      )
+      const message = err instanceof Error ? err.message : t("pages.agent.editor.raw_unknown_error", { defaultValue: "Erro desconhecido de leitura" })
+      setRawError(t("pages.agent.editor.raw_invalid_json", { defaultValue: "JSON inválido: {{message}}", message }))
       return null
     }
   }
 
   function handleOpenRawEditor() {
-    const payload = configQuery.data?.payload
+    const payload = configData.payload
     if (!payload) return
     const cloned = JSON.parse(JSON.stringify(payload)) as TemplateApplyPayload
-    const rawPayload = {
-      ...hydrateAgentPayload(cloned),
-      agent_id: cloned.agent_id ?? selectedAgentId,
-    }
-    setRawDraft(JSON.stringify(rawPayload, null, 2))
+    setRawDraft(JSON.stringify({ ...hydrateAgentPayload(cloned), agent_id: cloned.agent_id ?? selectedAgentId }, null, 2))
     setRawError(null)
     setRawOpen(true)
-  }
-
-  function handleFormatRawDraft() {
-    const payload = parseRawDraft()
-    if (!payload) return
-    setRawDraft(JSON.stringify(payload, null, 2))
   }
 
   function handleSaveRawDraft() {
     const payload = parseRawDraft()
     if (!payload) return
-    applyMutation.mutate(payload, {
-      onSuccess: () => setRawOpen(false),
-    })
+    applyMutation.mutate(payload, { onSuccess: () => setRawOpen(false) })
   }
 
   function handleRawOpenChange(open: boolean) {
     if (!open && applyMutation.isPending) return
     setRawOpen(open)
-    if (!open) {
-      setRawError(null)
-    }
+    if (!open) setRawError(null)
   }
 
   function handleCreateOpen() {
@@ -414,346 +1028,324 @@ export function AgentEditorPage() {
 
   function handleConfigureSelectedAgent() {
     if (!selectedAgent) return
-    const startingTemplate = AGENT_TEMPLATES[0]
-    if (!startingTemplate) return
-    const nextDraft = templateToDraft(
-      startingTemplate,
-      defaultTemplateSkillConfigs(startingTemplate, installedSkills),
-    )
-    setDraft({
-      ...nextDraft,
-      agent_id: selectedAgent.id,
-      name: selectedAgent.name || nextDraft.name,
-    })
+    const nextDraft = defaultDraftForAgent(selectedAgent, installedSkills)
+    setDraft({ ...nextDraft, agent_id: selectedAgent.id, name: selectedAgent.name || nextDraft.name })
     setEditing(true)
   }
 
   function handleDeleteAgent(agent: AgentSummary) {
     if (agent.id === "main") return
-    const confirmed = window.confirm(
-      t(
-        "pages.agent.editor.delete_confirm",
-        "Remove this agent from config? Its workspace files will be preserved.",
-      ),
-    )
-    if (confirmed) {
-      deleteMutation.mutate(agent.id)
+    const confirmed = window.confirm(t("pages.agent.editor.delete_confirm", "Remover este agente da configuração? Os arquivos de workspace serão preservados."))
+    if (confirmed) deleteMutation.mutate(agent.id)
+  }
+
+  function handleToggleAgentActive(agent: AgentSummary) {
+    const active = agent.active !== false
+    if (agent.default && active) {
+      toast.error(t("pages.agent.editor.default_agent_must_stay_active", "O agente padrão precisa continuar ativo."))
+      return
     }
+    activeMutation.mutate({ agentId: agent.id, active: !active })
   }
 
   function handleSheetOpenChange(open: boolean) {
-    if (!open && !applyMutation.isPending) {
-      setEditing(false)
-      setDraft(null)
+    if (!open && !applyMutation.isPending) { setEditing(false); setDraft(null) }
+  }
+
+  // ── chat handler ──────────────────────────────────────────────────────────
+  const [sendingChat, setSendingChat] = useState(false)
+  async function handleSendChat() {
+    const content = chatInput.trim()
+    if (!selectedAgentId || !content) return
+    setSendingChat(true)
+    setChatMessages((prev) => [...prev, { role: "user", content }])
+    setChatInput("")
+    try {
+      const response = await sendInternalAgentTurn(selectedAgentId, content, chatSessionID)
+      setChatSessionID(response.session_id)
+      setChatMessages((prev) => [...prev, { role: "assistant", content: response.content }])
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSendingChat(false)
     }
   }
 
-  const configured = configQuery.data?.configured ?? false
-  // For the summary card, also resolve placeholders so the user doesn't see
-  // raw `{agent.name}` text in the presentation preview before clicking Edit.
+  // ── orchestration helpers ─────────────────────────────────────────────────
+  function updateSelectedProfile(patch: Partial<AgentProfileDraft>) {
+    if (!selectedAgentId) return
+    setProfiles((current) => {
+      const existing = current[selectedAgentId]
+      if (!existing) return current
+      return { ...current, [selectedAgentId]: { ...existing, ...patch } }
+    })
+  }
+
+  function updateSelectedRoleConfig(updater: (current: RoleConfigDraft) => RoleConfigDraft) {
+    if (!selectedAgentId) return
+    const current = parseRoleConfigDraft(roleConfigDrafts[selectedAgentId] || "{}") ?? {}
+    const next = updater(current)
+    setRoleConfigDrafts((drafts) => ({ ...drafts, [selectedAgentId]: JSON.stringify(next, null, 2) }))
+  }
+
+  // ── derived values ────────────────────────────────────────────────────────
+  const configured = configData.configured
   const resolvedPayload = useMemo(() => {
-    const payload = configQuery.data?.payload
+    const payload = configData.payload
     if (!payload) return null
     return substituteAgentPlaceholders(payload)
-  }, [configQuery.data?.payload])
+  }, [configData.payload])
 
-  const isCreateDisabled =
-    newAgentName.trim() === "" || createMutation.isPending
+  const isCreateDisabled = newAgentName.trim() === "" || createMutation.isPending
   const previewAgentID = normalizeAgentIDPreview(newAgentID || newAgentName)
+
+  const filteredAgents = useMemo(() => {
+    if (!searchQuery.trim()) return agents
+    const q = searchQuery.toLowerCase()
+    return agents.filter((a) => (a.name ?? "").toLowerCase().includes(q) || a.id.toLowerCase().includes(q))
+  }, [agents, searchQuery])
+
+  const isLoadingMain = editorStateQuery.isLoading
+
+  const internalAgents = agents
+  const selectedProfile = profiles[selectedAgentId]
+  const selectedRoleConfigDraft = roleConfigDrafts[selectedAgentId] || "{}"
+  const selectedRoleConfig = parseRoleConfigDraft(selectedRoleConfigDraft)
+  const quickPrompts = quickPromptsByAgent[selectedAgentId] || []
 
   return (
     <div className="flex h-full flex-col">
       <PageHeader title={t("navigation.agent_editor")} />
 
-      <div className="flex-1 overflow-auto px-6 py-6">
-        <div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <IconUsers className="text-muted-foreground size-4" />
-                <h2 className="text-sm font-semibold">
-                  {t("pages.agent.editor.agents", "Agents")}
-                </h2>
+      <div className="flex-1 overflow-auto">
+        <div className="mx-auto grid h-full w-full max-w-7xl gap-0 lg:grid-cols-[288px_minmax(0,1fr)]">
+
+          {/* ── sidebar ──────────────────────────────────────────── */}
+          <aside className="border-border/40 flex flex-col border-r">
+            <div className="border-border/40 flex items-center justify-between gap-2 border-b px-4 py-3">
+              <div className="flex items-center gap-2">
+                <IconUsers className="text-muted-foreground size-4 shrink-0" />
+                <span className="text-sm font-semibold">{t("pages.agent.editor.agents", "Agentes")}</span>
+                {agents.length > 0 && (
+                  <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums">
+                    {agents.length}
+                  </span>
+                )}
               </div>
-              <Button size="sm" onClick={handleCreateOpen}>
-                <IconPlus className="size-4" />
-                {t("pages.agent.editor.new_agent", "New")}
+              <Button size="sm" onClick={handleCreateOpen} className="h-7 gap-1 px-2.5 text-xs">
+                <IconPlus className="size-3.5" />
+                {t("pages.agent.editor.new_agent", "Novo agente")}
               </Button>
             </div>
 
-            <div className="border-border/40 bg-card/40 overflow-hidden rounded-xl border">
-              {agentsQuery.isLoading ? (
-                <div className="text-muted-foreground flex items-center gap-2 p-4 text-sm">
-                  <IconLoader2 className="size-4 animate-spin" />
-                  {t("pages.agent.editor.loading")}
+            <div className="border-border/40 border-b px-3 py-2.5">
+              <div className="relative">
+                <IconSearch className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar agente…"
+                  className="border-border/60 bg-muted/30 placeholder:text-muted-foreground/60 focus:ring-primary/20 w-full rounded-lg border py-1.5 pr-3 pl-8 text-xs outline-none focus:ring-2"
+                  aria-label="Buscar agentes"
+                />
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {editorStateQuery.isLoading ? (
+                <div className="space-y-1 p-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-xl px-3 py-2.5">
+                      <Skeleton className="size-10 rounded-xl" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-3 w-3/4 rounded" />
+                        <Skeleton className="h-2.5 w-1/2 rounded" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filteredAgents.length === 0 ? (
+                <div className="text-muted-foreground flex flex-col items-center gap-2 py-10 text-center text-xs">
+                  <IconSearch className="size-6 opacity-40" />
+                  <p>Nenhum agente encontrado</p>
                 </div>
               ) : (
-                <div className="divide-border/40 divide-y">
-                  {agents.map((agent) => (
-                    <button
-                      key={agent.id}
-                      type="button"
-                      aria-pressed={agent.id === selectedAgentId}
-                      onClick={() => setSelectedAgentId(agent.id)}
-                      className="hover:bg-muted/50 aria-pressed:bg-primary/10 flex w-full min-w-0 items-start gap-3 px-4 py-3 text-left transition"
-                    >
-                      <div className="bg-primary/10 text-primary mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg">
-                        <IconSparkles className="size-4" />
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="text-foreground truncate text-sm font-medium">
-                          {agent.name || agent.id}
+                <div className="space-y-0.5 p-2">
+                  {filteredAgents.map((agent) => {
+                    const isSelected = agent.id === selectedAgentId
+                    const isActive = agent.active !== false
+                    return (
+                      <button
+                        key={agent.id}
+                        type="button"
+                        aria-pressed={isSelected}
+                        aria-current={isSelected ? "true" : undefined}
+                        onClick={() => setSelectedAgentId(agent.id)}
+                        className={`group focus-visible:ring-ring relative flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-150 focus-visible:ring-2 focus-visible:outline-none ${
+                          isSelected ? "bg-primary/8 ring-primary/20 ring-1" : "hover:bg-muted/60"
+                        }`}
+                      >
+                        {isSelected && (
+                          <span className="bg-primary absolute top-1/2 left-0 h-5 w-[3px] -translate-y-1/2 rounded-r-full" />
+                        )}
+                        <AgentAvatar agent={agent} size="sm" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`truncate text-sm font-medium ${isSelected ? "text-foreground" : "text-foreground/80 group-hover:text-foreground"}`}>
+                              {agent.name || agent.id}
+                            </span>
+                            {!isActive && <span className="size-1.5 shrink-0 rounded-full bg-red-400" />}
+                          </div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                            {agent.default && <DefaultBadge />}
+                            <ReadyStatusBadges agent={agent} compact />
+                          </div>
+                          <p className="text-muted-foreground/70 mt-1 truncate text-[11px]">{agentRoleLabel(agent)}</p>
                         </div>
-                        <div className="text-muted-foreground truncate text-xs">
-                          {agent.id}
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {agent.default ? (
-                            <Badge variant="secondary">
-                              {t("pages.agent.editor.default", "Default")}
-                            </Badge>
-                          ) : null}
-                          <Badge
-                            variant={agent.configured ? "outline" : "ghost"}
-                          >
-                            {agent.configured
-                              ? t("pages.agent.editor.configured", "Configured")
-                              : t("pages.agent.editor.not_configured", "Draft")}
-                          </Badge>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
           </aside>
 
-          <main className="min-w-0 space-y-6">
-            {configQuery.isLoading || agentsQuery.isLoading ? (
-              <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                <IconLoader2 className="size-4 animate-spin" />
-                {t("pages.agent.editor.loading")}
-              </div>
-            ) : !selectedAgent ? (
-              <EmptyState onCreate={handleCreateOpen} />
-            ) : !configured || !configQuery.data?.payload ? (
-              <EmptyState
-                onCreate={handleCreateOpen}
-                onConfigure={handleConfigureSelectedAgent}
-                agent={selectedAgent}
-              />
-            ) : (
-              <>
-                <section className="border-border/40 bg-card/40 space-y-3 rounded-xl border p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="bg-primary/10 ring-primary/20 text-primary flex size-12 items-center justify-center rounded-xl ring-1">
-                      <IconSparkles className="size-6" />
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-foreground truncate text-xl font-bold tracking-tight">
-                          {configQuery.data.payload.name}
-                        </h2>
-                        {selectedAgent.default ? (
-                          <Badge variant="secondary">
-                            {t("pages.agent.editor.default", "Default")}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <p className="text-muted-foreground line-clamp-2 text-sm">
-                        {resolvedPayload?.presentation ??
-                          configQuery.data.payload.presentation}
-                      </p>
-                    </div>
-                    {selectedAgent.id !== "main" ? (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteAgent(selectedAgent)}
-                        disabled={deleteMutation.isPending}
-                        title={t(
-                          "pages.agent.editor.delete_agent",
-                          "Remove agent",
-                        )}
-                      >
-                        <IconTrash className="size-4" />
-                      </Button>
-                    ) : null}
-                  </div>
+          {/* ── main content ─────────────────────────────────────── */}
+          <main className="flex min-w-0 flex-col overflow-hidden">
+            {/* mobile agent selector */}
+            <div className="border-border/40 flex items-center gap-2 border-b px-4 py-2.5 lg:hidden">
+              <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+                <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {agents.map((a) => (
+                    <SelectItem key={a.id} value={a.id} className="text-xs">{a.name || a.id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button size="sm" onClick={handleCreateOpen} className="h-8"><IconPlus className="size-3.5" /></Button>
+            </div>
 
-                  <div className="grid gap-3 pt-4 sm:grid-cols-2">
-                    <SummaryRow
-                      label={t(
-                        "pages.agent.editor.summary.agent_id",
-                        "Agent ID",
-                      )}
-                      value={selectedAgent.id}
-                    />
-                    <SummaryRow
-                      label={t(
-                        "pages.agent.editor.summary.workspace",
-                        "Workspace",
-                      )}
-                      value={selectedAgent.workspace}
-                    />
-                    <SummaryRow
-                      label={t("pages.agent.editor.summary.template")}
-                      value={
-                        template?.name ?? configQuery.data.payload.template_id
-                      }
-                    />
-                    <SummaryRow
-                      label={t("pages.agent.editor.summary.tone")}
-                      value={configQuery.data.payload.tone}
-                    />
-                    <SummaryRow
-                      label={t("pages.agent.editor.summary.language")}
-                      value={configQuery.data.payload.language}
-                    />
-                    <SummaryRow
-                      label={t("pages.agent.editor.summary.company")}
-                      value={configQuery.data.payload.company_info.name}
-                    />
-                    <SummaryRow
-                      label={t("pages.agent.editor.summary.professionals")}
-                      value={
-                        configQuery.data.payload.modules?.professionals_enabled
-                          ? `${configQuery.data.payload.professionals?.length ?? 0}`
-                          : t("pages.agent.editor.summary.disabled")
-                      }
-                    />
-                    <SummaryRow
-                      label={t("pages.agent.editor.summary.products")}
-                      value={
-                        configQuery.data.payload.modules?.products_enabled
-                          ? `${configQuery.data.payload.products?.length ?? 0}`
-                          : t("pages.agent.editor.summary.disabled")
-                      }
-                    />
-                    <SummaryRow
-                      label={t("pages.agent.editor.summary.skills_active")}
-                      value={`${configQuery.data.payload.skill_configs?.filter((s) => s.enabled).length ?? 0}`}
-                    />
-                    <SummaryRow
-                      label={t("pages.agent.editor.summary.applied_at")}
-                      value={
-                        configQuery.data.applied_at
-                          ? new Date(
-                              configQuery.data.applied_at * 1000,
-                            ).toLocaleString()
-                          : "—"
-                      }
-                    />
-                  </div>
-                </section>
-
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleOpenRawEditor}
-                    size="lg"
-                  >
-                    <IconBraces className="size-4" />
-                    {t("pages.agent.editor.raw_json", "Raw JSON")}
-                  </Button>
-                  <Button onClick={handleEdit} size="lg">
-                    <IconEdit className="size-4" />
-                    {t("pages.agent.editor.edit")}
-                  </Button>
-                </div>
-              </>
-            )}
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              {isLoadingMain ? (
+                <LoadingSkeleton />
+              ) : !selectedAgent ? (
+                <EmptyState onCreate={handleCreateOpen} />
+              ) : (
+                <UnifiedAgentEditor
+                  agent={selectedAgent}
+                  configured={configured}
+                  configData={configData}
+                  resolvedPayload={resolvedPayload}
+                  template={template}
+                  selectedAgentId={selectedAgentId}
+                  selectedProfile={selectedProfile}
+                  selectedRoleConfigDraft={selectedRoleConfigDraft}
+                  selectedRoleConfig={selectedRoleConfig}
+                  mainAgentID={mainAgentID}
+                  mainAllowAgents={mainAllowAgents}
+                  assistantJIDs={assistantJIDs}
+                  assistantChats={assistantChats}
+                  internalAgents={internalAgents}
+                  isSavingOrchestration={saveOrchestrationMutation.isPending}
+                  isLoadingOrchestration={editorStateQuery.isLoading}
+                  isTogglingActive={activeMutation.isPending}
+                  isDeleting={deleteMutation.isPending}
+                  messages={chatMessages}
+                  chatInput={chatInput}
+                  isSending={sendingChat}
+                  proposals={proposals}
+                  quickPrompts={quickPrompts}
+                  onCreate={handleCreateOpen}
+                  onConfigure={handleConfigureSelectedAgent}
+                  onEditPrompt={handleEdit}
+                  onOpenRawEditor={handleOpenRawEditor}
+                  onToggleActive={() => handleToggleAgentActive(selectedAgent)}
+                  onDelete={selectedAgent.id !== "main" ? () => handleDeleteAgent(selectedAgent) : undefined}
+                  onUpdateProfile={updateSelectedProfile}
+                  onUpdateRoleConfig={updateSelectedRoleConfig}
+                  onRoleConfigDraftChange={(v) =>
+                    setRoleConfigDrafts((d) => ({ ...d, [selectedAgentId]: v }))
+                  }
+                  onMainAgentChange={(id) => {
+                    setMainAgentID(id)
+                    setMainAllowAgents((c) => c.filter((x) => x !== id))
+                  }}
+                  onToggleMainAllow={(id) =>
+                    setMainAllowAgents((c) =>
+                      c.includes(id) ? c.filter((x) => x !== id) : [...c, id],
+                    )
+                  }
+                  onAssistantJIDsChange={setAssistantJIDs}
+                  onAssistantChatsChange={setAssistantChats}
+                  onSaveOrchestration={() => saveOrchestrationMutation.mutate()}
+                  onRefreshOrchestration={() => void queryClient.invalidateQueries({ queryKey: ["agent-editor-state"] })}
+                  onChatInputChange={setChatInput}
+                  onSendChat={handleSendChat}
+                  onPromptSelect={setChatInput}
+                  onProposalInspect={(proposal) =>
+                    setChatInput(
+                      `Revise esta proposta salva e me diga quais arquivos foram gerados, próximos ajustes e pendências:\n\n${JSON.stringify(proposal, null, 2)}`,
+                    )
+                  }
+                />
+              )}
+            </div>
           </main>
         </div>
       </div>
 
+      {/* ── dialogs ───────────────────────────────────────────────── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {t("pages.agent.editor.create_title", "New agent")}
-            </DialogTitle>
+            <DialogTitle>{t("pages.agent.editor.create_title", "Novo agente")}</DialogTitle>
             <DialogDescription>
-              {t(
-                "pages.agent.editor.create_description",
-                "Create an agent entry and choose the template used for its first workspace files.",
-              )}
+              {t("pages.agent.editor.create_description", "Crie um agente e escolha o template para seus arquivos iniciais de workspace.")}
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="agent-name">
-                {t("pages.agent.editor.agent_name", "Agent name")}
-              </Label>
+              <Label htmlFor="agent-name">{t("pages.agent.editor.agent_name", "Nome do agente")}</Label>
               <Input
                 id="agent-name"
                 value={newAgentName}
-                onChange={(event) => setNewAgentName(event.target.value)}
-                placeholder={t(
-                  "pages.agent.editor.agent_name_placeholder",
-                  "Sales assistant",
-                )}
+                onChange={(e) => setNewAgentName(e.target.value)}
+                placeholder={t("pages.agent.editor.agent_name_placeholder", "Assistente de vendas")}
               />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="agent-id">
-                {t("pages.agent.editor.agent_id", "Agent ID")}
-              </Label>
+              <Label htmlFor="agent-id">{t("pages.agent.editor.agent_id", "ID do agente")}</Label>
               <Input
                 id="agent-id"
                 value={newAgentID}
-                onChange={(event) => setNewAgentID(event.target.value)}
+                onChange={(e) => setNewAgentID(e.target.value)}
                 placeholder={previewAgentID}
               />
               <p className="text-muted-foreground text-xs">
-                {t("pages.agent.editor.agent_id_hint", "Runtime ID:")}{" "}
-                <span className="font-mono">{previewAgentID}</span>
+                {t("pages.agent.editor.agent_id_hint", "ID de runtime:")}{" "}
+                <code className="font-mono">{previewAgentID}</code>
               </p>
             </div>
-
             <div className="space-y-2">
-              <Label>
-                {t("pages.agent.editor.starting_template", "Starting template")}
-              </Label>
-              <Select
-                value={newAgentTemplateID}
-                onValueChange={setNewAgentTemplateID}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
+              <Label>{t("pages.agent.editor.starting_template", "Template inicial")}</Label>
+              <Select value={newAgentTemplateID} onValueChange={setNewAgentTemplateID}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {AGENT_TEMPLATES.map((template) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      {template.name}
-                    </SelectItem>
+                  {AGENT_TEMPLATES.map((tmpl) => (
+                    <SelectItem key={tmpl.id} value={tmpl.id}>{tmpl.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
-
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setCreateOpen(false)}
-              disabled={createMutation.isPending}
-            >
+            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createMutation.isPending}>
               {t("pages.agent.templates.cancel")}
             </Button>
-            <Button
-              onClick={() => createMutation.mutate()}
-              disabled={isCreateDisabled}
-            >
-              {createMutation.isPending ? (
-                <IconLoader2 className="size-4 animate-spin" />
-              ) : (
-                <IconPlus className="size-4" />
-              )}
-              {t("pages.agent.editor.create_agent", "Create")}
+            <Button onClick={() => createMutation.mutate()} disabled={isCreateDisabled}>
+              {createMutation.isPending ? <IconLoader2 className="size-4 animate-spin" /> : <IconPlus className="size-4" />}
+              {t("pages.agent.editor.create_agent", "Criar agente")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -762,34 +1354,21 @@ export function AgentEditorPage() {
       <Dialog open={rawOpen} onOpenChange={handleRawOpenChange}>
         <DialogContent className="flex h-[min(86vh,760px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
           <DialogHeader className="border-border/40 border-b px-6 py-4 pr-14">
-            <DialogTitle>
-              {t("pages.agent.editor.raw_json_title", "Raw agent JSON")}
-            </DialogTitle>
+            <DialogTitle>{t("pages.agent.editor.raw_json_title", "JSON bruto do agente")}</DialogTitle>
             <DialogDescription>
-              {t(
-                "pages.agent.editor.raw_json_description",
-                "Advanced editor for the exact payload saved into this agent workspace.",
-              )}
+              {t("pages.agent.editor.raw_json_description", "Editor avançado do payload exato salvo no workspace deste agente.")}
             </DialogDescription>
           </DialogHeader>
-
           <div className="min-h-0 flex-1 p-4">
             <CodeEditor
               value={rawDraft}
-              onChange={(value) => {
-                setRawDraft(value)
-                if (rawError) setRawError(null)
-              }}
+              onChange={(value) => { setRawDraft(value); if (rawError) setRawError(null) }}
               language="json"
               path={`${selectedAgentId}/agent_config.json`}
-              ariaLabel={t(
-                "pages.agent.editor.raw_json_title",
-                "Raw agent JSON",
-              )}
+              ariaLabel={t("pages.agent.editor.raw_json_title", "JSON bruto do agente")}
               className="h-full min-h-[360px]"
             />
           </div>
-
           <div className="border-border/40 flex min-h-10 items-center justify-between gap-3 border-t px-6 py-3 text-xs">
             <div className="min-w-0 flex-1">
               {rawError ? (
@@ -799,138 +1378,1604 @@ export function AgentEditorPage() {
                 </span>
               ) : (
                 <span className="text-muted-foreground">
-                  {t("pages.agent.editor.raw_char_count", {
-                    count: rawDraft.length,
-                    defaultValue: "{{count}} characters",
-                  })}
+                  {t("pages.agent.editor.raw_char_count", { count: rawDraft.length, defaultValue: "{{count}} caracteres" })}
                 </span>
               )}
             </div>
             <DialogFooter className="shrink-0">
-              <Button
-                variant="outline"
-                onClick={() => handleRawOpenChange(false)}
-                disabled={applyMutation.isPending}
-              >
+              <Button variant="outline" onClick={() => handleRawOpenChange(false)} disabled={applyMutation.isPending}>
                 {t("pages.agent.templates.cancel")}
               </Button>
-              <Button
-                variant="outline"
-                onClick={handleFormatRawDraft}
-                disabled={applyMutation.isPending}
-              >
+              <Button variant="outline" onClick={() => { const p = parseRawDraft(); if (p) setRawDraft(JSON.stringify(p, null, 2)) }} disabled={applyMutation.isPending}>
                 <IconBraces className="size-4" />
-                {t("pages.agent.editor.raw_format", "Format")}
+                {t("pages.agent.editor.raw_format", "Formatar")}
               </Button>
-              <Button
-                onClick={handleSaveRawDraft}
-                disabled={applyMutation.isPending}
-              >
-                {applyMutation.isPending ? (
-                  <IconLoader2 className="size-4 animate-spin" />
-                ) : (
-                  <IconCheck className="size-4" />
-                )}
-                {t("pages.agent.editor.raw_save", "Save JSON")}
+              <Button onClick={handleSaveRawDraft} disabled={applyMutation.isPending}>
+                {applyMutation.isPending ? <IconLoader2 className="size-4 animate-spin" /> : <IconCheck className="size-4" />}
+                {t("pages.agent.editor.raw_save", "Salvar JSON")}
               </Button>
             </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Reuse the same drawer that the templates page uses for apply. The
-          backend POST /api/agent/templates/apply is idempotent and re-renders
-          AGENT.md/SOUL.md/behavior.json + saves agent_config.json again. */}
-      <TemplateConfigSheet
-        open={editing}
-        template={template}
-        draft={draft}
-        isApplying={applyMutation.isPending}
-        isSavingTemplate={false}
-        isResettingTemplate={false}
-        hasSavedOverride={false}
-        installedSkills={installedSkills}
-        onDraftChange={setDraft}
-        onApply={() => {
-          if (draft) {
-            applyMutation.mutate({
-              ...draft,
-              agent_id: draft.agent_id ?? selectedAgentId,
-            })
-          }
-        }}
-        onSaveTemplate={() => {
-          /* not exposed in agent editor — template defaults are managed
-             from /agent/template-editor instead. */
-        }}
-        onResetTemplate={() => {
-          /* same as above */
-        }}
-        onOpenChange={handleSheetOpenChange}
-      />
+      {agentKind(selectedAgentId) === "attendant" ? (
+        <TemplateConfigSheet
+          open={editing}
+          template={template}
+          draft={draft}
+          isApplying={applyMutation.isPending}
+          isSavingTemplate={false}
+          isResettingTemplate={false}
+          hasSavedOverride={false}
+          installedSkills={installedSkills}
+          onDraftChange={setDraft}
+          onApply={() => {
+            if (draft) {
+              applyMutation.mutate(substituteAgentPlaceholders({ ...draft, agent_id: draft.agent_id ?? selectedAgentId }))
+            }
+          }}
+          onSaveTemplate={() => {}}
+          onResetTemplate={() => {}}
+          onOpenChange={handleSheetOpenChange}
+        />
+      ) : (
+        <SpecialistPromptSheet
+          open={editing}
+          agent={selectedAgent}
+          draft={draft}
+          isApplying={applyMutation.isPending}
+          onDraftChange={setDraft}
+          onApply={() => {
+            if (draft) {
+              applyMutation.mutate(substituteAgentPlaceholders({ ...draft, agent_id: draft.agent_id ?? selectedAgentId }))
+            }
+          }}
+          onOpenChange={handleSheetOpenChange}
+        />
+      )}
     </div>
   )
 }
 
-function EmptyState({
+// ─── unified editor sections ─────────────────────────────────────────────────
+
+function UnifiedAgentEditor({
   agent,
+  configured,
+  configData,
+  resolvedPayload,
+  template,
+  selectedAgentId,
+  selectedProfile,
+  selectedRoleConfigDraft,
+  selectedRoleConfig,
+  mainAgentID,
+  mainAllowAgents,
+  assistantJIDs,
+  assistantChats,
+  internalAgents,
+  isSavingOrchestration,
+  isLoadingOrchestration,
+  isTogglingActive,
+  isDeleting,
+  messages,
+  chatInput,
+  isSending,
+  proposals,
+  quickPrompts,
   onCreate,
   onConfigure,
+  onEditPrompt,
+  onOpenRawEditor,
+  onToggleActive,
+  onDelete,
+  onUpdateProfile,
+  onUpdateRoleConfig,
+  onRoleConfigDraftChange,
+  onMainAgentChange,
+  onToggleMainAllow,
+  onAssistantJIDsChange,
+  onAssistantChatsChange,
+  onSaveOrchestration,
+  onRefreshOrchestration,
+  onChatInputChange,
+  onSendChat,
+  onPromptSelect,
+  onProposalInspect,
 }: {
-  agent?: AgentSummary
+  agent: AgentEditorAgent
+  configured: boolean
+  configData: AgentConfigResponse
+  resolvedPayload: TemplateApplyPayload | null
+  template: AgentTemplate | null
+  selectedAgentId: string
+  selectedProfile?: AgentProfileDraft
+  selectedRoleConfigDraft: string
+  selectedRoleConfig: RoleConfigDraft | null
+  mainAgentID: string
+  mainAllowAgents: string[]
+  assistantJIDs: string
+  assistantChats: string
+  internalAgents: AgentEditorAgent[]
+  isSavingOrchestration: boolean
+  isLoadingOrchestration: boolean
+  isTogglingActive: boolean
+  isDeleting: boolean
+  messages: ChatMessage[]
+  chatInput: string
+  isSending: boolean
+  proposals: unknown[]
+  quickPrompts: Array<{ icon: React.ElementType; label: string; prompt: string }>
   onCreate: () => void
-  onConfigure?: () => void
+  onConfigure: () => void
+  onEditPrompt: () => void
+  onOpenRawEditor: () => void
+  onToggleActive: () => void
+  onDelete?: () => void
+  onUpdateProfile: (patch: Partial<AgentProfileDraft>) => void
+  onUpdateRoleConfig: (updater: (c: RoleConfigDraft) => RoleConfigDraft) => void
+  onRoleConfigDraftChange: (v: string) => void
+  onMainAgentChange: (id: string) => void
+  onToggleMainAllow: (id: string) => void
+  onAssistantJIDsChange: (v: string) => void
+  onAssistantChatsChange: (v: string) => void
+  onSaveOrchestration: () => void
+  onRefreshOrchestration: () => void
+  onChatInputChange: (v: string) => void
+  onSendChat: () => void
+  onPromptSelect: (v: string) => void
+  onProposalInspect: (proposal: unknown) => void
+}) {
+  return (
+    <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-300">
+      <IdentityProfileSection
+        agent={agent}
+        selectedProfile={selectedProfile}
+        isTogglingActive={isTogglingActive}
+        isDeleting={isDeleting}
+        onUpdateProfile={onUpdateProfile}
+        onToggleActive={onToggleActive}
+        onDelete={onDelete}
+      />
+
+      <OperationalRoleSection
+        selectedAgentId={selectedAgentId}
+        selectedRoleConfig={selectedRoleConfig}
+        selectedRoleConfigDraft={selectedRoleConfigDraft}
+        onUpdateRoleConfig={onUpdateRoleConfig}
+        onRoleConfigDraftChange={onRoleConfigDraftChange}
+      />
+
+      <PromptWorkspaceSection
+        agent={agent}
+        configured={configured}
+        configData={configData}
+        resolvedPayload={resolvedPayload}
+        template={template}
+        onCreate={onCreate}
+        onConfigure={onConfigure}
+        onEditPrompt={onEditPrompt}
+        onOpenRawEditor={onOpenRawEditor}
+      />
+
+      <AccessRoutingSection
+        selectedAgentId={selectedAgentId}
+        agent={agent}
+        mainAgentID={mainAgentID}
+        mainAllowAgents={mainAllowAgents}
+        assistantJIDs={assistantJIDs}
+        assistantChats={assistantChats}
+        internalAgents={internalAgents}
+        isSaving={isSavingOrchestration}
+        isLoading={isLoadingOrchestration}
+        onMainAgentChange={onMainAgentChange}
+        onToggleMainAllow={onToggleMainAllow}
+        onAssistantJIDsChange={onAssistantJIDsChange}
+        onAssistantChatsChange={onAssistantChatsChange}
+        onSave={onSaveOrchestration}
+        onRefresh={onRefreshOrchestration}
+      />
+
+      <section id="agent-chat-section" className="space-y-3">
+        <SectionHeader title="Chat de teste" icon={IconMessageCircle} />
+        <ChatTab
+          selectedAgentId={selectedAgentId}
+          selectedProfile={selectedProfile}
+          messages={messages}
+          chatInput={chatInput}
+          isSending={isSending}
+          proposals={proposals}
+          quickPrompts={quickPrompts}
+          onChatInputChange={onChatInputChange}
+          onSend={onSendChat}
+          onPromptSelect={onPromptSelect}
+          onProposalInspect={onProposalInspect}
+        />
+      </section>
+    </div>
+  )
+}
+
+function IdentityProfileSection({
+  agent,
+  selectedProfile,
+  isTogglingActive,
+  isDeleting,
+  onUpdateProfile,
+  onToggleActive,
+  onDelete,
+}: {
+  agent: AgentEditorAgent
+  selectedProfile?: AgentProfileDraft
+  isTogglingActive: boolean
+  isDeleting: boolean
+  onUpdateProfile: (patch: Partial<AgentProfileDraft>) => void
+  onToggleActive: () => void
+  onDelete?: () => void
+}) {
+  const isActive = agent.active !== false
+
+  return (
+    <section className="border-border/40 bg-card/60 relative overflow-hidden rounded-2xl border p-6 shadow-sm">
+      <div className="from-primary/5 pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent" />
+      <div className="relative space-y-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <AgentAvatar agent={agent} size="lg" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-foreground text-2xl font-bold tracking-tight">{selectedProfile?.name || agent.name || agent.id}</h2>
+              {agent.default && <DefaultBadge />}
+              <StatusBadge active={isActive} />
+            </div>
+            <p className="text-muted-foreground text-sm">{agentRoleLabel(agent)}</p>
+            <div className="flex flex-wrap gap-1.5">
+              <ReadyStatusBadges agent={agent} />
+            </div>
+            <p className="text-muted-foreground/70 font-mono text-xs">{agent.id}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-end">
+            <Button
+              variant={isActive ? "outline" : "default"}
+              size="sm"
+              onClick={onToggleActive}
+              disabled={isTogglingActive || (agent.default && isActive)}
+              className={isActive ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/40" : ""}
+            >
+              {isTogglingActive ? <IconLoader2 className="size-4 animate-spin" /> : isActive ? <IconPlayerPause className="size-4" /> : <IconPlayerPlay className="size-4" />}
+              {isActive ? "Desativar" : "Ativar"}
+            </Button>
+            {onDelete && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onDelete}
+                disabled={isDeleting}
+                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40"
+              >
+                {isDeleting ? <IconLoader2 className="size-4 animate-spin" /> : <IconTrash className="size-4" />}
+                Remover
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {selectedProfile && (
+          <div className="border-border/60 bg-background/70 rounded-xl border p-4">
+            <SectionHeader title="Identidade" icon={IconUserShield} />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Nome exibido</Label>
+                <Input value={selectedProfile.name} onChange={(e) => onUpdateProfile({ name: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Imagem URL</Label>
+                <Input value={selectedProfile.imageURL} onChange={(e) => onUpdateProfile({ imageURL: e.target.value })} placeholder="https://..." />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Ícone</Label>
+                <Input value={selectedProfile.icon} onChange={(e) => onUpdateProfile({ icon: e.target.value })} placeholder="headset, target, sparkles…" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Iniciais</Label>
+                <Input value={selectedProfile.initials} onChange={(e) => onUpdateProfile({ initials: e.target.value.toUpperCase() })} maxLength={4} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Cor de fundo</Label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={selectedProfile.background} onChange={(e) => onUpdateProfile({ background: e.target.value })} className="size-8 cursor-pointer rounded border border-border/60 bg-transparent p-0.5" />
+                  <Input value={selectedProfile.background} onChange={(e) => onUpdateProfile({ background: e.target.value })} className="font-mono text-xs" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Cor do texto</Label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={selectedProfile.foreground} onChange={(e) => onUpdateProfile({ foreground: e.target.value })} className="size-8 cursor-pointer rounded border border-border/60 bg-transparent p-0.5" />
+                  <Input value={selectedProfile.foreground} onChange={(e) => onUpdateProfile({ foreground: e.target.value })} className="font-mono text-xs" />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function OperationalRoleSection({
+  selectedAgentId,
+  selectedRoleConfig,
+  selectedRoleConfigDraft,
+  onUpdateRoleConfig,
+  onRoleConfigDraftChange,
+}: {
+  selectedAgentId: string
+  selectedRoleConfig: RoleConfigDraft | null
+  selectedRoleConfigDraft: string
+  onUpdateRoleConfig: (updater: (c: RoleConfigDraft) => RoleConfigDraft) => void
+  onRoleConfigDraftChange: (v: string) => void
+}) {
+  return (
+    <section className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
+      <SectionHeader title="Papel operacional" icon={IconSparkles} />
+      <p className="text-muted-foreground mt-1 mb-3 text-xs">
+        Campos salvos em config.json para orientar o papel, sem misturar com o prompt renderizado do workspace.
+      </p>
+      {selectedRoleConfig ? (
+        <RoleSpecificConfigEditor config={selectedRoleConfig} onChange={onUpdateRoleConfig} />
+      ) : (
+        <div className="text-muted-foreground rounded-xl border border-dashed p-4 text-sm">
+          Nenhum perfil operacional encontrado para {selectedAgentId}.
+        </div>
+      )}
+      <details className="mt-3 rounded-xl border border-border/60 bg-muted/20 p-3">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">JSON avançado do papel</summary>
+        <Textarea
+          value={selectedRoleConfigDraft}
+          onChange={(e) => onRoleConfigDraftChange(e.target.value)}
+          className="mt-3 min-h-48 font-mono text-xs"
+          spellCheck={false}
+        />
+      </details>
+    </section>
+  )
+}
+
+function PromptWorkspaceSection({
+  agent,
+  configured,
+  configData,
+  resolvedPayload,
+  template,
+  onCreate,
+  onConfigure,
+  onEditPrompt,
+  onOpenRawEditor,
+}: {
+  agent: AgentEditorAgent
+  configured: boolean
+  configData: AgentConfigResponse
+  resolvedPayload: TemplateApplyPayload | null
+  template: AgentTemplate | null
+  onCreate: () => void
+  onConfigure: () => void
+  onEditPrompt: () => void
+  onOpenRawEditor: () => void
+}) {
+  const payload = configData.payload
+  const appliedAt = configData.applied_at
+    ? new Date(configData.applied_at * 1000).toLocaleString("pt-BR", {
+        day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+      })
+    : null
+  const activeSkillCount = payload?.skill_configs?.filter((s) => s.enabled).length ?? 0
+  const promptLabel = agent.id === "main" ? template?.name ?? payload?.template_id : promptSheetTitle(agent)
+  const presentation = resolvedPayload?.presentation ?? payload?.presentation
+
+  return (
+    <section className="space-y-4">
+      <div className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2">
+            <SectionHeader title="Prompt & Workspace" icon={IconSettings} />
+            <h3 className="text-lg font-semibold">{configured ? promptLabel : "Prompt do workspace pendente"}</h3>
+            <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">
+              {configured
+                ? presentation || "Arquivos de runtime já foram gerados para este agente."
+                : "A identidade e o roteamento podem ser salvos antes do prompt. Quando aplicar, serão gerados AGENT.md, SOUL.md, behavior.json e agent_config.json."}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-end">
+            <Button onClick={configured ? onEditPrompt : onConfigure} size="default" className="gap-2">
+              <IconEdit className="size-4" />
+              {configured ? promptEditLabel(agent) : "Criar prompt do workspace"}
+            </Button>
+            {configured && (
+              <Button variant="outline" onClick={onOpenRawEditor} size="default" className="gap-2">
+                <IconBraces className="size-4" />
+                JSON bruto do prompt
+              </Button>
+            )}
+            {!configured && (
+              <Button variant="outline" onClick={onCreate} size="default" className="gap-2">
+                <IconPlus className="size-4" />
+                Novo agente
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <InfoCard label="ID do agente" value={agent.id} mono />
+          <InfoCard label="Workspace" value={agent.workspace} mono />
+          <InfoCard label="Última aplicação" value={appliedAt} />
+          <InfoCard label="Skills no prompt" value={configured ? `${activeSkillCount}` : "pendente"} />
+        </div>
+      </div>
+      {agent.id === "marketing" && <MarketingPublishingPanel agent={agent} />}
+    </section>
+  )
+}
+
+function AccessRoutingSection({
+  selectedAgentId,
+  agent,
+  mainAgentID,
+  mainAllowAgents,
+  assistantJIDs,
+  assistantChats,
+  internalAgents,
+  isSaving,
+  isLoading,
+  onMainAgentChange,
+  onToggleMainAllow,
+  onAssistantJIDsChange,
+  onAssistantChatsChange,
+  onSave,
+  onRefresh,
+}: {
+  selectedAgentId: string
+  agent: AgentEditorAgent
+  mainAgentID: string
+  mainAllowAgents: string[]
+  assistantJIDs: string
+  assistantChats: string
+  internalAgents: AgentEditorAgent[]
+  isSaving: boolean
+  isLoading: boolean
+  onMainAgentChange: (id: string) => void
+  onToggleMainAllow: (id: string) => void
+  onAssistantJIDsChange: (v: string) => void
+  onAssistantChatsChange: (v: string) => void
+  onSave: () => void
+  onRefresh: () => void
+}) {
+  const mainAgent = internalAgents.find((a) => a.id === mainAgentID)
+  const subagentOptions = internalAgents.filter((a) => a.id !== mainAgentID)
+  const selectedSubagents = agent.subagents?.allow_agents ?? []
+
+  return (
+    <section className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
+      <SectionHeader title="Acesso & Roteamento" icon={IconShield} />
+      <p className="text-muted-foreground mt-1 text-xs">
+        Esta seção salva acesso, agente principal e delegação em config.json.
+      </p>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Agente principal público</Label>
+            <Select value={mainAgentID} onValueChange={onMainAgentChange} disabled={isLoading || internalAgents.length === 0}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {internalAgents.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>{a.name || a.id}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {mainAgent && <p className="text-muted-foreground font-mono text-xs">{mainAgent.id}</p>}
+          </div>
+
+          {subagentOptions.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-xs">Ana pode chamar no atendimento público</Label>
+              {subagentOptions.map((item) => (
+                <label key={item.id} className="border-border/60 flex min-h-10 cursor-pointer items-center justify-between rounded-lg border px-3 text-sm hover:bg-muted/40">
+                  <span>
+                    <span className="font-medium">{item.name || item.id}</span>
+                    <span className="text-muted-foreground ml-2 font-mono text-xs">{item.id}</span>
+                  </span>
+                  <Switch checked={mainAllowAgents.includes(item.id)} onCheckedChange={() => onToggleMainAllow(item.id)} />
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <InfoCard label="Acesso painel" value={agent.access?.panel_enabled === false ? "desativado" : "ativo"} />
+            <InfoCard label="WhatsApp direto" value={agent.access?.whatsapp_direct_enabled ? "ativo" : "restrito"} />
+            <InfoCard label="Subagentes deste agente" value={selectedSubagents.length ? selectedSubagents.join(", ") : "nenhum"} />
+            <InfoCard label="Agente selecionado" value={selectedAgentId} mono />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Números autorizados da Sofia</Label>
+            <Textarea
+              value={assistantJIDs}
+              onChange={(e) => onAssistantJIDsChange(e.target.value)}
+              placeholder="5511999999999@s.whatsapp.net"
+              className="min-h-20 resize-none text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Grupos autorizados da Sofia</Label>
+            <Textarea
+              value={assistantChats}
+              onChange={(e) => onAssistantChatsChange(e.target.value)}
+              placeholder="120363000000000000@g.us"
+              className="min-h-20 resize-none text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 flex items-center gap-2">
+        <Button onClick={onSave} disabled={isSaving} className="gap-2">
+          {isSaving ? <IconLoader2 className="size-4 animate-spin" /> : <IconDeviceFloppy className="size-4" />}
+          Salvar perfil, papel e roteamento
+        </Button>
+        <Button variant="outline" onClick={onRefresh} disabled={isLoading} className="gap-2">
+          <IconRefresh className="size-4" />
+          Atualizar leitura
+        </Button>
+      </div>
+    </section>
+  )
+}
+
+function SpecialistPromptSheet({
+  open,
+  agent,
+  draft,
+  isApplying,
+  onDraftChange,
+  onApply,
+  onOpenChange,
+}: {
+  open: boolean
+  agent: AgentSummary | null
+  draft: TemplateApplyPayload | null
+  isApplying: boolean
+  onDraftChange: (draft: TemplateApplyPayload | null) => void
+  onApply: () => void
+  onOpenChange: (open: boolean) => void
+}) {
+  if (!draft || !agent) {
+    return null
+  }
+  const setField = <K extends keyof TemplateApplyPayload>(key: K, value: TemplateApplyPayload[K]) => {
+    onDraftChange({ ...draft, [key]: value })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[min(88vh,780px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <DialogHeader className="border-border/40 border-b px-6 py-4 pr-14">
+          <DialogTitle>{promptSheetTitle(agent)}</DialogTitle>
+          <DialogDescription>
+            Editor enxuto do prompt especializado. Nome, avatar, papel e roteamento ficam na tela principal.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Resumo do prompt</Label>
+            <Input
+              value={draft.short_description || ""}
+              onChange={(e) => setField("short_description", e.target.value)}
+              placeholder="Resumo operacional deste especialista"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Contrato de atuação</Label>
+            <Textarea
+              value={draft.presentation || ""}
+              onChange={(e) => setField("presentation", e.target.value)}
+              className="min-h-28 resize-none text-sm"
+              placeholder="Explique como este agente deve atuar quando for chamado."
+            />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <TextListField
+              label="Funções principais"
+              value={lines(draft.functions)}
+              onChange={(v) => setField("functions", splitLines(v))}
+              placeholder={"Qualificar lead\nCriar campanha\nOrganizar relatório"}
+            />
+            <TextListField
+              label="Limites"
+              value={lines(draft.prohibitions)}
+              onChange={(v) => setField("prohibitions", splitLines(v))}
+              placeholder={"Não atender público final\nNão publicar sem aprovação"}
+            />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <TextListField
+              label="Proteções"
+              value={lines(draft.protections)}
+              onChange={(v) => setField("protections", splitLines(v))}
+              placeholder={"Pedir confirmação\nRegistrar pendências"}
+            />
+            <TextListField
+              label="Exige aprovação"
+              value={lines(draft.approval_required_for)}
+              onChange={(v) => setField("approval_required_for", splitLines(v))}
+              placeholder={"publicação externa\nalterar permissões"}
+            />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Modelo</Label>
+              <Input value={draft.model || ""} onChange={(e) => setField("model", e.target.value)} placeholder="default" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">ID do payload</Label>
+              <Input value={draft.template_id || ""} onChange={(e) => setField("template_id", e.target.value)} className="font-mono text-xs" />
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="border-border/40 border-t px-6 py-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isApplying}>
+            Cancelar
+          </Button>
+          <Button onClick={onApply} disabled={isApplying} className="gap-2">
+            {isApplying ? <IconLoader2 className="size-4 animate-spin" /> : <IconCheck className="size-4" />}
+            Aplicar no workspace
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── config tab: agent detail view ────────────────────────────────────────────
+
+function AgentDetailView({
+  agent,
+  configData,
+  resolvedPayload,
+  template,
+  isTogglingActive,
+  isDeleting,
+  onEdit,
+  onOpenRawEditor,
+  onToggleActive,
+  onDelete,
+  onOpenChat,
+}: {
+  agent: AgentSummary
+  configData: AgentConfigResponse
+  resolvedPayload: TemplateApplyPayload | null
+  template: AgentTemplate | null
+  isTogglingActive: boolean
+  isDeleting: boolean
+  onEdit: () => void
+  onOpenRawEditor: () => void
+  onToggleActive: () => void
+  onDelete: () => void
+  onOpenChat: () => void
 }) {
   const { t } = useTranslation()
+  const payload = configData.payload!
+  const isActive = agent.active !== false
+  const isDefault = agent.default
+  const skillsActiveCount = payload.skill_configs?.filter((s) => s.enabled).length ?? 0
+  const professionalsCount = payload.professionals?.length ?? 0
+  const productsCount = payload.products?.length ?? 0
+  const appliedAt = configData.applied_at
+    ? new Date(configData.applied_at * 1000).toLocaleString("pt-BR", {
+        day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+      })
+    : null
+
   return (
-    <div className="border-border/40 bg-card/40 flex flex-col items-center gap-4 rounded-xl border p-10 text-center">
-      <IconAlertCircle className="text-muted-foreground size-10" />
-      <div className="space-y-1">
-        <h3 className="text-foreground text-base font-semibold">
-          {agent
-            ? t(
-                "pages.agent.editor.empty_agent_title",
-                "This agent has no template yet",
-              )
-            : t("pages.agent.editor.empty_title")}
-        </h3>
-        <p className="text-muted-foreground max-w-md text-sm">
-          {agent
-            ? t(
-                "pages.agent.editor.empty_agent_description",
-                "Create or apply a template so the workspace gets AGENT.md, SOUL.md, behavior.json and editor state.",
-              )
-            : t("pages.agent.editor.empty_description")}
-        </p>
+    <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-300">
+      <div className="border-border/40 bg-card/60 relative overflow-hidden rounded-2xl border p-6 shadow-sm">
+        <div className="from-primary/5 pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent" />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start">
+          <AgentAvatar agent={agent} size="lg" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-foreground text-2xl font-bold tracking-tight">{payload.name || agent.name || agent.id}</h2>
+              {isDefault && <DefaultBadge />}
+              <StatusBadge active={isActive} />
+            </div>
+            {(resolvedPayload?.presentation ?? payload.presentation) && (
+              <p className="text-muted-foreground line-clamp-2 max-w-xl text-sm leading-relaxed">
+                {resolvedPayload?.presentation ?? payload.presentation}
+              </p>
+            )}
+            <p className="text-muted-foreground/70 font-mono text-xs">{agent.id}</p>
+            <p className="text-muted-foreground text-xs">{agentRoleLabel(agent)}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:flex-col sm:items-end">
+            <Button onClick={onEdit} size="default" className="gap-2">
+              <IconEdit className="size-4" />
+              {promptEditLabel(agent)}
+            </Button>
+            <Button variant="outline" onClick={onOpenRawEditor} size="default" className="gap-2">
+              <IconBraces className="size-4" />
+              {t("pages.agent.editor.raw_json", "JSON bruto")}
+            </Button>
+            {agent.id === "marketing" && (
+              <Button variant="outline" onClick={onOpenChat} size="default" className="gap-2">
+                <IconSparkles className="size-4" />
+                Testar Maya
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
-      <div className="flex flex-wrap justify-center gap-2">
-        {agent && onConfigure ? (
-          <Button onClick={onConfigure}>
-            <IconSparkles className="size-4" />
-            {t("pages.agent.editor.configure_agent", "Configure")}
-          </Button>
-        ) : null}
-        <Button
-          onClick={onCreate}
-          variant={agent && onConfigure ? "outline" : "default"}
-        >
-          <IconPlus className="size-4" />
-          {t("pages.agent.editor.new_agent", "New")}
+
+      <div className="space-y-5">
+        {agent.id === "marketing" && <MarketingPublishingPanel agent={agent} />}
+
+        <section>
+          <SectionHeader title={t("pages.agent.editor.section_identity", "Identidade")} icon={IconSparkles} />
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <InfoCard label={t("pages.agent.editor.summary.template", "Template aplicado")} value={template?.name ?? payload.template_id} />
+            <InfoCard label={t("pages.agent.editor.summary.tone", "Tom")} value={payload.tone} />
+            <InfoCard label={t("pages.agent.editor.summary.language", "Idioma")} value={payload.language} />
+            <InfoCard label={t("pages.agent.editor.summary.company", "Empresa")} value={payload.company_info?.name} />
+          </div>
+        </section>
+
+        <Separator className="opacity-50" />
+
+        <section>
+          <SectionHeader title={t("pages.agent.editor.section_workspace", "Workspace")} icon={IconSettings} />
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <InfoCard label={t("pages.agent.editor.summary.agent_id", "ID do agente")} value={agent.id} mono />
+            <InfoCard label={t("pages.agent.editor.summary.workspace", "Workspace")} value={agent.workspace} mono />
+            {appliedAt && <InfoCard label={t("pages.agent.editor.summary.applied_at", "Última aplicação")} value={appliedAt} />}
+          </div>
+        </section>
+
+        <Separator className="opacity-50" />
+
+        <section>
+          <SectionHeader title={t("pages.agent.editor.section_capabilities", "Capacidades")} icon={IconUsers} />
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <InfoCard label={t("pages.agent.editor.summary.skills_active", "Skills ativas")} value={`${skillsActiveCount}`} />
+            <InfoCard
+              label={t("pages.agent.editor.summary.professionals", "Profissionais")}
+              value={payload.modules?.professionals_enabled ? `${professionalsCount}` : t("pages.agent.editor.summary.disabled", "desativado")}
+            />
+            <InfoCard
+              label={t("pages.agent.editor.summary.products", "Produtos")}
+              value={payload.modules?.products_enabled ? `${productsCount}` : t("pages.agent.editor.summary.disabled", "desativado")}
+            />
+          </div>
+        </section>
+
+        <Separator className="opacity-50" />
+
+        <section>
+          <SectionHeader title={t("pages.agent.editor.section_danger", "Zona de risco")} icon={IconAlertTriangle} />
+          <p className="text-muted-foreground mt-1 mb-3 text-xs">
+            {t("pages.agent.editor.danger_description", "Estas ações afetam o comportamento do agente em todos os canais.")}
+          </p>
+          <div className="border-destructive/20 bg-destructive/3 rounded-xl border p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant={isActive ? "outline" : "default"}
+                size="sm"
+                onClick={onToggleActive}
+                disabled={isTogglingActive || (isDefault && isActive)}
+                title={isDefault && isActive ? t("pages.agent.editor.default_agent_must_stay_active", "O agente padrão precisa continuar ativo.") : undefined}
+                className={isActive ? "border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/40" : ""}
+              >
+                {isTogglingActive ? <IconLoader2 className="size-4 animate-spin" /> : isActive ? <IconPlayerPause className="size-4" /> : <IconPlayerPlay className="size-4" />}
+                {isActive ? t("pages.agent.editor.deactivate_agent", "Desativar agente") : t("pages.agent.editor.activate_agent", "Ativar agente")}
+              </Button>
+              {agent.id !== "main" && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onDelete}
+                      disabled={isDeleting}
+                      className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40"
+                    >
+                      {isDeleting ? <IconLoader2 className="size-4 animate-spin" /> : <IconTrash className="size-4" />}
+                      {t("pages.agent.editor.delete_agent", "Remover agente")}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Os arquivos de workspace são preservados.</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+// ─── profile & routing tab ────────────────────────────────────────────────────
+
+function ProfileTab({
+  selectedAgentId,
+  selectedProfile,
+  selectedRoleConfigDraft,
+  selectedRoleConfig,
+  mainAgentID,
+  mainAllowAgents,
+  assistantJIDs,
+  assistantChats,
+  internalAgents,
+  isSaving,
+  isLoading,
+  onUpdateProfile,
+  onUpdateRoleConfig,
+  onRoleConfigDraftChange,
+  onMainAgentChange,
+  onToggleMainAllow,
+  onAssistantJIDsChange,
+  onAssistantChatsChange,
+  onSave,
+  onRefresh,
+}: {
+  selectedAgentId: string
+  selectedProfile?: AgentProfileDraft
+  selectedRoleConfigDraft: string
+  selectedRoleConfig: RoleConfigDraft | null
+  mainAgentID: string
+  mainAllowAgents: string[]
+  assistantJIDs: string
+  assistantChats: string
+  internalAgents: AgentEditorAgent[]
+  isSaving: boolean
+  isLoading: boolean
+  onUpdateProfile: (patch: Partial<AgentProfileDraft>) => void
+  onUpdateRoleConfig: (updater: (c: RoleConfigDraft) => RoleConfigDraft) => void
+  onRoleConfigDraftChange: (v: string) => void
+  onMainAgentChange: (id: string) => void
+  onToggleMainAllow: (id: string) => void
+  onAssistantJIDsChange: (v: string) => void
+  onAssistantChatsChange: (v: string) => void
+  onSave: () => void
+  onRefresh: () => void
+}) {
+  const { t } = useTranslation()
+  const mainAgent = internalAgents.find((a) => a.id === mainAgentID)
+  const subagentOptions = internalAgents.filter((a) => a.id !== mainAgentID)
+
+  return (
+    <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-5 duration-300">
+      {/* profile editor */}
+      {selectedProfile && (
+        <div className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-3">
+            <ProfileAvatar profile={selectedProfile} />
+            <div>
+              <h3 className="text-sm font-semibold">{selectedProfile.name || selectedAgentId}</h3>
+              <p className="text-muted-foreground text-xs">{selectedAgentId}</p>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t("pages.orchestration.agent_name", "Nome")}</Label>
+              <Input value={selectedProfile.name} onChange={(e) => onUpdateProfile({ name: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t("pages.orchestration.avatar_image", "Imagem URL")}</Label>
+              <Input value={selectedProfile.imageURL} onChange={(e) => onUpdateProfile({ imageURL: e.target.value })} placeholder="https://..." />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t("pages.orchestration.avatar_icon", "Ícone")}</Label>
+              <Input value={selectedProfile.icon} onChange={(e) => onUpdateProfile({ icon: e.target.value })} placeholder="headset, target, sparkles…" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t("pages.orchestration.avatar_initials", "Iniciais")}</Label>
+              <Input value={selectedProfile.initials} onChange={(e) => onUpdateProfile({ initials: e.target.value.toUpperCase() })} maxLength={4} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t("pages.orchestration.avatar_background", "Cor de fundo")}</Label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={selectedProfile.background} onChange={(e) => onUpdateProfile({ background: e.target.value })} className="size-8 cursor-pointer rounded border border-border/60 bg-transparent p-0.5" />
+                <Input value={selectedProfile.background} onChange={(e) => onUpdateProfile({ background: e.target.value })} className="font-mono text-xs" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t("pages.orchestration.avatar_foreground", "Cor do texto")}</Label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={selectedProfile.foreground} onChange={(e) => onUpdateProfile({ foreground: e.target.value })} className="size-8 cursor-pointer rounded border border-border/60 bg-transparent p-0.5" />
+                <Input value={selectedProfile.foreground} onChange={(e) => onUpdateProfile({ foreground: e.target.value })} className="font-mono text-xs" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* role config */}
+      <div className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
+        <SectionHeader title={t("pages.orchestration.role_config", "Perfil operacional")} icon={IconSparkles} />
+        <p className="text-muted-foreground mt-1 mb-3 text-xs">
+          {t("pages.orchestration.role_config_hint", "Configuração estruturada do papel deste agente.")}
+        </p>
+        {selectedRoleConfig && (
+          <RoleSpecificConfigEditor config={selectedRoleConfig} onChange={onUpdateRoleConfig} />
+        )}
+        <Textarea
+          value={selectedRoleConfigDraft}
+          onChange={(e) => onRoleConfigDraftChange(e.target.value)}
+          className="mt-3 min-h-48 font-mono text-xs"
+          spellCheck={false}
+        />
+      </div>
+
+      {/* routing */}
+      <div className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
+        <SectionHeader title={t("pages.orchestration.main_allowlist", "Roteamento")} icon={IconShield} />
+        <div className="mt-4 space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t("pages.orchestration.main_agent", "Agente principal")}</Label>
+            <Select value={mainAgentID} onValueChange={onMainAgentChange} disabled={isLoading || internalAgents.length === 0}>
+              <SelectTrigger className="w-full"><SelectValue placeholder={t("pages.orchestration.main_agent_placeholder")} /></SelectTrigger>
+              <SelectContent>
+                {internalAgents.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>{a.name || a.id}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {mainAgent && <p className="text-muted-foreground font-mono text-xs">{mainAgent.id}</p>}
+          </div>
+
+          {subagentOptions.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-xs">Subagentes permitidos</Label>
+              {subagentOptions.map((agent) => (
+                <label key={agent.id} className="border-border/60 flex min-h-10 cursor-pointer items-center justify-between rounded-lg border px-3 text-sm hover:bg-muted/40">
+                  <span className="font-medium">{agent.name || agent.id}</span>
+                  <Switch checked={mainAllowAgents.includes(agent.id)} onCheckedChange={() => onToggleMainAllow(agent.id)} />
+                </label>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t("pages.orchestration.assistant_jids", "Números autorizados da Sofia")}</Label>
+            <Textarea
+              value={assistantJIDs}
+              onChange={(e) => onAssistantJIDsChange(e.target.value)}
+              placeholder={t("pages.orchestration.admin_jids_placeholder")}
+              className="min-h-20 resize-none text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t("pages.orchestration.assistant_chats", "Grupos autorizados da Sofia")}</Label>
+            <Textarea
+              value={assistantChats}
+              onChange={(e) => onAssistantChatsChange(e.target.value)}
+              placeholder="group:120363000000000000@g.us"
+              className="min-h-20 resize-none text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* save bar */}
+      <div className="flex items-center gap-2 pb-4">
+        <Button onClick={onSave} disabled={isSaving} className="gap-2">
+          {isSaving ? <IconLoader2 className="size-4 animate-spin" /> : <IconDeviceFloppy className="size-4" />}
+          {t("common.save", "Salvar")}
+        </Button>
+        <Button variant="outline" onClick={onRefresh} disabled={isLoading} className="gap-2">
+          <IconRefresh className="size-4" />
+          {t("common.refresh", "Atualizar")}
         </Button>
       </div>
     </div>
   )
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+// ─── chat tab ─────────────────────────────────────────────────────────────────
+
+function ChatTab({
+  selectedAgentId,
+  selectedProfile,
+  messages,
+  chatInput,
+  isSending,
+  proposals,
+  quickPrompts,
+  onChatInputChange,
+  onSend,
+  onPromptSelect,
+  onProposalInspect,
+}: {
+  selectedAgentId: string
+  selectedProfile?: AgentProfileDraft
+  messages: ChatMessage[]
+  chatInput: string
+  isSending: boolean
+  proposals: unknown[]
+  quickPrompts: Array<{ icon: React.ElementType; label: string; prompt: string }>
+  onChatInputChange: (v: string) => void
+  onSend: () => void
+  onPromptSelect: (v: string) => void
+  onProposalInspect: (p: unknown) => void
+}) {
+  const { t } = useTranslation()
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  const agentName = selectedProfile?.name || selectedAgentId
+
   return (
-    <div className="border-border/30 bg-muted/10 min-w-0 rounded-lg border px-3 py-2">
-      <div className="text-muted-foreground text-[10px] tracking-wide uppercase">
-        {label}
+    <div className="animate-in fade-in-0 slide-in-from-bottom-2 flex h-full flex-col gap-4 duration-300">
+      <div className="border-border/40 bg-card/60 flex flex-col rounded-2xl border shadow-sm" style={{ minHeight: 480 }}>
+        {/* chat header */}
+        <div className="border-border/40 flex items-center gap-3 border-b px-4 py-3">
+          {selectedProfile && <ProfileAvatar profile={selectedProfile} />}
+          <div>
+            <p className="text-sm font-semibold">{agentName}</p>
+            <p className="text-muted-foreground text-xs">{selectedAgentId}</p>
+          </div>
+        </div>
+
+        {/* quick prompts */}
+        {quickPrompts.length > 0 && (
+          <div className="border-border/40 flex flex-wrap gap-2 border-b px-4 py-2.5">
+            {quickPrompts.map((item) => {
+              const Icon = item.icon
+              return (
+                <Button key={item.label} type="button" variant="outline" size="sm" onClick={() => onPromptSelect(item.prompt)} className="h-7 gap-1.5 text-xs">
+                  <Icon className="size-3.5" />
+                  {item.label}
+                </Button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* messages */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {messages.length === 0 ? (
+            <div className="flex h-full min-h-32 flex-col items-center justify-center gap-2 text-center">
+              <IconMessageCircle className="text-muted-foreground/40 size-10" />
+              <p className="text-muted-foreground text-sm">{t("pages.orchestration.empty_chat")}</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {messages.map((msg, i) => (
+                <div
+                  key={`${msg.role}-${i}`}
+                  className={
+                    msg.role === "user"
+                      ? "bg-primary text-primary-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-sm px-4 py-2.5 text-sm"
+                      : "bg-muted mr-auto max-w-[86%] rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm whitespace-pre-wrap"
+                  }
+                >
+                  {msg.content}
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+
+        {/* input */}
+        <div className="border-border/40 flex gap-2 border-t p-3">
+          <Textarea
+            value={chatInput}
+            onChange={(e) => onChatInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                void onSend()
+              }
+            }}
+            placeholder={`Mensagem para ${agentName}… (Ctrl+Enter para enviar)`}
+            className="min-h-16 resize-none text-sm"
+          />
+          <Button
+            className="h-16 w-12 shrink-0"
+            onClick={onSend}
+            disabled={!chatInput.trim() || !selectedAgentId || isSending}
+            aria-label={t("pages.orchestration.send")}
+          >
+            {isSending ? <IconLoader2 className="size-5 animate-spin" /> : <IconSend className="size-5" />}
+          </Button>
+        </div>
       </div>
-      <div className="text-foreground truncate text-sm font-medium">
-        {value || "—"}
+
+      {/* proposals */}
+      {proposals.length > 0 && (
+        <div className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
+          <SectionHeader title={t("pages.orchestration.proposals", "Propostas")} icon={IconFileDescription} />
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {proposals.slice(0, 6).map((proposal, i) => (
+              <ProposalCard key={i} proposal={proposal} onInspect={() => onProposalInspect(proposal)} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── marketing panel (inside config tab) ─────────────────────────────────────
+
+function MarketingPublishingPanel({ agent }: { agent: AgentSummary }) {
+  const publishDir = marketingPublishDir(agent)
+  const deliverables = agent.role_config?.marketing?.deliverables ?? ["catalog_html", "simple_site", "campaign"]
+  const platforms = agent.role_config?.marketing?.platforms ?? ["instagram", "site", "catalog_html"]
+
+  return (
+    <section className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
+      <SectionHeader title="Publicação da Maya" icon={IconWorldWww} />
+      <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-relaxed">
+        Catálogos, cardápios e sites simples salvos em{" "}
+        <code className="bg-muted rounded px-1 font-mono text-xs">{publishDir}</code>{" "}
+        ficam acessíveis em{" "}
+        <code className="bg-muted rounded px-1 font-mono text-xs">/public/marketing/&lt;arquivo&gt;</code>.
+      </p>
+      <div className="mt-4 grid gap-2 md:grid-cols-3">
+        <InfoCard label="Pasta pública" value={publishDir} mono />
+        <InfoCard label="URL base" value="/public/marketing/" mono />
+        <InfoCard
+          label="Aprovação"
+          value={agent.role_config?.marketing?.requires_human_review === false ? "sem revisão obrigatória" : "revisão humana"}
+        />
       </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <CapabilityList icon={IconFileDescription} title="Entregáveis" items={deliverables} />
+        <CapabilityList icon={IconPhoto} title="Canais" items={platforms} />
+      </div>
+    </section>
+  )
+}
+
+function CapabilityList({ icon: Icon, title, items }: { icon: React.ElementType; title: string; items: string[] }) {
+  return (
+    <div className="bg-muted/30 rounded-xl p-3">
+      <div className="text-muted-foreground mb-2 flex items-center gap-2 text-xs font-medium uppercase">
+        <Icon className="size-3.5" />
+        {title}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((item) => (
+          <Badge key={item} variant="secondary" className="rounded-full">{item}</Badge>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── marketing role config editor (inside profile tab) ────────────────────────
+
+function RoleSpecificConfigEditor({
+  config,
+  onChange,
+}: {
+  config: RoleConfigDraft
+  onChange: (updater: (c: RoleConfigDraft) => RoleConfigDraft) => void
+}) {
+  switch (String(config.kind || "")) {
+    case "attendant":
+      return <AttendantRoleConfigEditor config={config} onChange={onChange} />
+    case "sales":
+      return <SalesRoleConfigEditor config={config} onChange={onChange} />
+    case "marketing":
+      return <MarketingRoleConfigEditor config={config} onChange={onChange} />
+    case "assistant":
+      return <AssistantRoleConfigEditor config={config} onChange={onChange} />
+    default:
+      return null
+  }
+}
+
+function AttendantRoleConfigEditor({
+  config,
+  onChange,
+}: {
+  config: RoleConfigDraft
+  onChange: (updater: (c: RoleConfigDraft) => RoleConfigDraft) => void
+}) {
+  const attendant = (config.attendant || {}) as AttendantRoleConfig
+  const updateAttendant = (patch: Partial<AttendantRoleConfig>) => {
+    onChange((c) => ({ ...c, attendant: { ...((c.attendant || {}) as AttendantRoleConfig), ...patch } }))
+  }
+
+  return (
+    <div className="border-border/60 bg-muted/20 mb-3 space-y-4 rounded-xl border p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium">Ana: atendimento e triagem</div>
+          <div className="text-muted-foreground text-xs">Campos da porta pública: setores, dados mínimos e escalonamentos.</div>
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 text-xs">
+          Agendamento
+          <Switch checked={attendant.scheduling_enabled ?? false} onCheckedChange={(v) => updateAttendant({ scheduling_enabled: v })} />
+        </label>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <TextListField label="Setores" value={lines(attendant.departments)} placeholder={"vendas\nsuporte\nfinanceiro\nhumano"} onChange={(v) => updateAttendant({ departments: splitLines(v) })} />
+        <TextListField label="Dados de triagem" value={lines(attendant.triage_fields)} placeholder={"nome\ncontato\nassunto\nurgencia"} onChange={(v) => updateAttendant({ triage_fields: splitLines(v) })} />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <TextListField label="Regras de escalonamento" value={lines(attendant.escalation_rules)} placeholder={"reclamacao grave\ndesconto ou excecao\ninformacao nao confirmada"} onChange={(v) => updateAttendant({ escalation_rules: splitLines(v) })} />
+        <div className="space-y-1.5">
+          <div className="text-muted-foreground text-xs font-medium">Fonte de FAQ</div>
+          <Input value={attendant.faq_source || ""} onChange={(e) => updateAttendant({ faq_source: e.target.value })} placeholder="company_context" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SalesRoleConfigEditor({
+  config,
+  onChange,
+}: {
+  config: RoleConfigDraft
+  onChange: (updater: (c: RoleConfigDraft) => RoleConfigDraft) => void
+}) {
+  const sales = (config.sales || {}) as SalesRoleConfig
+  const updateSales = (patch: Partial<SalesRoleConfig>) => {
+    onChange((c) => ({ ...c, sales: { ...((c.sales || {}) as SalesRoleConfig), ...patch } }))
+  }
+
+  return (
+    <div className="border-border/60 bg-muted/20 mb-3 space-y-4 rounded-xl border p-4">
+      <div>
+        <div className="text-sm font-medium">Leo: vendas e follow-up</div>
+        <div className="text-muted-foreground text-xs">Campos usados para qualificar lead, classificar oportunidade e devolver próxima ação.</div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <TextListField label="Etapas do funil" value={lines(sales.funnel_stages)} placeholder={"novo\nqualificacao\nproposta\nfollow_up\nganho\nperdido"} onChange={(v) => updateSales({ funnel_stages: splitLines(v) })} />
+        <TextListField label="Campos de qualificação" value={lines(sales.qualification_fields)} placeholder={"problema\nfit\nautoridade\nprazo\norcamento\nproximo_passo"} onChange={(v) => updateSales({ qualification_fields: splitLines(v) })} />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <TextListField label="Cadência de follow-up" value={lines(sales.followup_cadence)} placeholder={"D+1\nD+3\nD+7"} onChange={(v) => updateSales({ followup_cadence: splitLines(v) })} />
+        <TextListField label="Regras de handoff" value={lines(sales.handoff_rules)} placeholder={"lead qualificado com prazo\npedido de contrato\nexcecao comercial"} onChange={(v) => updateSales({ handoff_rules: splitLines(v) })} />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <div className="text-muted-foreground text-xs font-medium">CRM / sistema</div>
+          <Input value={sales.crm_integration || ""} onChange={(e) => updateSales({ crm_integration: e.target.value })} placeholder="future, planilha, CRM..." />
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-muted-foreground text-xs font-medium">Fonte de preços</div>
+          <Input value={sales.price_policy_source || ""} onChange={(e) => updateSales({ price_policy_source: e.target.value })} placeholder="memory/pricing.md" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MarketingRoleConfigEditor({
+  config,
+  onChange,
+}: {
+  config: RoleConfigDraft
+  onChange: (updater: (c: RoleConfigDraft) => RoleConfigDraft) => void
+}) {
+  const marketing = (config.marketing || {}) as MarketingRoleConfig
+  const cadence = marketing.cadence || {}
+  const brandKit = marketing.brand_kit || {}
+
+  const updateMarketing = (patch: Partial<MarketingRoleConfig>) => {
+    onChange((c) => ({ ...c, marketing: { ...((c.marketing || {}) as MarketingRoleConfig), ...patch } }))
+  }
+  const updateBrandKit = (patch: NonNullable<MarketingRoleConfig["brand_kit"]>) => {
+    updateMarketing({ brand_kit: { ...brandKit, ...patch } })
+  }
+  const updateCadence = (patch: NonNullable<MarketingRoleConfig["cadence"]>) => {
+    updateMarketing({ cadence: { ...cadence, ...patch } })
+  }
+
+  return (
+    <div className="border-border/60 bg-muted/20 mb-3 space-y-4 rounded-xl border p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium">Maya: sites e catálogos</div>
+          <div className="text-muted-foreground text-xs">Campos para orientar campanhas, páginas e catálogos HTML.</div>
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 text-xs">
+          Revisão humana
+          <Switch checked={marketing.requires_human_review ?? true} onCheckedChange={(v) => updateMarketing({ requires_human_review: v })} />
+        </label>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <div className="text-muted-foreground text-xs font-medium">Pasta pública</div>
+          <Input value={marketing.public_publish_dir || ""} onChange={(e) => updateMarketing({ public_publish_dir: e.target.value })} placeholder="public/marketing" />
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-muted-foreground text-xs font-medium">Aprovação</div>
+          <Select value={marketing.approval_mode || "owner_required"} onValueChange={(v) => updateMarketing({ approval_mode: v })}>
+            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="owner_required">Dono aprova</SelectItem>
+              <SelectItem value="admin_required">Admin aprova</SelectItem>
+              <SelectItem value="draft_only">Apenas rascunho</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <TextListField label="Plataformas" value={lines(marketing.platforms)} placeholder={"instagram\nsite\ncatalog_html"} onChange={(v) => updateMarketing({ platforms: splitLines(v) })} />
+        <TextListField label="Entregáveis" value={lines(marketing.deliverables)} placeholder={"post\ncampaign\ncatalog_html\nsimple_site"} onChange={(v) => updateMarketing({ deliverables: splitLines(v) })} />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <TextListField label="Pilares de conteúdo" value={lines(marketing.content_pillars)} placeholder={"educação\nprova social\npromoções"} onChange={(v) => updateMarketing({ content_pillars: splitLines(v) })} />
+        <TextListField label="Fontes de tendência" value={lines(marketing.trend_sources)} placeholder={"instagram\ngoogle_trends\nconcorrentes"} onChange={(v) => updateMarketing({ trend_sources: splitLines(v) })} />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <TextListField label="Cores da marca" value={lines(brandKit.colors)} placeholder={"#111827\n#f97316"} onChange={(v) => updateBrandKit({ colors: splitLines(v) })} />
+        <TextListField label="Fontes da marca" value={lines(brandKit.fonts)} placeholder={"Inter\nMontserrat"} onChange={(v) => updateBrandKit({ fonts: splitLines(v) })} />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <div className="text-muted-foreground text-xs font-medium">Tom</div>
+          <Input value={brandKit.tone || ""} onChange={(e) => updateBrandKit({ tone: e.target.value })} placeholder="claro, próximo e profissional" />
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-muted-foreground text-xs font-medium">Estilo visual</div>
+          <Input value={brandKit.visual_style || ""} onChange={(e) => updateBrandKit({ visual_style: e.target.value })} placeholder="limpo, moderno, com fotos reais" />
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="space-y-1.5">
+          <div className="text-muted-foreground text-xs font-medium">Posts/semana</div>
+          <Input type="number" min={0} value={cadence.posts_per_week ?? ""} onChange={(e) => updateCadence({ posts_per_week: e.target.value ? Number(e.target.value) : undefined })} />
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-muted-foreground text-xs font-medium">Campanhas/mês</div>
+          <Input type="number" min={0} value={cadence.campaigns_per_month ?? ""} onChange={(e) => updateCadence({ campaigns_per_month: e.target.value ? Number(e.target.value) : undefined })} />
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-muted-foreground text-xs font-medium">Horizonte</div>
+          <Input value={cadence.planning_horizon || ""} onChange={(e) => updateCadence({ planning_horizon: e.target.value })} placeholder="1-4 semanas" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AssistantRoleConfigEditor({
+  config,
+  onChange,
+}: {
+  config: RoleConfigDraft
+  onChange: (updater: (c: RoleConfigDraft) => RoleConfigDraft) => void
+}) {
+  const assistant = (config.assistant || {}) as AssistantRoleConfig
+  const updateAssistant = (patch: Partial<AssistantRoleConfig>) => {
+    onChange((c) => ({ ...c, assistant: { ...((c.assistant || {}) as AssistantRoleConfig), ...patch } }))
+  }
+
+  return (
+    <div className="border-border/60 bg-muted/20 mb-3 space-y-4 rounded-xl border p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium">Sofia: assistente do dono</div>
+          <div className="text-muted-foreground text-xs">Escopos privados, relatórios, delegação e confirmações obrigatórias.</div>
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 text-xs">
+          Edita agentes
+          <Switch checked={assistant.can_edit_agents ?? true} onCheckedChange={(v) => updateAssistant({ can_edit_agents: v })} />
+        </label>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <TextListField label="Escopos autorizados" value={lines(assistant.authorized_scopes)} placeholder={"workspace\nagents\nreports\ndocuments\nagenda\norchestration"} onChange={(v) => updateAssistant({ authorized_scopes: splitLines(v) })} />
+        <TextListField label="Relatórios" value={lines(assistant.report_cadence)} placeholder={"daily\nweekly\nmonthly"} onChange={(v) => updateAssistant({ report_cadence: splitLines(v) })} />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <TextListField label="Pode chamar agentes" value={lines(assistant.can_call_agents)} placeholder={"main\nvendas\nmarketing"} onChange={(v) => updateAssistant({ can_call_agents: splitLines(v) })} />
+        <TextListField label="Exige confirmação" value={lines(assistant.requires_confirmation)} placeholder={"editar agentes\nalterar permissoes\npublicar materiais\napagar arquivos"} onChange={(v) => updateAssistant({ requires_confirmation: splitLines(v) })} />
+      </div>
+      <div className="space-y-1.5">
+        <div className="text-muted-foreground text-xs font-medium">Auditoria</div>
+        <Select value={assistant.audit_level || "high"} onValueChange={(v) => updateAssistant({ audit_level: v })}>
+          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="high">Alta</SelectItem>
+            <SelectItem value="medium">Média</SelectItem>
+            <SelectItem value="low">Baixa</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
+}
+
+function TextListField({ label, value, placeholder, onChange }: { label: string; value: string; placeholder?: string; onChange: (v: string) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="text-muted-foreground text-xs font-medium">{label}</div>
+      <Textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="min-h-20 resize-none text-sm" />
+    </div>
+  )
+}
+
+// ─── proposal card ────────────────────────────────────────────────────────────
+
+function ProposalCard({ proposal, onInspect }: { proposal: unknown; onInspect: () => void }) {
+  const kind = proposalKind(proposal)
+  const assets = proposalAssets(proposal)
+  const publicURLs = proposalPublicURLs(proposal)
+  const Icon = kind === "site" ? IconWorldWww : kind === "catalog" ? IconFileDescription : IconSparkles
+
+  return (
+    <div className="bg-muted/30 ring-border/60 rounded-xl p-3 text-sm ring-1">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon className="text-muted-foreground size-4 shrink-0" />
+          <div className="min-w-0">
+            <div className="truncate font-medium">{proposalTitle(proposal)}</div>
+            <div className="text-muted-foreground text-xs">{kind || "marketing"}</div>
+          </div>
+        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={onInspect}>Revisar</Button>
+      </div>
+      {assets.length > 0 ? (
+        <div className="space-y-1">
+          {assets.slice(0, 3).map((asset) => (
+            <div key={asset} className="text-muted-foreground truncate font-mono text-xs" title={asset}>{asset}</div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-muted-foreground text-xs">Sem arquivo vinculado.</div>
+      )}
+      {publicURLs.length > 0 && (
+        <div className="border-border/60 mt-3 space-y-1 border-t pt-2">
+          {publicURLs.slice(0, 3).map((url) => (
+            <a key={url} href={url} target="_blank" rel="noreferrer" className="text-primary block truncate text-xs hover:underline" title={url}>{url}</a>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── loading skeleton ─────────────────────────────────────────────────────────
+
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="border-border/40 rounded-2xl border p-6">
+        <div className="flex items-start gap-4">
+          <Skeleton className="size-14 rounded-xl" />
+          <div className="flex-1 space-y-3">
+            <Skeleton className="h-7 w-48 rounded-lg" />
+            <Skeleton className="h-4 w-64 rounded" />
+            <Skeleton className="h-3 w-20 rounded" />
+          </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14 rounded-xl" />)}
+      </div>
+    </div>
+  )
+}
+
+// ─── empty / unconfigured states ──────────────────────────────────────────────
+
+function EmptyState({ onCreate }: { onCreate: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <div className="border-border/40 bg-card/40 flex flex-col items-center gap-5 rounded-2xl border p-12 text-center">
+      <div className="bg-muted flex size-16 items-center justify-center rounded-2xl">
+        <IconUsers className="text-muted-foreground size-8" />
+      </div>
+      <div className="space-y-1.5">
+        <h3 className="text-foreground text-base font-semibold">{t("pages.agent.editor.empty_title")}</h3>
+        <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">{t("pages.agent.editor.empty_description")}</p>
+      </div>
+      <Button onClick={onCreate} className="gap-2">
+        <IconPlus className="size-4" />
+        {t("pages.agent.editor.new_agent", "Novo agente")}
+      </Button>
+    </div>
+  )
+}
+
+function UnconfiguredState({
+  agent,
+  onCreate,
+  onConfigure,
+  onToggleActive,
+  isTogglingActive = false,
+  onDelete,
+  isDeleting = false,
+}: {
+  agent?: AgentSummary
+  onCreate: () => void
+  onConfigure?: () => void
+  onToggleActive?: () => void
+  isTogglingActive?: boolean
+  onDelete?: () => void
+  isDeleting?: boolean
+}) {
+  const { t } = useTranslation()
+  const isActive = agent?.active !== false
+
+  return (
+    <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-300">
+      {agent && (
+        <div className="border-border/40 bg-card/60 relative overflow-hidden rounded-2xl border p-6 shadow-sm">
+          <div className="from-primary/5 pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent" />
+          <div className="relative flex items-start gap-4">
+            <AgentAvatar agent={agent} size="lg" />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-foreground text-2xl font-bold">{agent.name || agent.id}</h2>
+                {agent.default && <DefaultBadge />}
+                <StatusBadge active={isActive} />
+              </div>
+              <p className="text-muted-foreground mt-1 font-mono text-xs">{agent.id}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col items-center gap-4 rounded-2xl border border-amber-200/60 bg-amber-50/50 p-10 text-center dark:border-amber-800/40 dark:bg-amber-950/20">
+        <div className="flex size-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/40">
+          <IconAlertCircle className="size-6 text-amber-600 dark:text-amber-400" />
+        </div>
+        <div className="space-y-1.5">
+          <h3 className="text-foreground text-base font-semibold">
+            {agent ? t("pages.agent.editor.empty_agent_title", "Agente sem template") : t("pages.agent.editor.empty_title")}
+          </h3>
+          <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
+            {agent ? t("pages.agent.editor.empty_agent_description", "Crie ou aplique um template para gerar o workspace do agente.") : t("pages.agent.editor.empty_description")}
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-2">
+          {agent && onConfigure && (
+            <Button onClick={onConfigure} className="gap-2">
+              <IconSparkles className="size-4" />
+              {t("pages.agent.editor.configure_agent", "Configurar")}
+            </Button>
+          )}
+          <Button variant={agent && onConfigure ? "outline" : "default"} onClick={onCreate} className="gap-2">
+            <IconPlus className="size-4" />
+            {t("pages.agent.editor.new_agent", "Novo agente")}
+          </Button>
+        </div>
+      </div>
+
+      {agent && (onToggleActive || onDelete) && (
+        <div className="border-destructive/20 bg-destructive/3 rounded-xl border p-4">
+          <p className="text-muted-foreground mb-3 text-xs font-medium">{t("pages.agent.editor.section_danger", "Zona de risco")}</p>
+          <div className="flex flex-wrap gap-2">
+            {onToggleActive && (
+              <Button variant="outline" size="sm" onClick={onToggleActive} disabled={isTogglingActive || (agent.default && isActive)}
+                className={isActive ? "border-amber-200 text-amber-700 hover:bg-amber-50" : ""}
+              >
+                {isTogglingActive ? <IconLoader2 className="size-4 animate-spin" /> : isActive ? <IconPlayerPause className="size-4" /> : <IconPlayerPlay className="size-4" />}
+                {isActive ? t("pages.agent.editor.deactivate_agent", "Desativar agente") : t("pages.agent.editor.activate_agent", "Ativar agente")}
+              </Button>
+            )}
+            {onDelete && (
+              <Button variant="outline" size="sm" onClick={onDelete} disabled={isDeleting} className="border-red-200 text-red-600 hover:bg-red-50">
+                {isDeleting ? <IconLoader2 className="size-4 animate-spin" /> : <IconTrash className="size-4" />}
+                {t("pages.agent.editor.delete_agent", "Remover agente")}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

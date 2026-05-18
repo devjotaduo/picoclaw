@@ -121,7 +121,7 @@ function buildSavePayload(
   editConfig: ChannelConfig,
   enabled: boolean,
 ): ChannelConfig {
-  const payload: ChannelConfig = { enabled, type: channel.config_key }
+  const payload: ChannelConfig = { enabled, type: channel.name }
   const settings: ChannelConfig = {}
 
   for (const [key, value] of Object.entries(editConfig)) {
@@ -483,6 +483,32 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
     setArrayFieldResetVersion((version) => version + 1)
   }
 
+  const persistChannelConfig = useCallback(
+    async (nextEnabled: boolean, preparedEditConfig: ChannelConfig) => {
+      if (!channel) return
+
+      const savePayload = buildSavePayload(
+        channel,
+        preparedEditConfig,
+        nextEnabled,
+      )
+      await patchAppConfig({
+        channel_list: {
+          [channel.config_key]: savePayload,
+        },
+      })
+      await loadData()
+      const gateway = await refreshGatewayState({ force: true })
+      showSaveSuccessOrRestartToast(
+        t,
+        t("channels.page.saveSuccess"),
+        channelDisplayName,
+        gateway?.restartRequired === true,
+      )
+    },
+    [channel, channelDisplayName, loadData, t],
+  )
+
   const handleSave = async () => {
     if (!channel) return
 
@@ -511,20 +537,7 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
     setServerError("")
     setFieldErrors({})
     try {
-      const savePayload = buildSavePayload(channel, preparedEditConfig, enabled)
-      await patchAppConfig({
-        channel_list: {
-          [channel.config_key]: savePayload,
-        },
-      })
-      await loadData()
-      const gateway = await refreshGatewayState({ force: true })
-      showSaveSuccessOrRestartToast(
-        t,
-        t("channels.page.saveSuccess"),
-        channelDisplayName,
-        gateway?.restartRequired === true,
-      )
+      await persistChannelConfig(enabled, preparedEditConfig)
     } catch (e) {
       const message =
         e instanceof Error ? e.message : t("channels.page.saveError")
@@ -533,6 +546,45 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
       setSaving(false)
     }
   }
+
+  const handleEnabledChange = useCallback(
+    (nextEnabled: boolean) => {
+      setEnabled(nextEnabled)
+
+      if (!channel || channel.name !== "whatsapp_native") {
+        return
+      }
+
+      const preparedEditConfig = flushPendingArrayFieldDrafts(editConfig)
+      if (preparedEditConfig !== editConfig) {
+        setEditConfig(preparedEditConfig)
+      }
+
+      setSaving(true)
+      setServerError("")
+      setFieldErrors({})
+      void persistChannelConfig(nextEnabled, preparedEditConfig)
+        .catch((e) => {
+          const message =
+            e instanceof Error ? e.message : t("channels.page.saveError")
+          setServerError(message)
+          setEnabled(asBool(baseConfig.enabled))
+          void loadData(true)
+        })
+        .finally(() => {
+          setSaving(false)
+        })
+    },
+    [
+      baseConfig.enabled,
+      channel,
+      editConfig,
+      flushPendingArrayFieldDrafts,
+      loadData,
+      persistChannelConfig,
+      t,
+    ],
+  )
 
   const handleWeixinBindSuccess = useCallback(async () => {
     try {
@@ -735,7 +787,11 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
                 <p className="text-sm font-medium">
                   {t("channels.page.enableLabel")}
                 </p>
-                <Switch checked={enabled} onCheckedChange={setEnabled} />
+                <Switch
+                  checked={enabled}
+                  onCheckedChange={handleEnabledChange}
+                  disabled={saving}
+                />
               </div>
             )}
 

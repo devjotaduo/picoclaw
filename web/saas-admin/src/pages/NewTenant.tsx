@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Check, Loader2 } from "lucide-react";
@@ -7,6 +7,15 @@ import { listLauncherProfiles } from "@/api/launcher-profiles";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Dialog } from "@/components/ui/dialog";
+
+const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+
+function validateSubdomain(value: string): string | null {
+  if (!value) return "Subdomain is required.";
+  if (value.length < 3 || value.length > 30) return "Only lowercase letters, numbers, hyphens. Max 30 chars.";
+  if (!SUBDOMAIN_RE.test(value)) return "Only lowercase letters, numbers, hyphens. Max 30 chars.";
+  return null;
+}
 
 export function NewTenant() {
   const nav = useNavigate();
@@ -21,6 +30,8 @@ export function NewTenant() {
   });
   const [result, setResult] = useState<CreateTenantResponse | null>(null);
   const [copied, setCopied] = useState(false);
+  const [subdomainError, setSubdomainError] = useState<string | null>(null);
+  const subdomainRef = useRef<HTMLInputElement>(null);
   const profilesQ = useQuery({ queryKey: ["launcher-profiles"], queryFn: listLauncherProfiles });
   const profiles = profilesQ.data?.profiles ?? [];
   const defaultProfile = profiles.find((profile) => profile.is_default);
@@ -60,6 +71,12 @@ export function NewTenant() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    const err = validateSubdomain(form.subdomain);
+    if (err) {
+      setSubdomainError(err);
+      subdomainRef.current?.focus();
+      return;
+    }
     m.mutate(form);
   };
 
@@ -104,13 +121,21 @@ export function NewTenant() {
           <Label htmlFor="subdomain">Subdomain (lowercase, 3–30 chars)</Label>
           <Input
             id="subdomain"
+            ref={subdomainRef}
             required
-            pattern="^[a-z0-9](-?[a-z0-9])*$"
-            minLength={3}
             maxLength={30}
             value={form.subdomain}
-            onChange={(e) => setForm({ ...form, subdomain: e.target.value.toLowerCase() })}
+            onChange={(e) => {
+              const v = e.target.value.toLowerCase();
+              setForm({ ...form, subdomain: v });
+              setSubdomainError(validateSubdomain(v));
+            }}
+            onBlur={() => setSubdomainError(validateSubdomain(form.subdomain))}
+            className={subdomainError ? "border-red-500 focus:border-red-500" : undefined}
           />
+          {subdomainError && (
+            <p className="mt-1 text-xs text-red-400">{subdomainError}</p>
+          )}
         </div>
         <div>
           <Label htmlFor="launcher_profile_id">Launcher profile</Label>

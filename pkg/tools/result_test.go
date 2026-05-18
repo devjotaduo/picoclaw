@@ -313,3 +313,19 @@ func TestToolResultContentForLLM_AppendsArtifactPaths(t *testing.T) {
 		t.Fatalf("expected artifact guidance note in ContentForLLM, got %q", content)
 	}
 }
+
+func TestToolResultContentForLLM_DeliveredMediaDoesNotRequestSendFileAgain(t *testing.T) {
+	result := &ToolResult{
+		ForLLM:       "Image generated.",
+		DeliverMedia: true,
+		ArtifactTags: []string{"[file:/tmp/example.png]"},
+	}
+
+	content := result.ContentForLLM()
+	if !strings.Contains(content, "already been rendered in the current chat") {
+		t.Fatalf("expected delivered media guidance in ContentForLLM, got %q", content)
+	}
+	if strings.Contains(content, artifactPathsLLMNote) {
+		t.Fatalf("did not expect send_file guidance for already delivered media, got %q", content)
+	}
+}

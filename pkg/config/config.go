@@ -308,14 +308,21 @@ func (m AgentModelConfig) MarshalJSON() ([]byte, error) {
 }
 
 type AgentConfig struct {
-	ID        string             `json:"id"`
-	Default   bool               `json:"default,omitempty"`
-	Name      string             `json:"name,omitempty"`
-	Workspace string             `json:"workspace,omitempty"`
-	Model     *AgentModelConfig  `json:"model,omitempty"`
-	Skills    []string           `json:"skills,omitempty"`
-	Subagents *SubagentsConfig   `json:"subagents,omitempty"`
-	Access    *AgentAccessConfig `json:"access,omitempty"`
+	ID         string             `json:"id"`
+	Default    bool               `json:"default,omitempty"`
+	Enabled    *bool              `json:"enabled,omitempty"`
+	Name       string             `json:"name,omitempty"`
+	Avatar     *AgentAvatarConfig `json:"avatar,omitempty"`
+	Workspace  string             `json:"workspace,omitempty"`
+	Model      *AgentModelConfig  `json:"model,omitempty"`
+	Skills     []string           `json:"skills,omitempty"`
+	Subagents  *SubagentsConfig   `json:"subagents,omitempty"`
+	Access     *AgentAccessConfig `json:"access,omitempty"`
+	RoleConfig *AgentRoleConfig   `json:"role_config,omitempty"`
+}
+
+func (a AgentConfig) IsEnabled() bool {
+	return a.Enabled == nil || *a.Enabled
 }
 
 type SubagentsConfig struct {
@@ -323,11 +330,96 @@ type SubagentsConfig struct {
 	Model       *AgentModelConfig `json:"model,omitempty"`
 }
 
+type AgentAvatarConfig struct {
+	Type       string `json:"type,omitempty"`
+	Icon       string `json:"icon,omitempty"`
+	Initials   string `json:"initials,omitempty"`
+	Background string `json:"background,omitempty"`
+	Foreground string `json:"foreground,omitempty"`
+	ImageURL   string `json:"image_url,omitempty"`
+}
+
 type AgentAccessConfig struct {
 	PanelEnabled           bool     `json:"panel_enabled,omitempty"`
 	PanelRoles             []string `json:"panel_roles,omitempty"`
 	WhatsAppDirectEnabled  bool     `json:"whatsapp_direct_enabled,omitempty"`
 	WhatsAppAllowedSenders []string `json:"whatsapp_allowed_senders,omitempty"`
+	WhatsAppAllowedChats   []string `json:"whatsapp_allowed_chats,omitempty"`
+}
+
+type AgentRoleConfig struct {
+	Version     int                       `json:"version,omitempty"`
+	Kind        string                    `json:"kind,omitempty"`
+	Description string                    `json:"description,omitempty"`
+	Profile     map[string]any            `json:"profile,omitempty"`
+	Marketing   *MarketingAgentRoleConfig `json:"marketing,omitempty"`
+	Sales       *SalesAgentRoleConfig     `json:"sales,omitempty"`
+	Attendant   *AttendantAgentRoleConfig `json:"attendant,omitempty"`
+	Assistant   *AssistantAgentRoleConfig `json:"assistant,omitempty"`
+}
+
+type MarketingAgentRoleConfig struct {
+	Platforms           []string                  `json:"platforms,omitempty"`
+	Deliverables        []string                  `json:"deliverables,omitempty"`
+	ApprovalMode        string                    `json:"approval_mode,omitempty"`
+	PublicPublishDir    string                    `json:"public_publish_dir,omitempty"`
+	BrandKit            MarketingBrandKitConfig   `json:"brand_kit,omitempty"`
+	ContentPillars      []string                  `json:"content_pillars,omitempty"`
+	Audiences           []MarketingAudienceConfig `json:"audiences,omitempty"`
+	Cadence             MarketingCadenceConfig    `json:"cadence,omitempty"`
+	TrendSources        []string                  `json:"trend_sources,omitempty"`
+	Competitors         []string                  `json:"competitors,omitempty"`
+	DefaultImageSizes   map[string]string         `json:"default_image_sizes,omitempty"`
+	RequiresHumanReview bool                      `json:"requires_human_review,omitempty"`
+}
+
+type MarketingBrandKitConfig struct {
+	Colors         []string `json:"colors,omitempty"`
+	Fonts          []string `json:"fonts,omitempty"`
+	Tone           string   `json:"tone,omitempty"`
+	VisualStyle    string   `json:"visual_style,omitempty"`
+	ForbiddenTerms []string `json:"forbidden_terms,omitempty"`
+	Do             []string `json:"do,omitempty"`
+	Dont           []string `json:"dont,omitempty"`
+}
+
+type MarketingAudienceConfig struct {
+	Name     string `json:"name,omitempty"`
+	Pain     string `json:"pain,omitempty"`
+	Desire   string `json:"desire,omitempty"`
+	Language string `json:"language,omitempty"`
+}
+
+type MarketingCadenceConfig struct {
+	PostsPerWeek      int    `json:"posts_per_week,omitempty"`
+	CampaignsPerMonth int    `json:"campaigns_per_month,omitempty"`
+	PlanningHorizon   string `json:"planning_horizon,omitempty"`
+}
+
+type SalesAgentRoleConfig struct {
+	FunnelStages        []string `json:"funnel_stages,omitempty"`
+	QualificationFields []string `json:"qualification_fields,omitempty"`
+	FollowupCadence     []string `json:"followup_cadence,omitempty"`
+	CRMIntegration      string   `json:"crm_integration,omitempty"`
+	PricePolicySource   string   `json:"price_policy_source,omitempty"`
+	HandoffRules        []string `json:"handoff_rules,omitempty"`
+}
+
+type AttendantAgentRoleConfig struct {
+	Departments       []string `json:"departments,omitempty"`
+	TriageFields      []string `json:"triage_fields,omitempty"`
+	EscalationRules   []string `json:"escalation_rules,omitempty"`
+	SchedulingEnabled bool     `json:"scheduling_enabled,omitempty"`
+	FAQSource         string   `json:"faq_source,omitempty"`
+}
+
+type AssistantAgentRoleConfig struct {
+	AuthorizedScopes     []string `json:"authorized_scopes,omitempty"`
+	ReportCadence        []string `json:"report_cadence,omitempty"`
+	CanEditAgents        bool     `json:"can_edit_agents,omitempty"`
+	CanCallAgents        []string `json:"can_call_agents,omitempty"`
+	RequiresConfirmation []string `json:"requires_confirmation,omitempty"`
+	AuditLevel           string   `json:"audit_level,omitempty"`
 }
 
 type DispatchConfig struct {
@@ -1028,6 +1120,8 @@ type ToolsConfig struct {
 	SaveMarketingProposal ToolConfig                 `json:"save_marketing_proposal" yaml:"-"                                                envPrefix:"PICOCLAW_TOOLS_SAVE_MARKETING_PROPOSAL_"`
 	TenantManager         ToolConfig                 `json:"tenant_manager"    yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_TENANT_MANAGER_"`
 	WhatsAppReportQuery   ToolConfig                 `json:"whatsapp_report_query" yaml:"-"                                                   envPrefix:"PICOCLAW_TOOLS_WHATSAPP_REPORT_QUERY_"`
+	CustomerLookup        ToolConfig                 `json:"customer_lookup"   yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_CUSTOMER_LOOKUP_"`
+	ProductLookup         ToolConfig                 `json:"product_lookup"    yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_PRODUCT_LOOKUP_"`
 	WebFetch              ToolConfig                 `json:"web_fetch"         yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_WEB_FETCH_"`
 	WriteFile             ToolConfig                 `json:"write_file"        yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_WRITE_FILE_"`
 }
@@ -1767,6 +1861,10 @@ func (t *ToolsConfig) IsToolEnabled(name string) bool {
 		return t.TenantManager.Enabled
 	case "whatsapp_report_query":
 		return t.WhatsAppReportQuery.Enabled
+	case "customer_lookup":
+		return t.CustomerLookup.Enabled
+	case "product_lookup":
+		return t.ProductLookup.Enabled
 	case "web_fetch":
 		return t.WebFetch.Enabled
 	case "send_file":

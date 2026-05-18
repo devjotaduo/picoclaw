@@ -66,6 +66,7 @@ export function TenantDetail() {
   });
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
   const [rotatedPwd, setRotatedPwd] = useState<string | null>(null);
   const [pwdCopied, setPwdCopied] = useState(false);
   const [applyProfileId, setApplyProfileId] = useState("");
@@ -84,7 +85,13 @@ export function TenantDetail() {
   });
   const deleteM = useMutation({
     mutationFn: () => deleteTenant(id),
-    onSuccess: () => nav("/tenants"),
+    onSuccess: () => {
+      setConfirmDelete(false);
+      setDeleteConfirm("");
+      toast({ type: "success", message: "Tenant deleted." });
+      nav("/tenants");
+    },
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to delete tenant." }),
   });
   const rotateM = useMutation({
     mutationFn: () => rotatePassword(id),
@@ -106,6 +113,12 @@ export function TenantDetail() {
     await navigator.clipboard.writeText(rotatedPwd);
     setPwdCopied(true);
     setTimeout(() => setPwdCopied(false), 1500);
+  };
+
+  const closeDeleteDialog = () => {
+    if (deleteM.isPending) return;
+    setConfirmDelete(false);
+    setDeleteConfirm("");
   };
 
   if (t.isLoading) {
@@ -154,7 +167,18 @@ export function TenantDetail() {
           <h1 className="text-xl font-semibold">{tenant.display_name}</h1>
           <div className="mt-1 flex items-center gap-2 text-sm">
             <StatusBadge status={tenant.status} />
-            <span className="text-zinc-500">{tenant.subdomain}</span>
+            {tenant.suspended_at && (
+              <span className="text-xs text-zinc-500">since {formatDate(tenant.suspended_at)}</span>
+            )}
+            <a
+              href={`https://${tenant.subdomain}.jotaduo.com`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-zinc-500 hover:text-zinc-200"
+            >
+              {tenant.subdomain}
+              <ExternalLink className="h-3 w-3" />
+            </a>
             <span className="text-zinc-700">•</span>
             <span className="text-zinc-500">{tenant.owner_email}</span>
           </div>
@@ -196,15 +220,24 @@ export function TenantDetail() {
               <Button variant="secondary" size="sm" onClick={() => rotateM.mutate()} disabled={rotateM.isPending}>
                 Rotate password
               </Button>
-              <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>Delete</Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => {
+                  setDeleteConfirm("");
+                  setConfirmDelete(true);
+                }}
+              >
+                Delete
+              </Button>
             </>
           )}
         </div>
       </header>
 
-      {tenant.last_error && (
-        <div className="mb-4 rounded bg-red-950/50 px-3 py-2 text-xs text-red-300">
-          <strong>Last error:</strong> {tenant.last_error}
+      {tenant.status === "error" && tenant.last_error && (
+        <div className="mb-4 rounded-lg border border-red-800 bg-red-950/30 p-3 text-xs text-red-300">
+          <span className="font-medium text-red-200">Error:</span> {tenant.last_error}
         </div>
       )}
 
@@ -367,16 +400,31 @@ export function TenantDetail() {
         </div>
       </div>
 
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete tenant?" size="sm">
-        <p className="text-sm text-zinc-300">
-          This will stop the container, delete the LiteLLM key, archive the volume to a tarball,
-          and remove all data. The tarball is retained for 30 days.
-        </p>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancel</Button>
-          <Button variant="danger" onClick={() => deleteM.mutate()} disabled={deleteM.isPending}>
-            {deleteM.isPending ? "Deleting…" : "Delete forever"}
-          </Button>
+      <Dialog open={confirmDelete} onClose={closeDeleteDialog} title="Delete tenant?" size="sm" closable={!deleteM.isPending}>
+        <div className="space-y-4 text-sm">
+          <p className="text-zinc-300">
+            This removes the Docker container, LiteLLM key, tenant volume, and related Picoclaw database records.
+          </p>
+          <div>
+            <label className="mb-1 block text-xs text-zinc-400">Type {tenant.subdomain}</label>
+            <input
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              className="h-9 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-red-500"
+              autoComplete="off"
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closeDeleteDialog} disabled={deleteM.isPending}>Cancel</Button>
+            <Button
+              variant="danger"
+              onClick={() => deleteM.mutate()}
+              disabled={deleteConfirm !== tenant.subdomain || deleteM.isPending}
+            >
+              {deleteM.isPending ? "Deleting…" : "Delete forever"}
+            </Button>
+          </div>
         </div>
       </Dialog>
 

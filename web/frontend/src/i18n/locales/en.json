@@ -80,6 +80,10 @@
     "deleteSession": "Excluir sessão",
     "messagesCount": "{{count}} mensagens",
     "noModel": "Selecionar modelo",
+    "agentSelector": "Select agent",
+    "agentSelectorPlaceholder": "Agent",
+    "agentAttachmentsUnsupported": "Media uploads are available in the main chat. For internal agents, send text.",
+    "agentSendFailed": "Failed to send message to the agent.",
     "inputDisabled": {
       "notConnected": "O Gateway não está rodando. Inicie-o para conversar.",
       "noModel": "Nenhum modelo padrão configurado. Vá para a página de Modelos para definir um."
@@ -144,6 +148,9 @@
     "cancel": "Cancelar",
     "save": "Salvar",
     "saving": "Salvando...",
+    "loading": "Loading...",
+    "refresh": "Refresh",
+    "sending": "Enviando...",
     "reset": "Redefinir",
     "confirm": "Confirmar",
     "saveChangesTitle": "Você tem alterações de configuração não salvas",
@@ -171,6 +178,9 @@
       },
       "antigravity": {
         "description": "Usa OAuth via navegador para o Google Cloud Code Assist."
+      },
+      "copilot": {
+        "description": "Import your GitHub token from the gh CLI or enter it manually."
       }
     },
     "status": {
@@ -184,7 +194,9 @@
       "deviceCode": "Device Code",
       "stopLoading": "Parar Carregamento",
       "saveToken": "Salvar",
-      "logout": "Sair"
+      "logout": "Sair",
+      "importClaudeCode": "Import from Claude Code",
+      "importGHCLI": "Import from GitHub CLI"
     },
     "logoutDialog": {
       "title": "Sair do provedor?",
@@ -192,7 +204,8 @@
     },
     "fields": {
       "openaiToken": "Token OpenAI",
-      "anthropicToken": "Token Anthropic"
+      "anthropicToken": "Token Anthropic",
+      "githubToken": "GitHub token (ghp_... or gho_...)"
     },
     "labels": {
       "account": "Conta",
@@ -222,6 +235,14 @@
       "url": "URL de Verificação",
       "polling": "Verificando status do login...",
       "open": "Abrir Página de Verificação"
+    },
+    "anthropicPaste": {
+      "title": "Anthropic browser login",
+      "description": "After authorizing on claude.ai, copy the code shown on the callback page and paste it below.",
+      "openAuth": "Open authorization page",
+      "codeLabel": "Code (format: code#state)",
+      "hint": "The final URL will be https://console.anthropic.com/oauth/code/callback?code=XXX#YYY — copy everything after ?code= (including the # and state).",
+      "submit": "Complete login"
     }
   },
   "models": {
@@ -515,8 +536,19 @@
   "pages": {
     "orchestration": {
       "agents": "Internal agents",
+      "profile": "Profile",
+      "agent_name": "Name",
+      "avatar_icon": "Icon",
+      "avatar_initials": "Initials",
+      "avatar_background": "Background",
+      "avatar_foreground": "Text",
+      "avatar_image": "Image URL",
       "main_allowlist": "Main permissions",
-      "admin_jids_placeholder": "Admin WhatsApp JIDs, one per line",
+      "main_agent": "Main agent",
+      "main_agent_placeholder": "Select main agent",
+      "assistant_jids": "Sofia authorized numbers",
+      "assistant_chats": "Sofia authorized groups",
+      "admin_jids_placeholder": "Sofia WhatsApp JIDs, one per line",
       "saved": "Orchestration saved",
       "internal": "Internal",
       "available": "Available",
@@ -526,6 +558,34 @@
       "empty_proposals": "No saved proposals."
     },
     "agent": {
+      "whatsapp": {
+        "chats": "Chats",
+        "search_placeholder": "Search name, phone…",
+        "placeholder": "Manual message… (Ctrl+Enter to send)",
+        "no_messages": "No messages in this conversation yet.",
+        "empty_title": "Select a conversation to start",
+        "empty_description": "Pick a contact from the list on the left to view messages and reply in real time.",
+        "agent_active": "Agent active",
+        "agent_paused": "Paused",
+        "agent_auto_paused": "Auto-paused",
+        "agent_resume": "Resume",
+        "connection_online": "Online",
+        "connection_reconnecting": "Reconnecting…",
+        "connection_offline": "Offline",
+        "connection_connecting": "Connecting…",
+        "status_pending": "Sending…",
+        "status_sent": "Sent",
+        "status_delivered": "Delivered",
+        "status_read": "Read",
+        "status_error": "Send failed",
+        "settings_menu": "Inbox settings",
+        "refresh_chats": "Refresh chats",
+        "stop_gateway": "Stop WhatsApp gateway",
+        "stop_gateway_confirm_title": "Stop WhatsApp gateway?",
+        "stop_gateway_confirm_description": "The gateway will stop sending and receiving messages immediately. Existing conversations are preserved, but the automatic agent will be unavailable until the gateway is restarted.",
+        "new_messages_singular": "1 new message",
+        "new_messages_plural": "{{count}} new messages"
+      },
       "load_error": "Falha ao carregar informações de suporte do agente.",
       "skills": {
         "empty": "Nenhuma skill disponível no momento.",
@@ -631,6 +691,14 @@
       "editor": {
         "loading": "Loading…",
         "edit": "Edit configuration",
+        "active": "Active",
+        "inactive": "Inactive",
+        "activate_agent": "Activate agent",
+        "deactivate_agent": "Deactivate agent",
+        "activate_success": "Agent activated.",
+        "deactivate_success": "Agent deactivated.",
+        "toggle_active_error": "Could not update agent status.",
+        "default_agent_must_stay_active": "The default agent must stay active.",
         "raw_json": "Raw JSON",
         "raw_json_title": "Raw agent JSON",
         "raw_json_description": "Advanced editor for the exact payload saved into this agent workspace.",
@@ -646,6 +714,7 @@
         "empty_description": "Apply a template to generate the initial agent configuration. After that, come back here to edit everything: schedule, professionals, products, skills, behavior, etc.",
         "go_to_templates": "Go to Templates",
         "summary": {
+          "status": "Status",
           "template": "Applied template",
           "tone": "Tone",
           "language": "Language",
@@ -654,8 +723,37 @@
           "products": "Products",
           "skills_active": "Active skills",
           "applied_at": "Last applied",
-          "disabled": "disabled"
-        }
+          "disabled": "disabled",
+          "agent_id": "Agent ID",
+          "workspace": "Workspace"
+        },
+        "agents": "Agents",
+        "new_agent": "New agent",
+        "create_title": "New agent",
+        "create_description": "Create an agent entry and choose the template used for its first workspace files.",
+        "create_agent": "Create agent",
+        "create_success": "Agent created.",
+        "create_error": "Could not create agent.",
+        "delete_agent": "Remove agent",
+        "delete_confirm": "Remove this agent from config? Its workspace files will be preserved.",
+        "delete_success": "Agent removed from config.",
+        "delete_error": "Could not remove agent.",
+        "configured": "Configured",
+        "not_configured": "Draft",
+        "default": "Default",
+        "configure_agent": "Configure",
+        "empty_agent_title": "Agent has no template yet",
+        "empty_agent_description": "Create or apply a template so the workspace gets AGENT.md, SOUL.md, behavior.json and editor state.",
+        "agent_name": "Agent name",
+        "agent_name_placeholder": "Sales assistant",
+        "agent_id": "Agent ID",
+        "agent_id_hint": "Runtime ID:",
+        "starting_template": "Starting template",
+        "section_identity": "Identity",
+        "section_workspace": "Workspace",
+        "section_capabilities": "Capabilities",
+        "section_danger": "Danger zone",
+        "danger_description": "These actions affect agent behavior across all channels."
       },
       "template_editor": {
         "search_placeholder": "Search templates",
@@ -693,6 +791,14 @@
           "enabled": "Enabled",
           "visible_label": "Visible in template",
           "visible_hint": "(show as a public agent capability)"
+        },
+        "style": {
+          "emoji_policy": "Emoji usage",
+          "emoji_policy_hint": "Choose whether the agent may use rare emojis or should avoid them entirely.",
+          "emoji_minimal": "A few emojis when useful",
+          "emoji_none": "Do not use any emoji",
+          "do": "Do",
+          "dont": "Don't"
         },
         "categories": {
           "all": "Todas",
@@ -779,6 +885,8 @@
           "identity_description": "Nome do agente, mensagem de apresentação, tom e idioma.",
           "company": "Empresa",
           "company_description": "Informações da empresa que serão referenciadas pelo agente.",
+          "knowledge_base": "Knowledge base",
+          "knowledge_base_description": "Official context and frequent questions the agent should use as source of truth.",
           "personality": "Personalidade",
           "personality_description": "Traços de personalidade que o agente demonstra nas conversas (gravado em SOUL.md).",
           "functions": "Funções e capacidades",
@@ -804,6 +912,18 @@
           "company_general_info": "Informações gerais",
           "company_general_info_hint": "Contexto extra que o agente deve conhecer: endereço, redes sociais, missão, observações importantes, política de feriados, etc.",
           "company_general_info_placeholder": "Ex.: Endereço: Rua X, 123. Estacionamento gratuito por 2h com selo. Atendimento bilíngue (PT/EN). Site: www.exemplo.com.br"
+        },
+        "knowledge_base": {
+          "overview": "Official context",
+          "overview_hint": "Policies, observations, commercial rules, and important information that do not fit structured fields.",
+          "overview_placeholder": "Example: Downtown deliveries are coordinated with the commercial team. Items under consultation must not receive estimated prices.",
+          "faqs": "Frequent questions",
+          "faqs_hint": "Add official questions and answers for recurring customer doubts.",
+          "faq_item": "FAQ {{number}}",
+          "question_placeholder": "Question",
+          "answer_placeholder": "Official answer",
+          "add_faq": "Add FAQ",
+          "remove_faq": "Remove FAQ"
         },
         "company": {
           "schedule": {

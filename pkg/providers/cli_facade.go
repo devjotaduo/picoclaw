@@ -23,8 +23,13 @@ func NewCodexCliProvider(workspace string) *CodexCliProvider {
 	return cliprovider.NewCodexCliProvider(workspace)
 }
 
-func NewGitHubCopilotProvider(uri string, connectMode string, model string) (*GitHubCopilotProvider, error) {
-	return cliprovider.NewGitHubCopilotProvider(uri, connectMode, model)
+func NewGitHubCopilotProvider(
+	uri string,
+	connectMode string,
+	model string,
+	githubToken string,
+) (*GitHubCopilotProvider, error) {
+	return cliprovider.NewGitHubCopilotProvider(uri, connectMode, model, githubToken)
 }
 
 func ReadCodexCliCredentials() (accessToken, accountID string, expiresAt time.Time, err error) {

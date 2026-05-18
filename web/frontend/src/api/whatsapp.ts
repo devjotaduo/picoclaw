@@ -15,6 +15,13 @@ export interface WhatsAppChat {
   updated_at: number
 }
 
+// Delivery status for outbound messages. Matches the four-state model used by
+// the WhatsApp Web UI. Backwards-compat: the backend currently only emits the
+// boolean `delivered` field; `deriveMessageStatus()` in lib/message-status.ts
+// computes the four-state value with sensible fallbacks. When the gateway
+// starts emitting `status`/`read` events, the field gets populated server-side.
+export type WhatsAppMessageStatus = "pending" | "sent" | "delivered" | "read"
+
 export interface WhatsAppMessage {
   id: number
   message_id?: string
@@ -27,6 +34,9 @@ export interface WhatsAppMessage {
   content: string
   ts: number
   delivered: boolean
+  // Optional richer status; if absent, derive from `delivered` + ts.
+  status?: WhatsAppMessageStatus
+  read_at?: number
   error?: string
 }
 
@@ -120,12 +130,28 @@ export interface InboxEvent {
   message?: WhatsAppMessage
 }
 
-async function getJSON<T>(path: string): Promise<T> {
-  const res = await launcherFetch(path)
+async function getJSON<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await launcherFetch(path, init)
   if (!res.ok) {
     throw new Error(`${res.status} ${res.statusText}`)
   }
   return res.json() as Promise<T>
+}
+
+export interface WhatsAppAvatarResponse {
+  url: string
+  avatar_id: string
+  cached: boolean
+}
+
+export async function fetchWhatsAppAvatar(
+  jid: string,
+  force = false,
+): Promise<WhatsAppAvatarResponse> {
+  return getJSON<WhatsAppAvatarResponse>(
+    `/api/whatsapp/chats/${encodeURIComponent(jid)}/avatar`,
+    { method: force ? "POST" : "GET" },
+  )
 }
 
 export async function listWhatsAppChats(limit = 100): Promise<WhatsAppChat[]> {
@@ -236,27 +262,55 @@ export async function markWhatsAppChatRead(jid: string): Promise<void> {
   })
 }
 
+export type InboxConnectionStatus = "connecting" | "online" | "reconnecting" | "offline"
+
+export interface OpenInboxStreamOptions {
+  onEvent: (evt: InboxEvent) => void
+  onError?: (err: Event) => void
+  onStatus?: (status: InboxConnectionStatus) => void
+}
+
 // EventSource wrapper. The launcher's session cookie is sent because we set
 // `withCredentials: true` — same-origin gives that for free, but the explicit
 // option keeps things working if the dashboard ever moves to a sub-domain
 // behind the same TLS.
+//
+// Two call shapes are supported for backwards compatibility:
+//   openInboxStream(onEvent, onError?)
+//   openInboxStream({ onEvent, onError?, onStatus? })
+//
+// The object form exposes connection state transitions ("connecting" →
+// "online" → "reconnecting" → "offline") so the dashboard can show a global
+// indicator without re-wiring the EventSource lifecycle in every consumer.
 export function openInboxStream(
-  onEvent: (evt: InboxEvent) => void,
-  onError?: (err: Event) => void,
+  arg1: OpenInboxStreamOptions | ((evt: InboxEvent) => void),
+  arg2?: (err: Event) => void,
 ): () => void {
+  const opts: OpenInboxStreamOptions =
+    typeof arg1 === "function" ? { onEvent: arg1, onError: arg2 } : arg1
+
   const es = new EventSource("/api/whatsapp/events", { withCredentials: true })
+  opts.onStatus?.("connecting")
+
   const handler = (e: MessageEvent) => {
+    opts.onStatus?.("online")
     try {
       const data = JSON.parse(e.data) as InboxEvent
-      onEvent(data)
+      opts.onEvent(data)
     } catch {
       // ignore malformed events
     }
   }
   es.addEventListener("message", handler)
   es.addEventListener("chat_update", handler)
-  if (onError) {
-    es.addEventListener("error", onError)
+  es.addEventListener("open", () => opts.onStatus?.("online"))
+  es.addEventListener("error", (err) => {
+    // readyState: 0 = CONNECTING (reconnect in flight), 2 = CLOSED.
+    opts.onStatus?.(es.readyState === EventSource.CLOSED ? "offline" : "reconnecting")
+    opts.onError?.(err)
+  })
+  return () => {
+    es.close()
+    opts.onStatus?.("offline")
   }
-  return () => es.close()
 }

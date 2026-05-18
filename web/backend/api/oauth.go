@@ -8,6 +8,8 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,16 +17,20 @@ import (
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
+	"gopkg.in/yaml.v3"
 )
 
 const (
 	oauthProviderOpenAI            = "openai"
 	oauthProviderAnthropic         = "anthropic"
 	oauthProviderGoogleAntigravity = "google-antigravity"
+	oauthProviderGitHubCopilot     = "github-copilot"
 
 	oauthMethodBrowser    = "browser"
 	oauthMethodDeviceCode = "device_code"
 	oauthMethodToken      = "token"
+	oauthMethodClaudeCode = "claude_code"
+	oauthMethodGHCLI      = "gh_cli"
 
 	oauthFlowPending = "pending"
 	oauthFlowSuccess = "success"
@@ -42,18 +48,21 @@ var oauthProviderOrder = []string{
 	oauthProviderOpenAI,
 	oauthProviderAnthropic,
 	oauthProviderGoogleAntigravity,
+	oauthProviderGitHubCopilot,
 }
 
 var oauthProviderMethods = map[string][]string{
 	oauthProviderOpenAI:            {oauthMethodBrowser, oauthMethodDeviceCode, oauthMethodToken},
-	oauthProviderAnthropic:         {oauthMethodToken},
+	oauthProviderAnthropic:         {oauthMethodBrowser, oauthMethodToken, oauthMethodClaudeCode},
 	oauthProviderGoogleAntigravity: {oauthMethodBrowser},
+	oauthProviderGitHubCopilot:     {oauthMethodGHCLI, oauthMethodToken},
 }
 
 var oauthProviderLabels = map[string]string{
 	oauthProviderOpenAI:            "OpenAI",
 	oauthProviderAnthropic:         "Anthropic",
 	oauthProviderGoogleAntigravity: "Google Antigravity",
+	oauthProviderGitHubCopilot:     "GitHub Copilot",
 }
 
 var (
@@ -63,7 +72,8 @@ var (
 	oauthBuildAuthorizeURL        = auth.BuildAuthorizeURL
 	oauthRequestDeviceCode        = auth.RequestDeviceCode
 	oauthPollDeviceCodeOnce       = auth.PollDeviceCodeOnce
-	oauthExchangeCodeForTokens    = auth.ExchangeCodeForTokens
+	oauthExchangeCodeForTokens          = auth.ExchangeCodeForTokens
+	oauthExchangeCodeForTokensWithState = auth.ExchangeCodeForTokensWithState
 	oauthGetCredential            = auth.GetCredential
 	oauthSetCredential            = auth.SetCredential
 	oauthDeleteCredential         = auth.DeleteCredential
@@ -89,6 +99,9 @@ type oauthFlow struct {
 	UserCode     string
 	VerifyURL    string
 	Interval     int
+	// ManualPaste indicates the flow does not have an HTTP callback and the
+	// authorization code must be POSTed to /api/oauth/flows/{id}/submit.
+	ManualPaste bool
 }
 
 type oauthProviderStatus struct {
@@ -105,15 +118,16 @@ type oauthProviderStatus struct {
 }
 
 type oauthFlowResponse struct {
-	FlowID    string `json:"flow_id"`
-	Provider  string `json:"provider"`
-	Method    string `json:"method"`
-	Status    string `json:"status"`
-	ExpiresAt string `json:"expires_at,omitempty"`
-	Error     string `json:"error,omitempty"`
-	UserCode  string `json:"user_code,omitempty"`
-	VerifyURL string `json:"verify_url,omitempty"`
-	Interval  int    `json:"interval,omitempty"`
+	FlowID      string `json:"flow_id"`
+	Provider    string `json:"provider"`
+	Method      string `json:"method"`
+	Status      string `json:"status"`
+	ExpiresAt   string `json:"expires_at,omitempty"`
+	Error       string `json:"error,omitempty"`
+	UserCode    string `json:"user_code,omitempty"`
+	VerifyURL   string `json:"verify_url,omitempty"`
+	Interval    int    `json:"interval,omitempty"`
+	ManualPaste bool   `json:"manual_paste,omitempty"`
 }
 
 // registerOAuthRoutes binds OAuth login/logout endpoints to the ServeMux.
@@ -122,6 +136,7 @@ func (h *Handler) registerOAuthRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/oauth/login", h.handleOAuthLogin)
 	mux.HandleFunc("GET /api/oauth/flows/{id}", h.handleGetOAuthFlow)
 	mux.HandleFunc("POST /api/oauth/flows/{id}/poll", h.handlePollOAuthFlow)
+	mux.HandleFunc("POST /api/oauth/flows/{id}/submit", h.handleSubmitOAuthFlow)
 	mux.HandleFunc("POST /api/oauth/logout", h.handleOAuthLogout)
 	mux.HandleFunc("GET /oauth/callback", h.handleOAuthCallback)
 }
@@ -285,7 +300,28 @@ func (h *Handler) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		redirectURI := buildOAuthRedirectURI(r)
+		// Anthropic's OAuth client only accepts a fixed paste-based redirect
+		// URI. The user authorizes on claude.ai, sees `code#state` on the
+		// console.anthropic.com callback page, and pastes it back via
+		// POST /api/oauth/flows/{id}/submit.
+		manualPaste := provider == oauthProviderAnthropic
+		var redirectURI string
+		if manualPaste {
+			redirectURI = auth.AnthropicPasteRedirectURI
+		} else {
+			redirectURI = buildOAuthRedirectURI(r)
+		}
+
+		// OpenAI's Codex OAuth client only accepts localhost redirect URIs.
+		// In web-server mode the redirect goes to the server domain, which OpenAI rejects.
+		if provider == oauthProviderOpenAI && !strings.HasPrefix(redirectURI, "http://localhost") {
+			http.Error(w,
+				"OpenAI browser OAuth requires direct (localhost) access. Use Device Code instead.",
+				http.StatusUnprocessableEntity,
+			)
+			return
+		}
+
 		authURL := oauthBuildAuthorizeURL(cfg, pkce, state, redirectURI)
 
 		now := oauthNow()
@@ -300,19 +336,62 @@ func (h *Handler) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
 			CodeVerifier: pkce.CodeVerifier,
 			OAuthState:   state,
 			RedirectURI:  redirectURI,
+			ManualPaste:  manualPaste,
 		}
 		h.storeOAuthFlow(flow)
 
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		resp := map[string]any{
 			"status":     "ok",
 			"provider":   provider,
 			"method":     method,
 			"flow_id":    flow.ID,
 			"auth_url":   authURL,
 			"expires_at": flow.ExpiresAt.Format(time.RFC3339),
+		}
+		if manualPaste {
+			resp["manual_paste"] = true
+			resp["redirect_uri"] = redirectURI
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+		return
+	case oauthMethodClaudeCode:
+		cred, err := importClaudeCodeCredential()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to import Claude Code credential: %v", err), http.StatusInternalServerError)
+			return
+		}
+		if err := h.persistCredentialAndConfig(provider, oauthMethodClaudeCode, cred); err != nil {
+			http.Error(w, fmt.Sprintf("failed to save credential: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":   "ok",
+			"provider": provider,
+			"method":   oauthMethodClaudeCode,
 		})
 		return
+
+	case oauthMethodGHCLI:
+		cred, err := importGHCLICredential()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to import GitHub CLI credential: %v", err), http.StatusInternalServerError)
+			return
+		}
+		if err := h.persistCredentialAndConfig(provider, oauthMethodGHCLI, cred); err != nil {
+			http.Error(w, fmt.Sprintf("failed to save credential: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":   "ok",
+			"provider": provider,
+			"method":   oauthMethodGHCLI,
+		})
+		return
+
 	default:
 		http.Error(w, "unsupported login method", http.StatusBadRequest)
 	}
@@ -385,6 +464,103 @@ func (h *Handler) handlePollOAuthFlow(w http.ResponseWriter, r *http.Request) {
 		updated, _ := h.getOAuthFlow(flowID)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(flowToResponse(updated))
+		return
+	}
+
+	h.setOAuthFlowSuccess(flowID)
+	updated, _ := h.getOAuthFlow(flowID)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(flowToResponse(updated))
+}
+
+// handleSubmitOAuthFlow accepts a paste-based authorization code for OAuth
+// providers (like Anthropic) that redirect to a callback page outside the
+// launcher's reach. The body is either {"code","state"} or {"paste":"code#state"}.
+func (h *Handler) handleSubmitOAuthFlow(w http.ResponseWriter, r *http.Request) {
+	flowID := strings.TrimSpace(r.PathValue("id"))
+	if flowID == "" {
+		http.Error(w, "missing flow id", http.StatusBadRequest)
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	var req struct {
+		Code  string `json:"code"`
+		State string `json:"state"`
+		Paste string `json:"paste"`
+	}
+	if err = json.Unmarshal(body, &req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	code := strings.TrimSpace(req.Code)
+	state := strings.TrimSpace(req.State)
+	if paste := strings.TrimSpace(req.Paste); paste != "" {
+		// Anthropic's callback page renders `code#state` for the user to copy.
+		// Accept either that exact form, a full URL, or just the code.
+		paste = strings.TrimPrefix(paste, auth.AnthropicPasteRedirectURI)
+		paste = strings.TrimPrefix(paste, "?code=")
+		if idx := strings.Index(paste, "#"); idx >= 0 {
+			code = paste[:idx]
+			if state == "" {
+				state = paste[idx+1:]
+			}
+		} else if code == "" {
+			code = paste
+		}
+	}
+	code = strings.TrimSpace(code)
+	state = strings.TrimSpace(state)
+
+	if code == "" {
+		http.Error(w, "code is required", http.StatusBadRequest)
+		return
+	}
+
+	flow, ok := h.getOAuthFlow(flowID)
+	if !ok {
+		http.Error(w, "flow not found", http.StatusNotFound)
+		return
+	}
+	if !flow.ManualPaste {
+		http.Error(w, "flow does not support manual submit", http.StatusBadRequest)
+		return
+	}
+	if flow.Status != oauthFlowPending {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(flowToResponse(flow))
+		return
+	}
+	if state != "" && state != flow.OAuthState {
+		h.setOAuthFlowError(flowID, "state mismatch")
+		http.Error(w, "state mismatch", http.StatusBadRequest)
+		return
+	}
+
+	cfg, err := oauthConfigForProvider(flow.Provider)
+	if err != nil {
+		h.setOAuthFlowError(flowID, err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	cred, err := oauthExchangeCodeForTokensWithState(cfg, code, flow.CodeVerifier, flow.OAuthState, flow.RedirectURI)
+	if err != nil {
+		h.setOAuthFlowError(flowID, fmt.Sprintf("token exchange failed: %v", err))
+		http.Error(w, fmt.Sprintf("token exchange failed: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if err := h.persistCredentialAndConfig(flow.Provider, "oauth", cred); err != nil {
+		h.setOAuthFlowError(flowID, fmt.Sprintf("failed to save credential: %v", err))
+		http.Error(w, fmt.Sprintf("failed to save credential: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -527,7 +703,9 @@ func normalizeOAuthProvider(raw string) (string, error) {
 	switch provider {
 	case "antigravity":
 		return oauthProviderGoogleAntigravity, nil
-	case oauthProviderOpenAI, oauthProviderAnthropic, oauthProviderGoogleAntigravity:
+	case "copilot", "github":
+		return oauthProviderGitHubCopilot, nil
+	case oauthProviderOpenAI, oauthProviderAnthropic, oauthProviderGoogleAntigravity, oauthProviderGitHubCopilot:
 		return provider, nil
 	default:
 		return "", fmt.Errorf("unsupported provider %q", raw)
@@ -550,6 +728,8 @@ func oauthConfigForProvider(provider string) (auth.OAuthProviderConfig, error) {
 		return auth.OpenAIOAuthConfig(), nil
 	case oauthProviderGoogleAntigravity:
 		return auth.GoogleAntigravityOAuthConfig(), nil
+	case oauthProviderAnthropic:
+		return auth.AnthropicOAuthConfig(), nil
 	default:
 		return auth.OAuthProviderConfig{}, fmt.Errorf("provider %q does not support browser oauth", provider)
 	}
@@ -575,11 +755,12 @@ func buildOAuthRedirectURI(r *http.Request) string {
 
 func flowToResponse(flow *oauthFlow) oauthFlowResponse {
 	resp := oauthFlowResponse{
-		FlowID:   flow.ID,
-		Provider: flow.Provider,
-		Method:   flow.Method,
-		Status:   flow.Status,
-		Error:    flow.Error,
+		FlowID:      flow.ID,
+		Provider:    flow.Provider,
+		Method:      flow.Method,
+		Status:      flow.Status,
+		Error:       flow.Error,
+		ManualPaste: flow.ManualPaste,
 	}
 	if !flow.ExpiresAt.IsZero() {
 		resp.ExpiresAt = flow.ExpiresAt.Format(time.RFC3339)
@@ -747,6 +928,9 @@ func (h *Handler) syncProviderAuthMethod(provider, authMethod string) error {
 	found := false
 	for i := range cfg.ModelList {
 		if modelBelongsToProvider(provider, cfg.ModelList[i]) {
+			if provider == oauthProviderGitHubCopilot {
+				normalizeGitHubCopilotModelConfig(cfg.ModelList[i])
+			}
 			cfg.ModelList[i].AuthMethod = authMethod
 			found = true
 		}
@@ -759,6 +943,34 @@ func (h *Handler) syncProviderAuthMethod(provider, authMethod string) error {
 	return oauthSaveConfig(h.configPath, cfg)
 }
 
+func normalizeGitHubCopilotModelConfig(modelCfg *config.ModelConfig) {
+	if modelCfg == nil {
+		return
+	}
+	modelCfg.Provider = "github-copilot"
+	model := strings.ToLower(strings.TrimSpace(modelCfg.Model))
+	if model == "" || model == "gpt-4o" {
+		modelCfg.Model = "gpt-4.1"
+	}
+	if strings.TrimSpace(modelCfg.APIBase) == "" ||
+		isDefaultGitHubCopilotAPIBase(modelCfg.APIBase) ||
+		strings.TrimRight(modelCfg.APIBase, "/") == "https://models.inference.ai.azure.com" {
+		modelCfg.APIBase = ""
+	}
+	if strings.TrimSpace(modelCfg.ConnectMode) == "" {
+		modelCfg.ConnectMode = "grpc"
+	}
+	modelCfg.APIKeys = nil
+}
+
+func isDefaultGitHubCopilotAPIBase(apiBase string) bool {
+	apiBase = strings.ToLower(strings.TrimRight(strings.TrimSpace(apiBase), "/"))
+	return apiBase == "localhost:4321" ||
+		apiBase == "http://localhost:4321" ||
+		apiBase == "127.0.0.1:4321" ||
+		apiBase == "http://127.0.0.1:4321"
+}
+
 func modelBelongsToProvider(provider string, modelCfg *config.ModelConfig) bool {
 	protocol, _ := providers.ExtractProtocol(modelCfg)
 	switch provider {
@@ -768,6 +980,8 @@ func modelBelongsToProvider(provider string, modelCfg *config.ModelConfig) bool 
 		return protocol == "anthropic"
 	case oauthProviderGoogleAntigravity:
 		return protocol == "antigravity" || protocol == "google-antigravity"
+	case oauthProviderGitHubCopilot:
+		return protocol == "github-copilot" || protocol == "copilot" || protocol == "github-models"
 	default:
 		return false
 	}
@@ -786,7 +1000,7 @@ func defaultModelConfigForProvider(provider, authMethod string) *config.ModelCon
 		return &config.ModelConfig{
 			ModelName:  "claude-sonnet-4.6",
 			Provider:   "anthropic",
-			Model:      "claude-sonnet-4.6",
+			Model:      "claude-sonnet-4-6",
 			AuthMethod: authMethod,
 		}
 	case oauthProviderGoogleAntigravity:
@@ -796,9 +1010,111 @@ func defaultModelConfigForProvider(provider, authMethod string) *config.ModelCon
 			Model:      "gemini-3-flash",
 			AuthMethod: authMethod,
 		}
+	case oauthProviderGitHubCopilot:
+		return &config.ModelConfig{
+			ModelName:   "copilot-gpt-4.1",
+			Provider:    "github-copilot",
+			Model:       "gpt-4.1",
+			AuthMethod:  authMethod,
+			ConnectMode: "grpc",
+		}
 	default:
 		return &config.ModelConfig{}
 	}
+}
+
+// importClaudeCodeCredential reads the Anthropic OAuth token stored by the
+// Claude Code CLI from ~/.claude/.credentials.json.
+func importClaudeCodeCredential() (*auth.AuthCredential, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("finding home dir: %w", err)
+	}
+	credPath := filepath.Join(homeDir, ".claude", ".credentials.json")
+	data, err := os.ReadFile(credPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading Claude Code credentials (%s): %w", credPath, err)
+	}
+	var raw struct {
+		ClaudeAiOauth struct {
+			AccessToken  string `json:"accessToken"`
+			RefreshToken string `json:"refreshToken"`
+			ExpiresAt    int64  `json:"expiresAt"` // milliseconds since epoch
+		} `json:"claudeAiOauth"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parsing Claude Code credentials: %w", err)
+	}
+	if raw.ClaudeAiOauth.AccessToken == "" {
+		return nil, fmt.Errorf("no access token found in Claude Code credentials at %s", credPath)
+	}
+	var expiresAt time.Time
+	if raw.ClaudeAiOauth.ExpiresAt > 0 {
+		expiresAt = time.UnixMilli(raw.ClaudeAiOauth.ExpiresAt)
+	}
+	return &auth.AuthCredential{
+		AccessToken:  raw.ClaudeAiOauth.AccessToken,
+		RefreshToken: raw.ClaudeAiOauth.RefreshToken,
+		ExpiresAt:    expiresAt,
+		Provider:     oauthProviderAnthropic,
+		AuthMethod:   oauthMethodClaudeCode,
+	}, nil
+}
+
+// importGHCLICredential reads a GitHub OAuth token from the Copilot CLI hosts
+// file (~/.config/github-copilot/hosts.json) or the GitHub CLI hosts file
+// (~/.config/gh/hosts.yml), whichever is found first.
+func importGHCLICredential() (*auth.AuthCredential, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("finding home dir: %w", err)
+	}
+
+	// Try ~/.config/github-copilot/hosts.json first.
+	copilotPath := filepath.Join(homeDir, ".config", "github-copilot", "hosts.json")
+	if data, readErr := os.ReadFile(copilotPath); readErr == nil {
+		var hosts map[string]struct {
+			OAuthToken string `json:"oauth_token"`
+			User       string `json:"user"`
+		}
+		if jsonErr := json.Unmarshal(data, &hosts); jsonErr == nil {
+			if gh, ok := hosts["github.com"]; ok && gh.OAuthToken != "" {
+				return &auth.AuthCredential{
+					AccessToken: gh.OAuthToken,
+					AccountID:   gh.User,
+					Provider:    oauthProviderGitHubCopilot,
+					AuthMethod:  oauthMethodGHCLI,
+				}, nil
+			}
+		}
+	}
+
+	// Fall back to ~/.config/gh/hosts.yml (GitHub CLI).
+	ghPath := filepath.Join(homeDir, ".config", "gh", "hosts.yml")
+	data, err := os.ReadFile(ghPath)
+	if err != nil {
+		return nil, fmt.Errorf("no GitHub credentials found (checked %s and %s)", copilotPath, ghPath)
+	}
+
+	var hosts map[string]struct {
+		OAuthToken string `yaml:"oauth_token"`
+		User       string `yaml:"user"`
+	}
+	if err := yaml.Unmarshal(data, &hosts); err != nil {
+		return nil, fmt.Errorf("parsing gh hosts.yml: %w", err)
+	}
+
+	gh, ok := hosts["github.com"]
+	if !ok || gh.OAuthToken == "" {
+		return nil, fmt.Errorf("no GitHub token found in %s", ghPath)
+	}
+
+	return &auth.AuthCredential{
+		AccessToken: gh.OAuthToken,
+		AccountID:   gh.User,
+		Provider:    oauthProviderGitHubCopilot,
+		AuthMethod:  oauthMethodGHCLI,
+	}, nil
 }
 
 func fetchGoogleUserEmail(accessToken string) (string, error) {

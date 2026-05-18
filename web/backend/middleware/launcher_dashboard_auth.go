@@ -305,6 +305,9 @@ func isPublicLauncherDashboardStatic(method, p string) bool {
 	if strings.HasPrefix(p, "/assets/") {
 		return true
 	}
+	if strings.HasPrefix(p, "/public/marketing/") {
+		return true
+	}
 	switch p {
 	case "/favicon.ico", "/favicon.svg", "/favicon-96x96.png",
 		"/apple-touch-icon.png", "/lark.svg",

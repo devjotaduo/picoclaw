@@ -217,6 +217,31 @@ func TestResolveRoute_DefaultAgentSelection(t *testing.T) {
 	}
 }
 
+func TestResolveRoute_IgnoresDisabledAgents(t *testing.T) {
+	disabled := false
+	agents := []config.AgentConfig{
+		{ID: "main", Default: true, Enabled: &disabled},
+		{ID: "sales"},
+	}
+	cfg := testConfig(agents)
+	cfg.Agents.Dispatch = &config.DispatchConfig{
+		Rules: []config.DispatchRule{
+			{
+				Name:  "disabled-main",
+				Agent: "main",
+				When:  config.DispatchSelector{Channel: "cli"},
+			},
+		},
+	}
+	r := NewRouteResolver(cfg)
+
+	route := r.ResolveRoute(bus.InboundContext{Channel: "cli"})
+
+	if route.AgentID != "sales" {
+		t.Errorf("AgentID = %q, want 'sales' (disabled agents should be skipped)", route.AgentID)
+	}
+}
+
 func TestResolveRoute_NoDefaultUsesFirst(t *testing.T) {
 	agents := []config.AgentConfig{
 		{ID: "alpha"},

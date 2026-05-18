@@ -17,8 +17,6 @@ export type Tenant = {
   created_at: string;
   suspended_at: string | null;
   crm_contact_id?: number | null;
-  crm_company_id?: number | null;
-  crm_deal_id?: number | null;
   launcher_profile_id?: string | null;
   launcher_profile_version_applied?: number | null;
 };
@@ -143,16 +141,6 @@ export async function createInvite(id: string, email: string, role: string) {
     method: "POST",
     body: JSON.stringify({ email, role }),
   });
-}
-
-export async function listInvites(id: string) {
-  return api<{ invites: { id: number; email: string; role: string; expires_at: string; accepted_at: string | null }[] }>(
-    `/api/v1/tenants/${id}/invites`,
-  );
-}
-
-export async function revokeInvite(tenantId: string, inviteId: number) {
-  return api<void>(`/api/v1/tenants/${tenantId}/invites/${inviteId}`, { method: "DELETE" });
 }
 
 export async function getTenantLogs(id: string, tail = 200) {

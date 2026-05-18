@@ -1,0 +1,23 @@
+
+TABELA                                    LINHAS 
+========================== ===================== 
+PRODUTOS                                    1941 
+PRODUTOS_GRUPO                                69 
+PRODUTOS_SUBGRUPO                              0 
+PRODUTOS_MARCA                               222 
+PRODUTOS_BARRAS                                0 
+PRODUTOS_GRADE_ITENS                           0 
+GRADE                                          0 
+UNIDADE_MEDIDA                                38 
+EMITENTE                                       1 
+PARAMETROS                                     1 
+NFE                                            4 
+MDFE                                           0 
+MDFE_COMPONENTE_FRETE                          0 
+MDFE_PARCELAMENTO_FRETE                        0 
+TRANSPORTADORA                                 1 
+NFCE_FORMAS_PAGAMENTO                         18 
+NFE_FORMAS_PAGAMENTO                          16 
+ORCAMENTO_FORMAS_PAGAMENTO                    12 
+PEDIDO_FORMA_PAGAMENTO                         0 
+

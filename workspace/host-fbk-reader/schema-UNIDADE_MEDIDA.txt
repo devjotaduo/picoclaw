@@ -1,0 +1,9 @@
+
+FIELD_NAME                      FIELD_TYPE                FIELD_LENGTH FIELD_SCALE FIELD_POSITION     NOT_NULL 
+=============================== ========================= ============ =========== ============== ============ 
+ID                              INTEGER                              4           0              0            1 
+SIGLA                           VARCHAR                              6           0              1            0 
+DESCRICAO_UNIDADE               VARCHAR                            250           0              2            0 
+PODE_FRACIONAR                  CHAR                                 1           0              3            0 
+SINCRONISMO                     INTEGER                              4           0              4            0 
+

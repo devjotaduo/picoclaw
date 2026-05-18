@@ -105,7 +105,7 @@ func (s *TenantStore) GetIncludingDeleted(ctx context.Context, id string) (*Tena
 }
 
 // ListPendingCleanup returns tenants that are soft-deleted but haven't
-// finished their cleanup pipeline (tarball + rm volume + LiteLLM key delete).
+// finished their cleanup pipeline (container rm + LiteLLM key delete + volume rm + DB cascade).
 func (s *TenantStore) ListPendingCleanup(ctx context.Context) ([]*Tenant, error) {
 	q := `SELECT ` + tenantCols + ` FROM tenants
 	      WHERE status = 'deleting' AND cleanup_completed_at IS NULL`
@@ -241,9 +241,30 @@ func (s *TenantStore) MarkResumed(ctx context.Context, id string) error {
 }
 
 func (s *TenantStore) SoftDelete(ctx context.Context, id string) error {
-	const q = `UPDATE tenants SET status = 'deleting', deleted_at = now() WHERE id = $1`
-	_, err := s.DB.Pool.Exec(ctx, q, id)
-	return err
+	const q = `UPDATE tenants SET status = 'deleting', deleted_at = COALESCE(deleted_at, now()) WHERE id = $1`
+	tag, err := s.DB.Pool.Exec(ctx, q, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrTenantNotFound
+	}
+	return nil
+}
+
+// DeleteCascade removes the tenant row after external resources are gone. The
+// database foreign keys then cascade memberships, invites, and usage while
+// audit logs keep history with a NULL tenant_id.
+func (s *TenantStore) DeleteCascade(ctx context.Context, id string) error {
+	const q = `DELETE FROM tenants WHERE id = $1`
+	tag, err := s.DB.Pool.Exec(ctx, q, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrTenantNotFound
+	}
+	return nil
 }
 
 func (s *TenantStore) MarkPasswordDelivered(ctx context.Context, id string) error {

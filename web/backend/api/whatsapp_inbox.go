@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"strings"
 )
 
@@ -90,7 +89,3 @@ func escapeJSONString(s string) string {
 	}
 	return b.String()
 }
-
-// Compile-time assertion that url.URL is reachable (avoids unused-import lint
-// when the proxy Director is the only consumer).
-var _ = url.URL{}

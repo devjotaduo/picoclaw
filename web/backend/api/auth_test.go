@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sipeed/picoclaw/internal/saas/gatewayauth"
 	"github.com/sipeed/picoclaw/web/backend/middleware"
 )
 
@@ -331,6 +332,49 @@ func TestReferrerPolicyMiddleware(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
 		t.Fatalf("Referrer-Policy = %q", got)
+	}
+}
+
+// TestLauncherAuthSetupAcceptsTrustedGateway verifies that POST /api/auth/setup
+// succeeds when the request carries valid trusted-gateway HMAC headers, even if
+// no local session cookie is present. This covers the SaaS tenant flow where the
+// controlplane authenticates the user and forwards requests with signed headers.
+func TestLauncherAuthSetupAcceptsTrustedGateway(t *testing.T) {
+	const (
+		sess   = "local-session-value"
+		secret = "test-shared-secret"
+	)
+	store := &fakePasswordStore{initialized: true, password: "old-password"}
+	mux := http.NewServeMux()
+	RegisterLauncherAuthRoutes(mux, LauncherAuthRouteOpts{
+		SessionCookie: sess,
+		PasswordStore: store,
+	})
+	// Wrap with trusted-gateway auth middleware (mirrors main.go stack).
+	handler := middleware.LauncherDashboardAuth(middleware.LauncherDashboardAuthConfig{
+		ExpectedCookie:       sess,
+		AuthMode:             "trusted_gateway",
+		TrustedGatewaySecret: secret,
+	}, mux)
+
+	body := strings.NewReader(`{"password":"new-password12","confirm":"new-password12"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/setup", body)
+	req.Header.Set("Content-Type", "application/json")
+	// Sign the request as the gateway would.
+	gatewayauth.AnnotateRequest(req, secret, gatewayauth.Claims{
+		TenantID:  "tenant-1",
+		UserID:    "user-1",
+		UserEmail: "owner@example.com",
+		Role:      "owner",
+	}, time.Now())
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("setup via trusted gateway: code = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if store.password != "new-password12" {
+		t.Fatalf("password not updated: %q", store.password)
 	}
 }
 

@@ -75,6 +75,27 @@ func TestArchiveAndRemoveVolume_Missing(t *testing.T) {
 	}
 }
 
+func TestRemoveVolume(t *testing.T) {
+	root := t.TempDir()
+	volumeDir := filepath.Join(root, "volume")
+	if err := os.MkdirAll(filepath.Join(volumeDir, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(volumeDir, "nested", "state.db"), []byte("state"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RemoveVolume(context.Background(), volumeDir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(volumeDir); !os.IsNotExist(err) {
+		t.Fatalf("volume should be removed, stat err=%v", err)
+	}
+	if err := RemoveVolume(context.Background(), volumeDir); err != nil {
+		t.Fatalf("missing volume should be a no-op: %v", err)
+	}
+}
+
 func extractTarball(t *testing.T, path string) (names []string, contents map[string]string) {
 	t.Helper()
 	f, err := os.Open(path)

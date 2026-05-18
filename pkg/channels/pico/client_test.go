@@ -326,6 +326,47 @@ func TestPicoChannel_HandleMessageSend_AllowsMediaOnly(t *testing.T) {
 	}
 }
 
+func TestPicoChannel_HandleMessageSend_MarksInlineAudio(t *testing.T) {
+	mb := bus.NewMessageBus()
+	bc := &config.Channel{Type: "pico", Enabled: true}
+	ch, err := NewPicoChannel(bc, &config.PicoSettings{
+		Token: *config.NewSecureString("test-token"),
+	}, mb)
+	if err != nil {
+		t.Fatalf("NewPicoChannel() error = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := ch.Start(ctx); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	defer ch.Stop(ctx)
+
+	pc := &picoConn{id: "conn-1", sessionID: "sess-1"}
+	ch.handleMessageSend(pc, PicoMessage{
+		ID: "msg-1",
+		Payload: map[string]any{
+			"media": []any{
+				"data:audio/webm;codecs=opus;base64,AAAA",
+			},
+		},
+	})
+
+	select {
+	case msg := <-mb.InboundChan():
+		if msg.Content != "[audio]" {
+			t.Fatalf("msg.Content = %q, want [audio]", msg.Content)
+		}
+		if len(msg.Media) != 1 || !strings.HasPrefix(msg.Media[0], "data:audio/webm;codecs=opus;base64,") {
+			t.Fatalf("msg.Media = %#v, want inline audio payload", msg.Media)
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for inbound audio message")
+	}
+}
+
 func TestIsThoughtPayload(t *testing.T) {
 	tests := []struct {
 		name    string

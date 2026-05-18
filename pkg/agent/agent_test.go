@@ -1554,6 +1554,58 @@ func TestProcessMessage_MediaArtifactCanBeForwardedBySendFile(t *testing.T) {
 	}
 }
 
+func TestProcessMessage_DeliverMediaPublishesPreviewAndContinuesTurn(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.DefaultConfig()
+	cfg.Agents.Defaults.Workspace = tmpDir
+	cfg.Agents.Defaults.ModelName = "test-model"
+	cfg.Agents.Defaults.MaxTokens = 4096
+	cfg.Agents.Defaults.MaxToolIterations = 10
+
+	msgBus := bus.NewMessageBus()
+	provider := &deliverMediaThenFinalProvider{}
+	al := NewAgentLoop(cfg, msgBus, provider)
+
+	store := media.NewFileMediaStore()
+	al.SetMediaStore(store)
+	telegramChannel := &fakeMediaChannel{fakeChannel: fakeChannel{id: "rid-telegram"}}
+	al.SetChannelManager(newStartedTestChannelManager(t, msgBus, store, "telegram", telegramChannel))
+
+	imagePath := filepath.Join(tmpDir, "generated-preview.png")
+	if err := os.WriteFile(imagePath, []byte("fake generated image"), 0o644); err != nil {
+		t.Fatalf("WriteFile(imagePath) error = %v", err)
+	}
+	al.RegisterTool(&deliverMediaTool{
+		store: store,
+		path:  imagePath,
+	})
+
+	response, err := al.processMessage(context.Background(), testInboundMessage(bus.InboundMessage{
+		Channel:  "telegram",
+		ChatID:   "chat1",
+		SenderID: "user1",
+		Content:  "generate an Instagram post image",
+	}))
+	if err != nil {
+		t.Fatalf("processMessage() error = %v", err)
+	}
+	if response != "final copy after media" {
+		t.Fatalf("response = %q, want final copy after media", response)
+	}
+	if provider.calls != 2 {
+		t.Fatalf("expected turn to continue after media delivery, got %d LLM calls", provider.calls)
+	}
+	if len(telegramChannel.sentMedia) != 1 {
+		t.Fatalf("expected generated media preview to be sent once, got %d", len(telegramChannel.sentMedia))
+	}
+	if len(telegramChannel.sentMedia[0].Parts) != 1 {
+		t.Fatalf("expected one media part, got %+v", telegramChannel.sentMedia[0].Parts)
+	}
+	if telegramChannel.sentMedia[0].Parts[0].Filename != "generated-preview.png" {
+		t.Fatalf("filename = %q, want generated-preview.png", telegramChannel.sentMedia[0].Parts[0].Filename)
+	}
+}
+
 // TestAgentLoop_GetStartupInfo verifies startup info contains tools
 func TestAgentLoop_GetStartupInfo(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "agent-test-*")
@@ -1886,6 +1938,39 @@ func (m *artifactThenSendProvider) Chat(
 
 func (m *artifactThenSendProvider) GetDefaultModel() string {
 	return "artifact-then-send-model"
+}
+
+type deliverMediaThenFinalProvider struct {
+	calls int
+}
+
+func (m *deliverMediaThenFinalProvider) Chat(
+	ctx context.Context,
+	messages []providers.Message,
+	tools []providers.ToolDefinition,
+	model string,
+	opts map[string]any,
+) (*providers.LLMResponse, error) {
+	m.calls++
+	if m.calls == 1 {
+		return &providers.LLMResponse{
+			Content: "Generating the image now.",
+			ToolCalls: []providers.ToolCall{{
+				ID:        "call_deliver_media",
+				Type:      "function",
+				Name:      "deliver_media_tool",
+				Arguments: map[string]any{},
+			}},
+		}, nil
+	}
+	return &providers.LLMResponse{
+		Content:   "final copy after media",
+		ToolCalls: []providers.ToolCall{},
+	}, nil
+}
+
+func (m *deliverMediaThenFinalProvider) GetDefaultModel() string {
+	return "deliver-media-then-final-model"
 }
 
 type toolFeedbackProvider struct {
@@ -2386,6 +2471,39 @@ func (m *mediaArtifactTool) Execute(ctx context.Context, args map[string]any) *t
 		return tools.ErrorResult(err.Error()).WithError(err)
 	}
 	return tools.MediaResult("Artifact created.", []string{ref})
+}
+
+type deliverMediaTool struct {
+	store media.MediaStore
+	path  string
+}
+
+func (m *deliverMediaTool) Name() string { return "deliver_media_tool" }
+func (m *deliverMediaTool) Description() string {
+	return "Returns generated media that should be rendered in chat while the turn continues"
+}
+
+func (m *deliverMediaTool) Parameters() map[string]any {
+	return map[string]any{
+		"type":       "object",
+		"properties": map[string]any{},
+	}
+}
+
+func (m *deliverMediaTool) Execute(ctx context.Context, args map[string]any) *tools.ToolResult {
+	ref, err := m.store.Store(m.path, media.MediaMeta{
+		Filename:    filepath.Base(m.path),
+		ContentType: "image/png",
+		Source:      "test:deliver_media_tool",
+	}, "test:deliver_media")
+	if err != nil {
+		return tools.ErrorResult(err.Error()).WithError(err)
+	}
+	return &tools.ToolResult{
+		ForLLM:       "Generated media ready for chat preview.",
+		Media:        []string{ref},
+		DeliverMedia: true,
+	}
 }
 
 type toolLimitTestTool struct{}

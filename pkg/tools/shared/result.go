@@ -45,6 +45,10 @@ type ToolResult struct {
 	// When non-empty, the agent will publish these as OutboundMediaMessage.
 	Media []string `json:"media,omitempty"`
 
+	// DeliverMedia tells the agent loop to publish Media to the current chat
+	// while still allowing the turn to continue.
+	DeliverMedia bool `json:"deliver_media,omitempty"`
+
 	// Messages holds the ephemeral session history after execution.
 	// Only populated by SubTurn executions; used by evaluator_optimizer
 	// to carry stateful worker context across evaluation iterations.
@@ -80,7 +84,11 @@ func (tr *ToolResult) ContentForLLM() string {
 		}
 	}
 	if len(tr.ArtifactTags) > 0 {
-		artifactNote := "Local artifact paths: " + strings.Join(tr.ArtifactTags, " ") + "\n" + ArtifactPathsLLMNote
+		artifactInstruction := ArtifactPathsLLMNote
+		if tr.DeliverMedia {
+			artifactInstruction = "The media has already been rendered in the current chat. Do not call `send_file` for the same path again; use the path only for proposals, captions, or references."
+		}
+		artifactNote := "Local artifact paths: " + strings.Join(tr.ArtifactTags, " ") + "\n" + artifactInstruction
 		if content == "" {
 			content = artifactNote
 		} else if !strings.Contains(content, artifactNote) {
