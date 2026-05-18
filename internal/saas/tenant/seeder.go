@@ -28,6 +28,9 @@ import (
 const DBFilename = "launcher-auth.db"
 
 const (
+	defaultAgentMaxTokens     = 8192
+	defaultAgentContextWindow = 131072
+
 	sqlCreateTable = `
 		CREATE TABLE IF NOT EXISTS dashboard_credentials (
 			id          INTEGER PRIMARY KEY CHECK (id = 1),
@@ -95,7 +98,8 @@ func defaultPicoConfig(litellmBase string) map[string]any {
 				"allow_read_outside_workspace": false,
 				"provider":                     "litellm",
 				"model_name":                   "default",
-				"max_tokens":                   16384,
+				"max_tokens":                   defaultAgentMaxTokens,
+				"context_window":               defaultAgentContextWindow,
 				"max_tool_iterations":          50,
 				"summarize_message_threshold":  20,
 				"summarize_token_percent":      75,
@@ -148,6 +152,7 @@ func mergeLiteLLMCredential(cfg map[string]any, litellmBase string) {
 	if _, ok := defaults["restrict_to_workspace"]; !ok {
 		defaults["restrict_to_workspace"] = true
 	}
+	ensureAgentContextBudget(defaults)
 
 	fallbackModel := map[string]any{
 		"model_name": "default",
@@ -190,6 +195,40 @@ func mergeLiteLLMCredential(cfg map[string]any, litellmBase string) {
 	}
 	if _, ok := gateway["port"]; !ok {
 		gateway["port"] = 18790
+	}
+}
+
+func ensureAgentContextBudget(defaults map[string]any) {
+	if defaults == nil {
+		return
+	}
+	if maxTokens, ok := positiveInt(defaults["max_tokens"]); !ok || maxTokens > defaultAgentMaxTokens {
+		defaults["max_tokens"] = defaultAgentMaxTokens
+	}
+	if contextWindow, ok := positiveInt(defaults["context_window"]); !ok || contextWindow < defaultAgentContextWindow {
+		defaults["context_window"] = defaultAgentContextWindow
+	}
+	if threshold, ok := positiveInt(defaults["summarize_message_threshold"]); !ok || threshold <= 0 {
+		defaults["summarize_message_threshold"] = 20
+	}
+	if percent, ok := positiveInt(defaults["summarize_token_percent"]); !ok || percent <= 0 {
+		defaults["summarize_token_percent"] = 75
+	}
+}
+
+func positiveInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, n > 0
+	case int64:
+		return int(n), n > 0
+	case float64:
+		return int(n), n > 0
+	case json.Number:
+		i, err := n.Int64()
+		return int(i), err == nil && i > 0
+	default:
+		return 0, false
 	}
 }
 

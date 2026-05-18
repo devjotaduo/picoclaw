@@ -2,6 +2,7 @@ import {
   IconArrowLeft,
   IconCamera,
   IconLoader2,
+  IconSearch,
   IconUserEdit,
 } from "@tabler/icons-react"
 
@@ -16,6 +17,7 @@ import {
 import { AgentStatusChip } from "./agent-status-chip"
 import { ConnectionStatus } from "./connection-status"
 import { ContactAvatar } from "./contact-avatar"
+import { TypingIndicator } from "./typing-indicator"
 
 function formatJID(jid: string): string {
   const [user] = jid.split("@")
@@ -28,23 +30,21 @@ export interface ChatHeaderProps {
   displayName: string
   avatarUrl?: string
   avatarLoading?: boolean
-  /** Whether the operator-triggered auto-pause is currently active. */
   autoPaused?: boolean
-  /** Connection status of the inbox SSE stream. */
   connectionStatus: InboxConnectionStatus
   togglingPause: boolean
+  /** Whether the contact is typing right now (from gateway typing event). */
+  isTyping?: boolean
   onTogglePause: (paused: boolean) => void
   onResume?: () => void
   onBack: () => void
   onOpenProfile: () => void
   onRefreshAvatar: () => void
+  /** Toggles the in-conversation search bar. */
+  onToggleSearch?: () => void
+  searchOpen?: boolean
 }
 
-/**
- * Conversation header with hierarchical typography (name 16/600, phone 13/400,
- * connection chip on the side) and a compact agent-status chip in place of
- * the old persistent amber banner.
- */
 export function ChatHeader({
   chat,
   displayName,
@@ -53,11 +53,14 @@ export function ChatHeader({
   autoPaused,
   connectionStatus,
   togglingPause,
+  isTyping = false,
   onTogglePause,
   onResume,
   onBack,
   onOpenProfile,
   onRefreshAvatar,
+  onToggleSearch,
+  searchOpen = false,
 }: ChatHeaderProps) {
   return (
     <header className="border-border/40 bg-background flex items-center gap-3 border-b px-3 py-3">
@@ -97,7 +100,11 @@ export function ChatHeader({
           {displayName}
         </h3>
         <p className="text-foreground/65 mt-0.5 truncate text-[13px]">
-          {formatJID(chat.jid)}
+          {isTyping ? (
+            <TypingIndicator name={displayName.split(" ")[0]} />
+          ) : (
+            formatJID(chat.jid)
+          )}
         </p>
       </button>
 
@@ -106,6 +113,25 @@ export function ChatHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        {onToggleSearch && (
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onToggleSearch}
+                className={`text-muted-foreground hover:text-foreground focus-visible:ring-ring flex size-8 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none ${
+                  searchOpen ? "bg-muted text-foreground" : ""
+                }`}
+                aria-label="Buscar na conversa"
+                aria-pressed={searchOpen}
+              >
+                <IconSearch className="size-4" aria-hidden="true" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Buscar (Ctrl+F)</TooltipContent>
+          </Tooltip>
+        )}
+
         <Tooltip delayDuration={500}>
           <TooltipTrigger asChild>
             <button

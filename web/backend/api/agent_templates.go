@@ -224,6 +224,13 @@ type agentTemplateApplyResponse struct {
 	Reload       string `json:"reload,omitempty"`
 }
 
+const (
+	agentTemplateDefaultMaxTokens     = 8192
+	agentTemplateMinContextWindow     = 131072
+	agentTemplateSummarizeMsgThreshold = 20
+	agentTemplateSummarizeTokenPercent = 75
+)
+
 func (h *Handler) registerAgentTemplateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/agents", h.handleListAgents)
 	mux.HandleFunc("GET /api/agent/editor-state", h.handleGetAgentEditorState)
@@ -477,6 +484,31 @@ func templateModelConfig(req *agentTemplateApplyRequest) *config.AgentModelConfi
 		return nil
 	}
 	return &config.AgentModelConfig{Primary: model}
+}
+
+func ensureAgentTemplateRuntimeDefaults(defaults *config.AgentDefaults) bool {
+	if defaults == nil {
+		return false
+	}
+
+	changed := false
+	if defaults.MaxTokens <= 0 || defaults.MaxTokens > agentTemplateDefaultMaxTokens {
+		defaults.MaxTokens = agentTemplateDefaultMaxTokens
+		changed = true
+	}
+	if defaults.ContextWindow < agentTemplateMinContextWindow {
+		defaults.ContextWindow = agentTemplateMinContextWindow
+		changed = true
+	}
+	if defaults.SummarizeMessageThreshold <= 0 {
+		defaults.SummarizeMessageThreshold = agentTemplateSummarizeMsgThreshold
+		changed = true
+	}
+	if defaults.SummarizeTokenPercent <= 0 {
+		defaults.SummarizeTokenPercent = agentTemplateSummarizeTokenPercent
+		changed = true
+	}
+	return changed
 }
 
 func ensureAgentEntryForTemplate(cfg *config.Config, agentID string, req *agentTemplateApplyRequest) (string, bool) {
@@ -1220,12 +1252,14 @@ func (h *Handler) handleApplyAgentTemplate(w http.ResponseWriter, r *http.Reques
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
 		return
 	}
+	configChanged := ensureAgentTemplateRuntimeDefaults(&cfg.Agents.Defaults)
 	if err := normalizeTemplateRequestSkills(&req, availableTemplateSkillNames(cfg)); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	workspace, configChanged := ensureAgentEntryForTemplate(cfg, agentID, &req)
+	workspace, agentConfigChanged := ensureAgentEntryForTemplate(cfg, agentID, &req)
+	configChanged = configChanged || agentConfigChanged
 	if workspace == "" {
 		writeJSONError(w, http.StatusInternalServerError, "workspace path is not configured")
 		return
@@ -1408,6 +1442,12 @@ description: >
   {{.PresentationOneLine}}
 {{- if .Model}}
 model: {{.Model}}
+{{- end}}
+{{- if .Tools}}
+tools:
+{{- range .Tools}}
+  - {{.}}
+{{- end}}
 {{- end}}
 {{- if .Skills}}
 skills:
@@ -2358,6 +2398,8 @@ func renderAgentMarkdown(req *agentTemplateApplyRequest) (string, error) {
 	case orchestrator.AgentAssistant:
 		templateText = assistantAgentMDTemplate
 		data.Tools = specialistAgentToolAllowlist(orchestrator.AgentAssistant)
+	default:
+		data.Tools = publicAgentToolAllowlist()
 	}
 	tpl, err := template.New("agent").Parse(templateText)
 	if err != nil {
@@ -2368,6 +2410,18 @@ func renderAgentMarkdown(req *agentTemplateApplyRequest) (string, error) {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+func publicAgentToolAllowlist() []string {
+	return []string{
+		"customer_lookup",
+		"product_lookup",
+		"web_search",
+		"web_fetch",
+		"message",
+		"send_file",
+		"delegate",
+	}
 }
 
 func specialistAgentToolAllowlist(agentID string) []string {

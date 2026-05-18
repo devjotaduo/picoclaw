@@ -10,7 +10,6 @@ import {
   IconMapPin,
   IconMessageCircle,
   IconPhone,
-  IconRefresh,
   IconSearch,
   IconTags,
   IconUser,
@@ -50,16 +49,25 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
+import { useConversationSearch } from "@/hooks/whatsapp/use-conversation-search"
+import { useDragDropFiles } from "@/hooks/whatsapp/use-drag-drop-files"
 import { useAgentAutoPause } from "@/hooks/whatsapp/use-agent-auto-pause"
 import { useInboxConnection } from "@/hooks/whatsapp/use-inbox-connection"
 import { usePendingMessages } from "@/hooks/whatsapp/use-pending-messages"
+import { useTypingWindow } from "@/hooks/whatsapp/use-typing-window"
+import { attachmentPlaceholder } from "@/lib/whatsapp/attachment-placeholder"
 import { formatJID } from "@/lib/whatsapp/format"
+import { truncatePreview } from "@/lib/whatsapp/quote"
 
 import { ChatHeader } from "./chat/chat-header"
 import { ContactAvatar } from "./chat/contact-avatar"
 import { ConversationListItem } from "./chat/conversation-list-item"
+import { ConversationSearch } from "./chat/conversation-search"
+import { DragDropOverlay } from "./chat/drag-drop-overlay"
 import { InboxSettingsMenu } from "./chat/inbox-settings-menu"
+import { MessageInput } from "./chat/message-input"
 import { MessageList } from "./chat/message-list"
+import { type ReplyTarget } from "./chat/reply-preview"
 import { TagList } from "./chat/tag-list"
 
 const CHATS_QUERY_KEY = ["whatsapp", "chats"]
@@ -194,7 +202,6 @@ export function WhatsAppInboxPage() {
     },
     onError: (err: unknown, vars, context) => {
       toast.error(err instanceof Error ? err.message : String(err))
-      // Roll back the optimistic bubble.
       if (context?.tempId != null) {
         queryClient.setQueryData<WhatsAppMessage[]>(
           messagesQueryKey(vars.jid),
@@ -203,6 +210,51 @@ export function WhatsAppInboxPage() {
       }
     },
   })
+
+  // Mark a chat unread on the dashboard only (the backend has no /unread
+  // endpoint yet — when it lands, swap this for a real mutation). Pinned in
+  // the chat cache so the green badge appears immediately and survives until
+  // the operator opens the chat (which auto-clears via markRead).
+  const handleToggleRead = useCallback(
+    (chat: WhatsAppChat) => {
+      const next = chat.unread_count > 0 ? 0 : 1
+      queryClient.setQueryData<WhatsAppChat[]>(CHATS_QUERY_KEY, (prev) => {
+        if (!prev) return prev
+        return prev.map((c) =>
+          c.jid === chat.jid ? { ...c, unread_count: next } : c,
+        )
+      })
+      if (next === 0) {
+        void markWhatsAppChatRead(chat.jid).catch(() => {
+          /* tolerate offline */
+        })
+        toast.success("Conversa marcada como lida")
+      } else {
+        toast.success("Conversa marcada como não lida")
+      }
+    },
+    [queryClient],
+  )
+
+  const handleTogglePauseFromList = useCallback(
+    (chat: WhatsAppChat) => {
+      pauseMutation.mutate({ jid: chat.jid, paused: !chat.paused })
+    },
+    [pauseMutation],
+  )
+
+  // Remove a single bubble from THIS dashboard's cache only — the contact
+  // still sees the message on WhatsApp (we don't have a remote delete API).
+  const handleDeleteLocal = useCallback(
+    (message: WhatsAppMessage) => {
+      queryClient.setQueryData<WhatsAppMessage[]>(
+        messagesQueryKey(message.chat_jid),
+        (prev) => prev?.filter((m) => m.id !== message.id) ?? prev,
+      )
+      toast.success("Mensagem removida do dashboard")
+    },
+    [queryClient],
+  )
 
   const handleAutoPauseChange = useCallback(
     (paused: boolean) => {
@@ -255,6 +307,8 @@ export function WhatsAppInboxPage() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             unreadTotal={unreadTotal}
+            onToggleRead={handleToggleRead}
+            onTogglePause={handleTogglePauseFromList}
             hidden={mobileView === "chat"}
           />
 
@@ -267,11 +321,11 @@ export function WhatsAppInboxPage() {
               setDraft(v)
               if (v.trim()) notifyTyping()
             }}
-            onSend={() => {
-              if (selectedJID && draft.trim()) {
+            onSend={(content) => {
+              if (selectedJID && content.trim()) {
                 sendMutation.mutate({
                   jid: selectedJID,
-                  content: draft.trim(),
+                  content,
                 })
               }
             }}
@@ -285,6 +339,7 @@ export function WhatsAppInboxPage() {
             autoPaused={autoPaused}
             onResume={resumeNow}
             pendingIds={pendingIds}
+            onDeleteLocal={handleDeleteLocal}
             onBack={handleBackToList}
             hidden={mobileView === "list"}
           />
@@ -304,6 +359,8 @@ function ConversationList({
   searchQuery,
   onSearchChange,
   unreadTotal,
+  onToggleRead,
+  onTogglePause,
   hidden,
 }: {
   chats: WhatsAppChat[]
@@ -313,6 +370,8 @@ function ConversationList({
   searchQuery: string
   onSearchChange: (v: string) => void
   unreadTotal: number
+  onToggleRead?: (chat: WhatsAppChat) => void
+  onTogglePause?: (chat: WhatsAppChat) => void
   hidden: boolean
 }) {
   const { t } = useTranslation()
@@ -417,6 +476,8 @@ function ConversationList({
                 chat={chat}
                 selected={chat.jid === selectedJID}
                 onSelect={() => onSelect(chat.jid)}
+                onToggleRead={onToggleRead}
+                onTogglePause={onTogglePause}
               />
             ))}
           </div>
@@ -434,7 +495,7 @@ function ConversationPanel(props: {
   loadingMessages: boolean
   draft: string
   onDraftChange: (v: string) => void
-  onSend: () => void
+  onSend: (content: string) => void
   sending: boolean
   onTogglePause: (paused: boolean) => void
   togglingPause: boolean
@@ -442,6 +503,7 @@ function ConversationPanel(props: {
   autoPaused: boolean
   onResume: () => void
   pendingIds: ReadonlySet<number | string>
+  onDeleteLocal: (m: WhatsAppMessage) => void
   onBack: () => void
   hidden: boolean
 }) {
@@ -474,6 +536,7 @@ function ConversationView({
   autoPaused,
   onResume,
   pendingIds,
+  onDeleteLocal,
   onBack,
   hidden,
 }: {
@@ -482,7 +545,7 @@ function ConversationView({
   loadingMessages: boolean
   draft: string
   onDraftChange: (v: string) => void
-  onSend: () => void
+  onSend: (content: string) => void
   sending: boolean
   onTogglePause: (paused: boolean) => void
   togglingPause: boolean
@@ -490,15 +553,32 @@ function ConversationView({
   autoPaused: boolean
   onResume: () => void
   pendingIds: ReadonlySet<number | string>
+  onDeleteLocal: (m: WhatsAppMessage) => void
   onBack: () => void
   hidden: boolean
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [profileSheetOpen, setProfileSheetOpen] = useState(false)
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
 
   const displayName = chat.display_name || chat.push_name || formatJID(chat.jid)
   const orderedMessages = useMemo(() => [...messages].reverse(), [messages])
+
+  // Typing indicator: the contact is "typing" if `chat.typing_at` is fresher
+  // than 5s ago. The hook polls so the indicator clears even when the gateway
+  // never sends a "stopped typing" event.
+  const isContactTyping = useTypingWindow(chat.typing_at)
+
+  const search = useConversationSearch({ messages: orderedMessages })
+
+  const { rootRef, isDragging } = useDragDropFiles({
+    onFiles: (files) => {
+      const content = attachmentPlaceholder("document", files)
+      onSend(content)
+    },
+  })
 
   const avatarQuery = useQuery({
     queryKey: ["whatsapp", "avatar", chat.jid],
@@ -528,9 +608,44 @@ function ConversationView({
     retry: false,
   })
 
+  const handleReply = useCallback((m: WhatsAppMessage) => {
+    setReplyTarget({
+      id: m.id,
+      preview: truncatePreview(m.content, 200),
+      isOut: m.direction === "out",
+      authorLabel:
+        m.direction === "out"
+          ? m.source === "agent"
+            ? "Agente"
+            : "Operador"
+          : "Contato",
+    })
+  }, [])
+
+  const handleSend = useCallback(
+    (content: string) => {
+      onSend(content)
+      setReplyTarget(null)
+    },
+    [onSend],
+  )
+
+  // Ctrl/⌘+F opens the in-conversation search.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
+
   return (
     <section
-      className={`flex h-full min-h-0 flex-col ${hidden ? "hidden lg:flex" : "flex"}`}
+      ref={rootRef}
+      className={`relative flex h-full min-h-0 flex-col ${hidden ? "hidden lg:flex" : "flex"}`}
       aria-label={`Conversa com ${displayName}`}
     >
       <ChatHeader
@@ -541,11 +656,28 @@ function ConversationView({
         autoPaused={autoPaused}
         connectionStatus={connectionStatus}
         togglingPause={togglingPause}
+        isTyping={isContactTyping}
         onTogglePause={onTogglePause}
         onResume={onResume}
         onBack={onBack}
         onOpenProfile={() => setProfileSheetOpen(true)}
         onRefreshAvatar={() => refreshAvatarMutation.mutate()}
+        onToggleSearch={() => setSearchOpen((v) => !v)}
+        searchOpen={searchOpen}
+      />
+
+      <ConversationSearch
+        open={searchOpen}
+        query={search.query}
+        onQueryChange={search.setQuery}
+        matchCount={search.matchIndexes.length}
+        cursor={search.cursor}
+        onPrev={search.prev}
+        onNext={search.next}
+        onClose={() => {
+          setSearchOpen(false)
+          search.reset()
+        }}
       />
 
       <ContactProfileSheet
@@ -580,6 +712,10 @@ function ConversationView({
           messages={orderedMessages}
           resetKey={chat.jid}
           pendingIds={pendingIds}
+          searchQuery={searchOpen ? search.query : ""}
+          currentMatchId={searchOpen ? search.currentMessageId : null}
+          onReply={handleReply}
+          onDeleteLocal={onDeleteLocal}
           empty={
             <div className="space-y-2 text-center">
               <IconMessageCircle className="text-muted-foreground/30 mx-auto size-10" />
@@ -594,48 +730,16 @@ function ConversationView({
         />
       )}
 
-      <footer className="border-border/40 bg-background border-t">
-        <form
-          className="flex items-end gap-2 px-3 py-3"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (draft.trim()) onSend()
-          }}
-          aria-label="Formulário de envio de mensagem"
-        >
-          <Textarea
-            value={draft}
-            onChange={(e) => onDraftChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault()
-                if (draft.trim()) onSend()
-              }
-            }}
-            placeholder={t(
-              "pages.agent.whatsapp.placeholder",
-              "Mensagem manual… (Ctrl+Enter para enviar)",
-            )}
-            disabled={sending}
-            rows={1}
-            className="min-h-10 max-h-32 flex-1 resize-none rounded-xl text-sm"
-            aria-label="Campo de mensagem"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            disabled={!draft.trim() || sending}
-            className="h-10 w-10 shrink-0 rounded-xl bg-[#25d366] text-white hover:bg-[#1da851]"
-            aria-label={sending ? "Enviando" : "Enviar mensagem"}
-          >
-            {sending ? (
-              <IconLoader2 className="size-4 animate-spin" />
-            ) : (
-              <IconCheck className="size-4" />
-            )}
-          </Button>
-        </form>
-      </footer>
+      <MessageInput
+        value={draft}
+        onChange={onDraftChange}
+        onSend={handleSend}
+        sending={sending}
+        replyTarget={replyTarget}
+        onCancelReply={() => setReplyTarget(null)}
+      />
+
+      <DragDropOverlay visible={isDragging} />
     </section>
   )
 }

@@ -19,7 +19,12 @@ export function useInboxConnection(
   const [status, setStatus] = useState<InboxConnectionStatus>("connecting")
   const [lastEventAt, setLastEventAt] = useState<number | null>(null)
   const onEventRef = useRef(onEvent)
-  onEventRef.current = onEvent
+
+  // Keep the ref pointing at the latest callback without retriggering the
+  // EventSource lifecycle on every render.
+  useEffect(() => {
+    onEventRef.current = onEvent
+  }, [onEvent])
 
   useEffect(() => {
     const close = openInboxStream({

@@ -1,4 +1,5 @@
 import { IconChevronDown } from "@tabler/icons-react"
+import { useEffect } from "react"
 
 import type { WhatsAppMessage } from "@/api/whatsapp"
 import { useAutoScroll } from "@/hooks/whatsapp/use-auto-scroll"
@@ -7,12 +8,16 @@ import { MessageBubble } from "./message-bubble"
 
 export interface MessageListProps {
   messages: WhatsAppMessage[]
-  /** Key whose change resets autoscroll (typically the chat JID). */
   resetKey?: string | null
-  /** Set of message IDs still waiting on server confirmation. */
   pendingIds?: ReadonlySet<number | string>
-  /** Rendered when `messages` is empty. */
   empty?: React.ReactNode
+  /** Live search query — bubbles highlight matches and the cursor scrolls. */
+  searchQuery?: string
+  /** Message id at the search cursor; if set, scrolls into view on change. */
+  currentMatchId?: number | null
+  onReply?: (m: WhatsAppMessage) => void
+  onForward?: (m: WhatsAppMessage) => void
+  onDeleteLocal?: (m: WhatsAppMessage) => void
 }
 
 function toDate(ts: number): Date {
@@ -36,24 +41,34 @@ function DateSeparator({ ts }: { ts: number }) {
   )
 }
 
-/**
- * Scrollable list of messages with:
- *  - day separators (Portuguese long form)
- *  - smart autoscroll (sticks to bottom unless the user scrolled up)
- *  - "↓ N novas mensagens" pill when the user is reading older messages
- *  - aria-live="polite" so screen readers announce new bubbles
- */
 export function MessageList({
   messages,
   resetKey,
   pendingIds,
   empty,
+  searchQuery = "",
+  currentMatchId = null,
+  onReply,
+  onForward,
+  onDeleteLocal,
 }: MessageListProps) {
   const { scrollRef, newMessagesCount, handleScroll, scrollToBottom } =
     useAutoScroll({
       resetKey: resetKey ?? "",
       messageCount: messages.length,
     })
+
+  // Whenever the search cursor moves, find the bubble in the DOM and scroll it
+  // into view. Querying by data attribute keeps this decoupled from React refs.
+  useEffect(() => {
+    if (currentMatchId == null) return
+    const el = scrollRef.current?.querySelector<HTMLElement>(
+      `[data-message-id="${currentMatchId}"]`,
+    )
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" })
+    }
+  }, [currentMatchId, scrollRef])
 
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -80,7 +95,15 @@ export function MessageList({
               return (
                 <div key={msg.id}>
                   {showDateSep && <DateSeparator ts={msg.ts} />}
-                  <MessageBubble message={msg} pendingIds={pendingIds} />
+                  <MessageBubble
+                    message={msg}
+                    pendingIds={pendingIds}
+                    searchQuery={searchQuery}
+                    isCurrentMatch={msg.id === currentMatchId}
+                    onReply={onReply}
+                    onForward={onForward}
+                    onDeleteLocal={onDeleteLocal}
+                  />
                 </div>
               )
             })}
