@@ -3,8 +3,6 @@ import {
   IconBrandWhatsapp,
   IconChartBar,
   IconChevronRight,
-  IconChevronsDown,
-  IconChevronsUp,
   IconCopy,
   IconKey,
   IconListDetails,
@@ -87,6 +85,18 @@ const featureFallbacks: Record<string, string> = {
   whatsapp_reports: "whatsapp_inbox",
 }
 
+const visibleSidebarChannelKeys = new Set(["whatsapp_native"])
+const hiddenSidebarFeatures = new Set([
+  "models",
+  "credentials",
+  "agent_hub",
+  "agent_templates",
+  "template_editor",
+  "skill_editor",
+  "tools",
+  "logs",
+])
+
 function fallbackFeature(feature: string): string | undefined {
   if (feature.startsWith("channel:")) {
     return "channels"
@@ -104,12 +114,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     LauncherFeatureAccess
   > | null>(null)
   const [isSaasAdmin, setIsSaasAdmin] = React.useState(false)
-  const {
-    channelItems,
-    hasMoreChannels,
-    showAllChannels,
-    toggleShowAllChannels,
-  } = useSidebarChannels({
+  const { channelItems } = useSidebarChannels({
     language: (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase(),
     t,
   })
@@ -189,6 +194,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         label: "navigation.channels_group",
         defaultOpen: true,
         items: channelItems
+          .filter((item) => visibleSidebarChannelKeys.has(item.key))
           .map((item) => ({
             title: item.title,
             url: item.url,
@@ -324,14 +330,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     ]
       .map((group) => ({
         ...group,
-        items: group.items.filter((item) => canRead(item.feature)),
+        items: group.items.filter(
+          (item) => !hiddenSidebarFeatures.has(item.feature) && canRead(item.feature),
+        ),
       }))
       .filter((group) => group.items.length > 0)
   }, [canRead, channelItems, isSaasAdmin])
-
-  const channelsMoreToggleTitle = showAllChannels
-    ? t("navigation.show_less_channels")
-    : t("navigation.show_more_channels")
 
   return (
     <Sidebar
@@ -388,24 +392,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         </SidebarMenuItem>
                       )
                     })}
-              {group.isChannelsGroup && hasMoreChannels && (
-                <SidebarMenuItem key="channels-more-toggle">
-                  <SidebarMenuButton
-                    onClick={toggleShowAllChannels}
-                    tooltip={channelsMoreToggleTitle}
-                    className="text-muted-foreground hover:bg-muted/60 h-9 px-3"
-                  >
-                    {showAllChannels ? (
-                      <IconChevronsUp className="size-4 opacity-60" />
-                    ) : (
-                      <IconChevronsDown className="size-4 opacity-60" />
-                    )}
-                    <span className="opacity-80">
-                      {channelsMoreToggleTitle}
-                    </span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
             </SidebarMenu>
           )
 

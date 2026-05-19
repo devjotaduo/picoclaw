@@ -46,6 +46,9 @@ import { useTheme } from "@/hooks/use-theme.ts"
 export function AppHeader() {
   const { t } = useTranslation()
   const { theme, toggleTheme } = useTheme()
+  const showSidebarToggle = false
+  const showConnectionStatus = false
+  const showHeaderActions = false
   const {
     state: gwState,
     loading: gwLoading,
@@ -101,9 +104,11 @@ export function AppHeader() {
   return (
     <header className="bg-background/95 supports-backdrop-filter:bg-background/60 border-b-border/50 sticky top-0 z-50 flex h-14 shrink-0 items-center justify-between border-b px-4 backdrop-blur">
       <div className="flex items-center gap-2">
-        <SidebarTrigger className="text-muted-foreground hover:bg-accent hover:text-foreground flex h-9 w-9 items-center justify-center rounded-lg [&>svg]:size-5">
-          <IconMenu2 />
-        </SidebarTrigger>
+        {showSidebarToggle && (
+          <SidebarTrigger className="text-muted-foreground hover:bg-accent hover:text-foreground flex h-9 w-9 items-center justify-center rounded-lg [&>svg]:size-5">
+            <IconMenu2 />
+          </SidebarTrigger>
+        )}
         <div className="hidden w-36 shrink-0 items-center sm:flex">
           <Link to="/">
             <img
@@ -122,7 +127,7 @@ export function AppHeader() {
 
       {/* Center prominent connection status */}
       <div className="pointer-events-none absolute left-1/2 hidden h-full -translate-x-1/2 items-center justify-center lg:flex">
-        {showNotConnectedHint && (
+        {showConnectionStatus && showNotConnectedHint && (
           <div className="text-muted-foreground flex items-center gap-2 rounded-full border border-dashed px-4 py-1.5 text-xs shadow-sm backdrop-blur-md">
             <span className="bg-destructive/50 relative flex size-2 shrink-0 items-center justify-center rounded-full">
               <span className="bg-destructive absolute inline-flex size-full animate-ping rounded-full opacity-75"></span>
@@ -171,7 +176,11 @@ export function AppHeader() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="text-muted-foreground flex items-center gap-1 text-sm font-medium md:gap-2">
+      <div
+        className={`text-muted-foreground ${
+          showHeaderActions ? "flex" : "hidden"
+        } items-center gap-1 text-sm font-medium md:gap-2`}
+      >
         {restartRequired && (
           <Tooltip delayDuration={700}>
             <TooltipTrigger asChild>

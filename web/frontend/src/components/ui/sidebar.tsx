@@ -254,6 +254,11 @@ function SidebarTrigger({
   ...props
 }: React.ComponentProps<typeof Button>) {
   const { toggleSidebar } = useSidebar()
+  const showSidebarTrigger = false
+
+  if (!showSidebarTrigger) {
+    return null
+  }
 
   return (
     <Button
@@ -276,6 +281,11 @@ function SidebarTrigger({
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
   const { toggleSidebar } = useSidebar()
+  const showSidebarRail = false
+
+  if (!showSidebarRail) {
+    return null
+  }
 
   return (
     <button

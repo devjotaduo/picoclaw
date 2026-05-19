@@ -1,6 +1,5 @@
 import {
   IconPlugConnectedX,
-  IconRobot,
   IconRobotOff,
   IconSparkles,
   IconStar,
@@ -10,6 +9,7 @@ import { useTranslation } from "react-i18next"
 
 import type { AgentSummary } from "@/api/internal-agents"
 import type { LauncherQuickTask } from "@/api/launcher-policy"
+import { AIOrbAvatar } from "@/components/chat/ai-orb-avatar"
 import { Button } from "@/components/ui/button"
 
 interface ChatEmptyStateProps {
@@ -87,9 +87,6 @@ export function ChatEmptyState({
   }
 
   const agentName = (agent?.name || agent?.id || "").trim()
-  const initials =
-    agent?.avatar?.initials ||
-    (agentName ? agentName.slice(0, 2).toUpperCase() : "")
   const heading = agentName ? t("chat.welcomeWithAgent", { name: agentName }) : t("chat.welcome")
   const description = (chatIntro && chatIntro.length > 0
     ? chatIntro
@@ -101,11 +98,7 @@ export function ChatEmptyState({
   return (
     <div className="flex flex-col items-center justify-center py-16">
       <div
-        className="ring-border/40 mb-6 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full text-2xl font-semibold shadow-sm ring-1"
-        style={{
-          backgroundColor: agent?.avatar?.background || "#ede9fe",
-          color: agent?.avatar?.foreground || "#7c3aed",
-        }}
+        className="ring-border/40 mb-6 size-20 overflow-hidden rounded-full shadow-sm ring-1"
         aria-hidden="true"
       >
         {agent?.avatar?.image_url ? (
@@ -114,10 +107,8 @@ export function ChatEmptyState({
             alt=""
             className="size-full object-cover"
           />
-        ) : initials ? (
-          <span>{initials}</span>
         ) : (
-          <IconRobot className="h-9 w-9" />
+          <AIOrbAvatar />
         )}
       </div>
       <h3 className="mb-2 text-center text-xl font-medium">{heading}</h3>

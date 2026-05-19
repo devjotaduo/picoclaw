@@ -164,6 +164,11 @@ export function ChatPage() {
     assistantDetailsPolicyReady &&
     launcherPolicyQ.data.ui?.show_tool_calls !== false
   const canToggleAssistantDetails = canShowReasoning || canShowToolCalls
+  const showChatTitleExtra = false
+  const showModelSelector = false
+  const showAssistantDetailsToggle = false
+  const showNewChatButton = false
+  const showSessionHistoryButton = false
   const canShowModelSelector =
     launcherPolicyQ.isSuccess &&
     launcherPolicyQ.data.ui?.show_model_selector !== false
@@ -172,7 +177,11 @@ export function ChatPage() {
   const quickTasks = (launcherPolicyQ.data?.ui?.quick_tasks ?? []).filter(
     (task) => task.label.trim() && task.prompt.trim(),
   )
-  const hasChatHeaderControls = canChooseModel && canShowModelSelector
+  const hasChatHeaderControls =
+    showChatTitleExtra &&
+    showModelSelector &&
+    canChooseModel &&
+    canShowModelSelector
   const inputDisabledReason = resolveChatInputDisabledReason({
     hasDefaultModel,
     connectionState,
@@ -321,7 +330,7 @@ export function ChatPage() {
           hasScrolled ? "shadow-xs" : "shadow-none"
         }`}
         titleExtra={
-          hasChatHeaderControls && (
+          hasChatHeaderControls ? (
             <div className="flex min-w-0 items-center gap-2">
               <ModelSelector
                 defaultModelName={defaultModelName}
@@ -331,10 +340,10 @@ export function ChatPage() {
                 onValueChange={handleSetDefault}
               />
             </div>
-          )
+          ) : null
         }
       >
-        {canToggleAssistantDetails && (
+        {showAssistantDetailsToggle && canToggleAssistantDetails && (
           <div className="border-border/60 hidden items-center gap-2 rounded-lg border px-3 py-1.5 sm:flex">
             <span className="text-muted-foreground text-sm">
               {t("chat.showAssistantDetails")}
@@ -348,31 +357,35 @@ export function ChatPage() {
           </div>
         )}
 
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={newChat}
-          className="h-9 gap-2"
-        >
-          <IconPlus className="size-4" />
-          <span className="hidden sm:inline">{t("chat.newChat")}</span>
-        </Button>
+        {showNewChatButton && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={newChat}
+            className="h-9 gap-2"
+          >
+            <IconPlus className="size-4" />
+            <span className="hidden sm:inline">{t("chat.newChat")}</span>
+          </Button>
+        )}
 
-        <SessionHistoryMenu
-          sessions={sessions}
-          activeSessionId={activeSessionId}
-          hasMore={hasMore}
-          loadError={loadError}
-          loadErrorMessage={loadErrorMessage}
-          observerRef={observerRef}
-          onOpenChange={(open) => {
-            if (open) {
-              void loadSessions(true)
-            }
-          }}
-          onSwitchSession={switchSession}
-          onDeleteSession={handleDeleteSession}
-        />
+        {showSessionHistoryButton && (
+          <SessionHistoryMenu
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            hasMore={hasMore}
+            loadError={loadError}
+            loadErrorMessage={loadErrorMessage}
+            observerRef={observerRef}
+            onOpenChange={(open) => {
+              if (open) {
+                void loadSessions(true)
+              }
+            }}
+            onSwitchSession={switchSession}
+            onDeleteSession={handleDeleteSession}
+          />
+        )}
       </PageHeader>
 
       <div
