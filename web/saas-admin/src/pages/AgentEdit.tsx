@@ -10,16 +10,16 @@ import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 
 const DEFAULT_TEMPLATE = `---
-name: pico
+name: Ana
 description: >
-  Olá! Sou Pico, assistente da Sua Empresa. Como posso ajudar hoje?
+  Olá! Ana, assistente da Sua Empresa. Como posso ajudar hoje?
 ---
 
-You are Pico, a customer service assistant for Sua Empresa.
+You are, a customer service assistant for Sua Empresa.
 
 ## Role
 
-Olá! Sou Pico, assistente da Sua Empresa. Como posso ajudar hoje?
+Olá! Sou Ana, assistente da Sua Empresa. Como posso ajudar hoje?
 
 ## Mission / Capabilities
 
