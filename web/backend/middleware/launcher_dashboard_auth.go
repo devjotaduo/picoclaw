@@ -324,6 +324,7 @@ func isPublicLauncherDashboardStatic(method, p string) bool {
 	case "/favicon.ico", "/favicon.svg", "/favicon-96x96.png",
 		"/apple-touch-icon.png", "/lark.svg",
 		"/logo_with_text.png", "/logo_with_text_dark.png", "/logo_with_text_light.png",
+		"/jota-duo-logo.png",
 		"/robots.txt", "/site.webmanifest",
 		"/web-app-manifest-192x192.png", "/web-app-manifest-512x512.png":
 		return true
