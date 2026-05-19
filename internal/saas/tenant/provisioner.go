@@ -36,13 +36,12 @@ func NewProvisioner(cfg *config.Config, db *store.DB, dk *DockerClient, ll *lite
 }
 
 type CreateInput struct {
-	DisplayName       string
-	OwnerEmail        string
-	Subdomain         string
-	MonthlyBudgetUSD  *float64
-	MemLimitMB        int
-	CPUQuota          float64
-	LauncherProfileID string
+	DisplayName      string
+	OwnerEmail       string
+	Subdomain        string
+	MonthlyBudgetUSD *float64
+	MemLimitMB       int
+	CPUQuota         float64
 }
 
 type CreateOutput struct {
@@ -77,10 +76,6 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 	}
 
 	volumePath := filepath.Join(p.Cfg.TenantHostDataDir, id)
-	profile, err := p.resolveProfile(ctx, in.LauncherProfileID)
-	if err != nil {
-		return nil, err
-	}
 
 	t := &store.Tenant{
 		ID:               id,
@@ -94,17 +89,11 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		MemLimitMB:       in.MemLimitMB,
 		CPUQuota:         in.CPUQuota,
 	}
-	if profile != nil {
-		profileID := profile.ID
-		version := profile.Version
-		t.LauncherProfileID = &profileID
-		t.LauncherProfileVersionApplied = &version
-	}
 	if err := p.Tenants.Insert(ctx, t); err != nil {
 		return nil, fmt.Errorf("insert tenant: %w", err)
 	}
 
-	if err := p.runProvision(ctx, t, password, profile); err != nil {
+	if err := p.runProvision(ctx, t, password); err != nil {
 		msg := err.Error()
 		_ = p.Tenants.SetStatus(ctx, id, store.StatusError, &msg)
 		return nil, err
@@ -117,25 +106,20 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 	}, nil
 }
 
-func (p *Provisioner) runProvision(ctx context.Context, t *store.Tenant, password string, profile *store.LauncherProfile) error {
+func (p *Provisioner) runProvision(ctx context.Context, t *store.Tenant, password string) error {
 	if err := os.MkdirAll(t.VolumePath, 0o755); err != nil {
 		return fmt.Errorf("mkdir volume: %w", err)
 	}
-	seedPath := p.Cfg.TenantTemplateDir
-	if profile != nil {
-		seedPath = profile.SeedPath
+	if p.Cfg.TenantTemplateDir == "" {
+		return fmt.Errorf("TENANT_TEMPLATE_DIR is not configured: cannot mirror the main picoclaw home")
 	}
-	if err := CopyTemplate(seedPath, t.VolumePath); err != nil {
-		return fmt.Errorf("copy template: %w", err)
+	// Raw cópia do picoclaw principal: credenciais, configs, env, workspace e
+	// agentes viajam todos para o tenant. Só sobrescrevemos abaixo o que é
+	// estritamente per-tenant (senha do dashboard e chave LiteLLM).
+	if err := CopyVolumeRaw(p.Cfg.TenantTemplateDir, t.VolumePath); err != nil {
+		return fmt.Errorf("mirror picoclaw home: %w", err)
 	}
-	if err := SyncTemplateSkills(p.Cfg.TenantTemplateDir, t.VolumePath); err != nil {
-		return fmt.Errorf("sync template skills: %w", err)
-	}
-	if profile != nil {
-		if err := WriteLauncherPolicy(t.VolumePath, profile.RolePolicy()); err != nil {
-			return fmt.Errorf("write launcher policy: %w", err)
-		}
-	} else if err := WriteLauncherPolicy(t.VolumePath, nil); err != nil {
+	if err := WriteLauncherPolicy(t.VolumePath, nil); err != nil {
 		return fmt.Errorf("write launcher policy: %w", err)
 	}
 	if err := SeedDashboardPassword(ctx, t.VolumePath, password); err != nil {

@@ -48,7 +48,6 @@ export interface CreateTenantInput {
   monthly_budget_usd?: number
   mem_limit_mb?: number
   cpu_quota?: number
-  launcher_profile_id?: string
 }
 
 export interface CreateTenantResponse {

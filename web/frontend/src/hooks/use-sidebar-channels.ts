@@ -94,11 +94,15 @@ export interface SidebarChannelNavItem {
 interface UseSidebarChannelsOptions {
   language: string
   t: TFunction
+  isSaasAdmin: boolean
 }
+
+const TENANT_ALLOWED_CHANNELS = new Set(["whatsapp_native"])
 
 export function useSidebarChannels({
   language,
   t,
+  isSaasAdmin,
 }: UseSidebarChannelsOptions) {
   const gateway = useAtomValue(gatewayAtom)
   const [channels, setChannels] = React.useState<SupportedChannel[]>([])
@@ -156,7 +160,9 @@ export function useSidebarChannels({
   }, [language])
 
   const sortedChannels = React.useMemo(() => {
-    const list = [...channels]
+    const list = isSaasAdmin
+      ? [...channels]
+      : channels.filter((c) => TENANT_ALLOWED_CHANNELS.has(c.name))
     list.sort((a, b) => {
       const aEnabled = enabledMap[a.name] === true
       const bEnabled = enabledMap[b.name] === true
@@ -177,7 +183,7 @@ export function useSidebarChannels({
       )
     })
     return list
-  }, [channelImportanceIndex, channels, enabledMap, t])
+  }, [channelImportanceIndex, channels, enabledMap, isSaasAdmin, t])
 
   const hasMoreChannels = sortedChannels.length > DEFAULT_VISIBLE_CHANNELS
   const visibleChannels = showAllChannels

@@ -44,6 +44,7 @@ interface NavItem {
   feature: string
   translateTitle?: boolean
   external?: boolean
+  adminOnly?: boolean
 }
 
 interface NavGroup {
@@ -80,16 +81,6 @@ const featureFallbacks: Record<string, string> = {
 }
 
 const visibleSidebarChannelKeys = new Set(["whatsapp_native"])
-const hiddenSidebarFeatures = new Set([
-  "models",
-  "credentials",
-  "agent_hub",
-  "agent_templates",
-  "template_editor",
-  "skill_editor",
-  "tools",
-  "logs",
-])
 
 function fallbackFeature(feature: string): string | undefined {
   if (feature.startsWith("channel:")) {
@@ -111,6 +102,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { channelItems } = useSidebarChannels({
     language: (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase(),
     t,
+    isSaasAdmin,
   })
 
   React.useEffect(() => {
@@ -174,6 +166,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             icon: IconAtom,
             feature: "models",
             translateTitle: true,
+            adminOnly: true,
           },
           {
             title: "navigation.credentials",
@@ -181,6 +174,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             icon: IconKey,
             feature: "credentials",
             translateTitle: true,
+            adminOnly: true,
           },
         ],
       },
@@ -189,7 +183,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         defaultOpen: true,
         items: channelItems
           .filter((item) => visibleSidebarChannelKeys.has(item.key))
-          .map((item) => ({
+          .map<NavItem>((item) => ({
             title: item.title,
             url: item.url,
             icon: item.icon,
@@ -229,6 +223,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             icon: IconSearch,
             feature: "agent_hub",
             translateTitle: true,
+            adminOnly: true,
           },
           {
             title: "navigation.templates",
@@ -236,6 +231,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             icon: IconUserCheck,
             feature: "agent_templates",
             translateTitle: true,
+            adminOnly: true,
           },
           {
             title: "navigation.template_editor",
@@ -243,6 +239,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             icon: IconListDetails,
             feature: "template_editor",
             translateTitle: true,
+            adminOnly: true,
           },
           {
             title: "navigation.skills",
@@ -250,6 +247,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             icon: IconSparkles,
             feature: "skills",
             translateTitle: true,
+            adminOnly: true,
           },
           {
             title: "navigation.skill_editor",
@@ -257,6 +255,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             icon: IconListDetails,
             feature: "skill_editor",
             translateTitle: true,
+            adminOnly: true,
           },
         ],
       },
@@ -269,6 +268,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             icon: IconTools,
             feature: "tools",
             translateTitle: true,
+            adminOnly: true,
           },
           {
             title: "navigation.config",
@@ -283,6 +283,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             icon: IconListDetails,
             feature: "logs",
             translateTitle: true,
+            adminOnly: true,
           },
         ],
       },
@@ -325,7 +326,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       .map((group) => ({
         ...group,
         items: group.items.filter(
-          (item) => !hiddenSidebarFeatures.has(item.feature) && canRead(item.feature),
+          (item) => (!item.adminOnly || isSaasAdmin) && canRead(item.feature),
         ),
       }))
       .filter((group) => group.items.length > 0)
