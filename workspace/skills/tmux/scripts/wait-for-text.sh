@@ -3,14 +3,11 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: wait-for-text.sh [-L socket-name|-S socket-path] -t target -p pattern [options]
+Usage: wait-for-text.sh -t target -p pattern [options]
 
 Poll a tmux pane for text and exit when found.
 
 Options:
-  -L, --socket    tmux socket name (passed to tmux -L)
-  -S, --socket-path
-                  tmux socket path (passed to tmux -S)
   -t, --target    tmux target (session:window.pane), required
   -p, --pattern   regex pattern to look for, required
   -F, --fixed     treat pattern as a fixed string (grep -F)
@@ -23,8 +20,6 @@ USAGE
 
 target=""
 pattern=""
-socket_name=""
-socket_path=""
 grep_flag="-E"
 timeout=15
 interval=0.5
@@ -32,8 +27,6 @@ lines=1000
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -L|--socket)   socket_name="${2-}"; shift 2 ;;
-    -S|--socket-path) socket_path="${2-}"; shift 2 ;;
     -t|--target)   target="${2-}"; shift 2 ;;
     -p|--pattern)  pattern="${2-}"; shift 2 ;;
     -F|--fixed)    grep_flag="-F"; shift ;;
@@ -44,11 +37,6 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
   esac
 done
-
-if [[ -n "$socket_name" && -n "$socket_path" ]]; then
-  echo "Use either -L or -S, not both" >&2
-  exit 1
-fi
 
 if [[ -z "$target" || -z "$pattern" ]]; then
   echo "target and pattern are required" >&2
@@ -71,20 +59,13 @@ if ! command -v tmux >/dev/null 2>&1; then
   exit 1
 fi
 
-tmux_cmd=(tmux)
-if [[ -n "$socket_name" ]]; then
-  tmux_cmd+=(-L "$socket_name")
-elif [[ -n "$socket_path" ]]; then
-  tmux_cmd+=(-S "$socket_path")
-fi
-
 # End time in epoch seconds (integer, good enough for polling)
 start_epoch=$(date +%s)
 deadline=$((start_epoch + timeout))
 
 while true; do
   # -J joins wrapped lines, -S uses negative index to read last N lines
-  pane_text="$("${tmux_cmd[@]}" capture-pane -p -J -t "$target" -S "-${lines}" 2>/dev/null || true)"
+  pane_text="$(tmux capture-pane -p -J -t "$target" -S "-${lines}" 2>/dev/null || true)"
 
   if printf '%s\n' "$pane_text" | grep $grep_flag -- "$pattern" >/dev/null 2>&1; then
     exit 0

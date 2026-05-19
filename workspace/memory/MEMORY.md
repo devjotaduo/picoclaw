@@ -1,39 +1,44 @@
-# Long-term Memory
+# MEMORY
 
-This file stores important information that should persist across sessions.
+Esta memória organiza informações úteis da empresa. Não salvar conversa inteira.
 
-## Memory Policy
+## Regras
+- Salvar apenas informação útil.
+- Não salvar dados sensíveis desnecessários.
+- Sempre que possível, registrar data e fonte.
+- Se a informação for oficial, marcar como validada.
+- Se a informação for incerta, marcar como pendente.
+- Se houver conflito entre memória antiga e informação nova, pedir confirmação ao dono.
+- Nenhum agente deve inventar informação ausente na memória.
+- Se faltar informação importante, chamar Rafael ou Atendimento Humano.
 
-- Store durable facts, not raw conversation logs.
-- Prefer current explicit user statements and official company context over old memory.
-- Include date, source, and status for important facts when possible.
-- If a new fact contradicts an old one, update or mark the old one as stale instead of keeping both as true.
-- Do not store passwords, tokens, full card numbers, complete documents, unnecessary health data, minors' data, or other sensitive personal data.
-- Mask identifiers in summaries, for example CPF `***.***.***-12` or card `final 1234`.
-- Use daily notes for transient operational logs; keep this file lean.
+## Arquivos de memória
+- Empresa: empresa.md
+- Canais autorizados: canais-autorizados.md
+- Clientes: clientes.md
+- Leads: leads.md
+- FAQ: faq.md
+- Atendimentos: atendimentos.md
+- Vendas: vendas.md
+- Suporte: suporte.md
+- Decisões humanas: humano.md
+- Melhorias: melhorias.md
 
-## People and Organizations
+## Uso obrigatório
+Todos os agentes devem consultar a memória antes de responder sobre:
 
-(Stable names, roles, company affiliations, and approved contact channels.)
+- empresa;
+- produtos ou serviços;
+- preço;
+- prazo;
+- desconto;
+- disponibilidade;
+- clientes;
+- leads;
+- histórico de atendimento;
+- suporte;
+- regras internas;
+- canais autorizados.
 
-## Open Cases
+Se a informação não estiver validada, o agente deve dizer que vai confirmar e encaminhar para Rafael ou Atendimento Humano.
 
-(Active requests, unresolved issues, promised follow-ups, and current status.)
-
-## Decisions and Commitments
-
-(Confirmed decisions, approvals, deadlines, prices, exceptions, or promises made.)
-
-## Preferences
-
-(Communication preferences and service preferences learned over time.)
-
-## Knowledge Gaps
-
-(Recurring questions or missing official answers that should improve the knowledge base.)
-
-## Configuration
-
-- Model preferences
-- Channel settings
-- Skills enabled
