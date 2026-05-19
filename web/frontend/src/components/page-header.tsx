@@ -23,9 +23,11 @@ export function PageHeader({
       )}
     >
       <div className="flex items-center gap-4">
-        <h2 className="text-foreground/90 text-xl font-medium tracking-tight">
-          {title}
-        </h2>
+        {title ? (
+          <h2 className="text-foreground/90 text-xl font-medium tracking-tight">
+            {title}
+          </h2>
+        ) : null}
         {titleExtra}
       </div>
       {children && <div className="flex items-center gap-2">{children}</div>}

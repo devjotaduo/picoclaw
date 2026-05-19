@@ -2,7 +2,6 @@ import {
   IconAtom,
   IconBrandWhatsapp,
   IconChartBar,
-  IconChevronRight,
   IconCopy,
   IconKey,
   IconListDetails,
@@ -24,11 +23,6 @@ import {
   type LauncherFeatureAccess,
   getLauncherPolicy,
 } from "@/api/launcher-policy"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
 import {
   Sidebar,
   SidebarContent,
@@ -406,25 +400,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           }
 
           return (
-            <Collapsible
-              key={group.label}
-              defaultOpen={group.defaultOpen}
-              className="group/collapsible mb-1"
-            >
-              <SidebarGroup className="px-2 py-0">
-                <SidebarGroupLabel asChild>
-                  <CollapsibleTrigger className="hover:bg-muted/60 flex w-full cursor-pointer items-center justify-between rounded-md px-2 py-1.5 transition-colors">
-                    <span>{t(group.label)}</span>
-                    <IconChevronRight className="size-3.5 opacity-50 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                  </CollapsibleTrigger>
-                </SidebarGroupLabel>
-                <CollapsibleContent>
-                  <SidebarGroupContent className="pt-1">
-                    {menuContent}
-                  </SidebarGroupContent>
-                </CollapsibleContent>
-              </SidebarGroup>
-            </Collapsible>
+            <SidebarGroup key={group.label} className="mb-1 px-2 py-0">
+              <SidebarGroupLabel className="px-2 py-1.5">
+                <span>{t(group.label)}</span>
+              </SidebarGroupLabel>
+              <SidebarGroupContent className="pt-1">
+                {menuContent}
+              </SidebarGroupContent>
+            </SidebarGroup>
           )
         })}
       </SidebarContent>

@@ -12,6 +12,7 @@ import TextareaAutosize from "react-textarea-autosize"
 import { toast } from "sonner"
 
 import { ContextUsageRing } from "@/components/chat/context-usage-ring"
+import { RecordingWaveform } from "@/components/chat/recording-waveform"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -101,6 +102,7 @@ export function ChatComposer({
   // --- Audio recording state ---
   const [isRecording, setIsRecording] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [activeStream, setActiveStream] = useState<MediaStream | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
@@ -160,6 +162,7 @@ export function ChatComposer({
         }
         setIsRecording(false)
         setRecordingSeconds(0)
+        setActiveStream(null)
         if (blob.size === 0) return
         try {
           const dataUrl = await blobToDataUrl(blob)
@@ -177,6 +180,7 @@ export function ChatComposer({
       recorderRef.current = recorder
       setIsRecording(true)
       setRecordingSeconds(0)
+      setActiveStream(stream)
       timerRef.current = window.setInterval(() => {
         setRecordingSeconds((prev) => {
           const next = prev + 1
@@ -257,20 +261,39 @@ export function ChatComposer({
           </div>
         )}
 
-        <TextareaAutosize
-          value={input}
-          onChange={(e) => onInputChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          disabled={!canInput}
-          title={disabledMessage || undefined}
-          className={cn(
-            "placeholder:text-muted-foreground/50 max-h-[200px] min-h-[64px] resize-none border-0 bg-transparent px-2 py-1 text-[15px] shadow-none transition-colors focus-visible:ring-0 focus-visible:outline-none dark:bg-transparent",
-            !canInput && "cursor-not-allowed",
-          )}
-          minRows={1}
-          maxRows={8}
-        />
+        {isRecording ? (
+          <div className="flex min-h-[64px] items-center gap-3 px-2 py-1">
+            <span className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-red-500 uppercase">
+              <span className="relative inline-flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+              </span>
+              {t("chat.recording")}
+            </span>
+            <RecordingWaveform stream={activeStream} />
+            <span className="text-foreground/80 tabular-nums text-sm font-medium">
+              {Math.floor(recordingSeconds / 60)
+                .toString()
+                .padStart(2, "0")}
+              :{(recordingSeconds % 60).toString().padStart(2, "0")}
+            </span>
+          </div>
+        ) : (
+          <TextareaAutosize
+            value={input}
+            onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={!canInput}
+            title={disabledMessage || undefined}
+            className={cn(
+              "placeholder:text-muted-foreground/50 max-h-[200px] min-h-[64px] resize-none border-0 bg-transparent px-2 py-1 text-[15px] shadow-none transition-colors focus-visible:ring-0 focus-visible:outline-none dark:bg-transparent",
+              !canInput && "cursor-not-allowed",
+            )}
+            minRows={1}
+            maxRows={8}
+          />
+        )}
 
         <div className="mt-2 flex items-center justify-between px-1">
           <div className="flex items-center gap-1">
@@ -293,7 +316,7 @@ export function ChatComposer({
               className={cn(
                 "h-8 w-8 rounded-full",
                 isRecording
-                  ? "text-red-500 hover:text-red-600 animate-pulse"
+                  ? "bg-red-500 text-white shadow-[0_0_0_4px_rgba(239,68,68,0.18)] hover:bg-red-600"
                   : "text-muted-foreground hover:text-foreground",
               )}
               onClick={isRecording ? stopRecording : startRecording}
@@ -311,14 +334,6 @@ export function ChatComposer({
                 <IconMicrophone className="size-4" />
               )}
             </Button>
-            {isRecording ? (
-              <span className="text-muted-foreground ml-1 tabular-nums text-xs">
-                {Math.floor(recordingSeconds / 60)
-                  .toString()
-                  .padStart(2, "0")}
-                :{(recordingSeconds % 60).toString().padStart(2, "0")}
-              </span>
-            ) : null}
           </div>
 
           <div className="flex items-center gap-1.5">

@@ -56,6 +56,7 @@ import {
 import { getLauncherPolicy } from "@/api/launcher-policy"
 import { type SkillSupportItem, getSkills } from "@/api/skills"
 import { listWhatsAppChats } from "@/api/whatsapp"
+import { PendingHandoffsSidebar } from "@/components/chat/pending-handoffs-sidebar"
 import { CodeEditor } from "@/components/code-editor"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
@@ -113,12 +114,10 @@ import {
 } from "../templates/use-templates-page"
 import {
   type AgentListControls,
-  type AgentListSort,
   type AgentListStatusFilter,
   DEFAULT_AGENT_LIST_CONTROLS,
   applyAgentListControls,
 } from "./agent-list-filter"
-import { PendingHandoffsSidebar } from "@/components/chat/pending-handoffs-sidebar"
 import { AgentWizard, type WizardDraft } from "./agent-wizard"
 import { AvatarUpload } from "./avatar-upload"
 import { CardStatusBadge } from "./card-status"
@@ -855,6 +854,9 @@ function prepareDraftForEdit(
 
 // ─── shared UI sub-components ─────────────────────────────────────────────────
 
+const editorPanelClass =
+  "border-border/60 bg-card rounded-lg border p-4 shadow-none"
+
 function AgentAvatar({
   agent,
   size = "md",
@@ -874,7 +876,7 @@ function AgentAvatar({
   const initials = avatar.initials?.trim() || fallback.initials
   return (
     <div
-      className={`${sizeClasses[size]} ring-border/50 flex shrink-0 items-center justify-center overflow-hidden rounded-xl font-semibold ring-1`}
+      className={`${sizeClasses[size]} ring-border/50 flex shrink-0 items-center justify-center overflow-hidden rounded-lg font-semibold ring-1`}
       style={{
         backgroundColor: avatar.background || fallback.background,
         color: avatar.foreground || fallback.foreground,
@@ -899,7 +901,7 @@ function ProfileAvatar({ profile }: { profile: AgentProfileDraft }) {
     profile.initials.trim() || profile.name.slice(0, 2).toUpperCase()
   return (
     <span
-      className="ring-border/50 flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl text-sm font-semibold ring-1"
+      className="ring-border/50 flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg text-sm font-semibold ring-1"
       style={{
         backgroundColor: profile.background || "#475569",
         color: profile.foreground || "#ffffff",
@@ -921,10 +923,8 @@ function StatusBadge({ active }: { active: boolean }) {
   const { t } = useTranslation()
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-        active
-          ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-800"
-          : "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-400 dark:ring-red-800"
+      className={`border-border bg-background inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium ${
+        active ? "text-foreground" : "text-muted-foreground"
       }`}
     >
       <span
@@ -941,13 +941,13 @@ function ConfigBadge({ configured }: { configured: boolean }) {
   const { t } = useTranslation()
   if (configured) {
     return (
-      <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:ring-blue-800">
+      <span className="border-border bg-background text-foreground inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium">
         {t("pages.agent.editor.configured", "Configurado")}
       </span>
     )
   }
   return (
-    <Badge variant="secondary" className="rounded-full text-xs">
+    <Badge variant="outline">
       {t("pages.agent.editor.not_configured", "Rascunho")}
     </Badge>
   )
@@ -968,22 +968,16 @@ function ReadyStatusBadges({
       key: "profile",
       label: compact ? "Perfil" : "Perfil pronto",
       ready: profileReady,
-      readyClass:
-        "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-800",
     },
     {
       key: "prompt",
       label: compact ? "Prompt" : "Prompt pronto",
       ready: promptReady,
-      readyClass:
-        "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-800",
     },
     {
       key: "routing",
       label: compact ? "Rotas" : "Roteamento pronto",
       ready: routingReady,
-      readyClass:
-        "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800",
     },
   ]
   return (
@@ -991,10 +985,10 @@ function ReadyStatusBadges({
       {items.map((item) => (
         <span
           key={item.key}
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${
+          className={`border-border inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${
             item.ready
-              ? item.readyClass
-              : "bg-muted text-muted-foreground ring-border"
+              ? "bg-background text-foreground"
+              : "bg-muted text-muted-foreground"
           }`}
           aria-label={`${item.label}: ${item.ready ? "pronto" : "pendente"}`}
         >
@@ -1008,7 +1002,7 @@ function ReadyStatusBadges({
 function DefaultBadge() {
   const { t } = useTranslation()
   return (
-    <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:ring-violet-800">
+    <span className="border-border bg-background text-foreground inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium">
       {t("pages.agent.editor.default", "Padrão")}
     </span>
   )
@@ -1024,7 +1018,7 @@ function InfoCard({
   mono?: boolean
 }) {
   return (
-    <div className="bg-muted/30 hover:bg-muted/50 min-w-0 rounded-xl border border-transparent px-4 py-3 transition-colors">
+    <div className="border-border/60 bg-card min-w-0 rounded-lg border px-3 py-2">
       <p className="text-muted-foreground mb-1 text-[10px] font-medium tracking-wider uppercase">
         {label}
       </p>
@@ -1048,7 +1042,7 @@ function SectionHeader({
   return (
     <div className="flex items-center gap-2">
       <Icon className="text-muted-foreground size-3.5" />
-      <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+      <h3 className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
         {title}
       </h3>
     </div>
@@ -1112,9 +1106,7 @@ export function AgentEditorPage() {
   const [listStatus, setListStatus] = useState<AgentListStatusFilter>(
     DEFAULT_AGENT_LIST_CONTROLS.status,
   )
-  const [listSort, setListSort] = useState<AgentListSort>(
-    DEFAULT_AGENT_LIST_CONTROLS.sort,
-  )
+  const listSort = DEFAULT_AGENT_LIST_CONTROLS.sort
   const prevAgentIdRef = useRef(selectedAgentId)
 
   useEffect(() => {
@@ -1856,548 +1848,539 @@ export function AgentEditorPage() {
   return (
     <div className="flex h-full">
       <div className="agent-editor flex min-w-0 flex-1 flex-col">
-      <PageHeader title={t("navigation.agent_editor")}>
-        {selectedAgent && (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setVersionDrawerOpen(true)}
-              className="h-8 gap-1.5"
-            >
-              <IconHistory className="size-4" aria-hidden="true" />
-              Versões
-            </Button>
-            <Button
-              type="button"
-              variant={chatDrawerOpen ? "default" : "outline"}
-              size="sm"
-              onClick={() => setChatDrawerOpen((o) => !o)}
-              aria-pressed={chatDrawerOpen}
-              className="h-8 gap-1.5"
-            >
-              <IconMessageDots className="size-4" aria-hidden="true" />
-              Chat de teste
-            </Button>
-          </>
-        )}
-      </PageHeader>
+        <PageHeader title="" className="justify-end">
+          {selectedAgent && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setVersionDrawerOpen(true)}
+                className="h-8 gap-1.5"
+              >
+                <IconHistory className="size-4" aria-hidden="true" />
+                Versões
+              </Button>
+              <Button
+                type="button"
+                variant={chatDrawerOpen ? "default" : "outline"}
+                size="sm"
+                onClick={() => setChatDrawerOpen((o) => !o)}
+                aria-pressed={chatDrawerOpen}
+                className="h-8 gap-1.5"
+              >
+                <IconMessageDots className="size-4" aria-hidden="true" />
+                Chat de teste
+              </Button>
+            </>
+          )}
+        </PageHeader>
 
-      <div className="flex-1 overflow-auto">
-        <div className="mx-auto grid h-full w-full max-w-7xl gap-0 lg:grid-cols-[288px_minmax(0,1fr)]">
-          {/* ── sidebar ──────────────────────────────────────────── */}
-          <aside className="border-border/40 flex flex-col border-r">
-            <div className="border-border/40 flex items-center justify-between gap-2 border-b px-4 py-3">
-              <div className="flex items-center gap-2">
-                <IconUsers className="text-muted-foreground size-4 shrink-0" />
-                <span className="text-sm font-semibold">
-                  {t("pages.agent.editor.agents", "Agentes")}
-                </span>
-                {agents.length > 0 && (
-                  <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums">
-                    {agents.length}
+        <div className="flex-1 overflow-auto">
+          <div className="mx-auto grid h-full w-full max-w-6xl gap-0 lg:grid-cols-[272px_minmax(0,1fr)]">
+            {/* ── sidebar ──────────────────────────────────────────── */}
+            <aside className="border-border/60 bg-background/60 flex flex-col border-r">
+              <div className="border-border/60 flex items-center justify-between gap-2 border-b px-3 py-3">
+                <div className="flex items-center gap-2">
+                  <IconUsers className="text-muted-foreground size-4 shrink-0" />
+                  <span className="text-sm font-semibold">
+                    {t("pages.agent.editor.agents", "Agentes")}
+                  </span>
+                  {agents.length > 0 && (
+                    <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums">
+                      {agents.length}
+                    </span>
+                  )}
+                </div>
+                {canCreateAgents && (
+                  <Button
+                    size="sm"
+                    onClick={handleCreateOpen}
+                    className="h-7 gap-1 px-2.5 text-xs"
+                  >
+                    <IconPlus className="size-3.5" />
+                    {t("pages.agent.editor.new_agent", "Novo agente")}
+                  </Button>
+                )}
+              </div>
+
+              <div className="border-border/60 space-y-2 border-b px-3 py-2.5">
+                <div className="relative">
+                  <IconSearch className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+                  <Input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Buscar agente…"
+                    className="h-8 rounded-md pl-8 text-xs"
+                    aria-label="Buscar agentes"
+                  />
+                </div>
+                <div
+                  role="group"
+                  aria-label="Filtrar agentes"
+                  className="flex flex-wrap items-center gap-1"
+                >
+                  {(["all", "active", "inactive"] as const).map((s) => {
+                    const active = listStatus === s
+                    const label =
+                      s === "all"
+                        ? "Todos"
+                        : s === "active"
+                          ? "Ativos"
+                          : "Inativos"
+                    return (
+                      <Button
+                        key={s}
+                        type="button"
+                        onClick={() => setListStatus(s)}
+                        aria-pressed={active}
+                        variant={active ? "secondary" : "ghost"}
+                        size="sm"
+                        className={cn(
+                          "h-6 rounded-md px-2 text-[10px] font-medium",
+                          !active && "text-muted-foreground",
+                        )}
+                      >
+                        {label}
+                      </Button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {editorStateQuery.isLoading ? (
+                  <div className="space-y-1 p-2">
+                    {[1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 rounded-lg px-3 py-2.5"
+                      >
+                        <Skeleton className="size-10 rounded-lg" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-3 w-3/4 rounded" />
+                          <Skeleton className="h-2.5 w-1/2 rounded" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : filteredAgents.length === 0 ? (
+                  <div className="text-muted-foreground flex flex-col items-center gap-2 py-10 text-center text-xs">
+                    <IconSearch className="size-6 opacity-40" />
+                    <p>Nenhum agente encontrado</p>
+                  </div>
+                ) : (
+                  <div className="space-y-0.5 p-2">
+                    {filteredAgents.map((agent) => {
+                      const isSelected = agent.id === selectedAgentId
+                      const isActive = agent.active !== false
+                      return (
+                        <div
+                          key={agent.id}
+                          className={`group focus-within:ring-ring relative flex min-w-0 items-center gap-1 rounded-lg pr-1 transition-colors focus-within:ring-2 ${
+                            isSelected
+                              ? "bg-muted ring-border/60 ring-1"
+                              : "hover:bg-muted/60"
+                          }`}
+                        >
+                          {isSelected && (
+                            <span className="bg-primary absolute top-1/2 left-0 h-5 w-[3px] -translate-y-1/2 rounded-r-full" />
+                          )}
+                          <button
+                            type="button"
+                            aria-pressed={isSelected}
+                            aria-current={isSelected ? "true" : undefined}
+                            onClick={() => setSelectedAgentId(agent.id)}
+                            className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2.5 text-left focus:outline-none"
+                          >
+                            <AgentAvatar agent={agent} size="sm" />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`truncate text-sm font-medium ${
+                                    isSelected
+                                      ? "text-foreground"
+                                      : "text-foreground/80 group-hover:text-foreground"
+                                  }`}
+                                >
+                                  {agent.name || agent.id}
+                                </span>
+                                {!isActive && (
+                                  <span className="size-1.5 shrink-0 rounded-full bg-red-400" />
+                                )}
+                              </div>
+                              <p className="text-muted-foreground/70 mt-1 truncate text-[11px]">
+                                {agentRoleLabel(agent)}
+                              </p>
+                            </div>
+                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label={`Mais ações para ${agent.name || agent.id}`}
+                                className="text-muted-foreground hover:text-foreground focus-visible:ring-ring focus-visible:ring-offset-background inline-flex size-7 shrink-0 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                              >
+                                <IconDotsVertical
+                                  className="size-4"
+                                  aria-hidden="true"
+                                />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem
+                                onClick={() => setSelectedAgentId(agent.id)}
+                              >
+                                <IconEdit className="size-3.5" />
+                                Selecionar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDuplicateAgent(agent)}
+                                disabled={
+                                  duplicateMutation.isPending ||
+                                  !canCreateAgents
+                                }
+                              >
+                                <IconCopy className="size-3.5" />
+                                Duplicar agente
+                              </DropdownMenuItem>
+                              {agent.id !== "main" && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => handleDeleteAgent(agent)}
+                                    disabled={deleteMutation.isPending}
+                                    className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/40"
+                                  >
+                                    <IconTrash className="size-3.5" />
+                                    Remover
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </aside>
+
+            {/* ── main content ─────────────────────────────────────── */}
+            <main className="flex min-w-0 flex-col overflow-hidden">
+              {/* mobile agent selector */}
+              <div className="border-border/40 flex items-center gap-2 border-b px-4 py-2.5 lg:hidden">
+                <Select
+                  value={selectedAgentId}
+                  onValueChange={setSelectedAgentId}
+                >
+                  <SelectTrigger className="h-8 flex-1 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agents.map((a) => (
+                      <SelectItem key={a.id} value={a.id} className="text-xs">
+                        {a.name || a.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {canCreateAgents && (
+                  <Button size="sm" onClick={handleCreateOpen} className="h-8">
+                    <IconPlus className="size-3.5" />
+                  </Button>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-5 py-5">
+                {isLoadingMain ? (
+                  <LoadingSkeleton />
+                ) : !selectedAgent ? (
+                  <EmptyState
+                    onCreate={handleCreateOpen}
+                    canCreate={canCreateAgents}
+                  />
+                ) : (
+                  <UnifiedAgentEditor
+                    agent={selectedAgent}
+                    configured={configured}
+                    configData={configData}
+                    resolvedPayload={resolvedPayload}
+                    template={template}
+                    selectedAgentId={selectedAgentId}
+                    selectedProfile={selectedProfile}
+                    selectedRoleConfigDraft={selectedRoleConfigDraft}
+                    selectedRoleConfig={selectedRoleConfig}
+                    mainAgentID={mainAgentID}
+                    mainAllowAgents={mainAllowAgents}
+                    assistantJIDs={assistantJIDs}
+                    assistantChats={assistantChats}
+                    internalAgents={internalAgents}
+                    isSavingOrchestration={saveOrchestrationMutation.isPending}
+                    isLoadingOrchestration={editorStateQuery.isLoading}
+                    isTogglingActive={activeMutation.isPending}
+                    isDeleting={deleteMutation.isPending}
+                    checklistSteps={checklistSteps}
+                    isReadyToActivate={isReady}
+                    saveState={saveState}
+                    lastSavedAt={lastSavedAt}
+                    saveErrorMsg={saveErrorMsg}
+                    onSave={handleManualSave}
+                    onDiscard={handleDiscardOrchestration}
+                    activeTab={activeTab}
+                    onTabChange={setActiveTab}
+                    advancedJsonMode={advancedJsonMode}
+                    onAdvancedJsonModeChange={setAdvancedJsonMode}
+                    messages={chatMessages}
+                    chatInput={chatInput}
+                    isSending={sendingChat}
+                    proposals={proposals}
+                    quickPrompts={quickPrompts}
+                    canCreate={canCreateAgents}
+                    onCreate={handleCreateOpen}
+                    onConfigure={handleConfigureSelectedAgent}
+                    onEditPrompt={handleEdit}
+                    onOpenRawEditor={handleOpenRawEditor}
+                    onToggleActive={() =>
+                      handleToggleAgentActive(selectedAgent)
+                    }
+                    onDelete={
+                      selectedAgent.id !== "main"
+                        ? () => handleDeleteAgent(selectedAgent)
+                        : undefined
+                    }
+                    onUpdateProfile={updateSelectedProfile}
+                    onUpdateRoleConfig={updateSelectedRoleConfig}
+                    onRoleConfigDraftChange={(v) =>
+                      setRoleConfigDrafts((d) => ({
+                        ...d,
+                        [selectedAgentId]: v,
+                      }))
+                    }
+                    onMainAgentChange={(id) => {
+                      setMainAgentID(id)
+                      setMainAllowAgents((c) => c.filter((x) => x !== id))
+                    }}
+                    onToggleMainAllow={(id) =>
+                      setMainAllowAgents((c) =>
+                        c.includes(id) ? c.filter((x) => x !== id) : [...c, id],
+                      )
+                    }
+                    onAssistantJIDsChange={setAssistantJIDs}
+                    onAssistantChatsChange={setAssistantChats}
+                    onSaveOrchestration={() =>
+                      saveOrchestrationMutation.mutate()
+                    }
+                    onRefreshOrchestration={() =>
+                      void queryClient.invalidateQueries({
+                        queryKey: ["agent-editor-state"],
+                      })
+                    }
+                    onChatInputChange={setChatInput}
+                    onSendChat={handleSendChat}
+                    onPromptSelect={setChatInput}
+                    onProposalInspect={(proposal) =>
+                      setChatInput(
+                        `Revise esta proposta salva e me diga quais arquivos foram gerados, próximos ajustes e pendências:\n\n${JSON.stringify(proposal, null, 2)}`,
+                      )
+                    }
+                  />
+                )}
+              </div>
+            </main>
+          </div>
+        </div>
+
+        {/* ── dialogs ───────────────────────────────────────────────── */}
+        <AgentWizard
+          open={createOpen && canCreateAgents}
+          existingIDs={agents.map((a) => a.id)}
+          isSubmitting={wizardMutation.isPending}
+          onSubmit={(draft, payload) =>
+            wizardMutation.mutate({ draft, payload })
+          }
+          onTest={(draft, payload) =>
+            wizardMutation.mutate({ draft, payload, openAfter: true })
+          }
+          onCancel={() => setCreateOpen(false)}
+        />
+
+        <Dialog open={rawOpen} onOpenChange={handleRawOpenChange}>
+          <DialogContent className="flex h-[min(86vh,760px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
+            <DialogHeader className="border-border/40 border-b px-6 py-4 pr-14">
+              <DialogTitle>
+                {t("pages.agent.editor.raw_json_title", "JSON bruto do agente")}
+              </DialogTitle>
+              <DialogDescription>
+                {t(
+                  "pages.agent.editor.raw_json_description",
+                  "Editor avançado do payload exato salvo no workspace deste agente.",
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="min-h-0 flex-1 p-4">
+              <CodeEditor
+                value={rawDraft}
+                onChange={(value) => {
+                  setRawDraft(value)
+                  if (rawError) setRawError(null)
+                }}
+                language="json"
+                path={`${selectedAgentId}/agent_config.json`}
+                ariaLabel={t(
+                  "pages.agent.editor.raw_json_title",
+                  "JSON bruto do agente",
+                )}
+                className="h-full min-h-[360px]"
+              />
+            </div>
+            <div className="border-border/40 flex min-h-10 items-center justify-between gap-3 border-t px-6 py-3 text-xs">
+              <div className="min-w-0 flex-1">
+                {rawError ? (
+                  <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
+                    <IconAlertTriangle className="size-3 shrink-0" />
+                    <span className="truncate">{rawError}</span>
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {t("pages.agent.editor.raw_char_count", {
+                      count: rawDraft.length,
+                      defaultValue: "{{count}} caracteres",
+                    })}
                   </span>
                 )}
               </div>
-              {canCreateAgents && (
+              <DialogFooter className="shrink-0">
                 <Button
-                  size="sm"
-                  onClick={handleCreateOpen}
-                  className="h-7 gap-1 px-2.5 text-xs"
+                  variant="outline"
+                  onClick={() => handleRawOpenChange(false)}
+                  disabled={applyMutation.isPending}
                 >
-                  <IconPlus className="size-3.5" />
-                  {t("pages.agent.editor.new_agent", "Novo agente")}
+                  {t("pages.agent.templates.cancel")}
                 </Button>
-              )}
-            </div>
-
-            <div className="border-border/40 space-y-2 border-b px-3 py-2.5">
-              <div className="relative">
-                <IconSearch className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
-                <input
-                  type="search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Buscar agente…"
-                  className="border-border/60 bg-muted/30 placeholder:text-muted-foreground/60 focus:ring-primary/20 w-full rounded-lg border py-1.5 pr-3 pl-8 text-xs outline-none focus:ring-2"
-                  aria-label="Buscar agentes"
-                />
-              </div>
-              <div
-                role="group"
-                aria-label="Filtrar agentes"
-                className="flex flex-wrap items-center gap-1"
-              >
-                {(["all", "active", "inactive"] as const).map((s) => {
-                  const active = listStatus === s
-                  const label =
-                    s === "all"
-                      ? "Todos"
-                      : s === "active"
-                        ? "Ativos"
-                        : "Inativos"
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setListStatus(s)}
-                      aria-pressed={active}
-                      className={cn(
-                        "focus-visible:ring-ring rounded-full border px-2 py-0.5 text-[10px] font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
-                        active
-                          ? "border-primary bg-primary/10 text-foreground"
-                          : "border-border/60 text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {label}
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <label
-                  htmlFor="agent-sort"
-                  className="text-muted-foreground text-[10px] tracking-wide uppercase"
-                >
-                  Ordenar
-                </label>
-                <select
-                  id="agent-sort"
-                  value={listSort}
-                  onChange={(e) => setListSort(e.target.value as AgentListSort)}
-                  className="border-border/60 bg-muted/30 focus:ring-primary/20 rounded-md border px-2 py-0.5 text-[11px] outline-none focus:ring-2"
-                  aria-label="Ordenar agentes"
-                >
-                  <option value="default">Padrão primeiro</option>
-                  <option value="name">Nome A–Z</option>
-                  <option value="edited">Última edição</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {editorStateQuery.isLoading ? (
-                <div className="space-y-1 p-2">
-                  {[1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5"
-                    >
-                      <Skeleton className="size-10 rounded-xl" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-3 w-3/4 rounded" />
-                        <Skeleton className="h-2.5 w-1/2 rounded" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : filteredAgents.length === 0 ? (
-                <div className="text-muted-foreground flex flex-col items-center gap-2 py-10 text-center text-xs">
-                  <IconSearch className="size-6 opacity-40" />
-                  <p>Nenhum agente encontrado</p>
-                </div>
-              ) : (
-                <div className="space-y-0.5 p-2">
-                  {filteredAgents.map((agent) => {
-                    const isSelected = agent.id === selectedAgentId
-                    const isActive = agent.active !== false
-                    return (
-                      <div
-                        key={agent.id}
-                        className={`group focus-within:ring-ring relative flex min-w-0 items-center gap-1 rounded-xl pr-1 transition-all duration-150 focus-within:ring-2 ${
-                          isSelected
-                            ? "bg-primary/8 ring-primary/20 ring-1"
-                            : "hover:bg-muted/60"
-                        }`}
-                      >
-                        {isSelected && (
-                          <span className="bg-primary absolute top-1/2 left-0 h-5 w-[3px] -translate-y-1/2 rounded-r-full" />
-                        )}
-                        <button
-                          type="button"
-                          aria-pressed={isSelected}
-                          aria-current={isSelected ? "true" : undefined}
-                          onClick={() => setSelectedAgentId(agent.id)}
-                          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left focus:outline-none"
-                        >
-                          <AgentAvatar agent={agent} size="sm" />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`truncate text-sm font-medium ${
-                                  isSelected
-                                    ? "text-foreground"
-                                    : "text-foreground/80 group-hover:text-foreground"
-                                }`}
-                              >
-                                {agent.name || agent.id}
-                              </span>
-                              {!isActive && (
-                                <span className="size-1.5 shrink-0 rounded-full bg-red-400" />
-                              )}
-                            </div>
-                            <p className="text-muted-foreground/70 mt-1 truncate text-[11px]">
-                              {agentRoleLabel(agent)}
-                            </p>
-                          </div>
-                        </button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label={`Mais ações para ${agent.name || agent.id}`}
-                              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring focus-visible:ring-offset-background inline-flex size-7 shrink-0 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-                            >
-                              <IconDotsVertical
-                                className="size-4"
-                                aria-hidden="true"
-                              />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem
-                              onClick={() => setSelectedAgentId(agent.id)}
-                            >
-                              <IconEdit className="size-3.5" />
-                              Selecionar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDuplicateAgent(agent)}
-                              disabled={
-                                duplicateMutation.isPending || !canCreateAgents
-                              }
-                            >
-                              <IconCopy className="size-3.5" />
-                              Duplicar agente
-                            </DropdownMenuItem>
-                            {agent.id !== "main" && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() => handleDeleteAgent(agent)}
-                                  disabled={deleteMutation.isPending}
-                                  className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/40"
-                                >
-                                  <IconTrash className="size-3.5" />
-                                  Remover
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </aside>
-
-          {/* ── main content ─────────────────────────────────────── */}
-          <main className="flex min-w-0 flex-col overflow-hidden">
-            {/* mobile agent selector */}
-            <div className="border-border/40 flex items-center gap-2 border-b px-4 py-2.5 lg:hidden">
-              <Select
-                value={selectedAgentId}
-                onValueChange={setSelectedAgentId}
-              >
-                <SelectTrigger className="h-8 flex-1 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {agents.map((a) => (
-                    <SelectItem key={a.id} value={a.id} className="text-xs">
-                      {a.name || a.id}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {canCreateAgents && (
-                <Button size="sm" onClick={handleCreateOpen} className="h-8">
-                  <IconPlus className="size-3.5" />
-                </Button>
-              )}
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-6 py-6">
-              {isLoadingMain ? (
-                <LoadingSkeleton />
-              ) : !selectedAgent ? (
-                <EmptyState
-                  onCreate={handleCreateOpen}
-                  canCreate={canCreateAgents}
-                />
-              ) : (
-                <UnifiedAgentEditor
-                  agent={selectedAgent}
-                  configured={configured}
-                  configData={configData}
-                  resolvedPayload={resolvedPayload}
-                  template={template}
-                  selectedAgentId={selectedAgentId}
-                  selectedProfile={selectedProfile}
-                  selectedRoleConfigDraft={selectedRoleConfigDraft}
-                  selectedRoleConfig={selectedRoleConfig}
-                  mainAgentID={mainAgentID}
-                  mainAllowAgents={mainAllowAgents}
-                  assistantJIDs={assistantJIDs}
-                  assistantChats={assistantChats}
-                  internalAgents={internalAgents}
-                  isSavingOrchestration={saveOrchestrationMutation.isPending}
-                  isLoadingOrchestration={editorStateQuery.isLoading}
-                  isTogglingActive={activeMutation.isPending}
-                  isDeleting={deleteMutation.isPending}
-                  checklistSteps={checklistSteps}
-                  isReadyToActivate={isReady}
-                  saveState={saveState}
-                  lastSavedAt={lastSavedAt}
-                  saveErrorMsg={saveErrorMsg}
-                  onSave={handleManualSave}
-                  onDiscard={handleDiscardOrchestration}
-                  activeTab={activeTab}
-                  onTabChange={setActiveTab}
-                  advancedJsonMode={advancedJsonMode}
-                  onAdvancedJsonModeChange={setAdvancedJsonMode}
-                  messages={chatMessages}
-                  chatInput={chatInput}
-                  isSending={sendingChat}
-                  proposals={proposals}
-                  quickPrompts={quickPrompts}
-                  canCreate={canCreateAgents}
-                  onCreate={handleCreateOpen}
-                  onConfigure={handleConfigureSelectedAgent}
-                  onEditPrompt={handleEdit}
-                  onOpenRawEditor={handleOpenRawEditor}
-                  onToggleActive={() => handleToggleAgentActive(selectedAgent)}
-                  onDelete={
-                    selectedAgent.id !== "main"
-                      ? () => handleDeleteAgent(selectedAgent)
-                      : undefined
-                  }
-                  onUpdateProfile={updateSelectedProfile}
-                  onUpdateRoleConfig={updateSelectedRoleConfig}
-                  onRoleConfigDraftChange={(v) =>
-                    setRoleConfigDrafts((d) => ({ ...d, [selectedAgentId]: v }))
-                  }
-                  onMainAgentChange={(id) => {
-                    setMainAgentID(id)
-                    setMainAllowAgents((c) => c.filter((x) => x !== id))
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const p = parseRawDraft()
+                    if (p) setRawDraft(JSON.stringify(p, null, 2))
                   }}
-                  onToggleMainAllow={(id) =>
-                    setMainAllowAgents((c) =>
-                      c.includes(id) ? c.filter((x) => x !== id) : [...c, id],
-                    )
-                  }
-                  onAssistantJIDsChange={setAssistantJIDs}
-                  onAssistantChatsChange={setAssistantChats}
-                  onSaveOrchestration={() => saveOrchestrationMutation.mutate()}
-                  onRefreshOrchestration={() =>
-                    void queryClient.invalidateQueries({
-                      queryKey: ["agent-editor-state"],
-                    })
-                  }
-                  onChatInputChange={setChatInput}
-                  onSendChat={handleSendChat}
-                  onPromptSelect={setChatInput}
-                  onProposalInspect={(proposal) =>
-                    setChatInput(
-                      `Revise esta proposta salva e me diga quais arquivos foram gerados, próximos ajustes e pendências:\n\n${JSON.stringify(proposal, null, 2)}`,
-                    )
-                  }
-                />
-              )}
+                  disabled={applyMutation.isPending}
+                >
+                  <IconBraces className="size-4" />
+                  {t("pages.agent.editor.raw_format", "Formatar")}
+                </Button>
+                <Button
+                  onClick={handleSaveRawDraft}
+                  disabled={applyMutation.isPending}
+                >
+                  {applyMutation.isPending ? (
+                    <IconLoader2 className="size-4 animate-spin" />
+                  ) : (
+                    <IconCheck className="size-4" />
+                  )}
+                  {t("pages.agent.editor.raw_save", "Salvar JSON")}
+                </Button>
+              </DialogFooter>
             </div>
-          </main>
-        </div>
-      </div>
+          </DialogContent>
+        </Dialog>
 
-      {/* ── dialogs ───────────────────────────────────────────────── */}
-      <AgentWizard
-        open={createOpen && canCreateAgents}
-        existingIDs={agents.map((a) => a.id)}
-        isSubmitting={wizardMutation.isPending}
-        onSubmit={(draft, payload) => wizardMutation.mutate({ draft, payload })}
-        onTest={(draft, payload) =>
-          wizardMutation.mutate({ draft, payload, openAfter: true })
-        }
-        onCancel={() => setCreateOpen(false)}
-      />
-
-      <Dialog open={rawOpen} onOpenChange={handleRawOpenChange}>
-        <DialogContent className="flex h-[min(86vh,760px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
-          <DialogHeader className="border-border/40 border-b px-6 py-4 pr-14">
-            <DialogTitle>
-              {t("pages.agent.editor.raw_json_title", "JSON bruto do agente")}
-            </DialogTitle>
-            <DialogDescription>
-              {t(
-                "pages.agent.editor.raw_json_description",
-                "Editor avançado do payload exato salvo no workspace deste agente.",
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="min-h-0 flex-1 p-4">
-            <CodeEditor
-              value={rawDraft}
-              onChange={(value) => {
-                setRawDraft(value)
-                if (rawError) setRawError(null)
-              }}
-              language="json"
-              path={`${selectedAgentId}/agent_config.json`}
-              ariaLabel={t(
-                "pages.agent.editor.raw_json_title",
-                "JSON bruto do agente",
-              )}
-              className="h-full min-h-[360px]"
-            />
-          </div>
-          <div className="border-border/40 flex min-h-10 items-center justify-between gap-3 border-t px-6 py-3 text-xs">
-            <div className="min-w-0 flex-1">
-              {rawError ? (
-                <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
-                  <IconAlertTriangle className="size-3 shrink-0" />
-                  <span className="truncate">{rawError}</span>
-                </span>
-              ) : (
-                <span className="text-muted-foreground">
-                  {t("pages.agent.editor.raw_char_count", {
-                    count: rawDraft.length,
-                    defaultValue: "{{count}} caracteres",
-                  })}
-                </span>
-              )}
-            </div>
-            <DialogFooter className="shrink-0">
-              <Button
-                variant="outline"
-                onClick={() => handleRawOpenChange(false)}
-                disabled={applyMutation.isPending}
-              >
-                {t("pages.agent.templates.cancel")}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const p = parseRawDraft()
-                  if (p) setRawDraft(JSON.stringify(p, null, 2))
-                }}
-                disabled={applyMutation.isPending}
-              >
-                <IconBraces className="size-4" />
-                {t("pages.agent.editor.raw_format", "Formatar")}
-              </Button>
-              <Button
-                onClick={handleSaveRawDraft}
-                disabled={applyMutation.isPending}
-              >
-                {applyMutation.isPending ? (
-                  <IconLoader2 className="size-4 animate-spin" />
-                ) : (
-                  <IconCheck className="size-4" />
-                )}
-                {t("pages.agent.editor.raw_save", "Salvar JSON")}
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {agentKind(selectedAgentId) === "attendant" ? (
-        <TemplateConfigSheet
-          open={editing}
-          template={template}
-          draft={draft}
-          isApplying={applyMutation.isPending}
-          isSavingTemplate={false}
-          isResettingTemplate={false}
-          hasSavedOverride={false}
-          installedSkills={installedSkills}
-          onDraftChange={setDraft}
-          onApply={() => {
-            if (draft) {
-              applyMutation.mutate(
-                substituteAgentPlaceholders({
-                  ...draft,
-                  agent_id: draft.agent_id ?? selectedAgentId,
-                }),
-              )
-            }
-          }}
-          onSaveTemplate={() => {}}
-          onResetTemplate={() => {}}
-          onOpenChange={handleSheetOpenChange}
-        />
-      ) : (
-        <SpecialistPromptSheet
-          open={editing}
-          agent={selectedAgent}
-          draft={draft}
-          installedSkills={installedSkills}
-          isApplying={applyMutation.isPending}
-          onDraftChange={setDraft}
-          onApply={() => {
-            if (draft) {
-              applyMutation.mutate(
-                substituteAgentPlaceholders({
-                  ...draft,
-                  agent_id: draft.agent_id ?? selectedAgentId,
-                }),
-              )
-            }
-          }}
-          onOpenChange={handleSheetOpenChange}
-        />
-      )}
-
-      {selectedAgent && (
-        <DeactivateAgentDialog
-          open={deactivateOpen}
-          agentName={selectedAgent.name || selectedAgent.id}
-          conversations={activeConversationsQuery.data ?? []}
-          isLoadingConversations={activeConversationsQuery.isLoading}
-          isSubmitting={activeMutation.isPending}
-          onConfirm={handleConfirmDeactivate}
-          onCancel={() => setDeactivateOpen(false)}
-        />
-      )}
-
-      {selectedAgent && (
-        <VersionHistoryDrawer
-          open={versionDrawerOpen}
-          agentID={selectedAgent.id}
-          currentPayload={configData.payload ?? null}
-          onRestore={handleRestoreVersion}
-          onOpenChange={setVersionDrawerOpen}
-        />
-      )}
-
-      {selectedAgent && (
-        <ChatTestDrawer
-          open={chatDrawerOpen}
-          agentName={selectedAgent.name || selectedAgent.id}
-          onOpenChange={setChatDrawerOpen}
-        >
-          <ChatTab
-            selectedAgentId={selectedAgentId}
-            selectedProfile={selectedProfile}
-            messages={chatMessages}
-            chatInput={chatInput}
-            isSending={sendingChat}
-            proposals={proposals}
-            quickPrompts={quickPrompts}
-            onChatInputChange={setChatInput}
-            onSend={handleSendChat}
-            onPromptSelect={setChatInput}
-            onProposalInspect={(proposal) =>
-              setChatInput(
-                `Revise esta proposta salva e me diga quais arquivos foram gerados, próximos ajustes e pendências:\n\n${JSON.stringify(proposal, null, 2)}`,
-              )
-            }
+        {agentKind(selectedAgentId) === "attendant" ? (
+          <TemplateConfigSheet
+            open={editing}
+            template={template}
+            draft={draft}
+            isApplying={applyMutation.isPending}
+            isSavingTemplate={false}
+            isResettingTemplate={false}
+            hasSavedOverride={false}
+            installedSkills={installedSkills}
+            onDraftChange={setDraft}
+            onApply={() => {
+              if (draft) {
+                applyMutation.mutate(
+                  substituteAgentPlaceholders({
+                    ...draft,
+                    agent_id: draft.agent_id ?? selectedAgentId,
+                  }),
+                )
+              }
+            }}
+            onSaveTemplate={() => {}}
+            onResetTemplate={() => {}}
+            onOpenChange={handleSheetOpenChange}
           />
-        </ChatTestDrawer>
-      )}
+        ) : (
+          <SpecialistPromptSheet
+            open={editing}
+            agent={selectedAgent}
+            draft={draft}
+            installedSkills={installedSkills}
+            isApplying={applyMutation.isPending}
+            onDraftChange={setDraft}
+            onApply={() => {
+              if (draft) {
+                applyMutation.mutate(
+                  substituteAgentPlaceholders({
+                    ...draft,
+                    agent_id: draft.agent_id ?? selectedAgentId,
+                  }),
+                )
+              }
+            }}
+            onOpenChange={handleSheetOpenChange}
+          />
+        )}
+
+        {selectedAgent && (
+          <DeactivateAgentDialog
+            open={deactivateOpen}
+            agentName={selectedAgent.name || selectedAgent.id}
+            conversations={activeConversationsQuery.data ?? []}
+            isLoadingConversations={activeConversationsQuery.isLoading}
+            isSubmitting={activeMutation.isPending}
+            onConfirm={handleConfirmDeactivate}
+            onCancel={() => setDeactivateOpen(false)}
+          />
+        )}
+
+        {selectedAgent && (
+          <VersionHistoryDrawer
+            open={versionDrawerOpen}
+            agentID={selectedAgent.id}
+            currentPayload={configData.payload ?? null}
+            onRestore={handleRestoreVersion}
+            onOpenChange={setVersionDrawerOpen}
+          />
+        )}
+
+        {selectedAgent && (
+          <ChatTestDrawer
+            open={chatDrawerOpen}
+            agentName={selectedAgent.name || selectedAgent.id}
+            onOpenChange={setChatDrawerOpen}
+          >
+            <ChatTab
+              selectedAgentId={selectedAgentId}
+              selectedProfile={selectedProfile}
+              messages={chatMessages}
+              chatInput={chatInput}
+              isSending={sendingChat}
+              proposals={proposals}
+              quickPrompts={quickPrompts}
+              onChatInputChange={setChatInput}
+              onSend={handleSendChat}
+              onPromptSelect={setChatInput}
+              onProposalInspect={(proposal) =>
+                setChatInput(
+                  `Revise esta proposta salva e me diga quais arquivos foram gerados, próximos ajustes e pendências:\n\n${JSON.stringify(proposal, null, 2)}`,
+                )
+              }
+            />
+          </ChatTestDrawer>
+        )}
       </div>
       <PendingHandoffsSidebar className="hidden xl:flex" />
     </div>
@@ -2523,11 +2506,11 @@ function UnifiedAgentEditor({
 }) {
   void ready
   return (
-    <div className="animate-in fade-in-0 slide-in-from-bottom-2 flex flex-col gap-6 pb-0 duration-300">
+    <div className="animate-in fade-in-0 flex flex-col gap-5 pb-0 duration-200">
       <Tabs
         value={activeTab}
         onValueChange={(v) => onTabChange(v as AgentEditorTab)}
-        className="gap-4"
+        className="gap-3"
       >
         <TabsNav steps={checklistSteps} />
 
@@ -2660,145 +2643,122 @@ function IdentityProfileSection({
   const isActive = agent.active !== false
 
   return (
-    <section className="border-border/40 bg-card/60 relative overflow-hidden rounded-2xl border p-6 shadow-sm">
-      <div className="from-primary/5 pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent" />
-      <div className="relative space-y-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-          <AgentAvatar agent={agent} size="lg" />
-          <div className="min-w-0 flex-1 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-foreground text-xl font-semibold tracking-tight">
-                {selectedProfile?.name || agent.name || agent.id}
-              </h2>
-              {agent.default && <DefaultBadge />}
-              <StatusBadge active={isActive} />
-            </div>
+    <section className="space-y-4">
+      <div
+        className={cn(
+          editorPanelClass,
+          "flex flex-col gap-4 sm:flex-row sm:items-start",
+        )}
+      >
+        <AgentAvatar agent={agent} size="lg" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-foreground text-xl font-semibold tracking-tight">
+              {selectedProfile?.name || agent.name || agent.id}
+            </h2>
+            {agent.default && <DefaultBadge />}
+            <StatusBadge active={isActive} />
+          </div>
             <p className="text-muted-foreground text-sm">
               {agentRoleLabel(agent)}
             </p>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <ReadyStatusBadges agent={agent} />
-              <GatewayStatusBadge
-                boundJID={agent.access?.whatsapp_allowed_senders?.[0]}
-                onLinkClick={() => {
-                  window.location.href = "/channels?focus=whatsapp"
-                }}
-              />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className="text-muted-foreground/60 hover:text-foreground cursor-help text-[10px] tracking-wide uppercase"
-                    aria-label="Ver identificador técnico"
-                  >
-                    ID técnico
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent className="font-mono text-xs">
-                  {agent.id}
-                </TooltipContent>
-              </Tooltip>
-            </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {!isActive && (
+        <div className="flex shrink-0 items-center gap-2">
+          {!isActive && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={onToggleActive}
+              disabled={isTogglingActive}
+              className="gap-1.5"
+            >
+              {isTogglingActive ? (
+                <IconLoader2
+                  className="size-4 animate-spin"
+                  aria-hidden="true"
+                />
+              ) : (
+                <IconPlayerPlay className="size-4" aria-hidden="true" />
+              )}
+              Ativar
+            </Button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
-                variant="default"
+                variant="outline"
                 size="sm"
-                onClick={onToggleActive}
-                disabled={isTogglingActive}
-                className="gap-1.5"
+                aria-label={`Ações para ${agent.name || agent.id}`}
+                className="gap-1"
               >
-                {isTogglingActive ? (
-                  <IconLoader2
-                    className="size-4 animate-spin"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <IconPlayerPlay className="size-4" aria-hidden="true" />
-                )}
-                Ativar
+                <IconDotsVertical className="size-4" aria-hidden="true" />
+                Mais
               </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  aria-label={`Ações para ${agent.name || agent.id}`}
-                  className="gap-1"
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {isActive && (
+                <DropdownMenuItem
+                  onClick={onToggleActive}
+                  disabled={isTogglingActive || (agent.default && isActive)}
+                  className="text-amber-700 focus:bg-amber-50 focus:text-amber-800 dark:text-amber-300 dark:focus:bg-amber-950/40"
                 >
-                  <IconDotsVertical className="size-4" aria-hidden="true" />
-                  Mais
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {isActive && (
+                  {isTogglingActive ? (
+                    <IconLoader2
+                      className="size-3.5 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <IconPlayerPause className="size-3.5" aria-hidden="true" />
+                  )}
+                  Desativar atendimento
+                </DropdownMenuItem>
+              )}
+              {onDelete && (
+                <>
+                  {isActive && <DropdownMenuSeparator />}
                   <DropdownMenuItem
-                    onClick={onToggleActive}
-                    disabled={isTogglingActive || (agent.default && isActive)}
-                    className="text-amber-700 focus:bg-amber-50 focus:text-amber-800 dark:text-amber-300 dark:focus:bg-amber-950/40"
+                    onClick={onDelete}
+                    disabled={isDeleting}
+                    className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/40"
                   >
-                    {isTogglingActive ? (
+                    {isDeleting ? (
                       <IconLoader2
                         className="size-3.5 animate-spin"
                         aria-hidden="true"
                       />
                     ) : (
-                      <IconPlayerPause
-                        className="size-3.5"
-                        aria-hidden="true"
-                      />
+                      <IconTrash className="size-3.5" aria-hidden="true" />
                     )}
-                    Desativar atendimento
+                    Remover agente
                   </DropdownMenuItem>
-                )}
-                {onDelete && (
-                  <>
-                    {isActive && <DropdownMenuSeparator />}
-                    <DropdownMenuItem
-                      onClick={onDelete}
-                      disabled={isDeleting}
-                      className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/40"
-                    >
-                      {isDeleting ? (
-                        <IconLoader2
-                          className="size-3.5 animate-spin"
-                          aria-hidden="true"
-                        />
-                      ) : (
-                        <IconTrash className="size-3.5" aria-hidden="true" />
-                      )}
-                      Remover agente
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
+      </div>
 
-        {selectedProfile && (
-          <div className="border-border/60 bg-background/70 rounded-xl border p-4">
-            <SectionHeader title="Identidade" icon={IconUserShield} />
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Nome do agente</Label>
-                <Input
-                  value={selectedProfile.name}
-                  onChange={(e) => onUpdateProfile({ name: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Imagem</Label>
-                <AvatarUpload
-                  value={selectedProfile.imageURL}
-                  onChange={(next) => onUpdateProfile({ imageURL: next })}
-                />
-              </div>
+      {selectedProfile && (
+        <div className={editorPanelClass}>
+          <SectionHeader title="Identidade" icon={IconUserShield} />
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nome do agente</Label>
+              <Input
+                value={selectedProfile.name}
+                onChange={(e) => onUpdateProfile({ name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Imagem</Label>
+              <AvatarUpload
+                value={selectedProfile.imageURL}
+                onChange={(next) => onUpdateProfile({ imageURL: next })}
+              />
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </section>
   )
 }
@@ -2845,7 +2805,7 @@ function OperationalRoleSection({
   }
 
   return (
-    <section className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
+    <section className={editorPanelClass}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-2">
           <SectionHeader title="Papel operacional" icon={IconSparkles} />
@@ -2869,7 +2829,7 @@ function OperationalRoleSection({
         </div>
         <label
           htmlFor={advancedToggleID}
-          className="border-border/60 bg-muted/40 flex cursor-pointer items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium"
+          className="border-border/60 bg-background flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1 text-[11px] font-medium"
         >
           <Switch
             id={advancedToggleID}
@@ -2910,7 +2870,7 @@ function OperationalRoleSection({
           onChange={onUpdateRoleConfig}
         />
       ) : (
-        <div className="text-muted-foreground rounded-xl border border-dashed p-4 text-sm">
+        <div className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
           Nenhum perfil operacional encontrado para {selectedAgentId}.
         </div>
       )}
@@ -2960,7 +2920,7 @@ function PromptWorkspaceSection({
 
   return (
     <section className="space-y-4">
-      <div className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
+      <div className={editorPanelClass}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-2">
             <SectionHeader title="Prompt & Workspace" icon={IconSettings} />
@@ -3089,7 +3049,7 @@ function AccessRoutingSection({
   const selectedSubagents = agent.subagents?.allow_agents ?? []
 
   return (
-    <section className="border-border/40 bg-card/60 rounded-2xl border p-5 shadow-sm">
+    <section className={editorPanelClass}>
       <SectionHeader title="Acesso & Roteamento" icon={IconShield} />
       <p className="text-muted-foreground mt-1 text-xs">
         Esta seção salva acesso, agente principal e delegação em config.json.

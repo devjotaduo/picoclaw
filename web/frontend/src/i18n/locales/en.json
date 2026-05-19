@@ -27,13 +27,19 @@
     "admin_clone": "Clone tenant"
   },
   "launcherLogin": {
-    "title": "Entrar",
-    "description": "Digite a senha do dashboard para continuar.",
-    "passwordLabel": "Senha",
-    "passwordPlaceholder": "Digite a senha",
-    "submit": "Entrar",
-    "errorInvalid": "Senha incorreta. Tente novamente.",
-    "errorNetwork": "Erro de rede. Tente novamente."
+    "title": "Sign in to Jota Duo",
+    "description": "Use the operator email and Jota Duo dashboard password to continue.",
+    "emailLabel": "Email",
+    "emailPlaceholder": "operator@company.com",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Enter the password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "submit": "Sign in",
+    "errorEmailRequired": "Enter a valid email.",
+    "errorPasswordRequired": "Enter the password.",
+    "errorInvalid": "Incorrect password. Try again.",
+    "errorNetwork": "Network error. Try again."
   },
   "rootLayout": {
     "authErrorPrefix": "Erro do serviço de autenticação",
@@ -109,6 +115,7 @@
     "uploadedImage": "Imagem enviada",
     "recordAudio": "Record audio",
     "stopRecording": "Stop recording",
+    "recording": "Recording",
     "removeAudio": "Remove audio",
     "audioUnsupported": "Your browser does not support audio recording.",
     "audioReadFailed": "Could not process the recorded audio.",

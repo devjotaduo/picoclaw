@@ -8,12 +8,16 @@ export type LoginResult =
 
 export async function postLauncherDashboardLogin(
   password: string,
+  email?: string,
 ): Promise<LoginResult> {
   const res = await fetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ password: password.trim() }),
+    body: JSON.stringify({
+      email: email?.trim(),
+      password: password.trim(),
+    }),
   })
   if (res.ok) return { ok: true }
 

@@ -11,7 +11,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <TooltipProvider>
       <SidebarProvider
-        defaultOpen={false}
+        defaultOpen={true}
+        open={true}
         className="flex h-dvh flex-col overflow-hidden"
       >
         <AppHeader />

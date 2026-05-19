@@ -26,11 +26,17 @@
     "admin_clone": "克隆租户"
   },
   "launcherLogin": {
-    "title": "登录",
-    "description": "请输入控制台密码以继续。",
+    "title": "登录 Jota Duo",
+    "description": "使用操作员邮箱和 Jota Duo 控制台密码继续。",
+    "emailLabel": "邮箱",
+    "emailPlaceholder": "operator@company.com",
     "passwordLabel": "密码",
     "passwordPlaceholder": "输入密码",
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码",
     "submit": "登录",
+    "errorEmailRequired": "请输入有效邮箱。",
+    "errorPasswordRequired": "请输入密码。",
     "errorInvalid": "密码错误，请重试。",
     "errorNetwork": "网络错误，请重试。"
   },
@@ -104,6 +110,7 @@
     "uploadedImage": "已上传图片",
     "recordAudio": "录制音频",
     "stopRecording": "停止录制",
+    "recording": "录制中",
     "removeAudio": "移除音频",
     "audioUnsupported": "您的浏览器不支持音频录制。",
     "audioReadFailed": "无法处理录制的音频。",

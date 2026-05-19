@@ -114,7 +114,7 @@ export function SaveBar({
       role="region"
       aria-label="Barra de salvamento"
       className={cn(
-        "border-border/60 bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-2 border-t px-4 py-3 backdrop-blur",
+        "border-border/60 bg-background flex flex-wrap items-center justify-between gap-2 border-t px-4 py-3",
       )}
     >
       <StateBadge

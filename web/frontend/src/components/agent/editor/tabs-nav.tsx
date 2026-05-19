@@ -33,10 +33,10 @@ const STATUS_ICON: Record<
 }
 
 const STATUS_CLASS: Record<StepValidation["status"], string> = {
-  complete: "text-emerald-600 dark:text-emerald-400",
-  partial: "text-amber-600 dark:text-amber-400",
+  complete: "text-muted-foreground",
+  partial: "text-muted-foreground",
   empty: "text-muted-foreground",
-  error: "text-red-600 dark:text-red-400",
+  error: "text-destructive",
 }
 
 export const TABS_ORDER: AgentEditorTab[] = [
@@ -62,13 +62,17 @@ export function TabsNav({ steps }: TabsNavProps) {
     <TabsList
       role="tablist"
       aria-label="Seções do editor de agente"
-      className="flex h-auto w-full flex-wrap gap-1 p-1"
+      className="bg-card border-border/60 flex h-auto w-full flex-wrap justify-start gap-1 rounded-lg border p-1"
     >
       {TABS_ORDER.map((id) => {
         const label = TAB_LABELS[id]
         if (id === "test") {
           return (
-            <TabsTrigger key={id} value={id} className="gap-1.5">
+            <TabsTrigger
+              key={id}
+              value={id}
+              className="h-8 gap-1.5 rounded-md px-3 text-xs"
+            >
               <IconMessageCircle className="size-3.5" aria-hidden="true" />
               {label}
             </TabsTrigger>
@@ -87,11 +91,12 @@ export function TabsNav({ steps }: TabsNavProps) {
                 : "vazio"
           : "vazio"
         return (
-          <TabsTrigger key={id} value={id} className="gap-1.5">
-            <Icon
-              className={cn("size-3.5", iconClass)}
-              aria-hidden="true"
-            />
+          <TabsTrigger
+            key={id}
+            value={id}
+            className="h-8 gap-1.5 rounded-md px-3 text-xs"
+          >
+            <Icon className={cn("size-3.5", iconClass)} aria-hidden="true" />
             {label}
             <span className="sr-only">{statusText}</span>
           </TabsTrigger>

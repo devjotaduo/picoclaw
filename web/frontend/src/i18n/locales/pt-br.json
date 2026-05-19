@@ -27,11 +27,17 @@
     "admin_clone": "Clonar tenant"
   },
   "launcherLogin": {
-    "title": "Entrar",
-    "description": "Digite a senha do dashboard para continuar.",
+    "title": "Entrar na Jota Duo",
+    "description": "Use o email do operador e a senha do dashboard da Jota Duo para continuar.",
+    "emailLabel": "Email",
+    "emailPlaceholder": "operador@empresa.com",
     "passwordLabel": "Senha",
     "passwordPlaceholder": "Digite a senha",
+    "showPassword": "Mostrar senha",
+    "hidePassword": "Ocultar senha",
     "submit": "Entrar",
+    "errorEmailRequired": "Digite um email válido.",
+    "errorPasswordRequired": "Digite a senha.",
     "errorInvalid": "Senha incorreta. Tente novamente.",
     "errorNetwork": "Erro de rede. Tente novamente."
   },
@@ -109,6 +115,7 @@
     "uploadedImage": "Imagem enviada",
     "recordAudio": "Gravar áudio",
     "stopRecording": "Parar gravação",
+    "recording": "Gravando",
     "removeAudio": "Remover áudio",
     "audioUnsupported": "Seu navegador não suporta gravação de áudio.",
     "audioReadFailed": "Não foi possível processar o áudio gravado.",
