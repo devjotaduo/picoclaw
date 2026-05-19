@@ -1,4 +1,5 @@
 .PHONY: all build install uninstall clean help test cover build-all lint-docs \
+	build-whatsapp-native-local \
 	saas-dev-sync saas-dev-controlplane saas-dev-tenants saas-dev-admin-ui saas-dev-tenant-ui
 
 # Build variables
@@ -255,7 +256,22 @@ endif
 build-launcher-frontend:
 	@$(MAKE) -C web build-frontend
 
-## build-whatsapp-native: Build with WhatsApp native (whatsmeow) support; larger binary
+## build-whatsapp-native-local: Build current platform with WhatsApp native (whatsmeow) support
+build-whatsapp-native-local: generate
+	@echo "Building $(BINARY_NAME)$(EXT) with WhatsApp native for $(PLATFORM)/$(ARCH)..."
+ifeq ($(OS),Windows_NT)
+	@$(POWERSHELL) "New-Item -ItemType Directory -Force -Path '$(BUILD_DIR)' | Out-Null"
+	@$(GO) build -tags $(GO_BUILD_TAGS),whatsapp_native -ldflags "$(LDFLAGS)" -o $(BINARY_PATH)$(EXT) ./$(CMD_DIR)
+	@$(POWERSHELL) "Copy-Item -LiteralPath '$(BINARY_PATH)$(EXT)' -Destination '$(BUILD_DIR)/$(BINARY_NAME)$(EXT)' -Force"
+else
+	@mkdir -p $(BUILD_DIR)
+	@GOOS=$(PLATFORM) GOARCH=$(ARCH) $(GO) build -tags $(GO_BUILD_TAGS),whatsapp_native -ldflags "$(LDFLAGS)" -o $(BINARY_PATH)$(EXT) ./$(CMD_DIR)
+	@echo "Build complete: $(BINARY_PATH)$(EXT)"
+	@$(LNCMD) $(BINARY_NAME)-$(PLATFORM)-$(ARCH)$(EXT) $(BUILD_DIR)/$(BINARY_NAME)$(EXT)
+endif
+	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)$(EXT)"
+
+## build-whatsapp-native: Build with WhatsApp native (whatsmeow) support for release platforms
 build-whatsapp-native: generate
 ## @echo "Building $(BINARY_NAME) with WhatsApp native for $(PLATFORM)/$(ARCH)..."
 	@echo "Building for multiple platforms..."
