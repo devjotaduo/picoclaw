@@ -37,6 +37,19 @@ providers:
     directory: /etc/traefik/dynamic
     watch: true
 
-# certificatesResolvers are defined via docker-compose `command:` flags so the
-# `${LE_EMAIL}` placeholder gets interpolated by docker-compose (Traefik does
-# not interpolate env vars inside the static YAML).
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      # Hardcoded for the Jotaduo deployment — Traefik does NOT interpolate
+      # env vars inside the static YAML (so `${LE_EMAIL}` would be sent
+      # literally to Let's Encrypt and rejected as "unable to parse email").
+      # If you fork this stack, swap this to your own contact address.
+      email: "dev@jotaduo.com"
+      storage: "/letsencrypt/acme.json"
+      # HTTP-01 challenge: works without a Cloudflare DNS API token. Each
+      # tenant subdomain gets its own cert lazily — the tenant-router
+      # systemd watcher (docker/saas/scripts/tenant-router/) writes a
+      # concrete Host() router per running tenant so Traefik knows what to
+      # request a cert for. Wildcard via DNS-01 would need CF_DNS_API_TOKEN.
+      httpChallenge:
+        entryPoint: web

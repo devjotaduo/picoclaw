@@ -1,0 +1,18 @@
+[Unit]
+Description=Picoclaw: regenerate Traefik dynamic config when tenant containers change
+After=docker.service network.target
+Wants=docker.service
+
+[Service]
+Type=simple
+Environment=SAAS_BASE_DOMAIN=jotaduo.com
+Environment=DEBOUNCE_SECONDS=3
+ExecStart=/usr/local/sbin/picoclaw-tenant-router-watch
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=picoclaw-tenant-router
+
+[Install]
+WantedBy=multi-user.target

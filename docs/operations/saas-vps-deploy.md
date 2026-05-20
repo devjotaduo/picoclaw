@@ -143,7 +143,39 @@ docker compose -f docker/saas/docker-compose.yml --env-file .env ps
 docker logs -f traefik     # cert issuance lands within ~30s after first request
 ```
 
-## 8. Bootstrap admin
+## 8. Install the tenant-router watcher
+
+Traefik's `letsencrypt` resolver issues a cert lazily per concrete `Host()`
+rule. The controlplane router uses a `HostRegexp` to catch every tenant
+subdomain at request time, but Traefik never pre-issues certs for regex
+matches — so the first request to `https://<sub>.${SAAS_BASE_DOMAIN}/`
+fails the TLS handshake with `unrecognized name`.
+
+The watcher fixes this: it listens to docker events for tenant containers
+(`label=picoclaw.saas.managed=true`) and writes a per-tenant `Host()`
+router into `docker/saas/traefik/dynamic/tenants.yml`. Traefik picks the
+file up via its file-watcher and requests the cert lazily.
+
+Install once on the VPS as root:
+
+```bash
+sudo docker/saas/scripts/tenant-router/install.sh
+# or for a different base domain:
+sudo SAAS_BASE_DOMAIN=example.com docker/saas/scripts/tenant-router/install.sh
+```
+
+Verify:
+
+```bash
+systemctl status picoclaw-tenant-router.service
+journalctl -u picoclaw-tenant-router.service -f
+```
+
+The unit runs `picoclaw-tenant-router-watch` which calls
+`picoclaw-traefik-tenants` on each `create`/`start`/`die`/`destroy`/`rename`
+of a tenant container, debouncing bursts (default 3s).
+
+## 9. Bootstrap admin & sanity
 
 ```bash
 NEWPWD=$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-22)
@@ -152,7 +184,7 @@ docker compose exec controlplane /usr/local/bin/picoclaw-tenantctl \
 # Save NEWPWD to a root-only file, then sign in at https://admin.${SAAS_BASE_DOMAIN}/
 ```
 
-## 9. Sanity
+### Sanity
 
 ```bash
 curl -sS https://${SAAS_BASE_DOMAIN}/                       # 200, SPA
@@ -166,10 +198,12 @@ curl -sS -X POST -H 'Content-Type: application/json' -d '{}' \
 | Symptom | Cause | Mitigation |
 |---|---|---|
 | Traefik logs `client version 1.24 is too old` | dockerproxy v0.3 + Docker ≥ 29.x | Step 2 (daemon `DOCKER_MIN_API_VERSION=1.24`) + Traefik now mounts `/var/run/docker.sock` directly |
-| ACME error `unable to parse email address` with `${LE_EMAIL}` | Traefik does not interpolate env vars in static YAML | Compose passes `--certificatesresolvers.letsencrypt.acme.email=${LE_EMAIL}` as a CLI flag |
+| ACME error `unable to parse email address` with `${LE_EMAIL}` | Traefik does not interpolate env vars in static YAML | `traefik.yml` hard-codes `email: "dev@jotaduo.com"` (fork the file when reusing the stack) |
 | `Error while building configuration ... routers cannot be a standalone element` | Empty `routers: {}` / `services: {}` at top level of a dynamic file | Removed from `security-headers.yml` |
 | `Unable to parse certificate /etc/traefik/certs/dev.pem` | `dev-tls.yml` referenced mkcert files that don't exist in prod | Renamed to `dev-tls.yml.sample`; `dev-setup.sh` activates it for local dev only |
 | Bare `${SAAS_BASE_DOMAIN}` returns TLS `unrecognized name` | Controlplane router rule did not include apex domain | Rule now matches `Host(${SAAS_BASE_DOMAIN}) \|\| Host(admin.${SAAS_BASE_DOMAIN}) \|\| HostRegexp(…)` |
+| Tenant subdomain returns TLS `unrecognized name` even though DNS resolves | Traefik does not pre-issue certs for `HostRegexp` matches; the `letsencrypt` resolver only fires per concrete `Host()` rule | `docker/saas/scripts/tenant-router/` installs a systemd watcher that writes a per-tenant `Host()` router into `traefik/dynamic/tenants.yml` on every docker container lifecycle event (debounced 3s) |
+| Sofia chat finishes but no tenant is created, intake stays `submitted` with no `linked_tenant_id` | `AutoProvision.Run` used to fire inside the chat SSE handler at `mark_qualified`, before `ClaraFinalize` had collected `contact_email` | `AutoProvision.Run` moved to `handleSubmitCompanyIntake` (POST `/submit`) where the email is finally populated |
 
 ## Operational notes
 
