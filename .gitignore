@@ -79,3 +79,5 @@ docker/data
 
 .omc/
 .claude-*.zip
+.playwright-mcp/
+docker/saas/traefik/dynamic/dev-tls.yml

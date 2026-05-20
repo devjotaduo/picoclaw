@@ -1,0 +1,182 @@
+# SaaS deploy on a fresh Linux VPS
+
+This runbook produces the same state as the live deploy on
+`155.138.210.187` (Vultr Ubuntu 24.04, Docker 29.5.1).
+
+Tested topology:
+- One VPS, public DNS pointing both `${SAAS_BASE_DOMAIN}` and
+  `*.${SAAS_BASE_DOMAIN}` to its IP.
+- Traefik terminates TLS via Let's Encrypt HTTP-01 challenge (no Cloudflare
+  token required). Wildcard DNS suffices because each tenant subdomain
+  resolves to this same VPS and Traefik requests certs lazily.
+- All services run as containers via `docker compose`.
+
+---
+
+## 0. Prerequisites
+
+- Public IP, root SSH, ports 80 + 443 open.
+- DNS A records:
+  - `${SAAS_BASE_DOMAIN}` → VPS IP
+  - `*.${SAAS_BASE_DOMAIN}` → VPS IP
+
+## 1. OS packages + Docker
+
+```bash
+apt-get update -qq
+apt-get install -y ca-certificates curl gnupg git jq python3 ufw fail2ban
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+  > /etc/apt/sources.list.d/docker.list
+apt-get update -qq
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+## 2. Lower Docker daemon `MinAPIVersion`
+
+**Required on Docker ≥ 29.x.** The daemon defaults to `MinAPIVersion=1.40`,
+but Traefik's docker provider falls back to API 1.24 when version negotiation
+fails (which it does behind `tecnativa/docker-socket-proxy:0.3`). Result:
+Traefik can't list any containers and no routes ever come up.
+
+```bash
+mkdir -p /etc/systemd/system/docker.service.d
+cat > /etc/systemd/system/docker.service.d/api-version.conf <<'CONF'
+[Service]
+Environment="DOCKER_MIN_API_VERSION=1.24"
+CONF
+systemctl daemon-reload
+systemctl restart docker
+```
+
+Verify:
+```bash
+curl -s --unix-socket /var/run/docker.sock http://localhost/version | jq .MinAPIVersion
+# → "1.24"
+```
+
+The compose's traefik service ALSO bind-mounts `/var/run/docker.sock` directly
+(no proxy), which is the second half of the fix.
+
+## 3. Filesystem layout
+
+```bash
+install -d -m 755 /srv/saas
+install -d -m 755 /srv/saas/tenants
+install -d -m 700 /srv/saas/traefik
+install -m 600 /dev/null /srv/saas/traefik/acme.json
+install -d -m 755 /srv/saas/postgres/data
+install -d -m 755 /srv/saas/controlplane/data
+install -d -m 755 /srv/saas/controlplane/data/launcher-profiles
+install -d -m 755 /srv/saas/backups
+install -d -m 755 /srv/saas/opencrm/data
+install -d -m 755 /srv/picoclaw          # workspace overlay lives here
+```
+
+## 4. Repo + workspace
+
+Either git-clone or scp a `git archive HEAD` tarball into
+`/srv/saas/picoclaw/`. Then drop the canonical workspace template into
+`/srv/picoclaw/workspace/` (this is what `OverlayWorkspace` reads when
+`PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR=/srv/picoclaw/workspace`).
+
+## 5. `.env`
+
+Generate `/srv/saas/picoclaw/.env` (mode 600). Required keys (see
+`.env.supabase.example` for the Supabase + auto-provision block):
+
+```
+SAAS_BASE_DOMAIN=jotaduo.com
+LE_EMAIL=dev@jotaduo.com
+
+POSTGRES_USER=picoclaw
+POSTGRES_PASSWORD=<openssl rand -hex 24>
+POSTGRES_DB_CONTROL=picoclaw_control
+POSTGRES_DB_LITELLM=litellm
+
+JWT_SECRET=<openssl rand -hex 32>
+PICOCLAW_SAAS_GATEWAY_SECRET=<openssl rand -hex 32>
+
+LITELLM_MASTER_KEY=sk-<openssl rand -hex 16>
+LITELLM_URL=http://litellm:4000
+OPENROUTER_API_KEY=sk-or-v1-...
+
+TENANT_IMAGE=picoclaw-launcher:latest
+TENANT_HOST_DATA_DIR=/srv/saas/tenants
+TENANT_PROFILE_DIR=/srv/saas/controlplane/data/launcher-profiles
+
+SUPABASE_PROJECT_REF=...
+SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+SUPABASE_JWT_SECRET=                # empty for ES256 projects; keyfunc uses JWKS
+SUPABASE_SITE_URL=https://jotaduo.com
+
+PICOCLAW_SAAS_AUTO_PROVISION=true
+PICOCLAW_SAAS_AUTO_PROVISION_PROFILE=default-business
+PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY=3
+PICOCLAW_SAAS_AUTO_PROVISION_LOGIN_MODE=magic_link
+PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR=/srv/picoclaw/workspace
+
+TZ=America/Sao_Paulo
+```
+
+## 6. Build images
+
+```bash
+cd /srv/saas/picoclaw
+docker compose -f docker/saas/docker-compose.yml --env-file .env pull
+docker compose -f docker/saas/docker-compose.yml --env-file .env build controlplane opencrm
+docker build -f docker/Dockerfile.launcher -t picoclaw-launcher:latest .
+```
+
+## 7. Up
+
+```bash
+docker compose -f docker/saas/docker-compose.yml --env-file .env up -d
+```
+
+Watch:
+```bash
+docker compose -f docker/saas/docker-compose.yml --env-file .env ps
+docker logs -f traefik     # cert issuance lands within ~30s after first request
+```
+
+## 8. Bootstrap admin
+
+```bash
+NEWPWD=$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-22)
+docker compose exec controlplane /usr/local/bin/picoclaw-tenantctl \
+  bootstrap-admin --email dev@jotaduo.com --password "$NEWPWD" --reset
+# Save NEWPWD to a root-only file, then sign in at https://admin.${SAAS_BASE_DOMAIN}/
+```
+
+## 9. Sanity
+
+```bash
+curl -sS https://${SAAS_BASE_DOMAIN}/                       # 200, SPA
+curl -sS https://admin.${SAAS_BASE_DOMAIN}/                 # 200, SPA
+curl -sS -X POST -H 'Content-Type: application/json' -d '{}' \
+  https://${SAAS_BASE_DOMAIN}/api/v1/public/company-intakes # 201, intake JSON
+```
+
+## Known landmines (already mitigated in repo)
+
+| Symptom | Cause | Mitigation |
+|---|---|---|
+| Traefik logs `client version 1.24 is too old` | dockerproxy v0.3 + Docker ≥ 29.x | Step 2 (daemon `DOCKER_MIN_API_VERSION=1.24`) + Traefik now mounts `/var/run/docker.sock` directly |
+| ACME error `unable to parse email address` with `${LE_EMAIL}` | Traefik does not interpolate env vars in static YAML | Compose passes `--certificatesresolvers.letsencrypt.acme.email=${LE_EMAIL}` as a CLI flag |
+| `Error while building configuration ... routers cannot be a standalone element` | Empty `routers: {}` / `services: {}` at top level of a dynamic file | Removed from `security-headers.yml` |
+| `Unable to parse certificate /etc/traefik/certs/dev.pem` | `dev-tls.yml` referenced mkcert files that don't exist in prod | Renamed to `dev-tls.yml.sample`; `dev-setup.sh` activates it for local dev only |
+| Bare `${SAAS_BASE_DOMAIN}` returns TLS `unrecognized name` | Controlplane router rule did not include apex domain | Rule now matches `Host(${SAAS_BASE_DOMAIN}) \|\| Host(admin.${SAAS_BASE_DOMAIN}) \|\| HostRegexp(…)` |
+
+## Operational notes
+
+- `acme.json` is the only critical state outside Postgres — back it up.
+- Tenant volumes live under `/srv/saas/tenants/<tenant_id>/`. The controlplane
+  creates/removes them via the docker proxy (controlplane is still gated by
+  `tecnativa/docker-socket-proxy:0.3` — Traefik is the only service that
+  bypasses it).
+- Reverse a deploy: stop the stack, restore `acme.json`, `postgres/data`, and
+  tenant volumes from backup.
