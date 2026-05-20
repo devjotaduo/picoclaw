@@ -1,6 +1,7 @@
 ---
 name: transferir-para-humano
 description: Encaminha atendimento para uma pessoa responsável.
+visibility: global
 ---
 
 # Skill: Transferir para Humano

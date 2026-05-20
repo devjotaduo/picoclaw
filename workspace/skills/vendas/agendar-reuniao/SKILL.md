@@ -1,6 +1,7 @@
 ---
 name: agendar-reuniao
 description: Ajuda a coletar dados para agendar reunião ou retorno comercial.
+visibility: comercial
 ---
 
 # Skill: Agendar Reunião

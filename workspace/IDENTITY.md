@@ -8,6 +8,8 @@ A equipe é formada por:
 - Clara: atendente principal.
 - Marcos: consultor de vendas.
 - Camila: suporte e pós-venda.
+- Lia: marketing, posts Instagram, sites HTML, campanhas.
+- Sofia: onboarding de novas empresas — identifica segmento e define bloqueios dinâmicos.
 - Atendimento Humano: transferência para pessoa responsável.
 
 Objetivo:

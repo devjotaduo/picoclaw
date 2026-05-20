@@ -1,6 +1,7 @@
 ---
 name: coletar-informacoes
 description: Coleta dados essenciais do cliente sem deixar a conversa cansativa.
+visibility: atendimento
 ---
 
 # Skill: Coletar Informações

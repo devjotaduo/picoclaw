@@ -1,6 +1,7 @@
 ---
 name: atender-grupos
 description: Define como Clara deve atuar em grupos autorizados.
+visibility: atendimento
 ---
 
 # Skill: Atender Grupos

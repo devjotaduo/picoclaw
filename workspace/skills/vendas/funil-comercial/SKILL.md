@@ -1,6 +1,7 @@
 ---
 name: funil-comercial
 description: Organiza o lead dentro do funil de vendas.
+visibility: comercial
 ---
 
 # Skill: Funil Comercial

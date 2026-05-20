@@ -23,6 +23,10 @@ type Provisioner struct {
 	Profiles *store.LauncherProfileStore
 	Docker   *DockerClient
 	LiteLLM  *litellm.Client // optional; when nil the tenant is provisioned without an LLM key
+	// Supabase is the (optional) handle used during Delete() to remove the
+	// Supabase Auth user for tenants with auth_backend='supabase'. Nil when
+	// Supabase isn't configured — cleanup of those tenants is a no-op.
+	Supabase SupabaseDeleter
 }
 
 func NewProvisioner(cfg *config.Config, db *store.DB, dk *DockerClient, ll *litellm.Client) *Provisioner {
@@ -36,12 +40,23 @@ func NewProvisioner(cfg *config.Config, db *store.DB, dk *DockerClient, ll *lite
 }
 
 type CreateInput struct {
-	DisplayName      string
-	OwnerEmail       string
-	Subdomain        string
-	MonthlyBudgetUSD *float64
-	MemLimitMB       int
-	CPUQuota         float64
+	DisplayName       string
+	OwnerEmail        string
+	Subdomain         string
+	MonthlyBudgetUSD  *float64
+	MemLimitMB        int
+	CPUQuota          float64
+	LauncherProfileID string
+	// SkipDashboardPassword tells the provisioner to NOT seed launcher-auth.db
+	// with the generated password. Auto-provision uses this when Supabase Auth
+	// is the source of truth for the tenant's dashboard login — seeding a
+	// local bcrypt hash would just be dead weight inside the tenant volume.
+	// The InitialPassword in CreateOutput is still populated for cases where
+	// the caller wants to surface a password (LoginMode=password).
+	SkipDashboardPassword bool
+	// AuthBackend records how the controlplane will authenticate this
+	// tenant's dashboard requests: "local" (default) or "supabase".
+	AuthBackend string
 }
 
 type CreateOutput struct {
@@ -77,6 +92,10 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 
 	volumePath := filepath.Join(p.Cfg.TenantHostDataDir, id)
 
+	backend := in.AuthBackend
+	if backend == "" {
+		backend = "local"
+	}
 	t := &store.Tenant{
 		ID:               id,
 		DisplayName:      in.DisplayName,
@@ -88,12 +107,13 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		MonthlyBudgetUSD: in.MonthlyBudgetUSD,
 		MemLimitMB:       in.MemLimitMB,
 		CPUQuota:         in.CPUQuota,
+		AuthBackend:      backend,
 	}
 	if err := p.Tenants.Insert(ctx, t); err != nil {
 		return nil, fmt.Errorf("insert tenant: %w", err)
 	}
 
-	if err := p.runProvision(ctx, t, password); err != nil {
+	if err := p.runProvision(ctx, t, password, profile, in.SkipDashboardPassword); err != nil {
 		msg := err.Error()
 		_ = p.Tenants.SetStatus(ctx, id, store.StatusError, &msg)
 		return nil, err
@@ -106,7 +126,7 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 	}, nil
 }
 
-func (p *Provisioner) runProvision(ctx context.Context, t *store.Tenant, password string) error {
+func (p *Provisioner) runProvision(ctx context.Context, t *store.Tenant, password string, profile *store.LauncherProfile, skipDashboardPassword bool) error {
 	if err := os.MkdirAll(t.VolumePath, 0o755); err != nil {
 		return fmt.Errorf("mkdir volume: %w", err)
 	}
@@ -122,8 +142,10 @@ func (p *Provisioner) runProvision(ctx context.Context, t *store.Tenant, passwor
 	if err := WriteLauncherPolicy(t.VolumePath, nil); err != nil {
 		return fmt.Errorf("write launcher policy: %w", err)
 	}
-	if err := SeedDashboardPassword(ctx, t.VolumePath, password); err != nil {
-		return fmt.Errorf("seed password: %w", err)
+	if !skipDashboardPassword {
+		if err := SeedDashboardPassword(ctx, t.VolumePath, password); err != nil {
+			return fmt.Errorf("seed password: %w", err)
+		}
 	}
 
 	// LiteLLM virtual key — generated BEFORE container start so it can be
@@ -150,6 +172,9 @@ func (p *Provisioner) runProvision(ctx context.Context, t *store.Tenant, passwor
 
 	if err := SeedPicoConfig(ctx, t.VolumePath, p.Cfg.LiteLLMURL, llmKey); err != nil {
 		return fmt.Errorf("seed picoclaw config: %w", err)
+	}
+	if err := EnsureTenantWhatsAppNativeConfig(t.VolumePath); err != nil {
+		return fmt.Errorf("ensure whatsapp native config: %w", err)
 	}
 
 	spec := p.buildSpec(t)
@@ -309,6 +334,9 @@ func (p *Provisioner) runProvisionClone(ctx context.Context, t *store.Tenant, sr
 	if err := SeedPicoConfig(ctx, t.VolumePath, p.Cfg.LiteLLMURL, llmKey); err != nil {
 		return fmt.Errorf("seed picoclaw config: %w", err)
 	}
+	if err := EnsureTenantWhatsAppNativeConfig(t.VolumePath); err != nil {
+		return fmt.Errorf("ensure whatsapp native config: %w", err)
+	}
 
 	spec := p.buildSpec(t)
 	containerID, err := p.Docker.CreateAndStart(ctx, spec)
@@ -369,6 +397,9 @@ func (p *Provisioner) ApplyProfile(ctx context.Context, tenantID, profileID stri
 	}
 	if err := p.ensureTenantLiteLLMConfig(ctx, t); err != nil {
 		return backupDir, fmt.Errorf("ensure litellm config: %w", err)
+	}
+	if err := EnsureTenantWhatsAppNativeConfig(t.VolumePath); err != nil {
+		return backupDir, fmt.Errorf("ensure whatsapp native config: %w", err)
 	}
 	if err := p.Tenants.SetLauncherProfileApplied(ctx, t.ID, profile.ID, profile.Version); err != nil {
 		return backupDir, err

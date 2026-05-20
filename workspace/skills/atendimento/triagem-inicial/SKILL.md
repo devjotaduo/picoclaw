@@ -1,6 +1,7 @@
 ---
 name: triagem-inicial
 description: Recebe o cliente, entende o motivo do contato e direciona para o caminho correto.
+visibility: atendimento
 ---
 
 # Skill: Triagem Inicial

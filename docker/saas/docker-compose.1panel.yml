@@ -30,3 +30,7 @@ services:
       TENANT_PROFILE_DIR: /var/lib/picoclaw-saas/launcher-profiles
     volumes:
       - /root/.picoclaw:/etc/picoclaw/tenant-template:ro
+      # 1panel overlay mirrors the base compose bind so auto-provision can
+      # find the operator workspace at the same path the env var points at.
+      # Read-only; OverlayWorkspace filters runtime state on read.
+      - /srv/picoclaw/workspace:/srv/picoclaw/workspace:ro

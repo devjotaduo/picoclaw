@@ -1,6 +1,7 @@
 ---
 name: pos-venda
 description: Acompanha clientes após compra ou atendimento.
+visibility: suporte
 ---
 
 # Skill: Pós-venda

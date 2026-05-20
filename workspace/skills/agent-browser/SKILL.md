@@ -1,6 +1,7 @@
 ---
 name: agent-browser
 description: "Browser automation via agent-browser CLI. Use when the user needs to navigate websites, fill forms, click buttons, take screenshots, extract data, or test web apps."
+visibility: dev
 metadata: {"nanobot":{"emoji":"🌐","requires":{"bins":["agent-browser"]},"install":[{"id":"npm","kind":"npm","package":"agent-browser","global":true,"bins":["agent-browser"],"label":"Install agent-browser (npm)"}]}}
 ---
 

@@ -69,6 +69,7 @@ func run() error {
 		log.Println("mailer: SMTP not configured — invite emails will be no-op")
 	}
 	h := api.NewHandler(cfg, db, prov, mlr)
+	h.StartBackground(ctx)
 
 	if llm != nil {
 		poller := &reconciler.UsagePoller{DB: db, LiteLLM: llm, Interval: 5 * time.Minute}

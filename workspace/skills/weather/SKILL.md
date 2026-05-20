@@ -1,6 +1,7 @@
 ---
 name: weather
 description: Get current weather and forecasts with verified location matching (no API key required).
+visibility: dev
 homepage: https://wttr.in/:help
 metadata: {"nanobot":{"emoji":"🌤️","requires":{"bins":["curl"]}}}
 ---

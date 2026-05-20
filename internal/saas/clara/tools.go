@@ -119,7 +119,7 @@ func Tools() []ToolSpec {
 		{
 			Type: "function",
 			Function: ToolFunction{
-				Name: string(ToolSetChannels),
+				Name:        string(ToolSetChannels),
 				Description: "Canais por onde a empresa fala com clientes hoje.",
 				Parameters: json.RawMessage(`{
 					"type": "object",
@@ -203,7 +203,7 @@ func Tools() []ToolSpec {
 			Function: ToolFunction{
 				Name: string(ToolSetQuoting),
 				Description: "Se a empresa faz orçamento personalizado pra cada cliente (ex.: móveis sob medida, " +
-					"obras, eventos). Importante pra Leo (Consultor de Vendas) saber.",
+					"obras, eventos). Importante pra Marcos (Consultor de Vendas) saber.",
 				Parameters: json.RawMessage(`{
 					"type": "object",
 					"properties": {
@@ -274,15 +274,17 @@ func Tools() []ToolSpec {
 			Type: "function",
 			Function: ToolFunction{
 				Name: string(ToolSetAgentPriority),
-				Description: "Qual dos 4 agentes (Ana atendente, Leo vendas, Maya marketing, Sofia secretária do dono) " +
-					"a pessoa mais quer focar agora. Chame UMA vez quando descobrir.",
+				Description: "Qual dos 5 agentes da equipe Jotaduo a pessoa mais quer focar agora: " +
+					"Clara (atendente), Marcos (vendas), Camila (suporte), Lia (marketing) ou " +
+					"Rafael (assistente interno do dono). Chame UMA vez quando descobrir. " +
+					"Sofia (onboarding) recebe a pessoa no painel automaticamente — não é uma opção aqui.",
 				Parameters: json.RawMessage(`{
 					"type": "object",
 					"properties": {
 						"agent": {
 							"type": "string",
-							"enum": ["ana", "leo", "maya", "sofia"],
-							"description": "ana=atendimento, leo=vendas, maya=marketing, sofia=assistente do dono"
+							"enum": ["clara", "marcos", "camila", "lia", "rafael"],
+							"description": "clara=atendimento/triagem, marcos=vendas, camila=suporte/pós-venda, lia=marketing/instagram, rafael=assistente interno do dono"
 						},
 						"reason": {
 							"type": "string",

@@ -1,6 +1,7 @@
 ---
 name: monitorar-operacao
 description: Monitora atendimentos, grupos e oportunidades para o dono.
+visibility: interno
 ---
 
 # Skill: Monitorar Operação

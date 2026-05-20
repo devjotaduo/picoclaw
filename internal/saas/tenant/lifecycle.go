@@ -93,6 +93,14 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 	return p.Tenants.SetStatus(ctx, id, store.StatusActive, nil)
 }
 
+// SupabaseDeleter is the narrow interface the provisioner uses to remove the
+// Supabase Auth user when a tenant is deleted. Lifecycle code stays decoupled
+// from the concrete *auth.SupabaseClient (and from Supabase being configured
+// at all — nil is a valid value, meaning "skip the call").
+type SupabaseDeleter interface {
+	DeleteTenantUser(userID string) error
+}
+
 // Delete marks the tenant deleting, removes all runtime resources, then hard
 // deletes the row so database relationships cascade. If the process dies after
 // SoftDelete, the reconciler resumes the same cleanup pipeline.
@@ -127,6 +135,13 @@ func (p *Provisioner) cleanupDeletedTenant(ctx context.Context, t *store.Tenant)
 		if err := p.LiteLLM.DeleteKey(ctx, t.ID); err != nil {
 			return fmt.Errorf("litellm delete: %w", err)
 		}
+	}
+	// Supabase user cleanup is best-effort: the runtime resources are already
+	// gone by this point, so a stuck Supabase delete shouldn't block the row
+	// removal. If the user is already deleted (manual cleanup, prior crash),
+	// the Admin API returns 404 and we ignore it.
+	if p.Supabase != nil && t.AuthBackend == "supabase" && t.SupabaseUserID != nil && *t.SupabaseUserID != "" {
+		_ = p.Supabase.DeleteTenantUser(*t.SupabaseUserID)
 	}
 	if t.VolumePath != "" {
 		if err := RemoveVolume(ctx, t.VolumePath); err != nil {

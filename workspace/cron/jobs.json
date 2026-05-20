@@ -1,4 +1,33 @@
 {
   "version": 1,
-  "jobs": []
+  "jobs": [
+    {
+      "id": "heartbeat-rafael-daily",
+      "name": "HEARTBEAT Rafael — Manhã",
+      "enabled": false,
+      "schedule": { "kind": "cron", "expr": "0 8 * * *", "tz": "America/Sao_Paulo" },
+      "payload": { "kind": "message", "message": "HEARTBEAT", "channel": "whatsapp", "to": "[ATUALIZAR — número interno do dono]" }
+    },
+    {
+      "id": "lia-marketing-daily",
+      "name": "Lia — Rotina matinal de marketing",
+      "enabled": false,
+      "schedule": { "kind": "cron", "expr": "0 8 * * *", "tz": "America/Sao_Paulo" },
+      "payload": { "kind": "message", "message": "MARKETING_CHECK", "channel": "whatsapp", "to": "[ATUALIZAR — canal interno]" }
+    },
+    {
+      "id": "analytics-daily-report",
+      "name": "Analytics — Relatório diário",
+      "enabled": true,
+      "schedule": { "kind": "cron", "expr": "59 23 * * *", "tz": "America/Sao_Paulo" },
+      "payload": { "kind": "command", "command": "analytics.report.daily" }
+    },
+    {
+      "id": "analytics-pattern-weekly",
+      "name": "Analytics — Análise de padrões semanal",
+      "enabled": true,
+      "schedule": { "kind": "cron", "expr": "0 6 * * 1", "tz": "America/Sao_Paulo" },
+      "payload": { "kind": "command", "command": "analytics.patterns.weekly" }
+    }
+  ]
 }

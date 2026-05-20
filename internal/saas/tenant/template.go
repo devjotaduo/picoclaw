@@ -292,6 +292,140 @@ func CopyVolumeRaw(src, dst string) error {
 	})
 }
 
+// workspaceOverlaySkip names paths inside workspace/ that must NEVER be
+// overlaid onto a tenant — runtime state belonging to the operator's own
+// launcher. AGENT.md, SOUL.md, behavior.json, AGENTS.md, IDENTITY.md,
+// USER.md, TOOLS.md, HEARTBEAT.md, config/, agents/, skills/, cron/ —
+// everything that defines the team's *behavior* — gets overlaid.
+var workspaceOverlaySkip = []string{
+	"whatsapp",         // operator's WhatsApp session DB
+	"matrix",           // operator's matrix sync state
+	"sessions",         // operator's live conversation state
+	"state",            // operator's last-channel tracker
+	"runtime-user-env", // sandbox env redirects
+	"logs",             // operator log dir (if present)
+	"nav_visibility.json",
+}
+
+// workspaceOverlayLogSuffix catches per-launcher log files like heartbeat.log
+// that carry the operator's channel IDs and chat IDs. We never want those
+// leaking into a tenant volume.
+var workspaceOverlayLogSuffix = []string{".log"}
+
+// workspaceOverlayNonClobber lists path PREFIXES whose files are copied only
+// when missing in the destination. Used for memory/ so first-time tenants
+// get the template structure (empresa.md, leads.md, ...) but existing
+// tenants don't have their accumulated knowledge clobbered when the
+// operator re-edits the workspace.
+var workspaceOverlayNonClobber = []string{"memory/", "memory"}
+
+func shouldSkipWorkspaceOverlay(rel string) bool {
+	rel = filepath.ToSlash(rel)
+	if rel == "" || rel == "." {
+		return false
+	}
+	for _, s := range workspaceOverlaySkip {
+		if rel == s || strings.HasPrefix(rel, s+"/") {
+			return true
+		}
+	}
+	// Same suffix blocklist as template seeding — never overlay live DB / key
+	// material from the operator's local workspace into a tenant.
+	for _, suf := range templateSkipSuffix {
+		if strings.HasSuffix(rel, suf) && !isSharedTemplateKeyPath("workspace/"+rel) {
+			return true
+		}
+	}
+	for _, suf := range workspaceOverlayLogSuffix {
+		if strings.HasSuffix(rel, suf) {
+			return true
+		}
+	}
+	return false
+}
+
+func isWorkspaceOverlayNonClobber(rel string) bool {
+	rel = filepath.ToSlash(rel)
+	for _, p := range workspaceOverlayNonClobber {
+		if rel == p || rel == strings.TrimSuffix(p, "/") || strings.HasPrefix(rel, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// OverlayWorkspace copies srcWorkspaceDir into <tenantVolume>/workspace/.
+// Clobbering by default (so the operator's agent prompts and configs win
+// over whatever the launcher profile seeded), with two exceptions:
+//
+//   - Runtime state (whatsapp/, sessions/, state/, logs/, *.log, *.db, etc)
+//     is SKIPPED entirely — it belongs to the operator, not the tenant.
+//   - memory/* is COPY-IF-MISSING — fresh tenants get the empty template
+//     files (empresa.md, leads.md, faq.md, …) so the agents have somewhere
+//     to write; existing tenants keep what they've accumulated.
+//
+// Used by auto-provision when Cfg.AutoProvisionWorkspaceDir is set so new
+// tenants run the team the operator maintains in workspace/ (Rafael, Clara,
+// Marcos, Camila + Atendimento Humano in the canonical PicoClaw layout).
+//
+// Empty srcWorkspaceDir is a no-op.
+func OverlayWorkspace(srcWorkspaceDir, tenantVolume string) error {
+	if srcWorkspaceDir == "" {
+		return nil
+	}
+	info, err := os.Stat(srcWorkspaceDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("stat workspace overlay: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("workspace overlay %s is not a directory", srcWorkspaceDir)
+	}
+	dstRoot := filepath.Join(tenantVolume, "workspace")
+	if err := os.MkdirAll(dstRoot, 0o755); err != nil {
+		return fmt.Errorf("mkdir tenant workspace: %w", err)
+	}
+	return filepath.Walk(srcWorkspaceDir, func(path string, fi os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(srcWorkspaceDir, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		if shouldSkipWorkspaceOverlay(rel) {
+			if fi.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		dst := filepath.Join(dstRoot, rel)
+		if fi.IsDir() {
+			return os.MkdirAll(dst, fi.Mode().Perm())
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if !fi.Mode().IsRegular() {
+			return nil
+		}
+		if isWorkspaceOverlayNonClobber(rel) {
+			if _, statErr := os.Stat(dst); statErr == nil {
+				return nil // preserve tenant's accumulated data
+			}
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return err
+		}
+		return copyFile(path, dst, fi.Mode().Perm())
+	})
+}
+
 func copyFile(src, dst string, mode os.FileMode) error {
 	in, err := os.Open(src)
 	if err != nil {

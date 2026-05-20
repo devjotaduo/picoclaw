@@ -1,6 +1,7 @@
 ---
 name: conduzir-venda
 description: Conduz conversa comercial de forma consultiva.
+visibility: comercial
 ---
 
 # Skill: Conduzir Venda

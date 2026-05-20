@@ -45,6 +45,12 @@ type Tenant struct {
 	CRMDealID                     *int64
 	LauncherProfileID             *string
 	LauncherProfileVersionApplied *int64
+	// SupabaseUserID is set when this tenant's dashboard auth is handled by
+	// Supabase (AuthBackend = "supabase"). Empty for legacy local-auth tenants.
+	SupabaseUserID *string
+	// AuthBackend selects how the controlplane validates dashboard requests
+	// for this tenant: "local" (sessions table) or "supabase" (verify JWT).
+	AuthBackend string
 }
 
 type TenantStore struct{ DB *DB }
@@ -54,7 +60,8 @@ const tenantCols = `tenants.id, tenants.display_name, tenants.owner_email, tenan
     tenants.mem_limit_mb, tenants.cpu_quota, tenants.initial_password_delivered, tenants.last_error,
     tenants.created_at, tenants.suspended_at, tenants.deleted_at, tenants.cleanup_completed_at,
     tenants.crm_contact_id, tenants.crm_company_id, tenants.crm_deal_id,
-    tenants.launcher_profile_id, tenants.launcher_profile_version_applied`
+    tenants.launcher_profile_id, tenants.launcher_profile_version_applied,
+    tenants.supabase_user_id::text, tenants.auth_backend`
 
 func scanTenant(row pgx.Row) (*Tenant, error) {
 	var t Tenant
@@ -65,22 +72,50 @@ func scanTenant(row pgx.Row) (*Tenant, error) {
 		&t.CreatedAt, &t.SuspendedAt, &t.DeletedAt, &t.CleanupCompletedAt,
 		&t.CRMContactID, &t.CRMCompanyID, &t.CRMDealID,
 		&t.LauncherProfileID, &t.LauncherProfileVersionApplied,
+		&t.SupabaseUserID, &t.AuthBackend,
 	)
 	return &t, err
 }
 
 func (s *TenantStore) Insert(ctx context.Context, t *Tenant) error {
+	backend := t.AuthBackend
+	if backend == "" {
+		backend = "local"
+	}
 	const q = `
 		INSERT INTO tenants (id, display_name, owner_email, subdomain, status,
 		                     container_image, volume_path, monthly_budget_usd,
 		                     mem_limit_mb, cpu_quota, launcher_profile_id,
-		                     launcher_profile_version_applied)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`
+		                     launcher_profile_version_applied, auth_backend)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`
 	_, err := s.DB.Pool.Exec(ctx, q,
 		t.ID, t.DisplayName, t.OwnerEmail, t.Subdomain, t.Status,
 		t.ContainerImage, t.VolumePath, t.MonthlyBudgetUSD,
 		t.MemLimitMB, t.CPUQuota, t.LauncherProfileID, t.LauncherProfileVersionApplied,
+		backend,
 	)
+	return err
+}
+
+// GetByOwnerEmail looks up an active (non-deleted) tenant by the email we
+// stored when the owner was provisioned. Used by auto-provision to dedup
+// repeat conversations from the same user.
+func (s *TenantStore) GetByOwnerEmail(ctx context.Context, email string) (*Tenant, error) {
+	q := `SELECT ` + tenantCols + ` FROM tenants WHERE lower(owner_email) = lower($1) AND deleted_at IS NULL LIMIT 1`
+	t, err := scanTenant(s.DB.Pool.QueryRow(ctx, q, email))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrTenantNotFound
+	}
+	return t, err
+}
+
+// SetSupabaseUserID records the Supabase Auth UUID for this tenant and flips
+// auth_backend to 'supabase' so the gateway middleware switches code paths.
+func (s *TenantStore) SetSupabaseUserID(ctx context.Context, tenantID, supabaseUserID string) error {
+	const q = `UPDATE tenants
+	           SET supabase_user_id = $2::uuid, auth_backend = 'supabase'
+	           WHERE id = $1`
+	_, err := s.DB.Pool.Exec(ctx, q, tenantID, supabaseUserID)
 	return err
 }
 

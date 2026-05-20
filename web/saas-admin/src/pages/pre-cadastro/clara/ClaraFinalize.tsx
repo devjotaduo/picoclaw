@@ -140,7 +140,7 @@ export function ClaraFinalize(props: ClaraFinalizeProps) {
 					<h1 className="text-xl font-semibold text-zinc-900">Confere o que entendi</h1>
 					<p className="mt-1.5 text-sm text-zinc-600">
 						{props.qualifiedReason ||
-							"Esse é o resuminho do nosso papo. Se estiver tudo certo, confirma seu contato pra Sofia te chamar no WhatsApp e pegar os detalhes técnicos (preços, integrações, esses pormenores)."}
+							"Esse é o resuminho do nosso papo. Se estiver tudo certo, confirma seu contato pra gente te mandar o acesso do painel — a Sofia já te recebe lá pra fechar os detalhes (horário, regra de preço, FAQs) em uns 5 minutos."}
 					</p>
 
 					<MiniReport extracted={props.extracted} />
@@ -148,7 +148,7 @@ export function ClaraFinalize(props: ClaraFinalizeProps) {
 					<AgentRecommendations extracted={props.extracted} />
 
 					<p className="mt-7 text-sm font-medium text-zinc-900">
-						Como a Sofia te chama:
+						Pra onde te mandamos o acesso:
 					</p>
 
 					<section className="mt-6 space-y-3" aria-labelledby="finalize-contact">
@@ -244,13 +244,13 @@ export function ClaraFinalize(props: ClaraFinalizeProps) {
 								Enviando…
 							</>
 						) : (
-							"Confirmar — Sofia vai te chamar"
+							"Confirmar — me mande o acesso do painel"
 						)}
 					</Button>
 
 					<p className="mt-3 text-center text-xs text-zinc-500">
-						Sem compromisso agora. A Sofia te chama no WhatsApp pra pegar os detalhes
-						técnicos (preços, integrações, esses pormenores).
+						Sem compromisso agora. A Sofia te recebe no painel pra fechar os
+						detalhes (horário, regra de preço, FAQs) em uns 5 minutos.
 					</p>
 
 					{hasExtracted(props.extracted) && (
@@ -271,10 +271,11 @@ export function ClaraFinalize(props: ClaraFinalizeProps) {
 // didn't capture it (no "—" placeholders). Sofia uses this to start the
 // WhatsApp follow-up already aware of the context.
 const AGENT_LABELS: Record<NonNullable<ClaraExtracted["priorityAgent"]>, string> = {
-	ana: "Ana (atendimento)",
-	leo: "Leo (vendas / orçamentos)",
-	maya: "Maya (marketing e Instagram)",
-	sofia: "Sofia (sua secretária)",
+	clara: "Clara (atendimento e triagem)",
+	marcos: "Marcos (vendas e orçamentos)",
+	camila: "Camila (suporte e pós-venda)",
+	lia: "Lia (marketing e Instagram)",
+	rafael: "Rafael (assistente interno do dono)",
 };
 
 const PROBLEM_AREA_LABELS: Record<NonNullable<ClaraExtracted["problemArea"]>, string> = {
@@ -365,7 +366,8 @@ function MiniReport({ extracted: e }: { extracted: ClaraExtracted }) {
 		return (
 			<section className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
 				A Clara não conseguiu extrair nada concreto desta vez. Você pode voltar e contar
-				um pouco mais, ou confirmar mesmo assim que a Sofia te chama pra entender melhor.
+				um pouco mais, ou confirmar mesmo assim que a Sofia te recebe no painel pra
+				entender melhor.
 			</section>
 		);
 	}
@@ -432,7 +434,8 @@ function AgentRecommendations({ extracted: e }: { extracted: ClaraExtracted }) {
 				))}
 			</div>
 			<p className="mt-3 text-xs text-zinc-600">
-				A Sofia confirma esses pontos contigo no WhatsApp.
+				A Sofia confirma esses pontos contigo no painel (mandamos o link no seu
+				email/WhatsApp).
 			</p>
 		</section>
 	);
@@ -449,30 +452,36 @@ function buildAgentRecommendations(e: ClaraExtracted): AgentRecommendation[] {
 	const isServico = segments.some((s) => s.includes("serv") || s.includes("consultoria") || s.includes("sob medida"));
 	const isRestaurante = segments.some((s) => s.includes("restaurante") || s.includes("cardápio") || s.includes("delivery"));
 	const painText = pains.join(" ");
-	const wantsAna =
+	const wantsClara =
 		e.problemArea === "atendimento" ||
-		e.problemArea === "suporte" ||
-		e.priorityAgent === "ana" ||
+		e.problemArea === "agendamento" ||
+		e.priorityAgent === "clara" ||
+		isClinica ||
 		painText.includes("demora") ||
 		painText.includes("dúvida") ||
-		painText.includes("responder");
-	const wantsLeo =
+		painText.includes("responder") ||
+		painText.includes("agendamento");
+	const wantsMarcos =
 		e.problemArea === "vendas" ||
 		e.quotingPersonalized === true ||
-		e.priorityAgent === "leo" ||
+		e.priorityAgent === "marcos" ||
 		painText.includes("orçamento") ||
 		painText.includes("lead");
-	const wantsMaya =
+	const wantsCamila =
+		e.problemArea === "suporte" ||
+		e.priorityAgent === "camila" ||
+		painText.includes("reclamação") ||
+		painText.includes("problema") ||
+		painText.includes("pós-venda");
+	const wantsLia =
 		e.problemArea === "marketing" ||
-		e.priorityAgent === "maya" ||
+		e.priorityAgent === "lia" ||
 		(!!e.instagram && painText.includes("marketing"));
-	const wantsSofia =
-		e.problemArea === "agendamento" ||
+	const wantsRafael =
 		e.problemArea === "gestao" ||
-		e.priorityAgent === "sofia" ||
-		isClinica ||
-		painText.includes("agendamento") ||
+		e.priorityAgent === "rafael" ||
 		painText.includes("sobrecarregado") ||
+		painText.includes("esquecimento") ||
 		painText.includes("follow-up");
 
 	const recs: AgentRecommendation[] = [];
@@ -486,38 +495,42 @@ function buildAgentRecommendations(e: ClaraExtracted): AgentRecommendation[] {
 	// Prioritize the agent the visitor explicitly chose, then derive a
 	// natural ordering from the problem area, then fall back to a stable
 	// default so we always pick *some* agent when signals are sparse.
+	// Sofia (onboarding) is NOT an option here — she runs once during setup,
+	// the recommendations are about the ongoing-operation team.
 	const areaToAgent: Record<NonNullable<ClaraExtracted["problemArea"]>, AgentKey> = {
-		vendas: "leo",
-		atendimento: "ana",
-		suporte: "ana",
-		agendamento: "sofia",
-		marketing: "maya",
-		gestao: "sofia",
+		vendas: "marcos",
+		atendimento: "clara",
+		suporte: "camila",
+		agendamento: "clara",
+		marketing: "lia",
+		gestao: "rafael",
 	};
 	const ordered: AgentKey[] = [];
 	if (e.priorityAgent) ordered.push(e.priorityAgent);
 	if (e.problemArea && !ordered.includes(areaToAgent[e.problemArea])) {
 		ordered.push(areaToAgent[e.problemArea]);
 	}
-	for (const k of ["sofia", "ana", "leo", "maya"] as AgentKey[]) {
+	for (const k of ["rafael", "clara", "marcos", "camila", "lia"] as AgentKey[]) {
 		if (!ordered.includes(k)) ordered.push(k);
 	}
 
 	for (const key of ordered) {
 		if (recs.length >= 2) break;
 		switch (key) {
-			case "ana": {
-				if (!wantsAna) break;
+			case "clara": {
+				if (!wantsClara) break;
 				const bullets: string[] = [];
 				if (onInsta) bullets.push("Responde DM do Instagram no mesmo minuto, dia e noite.");
 				if (onZap) bullets.push("Atende o WhatsApp sem fila — separa quem quer comprar de quem só pergunta.");
 				bullets.push("Repete a resposta certa pras dúvidas que aparecem todo dia.");
-				if (isClinica) bullets.push("Tira dúvida de horário e preço sem você precisar olhar.");
-				add("ana", bullets);
+				if (isClinica || e.problemArea === "agendamento") {
+					bullets.push("Marca, confirma e remarca consulta sem você precisar lembrar.");
+				}
+				add("clara", bullets);
 				break;
 			}
-			case "leo": {
-				if (!wantsLeo) break;
+			case "marcos": {
+				if (!wantsMarcos) break;
 				const bullets: string[] = [];
 				if (e.quotingPersonalized === true) {
 					bullets.push("Monta orçamento sob medida em 5 min, com as regras que você usa.");
@@ -530,35 +543,42 @@ function buildAgentRecommendations(e: ClaraExtracted): AgentRecommendation[] {
 				if (e.productType === "serviço" || isServico) {
 					bullets.push("Pergunta o que precisa pra fechar antes de você entrar na conversa.");
 				}
-				add("leo", bullets);
+				add("marcos", bullets);
 				break;
 			}
-			case "maya": {
-				if (!wantsMaya) break;
+			case "camila": {
+				if (!wantsCamila) break;
+				const bullets: string[] = [];
+				bullets.push("Recebe quem teve problema, coleta os dados e consulta o histórico antes de você entrar.");
+				bullets.push("Acompanha pós-venda e avisa quando algo precisa de uma resposta sua.");
+				if (isLoja || isRestaurante) bullets.push("Trata reclamação de pedido com tom calmo e sempre devolve com próximo passo.");
+				add("camila", bullets);
+				break;
+			}
+			case "lia": {
+				if (!wantsLia) break;
 				const bullets: string[] = [];
 				if (e.instagram) {
 					bullets.push("Posta no Instagram sem você precisar pensar no que escrever.");
-					bullets.push("Responde os DMs e manda quem mostrou interesse pro Leo fechar.");
+					bullets.push("Sugere conteúdo das datas sazonais com o cara da marca.");
 				} else {
 					bullets.push("Cria post e legenda do que faz sentido pro seu público.");
 				}
-				if (e.website) bullets.push("Sugere o que vale colocar no site pra cliente novo achar.");
-				add("maya", bullets);
+				if (e.website) bullets.push("Monta página simples pra cliente novo achar você.");
+				add("lia", bullets);
 				break;
 			}
-			case "sofia": {
-				if (!wantsSofia) break;
+			case "rafael": {
+				if (!wantsRafael) break;
 				const bullets: string[] = [];
-				if (isClinica || e.problemArea === "agendamento") {
-					bullets.push("Confirma e remarca consulta sozinha, sem você lembrar.");
-					bullets.push("Avisa quando alguém marcou e quando vai faltar.");
-				} else if (isLoja || isRestaurante) {
-					bullets.push("Te manda no fim do dia um resumo dos pedidos e do que ficou em aberto.");
+				if (isLoja || isRestaurante) {
+					bullets.push("Te manda no fim do dia um resumo do que rolou e do que ficou em aberto.");
 				} else {
 					bullets.push("Lembra dos follow-ups que sempre escapam.");
 				}
-				bullets.push("Organiza sua agenda pra você não perder cliente por esquecimento.");
-				add("sofia", bullets);
+				bullets.push("Avisa no seu WhatsApp quando aparece lead quente, cliente irritado ou atendimento parado.");
+				bullets.push("Sugere melhoria quando vê uma pergunta repetir várias vezes.");
+				add("rafael", bullets);
 				break;
 			}
 		}

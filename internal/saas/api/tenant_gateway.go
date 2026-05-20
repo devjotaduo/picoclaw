@@ -74,7 +74,7 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		return
 	}
 
-	user, role, ok := h.authenticateTenantRequest(w, r, t.ID)
+	userID, userEmail, role, ok := h.authenticateTenantRequest(w, r, t)
 	if !ok {
 		return
 	}
@@ -110,8 +110,8 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 	h.proxyTenantRequest(w, r, target, func(req *http.Request) {
 		gatewayauth.AnnotateRequest(req, h.Cfg.GatewaySharedSecret, gatewayauth.Claims{
 			TenantID:  t.ID,
-			UserID:    strconv.FormatInt(user.ID, 10),
-			UserEmail: user.Email,
+			UserID:    userID,
+			UserEmail: userEmail,
 			Role:      role,
 		}, time.Now())
 	})
@@ -135,26 +135,121 @@ func (h *Handler) proxyTenantRequest(w http.ResponseWriter, r *http.Request, tar
 	proxy.ServeHTTP(w, r)
 }
 
-func (h *Handler) authenticateTenantRequest(w http.ResponseWriter, r *http.Request, tenantID string) (*store.User, string, bool) {
+// authenticateTenantRequest resolves who is making this request and what
+// their role is on this tenant. Returns canonical (userID, email, role)
+// strings ready to be signed into the trusted_gateway header.
+//
+// Tenants with auth_backend='supabase' are gated by the Supabase JWT in the
+// sb-access-token cookie; the JWT's app_metadata.tenant_id must match the
+// tenant being accessed. Tenants with auth_backend='local' (the historical
+// path) keep using the controlplane's session cookie.
+func (h *Handler) authenticateTenantRequest(w http.ResponseWriter, r *http.Request, t *store.Tenant) (string, string, string, bool) {
+	if t.AuthBackend == "supabase" && h.Supabase != nil {
+		return h.authenticateSupabaseTenant(w, r, t)
+	}
+	return h.authenticateLocalTenant(w, r, t.ID)
+}
+
+func (h *Handler) authenticateLocalTenant(w http.ResponseWriter, r *http.Request, tenantID string) (string, string, string, bool) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil || cookie.Value == "" {
 		rejectTenantGatewayAuth(w, r, h.Cfg.TenantBaseDomain)
-		return nil, "", false
+		return "", "", "", false
 	}
 	user, err := h.Sessions.GetUser(r.Context(), cookie.Value)
 	if err != nil || user.Status != store.UserStatusActive {
 		rejectTenantGatewayAuth(w, r, h.Cfg.TenantBaseDomain)
-		return nil, "", false
+		return "", "", "", false
 	}
 	if user.IsPlatformAdmin() {
-		return user, policy.RolePlatformAdmin, true
+		return strconv.FormatInt(user.ID, 10), user.Email, policy.RolePlatformAdmin, true
 	}
 	role, err := h.Memberships.GetRole(r.Context(), user.ID, tenantID)
 	if err != nil {
 		rejectTenantGatewayAuth(w, r, h.Cfg.TenantBaseDomain)
-		return nil, "", false
+		return "", "", "", false
 	}
-	return user, string(role), true
+	return strconv.FormatInt(user.ID, 10), user.Email, string(role), true
+}
+
+func (h *Handler) authenticateSupabaseTenant(w http.ResponseWriter, r *http.Request, t *store.Tenant) (string, string, string, bool) {
+	token := readSupabaseAccessToken(r, h.Cfg.SupabaseProjectRef)
+	if token == "" {
+		rejectSupabaseTenantAuth(w, r, h.Supabase.SiteURL())
+		return "", "", "", false
+	}
+	claims, err := h.Supabase.VerifyAccessToken(token)
+	if err != nil {
+		rejectSupabaseTenantAuth(w, r, h.Supabase.SiteURL())
+		return "", "", "", false
+	}
+	if claims.TenantID != t.ID {
+		writeError(w, http.StatusForbidden, "this account is not registered for this tenant")
+		return "", "", "", false
+	}
+	// First successful owner auth: mark the tenant engaged and cancel any
+	// pending onboarding reminders. initial_password_delivered is reused
+	// as the "owner has shown up" flag for Supabase tenants (the original
+	// local-auth meaning doesn't apply since we skip the bcrypt seed).
+	// This block is cheap (one tenant column read above) and idempotent.
+	if !t.InitialPasswordDelivered && mapSupabaseRoleToTenantRole(claims.Role) == string(store.RoleTenantOwner) {
+		bgCtx := r.Context()
+		if err := h.Tenants.MarkPasswordDelivered(bgCtx, t.ID); err == nil && h.Reminders != nil {
+			_, _ = h.Reminders.CancelByTenant(bgCtx, t.ID, "owner first auth")
+		}
+	}
+	return claims.UserID, claims.Email, mapSupabaseRoleToTenantRole(claims.Role), true
+}
+
+// readSupabaseAccessToken extracts the access token from any cookie name
+// Supabase SDKs write. Order: project-scoped (preferred), then legacy short
+// name, then Authorization: Bearer header for tests / CLI clients.
+func readSupabaseAccessToken(r *http.Request, projectRef string) string {
+	if projectRef != "" {
+		if c, err := r.Cookie("sb-" + projectRef + "-auth-token"); err == nil && c.Value != "" {
+			return strings.TrimSpace(c.Value)
+		}
+	}
+	if c, err := r.Cookie("sb-access-token"); err == nil && c.Value != "" {
+		return strings.TrimSpace(c.Value)
+	}
+	auth := r.Header.Get("Authorization")
+	if strings.HasPrefix(strings.ToLower(auth), "bearer ") {
+		return strings.TrimSpace(auth[len("Bearer "):])
+	}
+	return ""
+}
+
+// mapSupabaseRoleToTenantRole turns the role we stored in app_metadata into a
+// value the launcher's policy engine understands. Unknown roles default to
+// viewer (safest).
+func mapSupabaseRoleToTenantRole(role string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "owner":
+		return string(store.RoleTenantOwner)
+	case "admin":
+		return string(store.RoleTenantAdmin)
+	case "operator":
+		return string(store.RoleOperator)
+	default:
+		return string(store.RoleViewer)
+	}
+}
+
+func rejectSupabaseTenantAuth(w http.ResponseWriter, r *http.Request, siteURL string) {
+	p := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
+	if strings.HasPrefix(p, "/api/") || p == "/pico/ws" || strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	target := "/login"
+	if siteURL != "" {
+		target = strings.TrimRight(siteURL, "/") + "/login"
+	}
+	if r.URL != nil && r.URL.RequestURI() != "" {
+		target += "?next=" + url.QueryEscape("https://"+r.Host+r.URL.RequestURI())
+	}
+	http.Redirect(w, r, target, http.StatusFound)
 }
 
 func tenantDashboardAllowed(role string, rolePolicy policy.RolePolicy, method, path string) bool {
