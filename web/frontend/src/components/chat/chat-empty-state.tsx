@@ -5,6 +5,7 @@ import {
   IconStar,
 } from "@tabler/icons-react"
 import { Link } from "@tanstack/react-router"
+import type { TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
 
 import type { AgentSummary } from "@/api/internal-agents"
@@ -21,6 +22,30 @@ interface ChatEmptyStateProps {
   quickTasks?: LauncherQuickTask[]
   disabled?: boolean
   onQuickTask?: (prompt: string) => void
+}
+
+function agentIntro(agent: AgentSummary | null | undefined, t: TFunction) {
+  const name = (agent?.name || agent?.id || "").trim()
+  const kind =
+    typeof agent?.role_config?.kind === "string"
+      ? agent.role_config.kind.trim()
+      : ""
+
+  if (kind) {
+    const translated = t(`chat.agentIntro.${kind}`, {
+      defaultValue: "",
+      name,
+    })
+    if (translated.trim()) {
+      return translated
+    }
+  }
+
+  const description =
+    typeof agent?.role_config?.description === "string"
+      ? agent.role_config.description.trim()
+      : ""
+  return description || ""
 }
 
 export function ChatEmptyState({
@@ -90,9 +115,11 @@ export function ChatEmptyState({
   const heading = agentName
     ? t("chat.welcomeWithAgent", { name: agentName })
     : t("chat.welcome")
-  const description = (
-    chatIntro && chatIntro.length > 0 ? chatIntro : t("chat.welcomeDesc")
-  ) as string
+  const agentDescription = agentIntro(agent, t)
+  const description = (agentDescription ||
+    (chatIntro && chatIntro.length > 0
+      ? chatIntro
+      : t("chat.welcomeDesc"))) as string
   const tasks = (quickTasks ?? []).filter(
     (task) => task.label.trim() && task.prompt.trim(),
   )

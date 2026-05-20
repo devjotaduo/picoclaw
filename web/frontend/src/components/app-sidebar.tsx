@@ -1,4 +1,5 @@
 import {
+  IconArrowUp,
   IconAtom,
   IconBrandWhatsapp,
   IconChartBar,
@@ -6,6 +7,7 @@ import {
   IconKey,
   IconListDetails,
   IconMessageCircle,
+  IconPaperclip,
   IconPlus,
   IconRobot,
   IconSearch,
@@ -24,8 +26,13 @@ import {
   getLauncherPolicy,
 } from "@/api/launcher-policy"
 import {
+  getWorkspaceAgents,
+  type WorkspaceAgent,
+} from "@/api/workspace-agents"
+import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -114,6 +121,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     LauncherFeatureAccess
   > | null>(null)
   const [isSaasAdmin, setIsSaasAdmin] = React.useState(false)
+  const [workspaceAgents, setWorkspaceAgents] = React.useState<
+    WorkspaceAgent[]
+  >([])
+  const [sidebarPrompt, setSidebarPrompt] = React.useState("")
+  const [sidebarLastPrompt, setSidebarLastPrompt] = React.useState("")
   const { channelItems } = useSidebarChannels({
     language: (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase(),
     t,
@@ -140,6 +152,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }, [])
 
+  React.useEffect(() => {
+    let active = true
+    getWorkspaceAgents()
+      .then((response) => {
+        if (active) {
+          setWorkspaceAgents(response.agents)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setWorkspaceAgents([])
+        }
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
   const canRead = React.useCallback(
     (feature: string) => {
       if (!features) {
@@ -157,6 +187,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       setOpenMobile(false)
     }
   }, [isMobile, setOpenMobile])
+
+  const handleSidebarPromptSubmit = React.useCallback(
+    (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      const trimmed = sidebarPrompt.trim()
+      if (!trimmed) {
+        return
+      }
+      setSidebarLastPrompt(trimmed)
+      setSidebarPrompt("")
+    },
+    [sidebarPrompt],
+  )
 
   const navGroups: NavGroup[] = React.useMemo(() => {
     return [
@@ -213,7 +256,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         items: [
           {
             title: "navigation.agent_editor",
-            url: "/agent/editor",
+            url: "/agent/agents",
             icon: IconRobot,
             feature: "agent_editor",
             translateTitle: true,
@@ -429,7 +472,101 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           )
         })}
       </SidebarContent>
+      <SidebarFooter className="bg-background px-2 pt-2 pb-3 group-data-[collapsible=icon]:hidden">
+        <SidebarAgentMiniChat
+          agents={workspaceAgents}
+          prompt={sidebarPrompt}
+          lastPrompt={sidebarLastPrompt}
+          onPromptChange={setSidebarPrompt}
+          onSubmit={handleSidebarPromptSubmit}
+        />
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )
+}
+
+function SidebarAgentMiniChat({
+  agents,
+  prompt,
+  lastPrompt,
+  onPromptChange,
+  onSubmit,
+}: {
+  agents: WorkspaceAgent[]
+  prompt: string
+  lastPrompt: string
+  onPromptChange: (value: string) => void
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
+}) {
+  const agent =
+    agents.find((item) => item.name.toLowerCase() === "rafael") ??
+    agents.find((item) => item.visibility === "interno") ??
+    agents[0]
+  const name = agent?.name ?? "Rafael"
+  const initials = getSidebarAgentInitials(name)
+  const message = lastPrompt
+    ? "Recebido. Vou acompanhar e sinalizar se precisar."
+    : "Preciso de uma confirmação rápida."
+
+  return (
+    <aside className="border-border/70 bg-card text-card-foreground flex min-h-[244px] flex-col overflow-hidden rounded-xl border p-3 shadow-sm">
+      <div className="flex flex-col items-center text-center">
+        <div className="bg-primary/10 text-primary ring-primary/25 mb-2 flex size-11 items-center justify-center rounded-full text-xs font-semibold ring-1">
+          {initials}
+        </div>
+        <p className="text-foreground text-sm font-medium leading-5">
+          {name} está ativo
+        </p>
+        <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-5">
+          {message}
+        </p>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {["Revisar", "Resumo"].map((label) => (
+          <button
+            key={label}
+            type="button"
+            className="border-border/70 bg-muted/35 text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg border px-2 py-2 text-left text-xs transition"
+            onClick={() => onPromptChange(label)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <form
+        className="border-border/70 bg-muted/20 focus-within:border-primary/35 mt-auto flex items-center gap-1.5 rounded-full border px-2 py-1.5"
+        onSubmit={onSubmit}
+      >
+        <IconPaperclip className="text-muted-foreground size-3.5 shrink-0" />
+        <input
+          value={prompt}
+          onChange={(event) => onPromptChange(event.target.value)}
+          placeholder="Responder..."
+          aria-label="Responder ao mini chat dos agentes"
+          className="text-foreground placeholder:text-muted-foreground/70 min-w-0 flex-1 bg-transparent text-xs outline-none"
+        />
+        <button
+          type="submit"
+          disabled={!prompt.trim()}
+          aria-label="Enviar resposta"
+          className="bg-primary text-primary-foreground hover:bg-primary/85 disabled:bg-muted disabled:text-muted-foreground flex size-6 items-center justify-center rounded-full transition"
+        >
+          <IconArrowUp className="size-3.5" />
+        </button>
+      </form>
+    </aside>
+  )
+}
+
+function getSidebarAgentInitials(name: string): string {
+  const parts = name
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+  if (parts.length === 0) return "AG"
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
 }

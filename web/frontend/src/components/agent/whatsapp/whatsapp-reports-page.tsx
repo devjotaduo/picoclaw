@@ -13,7 +13,7 @@ import type { ReactNode } from "react"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
-import { getAppConfig } from "@/api/channels"
+import { getChannelConfig, getWhatsAppNativeQR } from "@/api/channels"
 import {
   type WhatsAppDailyMetric,
   type WhatsAppLabelCount,
@@ -31,6 +31,23 @@ export function WhatsAppReportsPage() {
   const { t } = useTranslation()
   const [days, setDays] = useState<(typeof RANGE_OPTIONS)[number]>(7)
 
+  const channelConfigQuery = useQuery({
+    queryKey: ["channels", "whatsapp_native", "config"],
+    queryFn: () => getChannelConfig("whatsapp_native"),
+    staleTime: 10_000,
+  })
+  const whatsappEnabled = useMemo(() => {
+    const enabled = channelConfigQuery.data?.config.enabled
+    return enabled !== false
+  }, [channelConfigQuery.data])
+  const qrQuery = useQuery({
+    queryKey: ["whatsapp_native", "qr", "reports"],
+    queryFn: getWhatsAppNativeQR,
+    enabled: whatsappEnabled,
+    refetchInterval: whatsappEnabled ? 5_000 : false,
+  })
+  const canLoadReports = qrQuery.data?.status === "confirmed"
+
   const reportQuery = useQuery({
     queryKey: ["whatsapp", "reports", days],
     queryFn: () => {
@@ -40,24 +57,13 @@ export function WhatsAppReportsPage() {
         to: now,
       })
     },
-    refetchInterval: 60_000,
+    enabled: canLoadReports,
+    refetchInterval: canLoadReports ? 60_000 : false,
   })
-  const configQuery = useQuery({
-    queryKey: ["config"],
-    queryFn: getAppConfig,
-  })
-
-  const whatsappEnabled = useMemo(() => {
-    const cfg = configQuery.data as Record<string, unknown> | undefined
-    const channels = cfg?.channel_list
-    if (!channels || typeof channels !== "object") return true
-    const whatsapp = (channels as Record<string, unknown>).whatsapp
-    if (!whatsapp || typeof whatsapp !== "object") return true
-    const enabled = (whatsapp as Record<string, unknown>).enabled
-    return enabled !== false
-  }, [configQuery.data])
 
   const report = reportQuery.data
+  const checkingConnection =
+    channelConfigQuery.isLoading || (whatsappEnabled && qrQuery.isLoading)
 
   return (
     <div className="flex h-full flex-col">
@@ -83,7 +89,7 @@ export function WhatsAppReportsPage() {
             variant="outline"
             size="sm"
             onClick={() => void reportQuery.refetch()}
-            disabled={reportQuery.isFetching}
+            disabled={reportQuery.isFetching || !canLoadReports}
           >
             <IconRefresh
               className={cn("size-4", reportQuery.isFetching && "animate-spin")}
@@ -114,7 +120,23 @@ export function WhatsAppReportsPage() {
           </div>
         ) : null}
 
-        {reportQuery.isLoading ? (
+        {checkingConnection ? (
+          <div className="text-muted-foreground text-sm">
+            {t("common.loading", "Carregando...")}
+          </div>
+        ) : !canLoadReports ? (
+          <div className="text-muted-foreground flex min-h-[260px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 text-center">
+            <IconAlertTriangle className="size-6" />
+            <div>
+              <h3 className="text-foreground text-sm font-medium">
+                WhatsApp Nativo desconectado
+              </h3>
+              <p className="mt-1 max-w-sm text-sm">
+                Conecte o canal na Caixa WhatsApp para carregar os relatórios.
+              </p>
+            </div>
+          </div>
+        ) : reportQuery.isLoading ? (
           <div className="text-muted-foreground text-sm">
             {t("common.loading", "Carregando...")}
           </div>

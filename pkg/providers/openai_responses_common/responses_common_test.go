@@ -541,6 +541,19 @@ func TestBuildMultipartContent_AudioFile(t *testing.T) {
 	}
 }
 
+func TestBuildMultipartContent_DocumentFile(t *testing.T) {
+	parts := BuildMultipartContent("", []string{"data:application/pdf;base64,UEZERGF0YQ=="})
+	if len(parts) != 1 {
+		t.Fatalf("len(parts) = %d, want 1", len(parts))
+	}
+	if parts[0].OfInputFile == nil {
+		t.Fatal("expected file part for document")
+	}
+	if !parts[0].OfInputFile.Filename.Valid() || parts[0].OfInputFile.Filename.Value != "document.pdf" {
+		t.Fatalf("Filename = %#v, want document.pdf", parts[0].OfInputFile.Filename)
+	}
+}
+
 func TestBuildMultipartContent_EmptyTextSkipped(t *testing.T) {
 	parts := BuildMultipartContent("", []string{"data:image/png;base64,abc"})
 	if len(parts) != 1 {

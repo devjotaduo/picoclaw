@@ -285,6 +285,34 @@ func TestParseInlineImageMedia_Valid(t *testing.T) {
 	}
 }
 
+func TestParseInlineImageMedia_Document(t *testing.T) {
+	media, err := parseInlineImageMedia(map[string]any{
+		"media": []any{
+			"data:application/pdf;base64,UEZERGF0YQ==",
+		},
+	})
+	if err != nil {
+		t.Fatalf("parseInlineImageMedia() error = %v", err)
+	}
+	if len(media) != 1 {
+		t.Fatalf("len(media) = %d, want 1", len(media))
+	}
+	if !strings.HasPrefix(media[0], "data:application/pdf;base64,") {
+		t.Fatalf("media[0] = %q, want inline PDF payload", media[0])
+	}
+}
+
+func TestParseInlineImageMedia_RejectsUnsupportedDocument(t *testing.T) {
+	_, err := parseInlineImageMedia(map[string]any{
+		"media": []any{
+			"data:application/x-msdownload;base64,AAAA",
+		},
+	})
+	if err == nil {
+		t.Fatal("parseInlineImageMedia() error = nil, want unsupported document error")
+	}
+}
+
 func TestPicoChannel_HandleMessageSend_AllowsMediaOnly(t *testing.T) {
 	mb := bus.NewMessageBus()
 	bc := &config.Channel{Type: "pico", Enabled: true}

@@ -98,7 +98,8 @@ func TranslateMessages(messages []protocoltypes.Message) (input responses.Respon
 }
 
 // BuildMultipartContent constructs a ResponseInputMessageContentListParam from
-// text content and media URLs (data:image/... and data:audio/... URIs).
+// text content and media URLs (data:image/..., data:audio/..., data:text/...,
+// and supported data:application/... URIs).
 func BuildMultipartContent(text string, media []string) responses.ResponseInputMessageContentListParam {
 	parts := make(responses.ResponseInputMessageContentListParam, 0, 1+len(media))
 
@@ -127,10 +128,70 @@ func BuildMultipartContent(text string, media []string) responses.ResponseInputM
 					},
 				})
 			}
+		} else if filename, data, ok := parseDataFileURL(mediaURL); ok {
+			parts = append(parts, responses.ResponseInputContentUnionParam{
+				OfInputFile: &responses.ResponseInputFileParam{
+					FileData: openai.Opt(data),
+					Filename: openai.Opt(filename),
+				},
+			})
 		}
 	}
 
 	return parts
+}
+
+func parseDataFileURL(mediaURL string) (filename string, data string, ok bool) {
+	if !strings.HasPrefix(mediaURL, "data:application/") &&
+		!strings.HasPrefix(mediaURL, "data:text/") {
+		return "", "", false
+	}
+
+	header, payload, found := strings.Cut(mediaURL, ",")
+	if !found || strings.TrimSpace(payload) == "" {
+		return "", "", false
+	}
+	if !strings.Contains(header, ";base64") {
+		return "", "", false
+	}
+
+	mimeWithParams := strings.TrimPrefix(header, "data:")
+	mimeType, _, _ := strings.Cut(mimeWithParams, ";")
+	extension, ok := dataFileExtension(mimeType)
+	if !ok {
+		return "", "", false
+	}
+
+	return "document." + extension, strings.TrimSpace(payload), true
+}
+
+func dataFileExtension(mimeType string) (string, bool) {
+	switch mimeType {
+	case "application/json":
+		return "json", true
+	case "application/msword":
+		return "doc", true
+	case "application/pdf":
+		return "pdf", true
+	case "application/vnd.ms-excel":
+		return "xls", true
+	case "application/vnd.ms-powerpoint":
+		return "ppt", true
+	case "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+		return "pptx", true
+	case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+		return "xlsx", true
+	case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+		return "docx", true
+	case "text/csv":
+		return "csv", true
+	case "text/markdown":
+		return "md", true
+	case "text/plain":
+		return "txt", true
+	default:
+		return "", false
+	}
 }
 
 // ResolveToolCall extracts the function name and JSON arguments string from a ToolCall.

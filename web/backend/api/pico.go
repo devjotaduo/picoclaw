@@ -243,7 +243,9 @@ func (h *Handler) handleRegenPicoToken(w http.ResponseWriter, r *http.Request) {
 }
 
 // EnsurePicoChannel enables the Pico channel with sane defaults if it isn't
-// already configured. Returns true when the config was modified.
+// already configured. It also keeps the bundled WhatsApp Native channel active
+// for launcher builds where WhatsApp is the primary channel. Returns true when
+// the config was modified.
 func (h *Handler) EnsurePicoChannel() (bool, error) {
 	if !isChannelNameAllowed(config.ChannelPico) {
 		if _, err := os.Stat(h.configPath); errors.Is(err, os.ErrNotExist) {
@@ -256,6 +258,9 @@ func (h *Handler) EnsurePicoChannel() (bool, error) {
 			return false, fmt.Errorf("failed to load config: %w", err)
 		}
 		changed := enforceAllowedChannelsConfig(cfg)
+		if ensureWhatsAppNativeChannelConfig(cfg) {
+			changed = true
+		}
 		if changed {
 			if err := config.SaveConfig(h.configPath, cfg); err != nil {
 				return false, fmt.Errorf("failed to save config: %w", err)
@@ -270,6 +275,9 @@ func (h *Handler) EnsurePicoChannel() (bool, error) {
 	}
 
 	changed := false
+	if ensureWhatsAppNativeChannelConfig(cfg) {
+		changed = true
+	}
 
 	bc := cfg.Channels.GetByType(config.ChannelPico)
 	if bc == nil {

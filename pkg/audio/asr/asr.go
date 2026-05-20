@@ -140,6 +140,26 @@ func fallbackTranscriberFromModelConfig(modelCfg *config.ModelConfig) Transcribe
 	return nil
 }
 
+func openRouterWhisperFallbackFromModelConfig(modelCfg *config.ModelConfig) Transcriber {
+	if modelCfg == nil || modelCfg.APIKey() == "" {
+		return nil
+	}
+
+	protocol, _ := providers.ExtractProtocol(modelCfg)
+	if protocol != "openrouter" {
+		return nil
+	}
+
+	derived := *modelCfg
+	derived.ModelName = strings.TrimSpace(modelCfg.ModelName)
+	if derived.ModelName == "" {
+		derived.ModelName = "openrouter-whisper"
+	}
+	derived.Provider = "openrouter"
+	derived.Model = "openai/whisper-1"
+	return NewWhisperTranscriber(&derived)
+}
+
 // DetectTranscriber inspects cfg and returns the appropriate Transcriber, or
 // nil if no supported transcription provider is configured.
 func DetectTranscriber(cfg *config.Config) Transcriber {
@@ -159,6 +179,12 @@ func DetectTranscriber(cfg *config.Config) Transcriber {
 	// Fall back to compatibility scanning for legacy auto-detected ASR providers.
 	for _, mc := range cfg.ModelList {
 		if tr := fallbackTranscriberFromModelConfig(mc); tr != nil {
+			return tr
+		}
+	}
+
+	for _, mc := range cfg.ModelList {
+		if tr := openRouterWhisperFallbackFromModelConfig(mc); tr != nil {
 			return tr
 		}
 	}

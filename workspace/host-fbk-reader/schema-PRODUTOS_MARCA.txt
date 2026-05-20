@@ -1,6 +1,0 @@
-
-FIELD_NAME                      FIELD_TYPE                FIELD_LENGTH FIELD_SCALE FIELD_POSITION     NOT_NULL 
-=============================== ========================= ============ =========== ============== ============ 
-ID                              INTEGER                              4           0              0            1 
-MARCA                           VARCHAR                             20           0              1            0 
-

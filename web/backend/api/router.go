@@ -95,6 +95,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Agent templates (apply preset workspace AGENT.md/SOUL.md)
 	h.registerAgentTemplateRoutes(mux)
 
+	// Workspace-defined agents from workspace/agents/*.md.
+	h.registerWorkspaceAgentRoutes(mux)
+
 	// Agent prompt version history (server-side replacement for the
 	// localStorage fallback the frontend uses when this endpoint is
 	// unavailable).

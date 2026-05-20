@@ -27,14 +27,30 @@ import {
 interface AssistantMessageProps {
   content: string
   attachments?: ChatAttachment[]
+  assistantName?: string
   kind?: AssistantMessageKind
   toolCalls?: ChatToolCall[]
   timestamp?: string | number
 }
 
+function localizeContextCommandContent(content: string): string {
+  if (!content.includes("Context usage")) {
+    return content
+  }
+
+  return content
+    .replace(/^Context usage/gm, "Uso do contexto")
+    .replace(/^Messages:/gm, "Mensagens:")
+    .replace(/^Used:/gm, "Usado:")
+    .replace(/^Compress at:/gm, "Limite de compressão:")
+    .replace(/^Compression progress:/gm, "Progresso da compressão:")
+    .replace(/^Remaining:/gm, "Restante:")
+}
+
 export function AssistantMessage({
   content,
   attachments = [],
+  assistantName = "",
   kind = "normal",
   toolCalls = [],
   timestamp = "",
@@ -44,7 +60,8 @@ export function AssistantMessage({
   const isThought = kind === "thought"
   const isToolCalls = kind === "tool_calls"
   const isCollapsedBlock = isThought || isToolCalls
-  const hasText = content.trim().length > 0
+  const displayContent = localizeContextCommandContent(content)
+  const hasText = displayContent.trim().length > 0
   const hasToolCalls = toolCalls.length > 0
   const imageAttachments = attachments.filter(
     (attachment) => attachment.type === "image",
@@ -58,6 +75,9 @@ export function AssistantMessage({
   const [isExpanded, setIsExpanded] = useState(true)
   const formattedTimestamp =
     timestamp !== "" ? formatMessageTime(timestamp) : ""
+  const messageMeta = [assistantName.trim(), formattedTimestamp].filter(
+    Boolean,
+  )
 
   const handleCopy = async () => {
     const markCopied = () => {
@@ -67,7 +87,7 @@ export function AssistantMessage({
 
     try {
       if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(content)
+        await navigator.clipboard.writeText(displayContent)
         markCopied()
         return
       }
@@ -76,7 +96,7 @@ export function AssistantMessage({
     }
 
     const textArea = document.createElement("textarea")
-    textArea.value = content
+    textArea.value = displayContent
     textArea.setAttribute("readonly", "")
     textArea.style.position = "fixed"
     textArea.style.left = "-9999px"
@@ -99,16 +119,10 @@ export function AssistantMessage({
 
   return (
     <div className="group flex w-full flex-col gap-1.5">
-      {!isCollapsedBlock && (
+      {!isCollapsedBlock && messageMeta.length > 0 && (
         <div className="text-muted-foreground/60 flex items-center justify-between gap-2 px-1 text-xs opacity-70">
           <div className="flex items-center gap-2">
-            <span>PicoClaw</span>
-            {formattedTimestamp && (
-              <>
-                <span className="opacity-50">•</span>
-                <span>{formattedTimestamp}</span>
-              </>
-            )}
+            <span>{messageMeta.join(" • ")}</span>
           </div>
         </div>
       )}
@@ -226,7 +240,7 @@ export function AssistantMessage({
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
               >
-                {content}
+                {displayContent}
               </ReactMarkdown>
             </div>
           )}

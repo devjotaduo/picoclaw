@@ -119,6 +119,21 @@ func TestDetectTranscriber(t *testing.T) {
 			wantName: "whisper",
 		},
 		{
+			name: "openrouter chat model derives whisper fallback",
+			cfg: &config.Config{
+				ModelList: []*config.ModelConfig{
+					{
+						ModelName: "openrouter-gpt",
+						Provider:  "openrouter",
+						Model:     "openai/gpt-5.4",
+						APIBase:   "https://openrouter.ai/api/v1",
+						APIKeys:   config.SimpleSecureStrings("sk-openrouter"),
+					},
+				},
+			},
+			wantName: "whisper",
+		},
+		{
 			name: "voice model name alias selects non-gemini audio model transcriber",
 			cfg: &config.Config{
 				Voice: config.VoiceConfig{ModelName: "my-asr-model"},

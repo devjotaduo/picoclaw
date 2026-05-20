@@ -207,19 +207,17 @@ export function AppHeader() {
             <TooltipTrigger asChild>
               <span
                 role="status"
-                aria-label={t(
-                  "header.gateway.status.running",
-                  "Gateway online",
-                )}
-                className="hidden items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 transition-colors duration-200 sm:inline-flex dark:bg-emerald-500/20 dark:text-emerald-300"
+                aria-label={t("header.gateway.status.running", "Conectado")}
+                className="text-muted-foreground/70 hidden items-center gap-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium transition-colors duration-200 sm:inline-flex"
                 data-tour="gateway-button"
               >
-                <span className="size-1.5 rounded-full bg-emerald-500/90" />
-                {t("header.gateway.status.running", "Gateway online")}
+                <span className="size-1.5 rounded-full bg-emerald-500/60" />
+                {t("header.gateway.status.running", "Conectado")}
               </span>
             </TooltipTrigger>
             <TooltipContent>
-              {gwError ?? t("header.gateway.action.running", "Gateway rodando")}
+              {gwError ??
+                t("header.gateway.action.running", "Serviço conectado")}
             </TooltipContent>
           </Tooltip>
         ) : (

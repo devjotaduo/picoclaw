@@ -341,7 +341,9 @@ export function sendChatMessage({
   const normalizedAttachments = attachments
     .filter(
       (attachment) =>
-        (attachment.type === "image" || attachment.type === "audio") &&
+        (attachment.type === "image" ||
+          attachment.type === "audio" ||
+          attachment.type === "file") &&
         attachment.url,
     )
     .map((attachment) => ({ ...attachment }))
