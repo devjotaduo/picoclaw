@@ -79,7 +79,7 @@ export function ChatHeader({
           type="button"
           onClick={onRefreshAvatar}
           disabled={avatarLoading}
-          className="focus-visible:ring-ring absolute inset-0 flex items-center justify-center rounded-full bg-black/0 opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:bg-black/40 focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed"
+          className="focus-visible:ring-ring absolute inset-0 flex items-center justify-center rounded-full bg-black/0 opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100 focus-visible:bg-black/40 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed"
           aria-label="Atualizar foto de perfil"
         >
           {avatarLoading ? (
@@ -96,7 +96,7 @@ export function ChatHeader({
         className="group min-w-0 flex-1 text-left"
         aria-label={`Abrir perfil de ${displayName}`}
       >
-        <h3 className="group-hover:text-primary truncate text-base font-semibold leading-tight transition-colors">
+        <h3 className="group-hover:text-primary truncate text-base leading-tight font-semibold transition-colors">
           {displayName}
         </h3>
         <p className="text-foreground/65 mt-0.5 truncate text-[13px]">

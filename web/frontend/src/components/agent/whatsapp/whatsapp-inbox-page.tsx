@@ -22,6 +22,11 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
 import {
+  getChannelConfig,
+  getWhatsAppNativeQR,
+  patchAppConfig,
+} from "@/api/channels"
+import {
   type InboxEvent,
   type WhatsAppChat,
   type WhatsAppContactProfile,
@@ -38,6 +43,7 @@ import {
   saveWhatsAppContactProfile,
   sendWhatsAppManual,
 } from "@/api/whatsapp"
+import { WhatsAppNativeForm } from "@/components/channels/channel-forms/whatsapp-native-form"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -51,9 +57,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
+import { useAgentAutoPause } from "@/hooks/whatsapp/use-agent-auto-pause"
 import { useConversationSearch } from "@/hooks/whatsapp/use-conversation-search"
 import { useDragDropFiles } from "@/hooks/whatsapp/use-drag-drop-files"
-import { useAgentAutoPause } from "@/hooks/whatsapp/use-agent-auto-pause"
 import { useGlobalShortcuts } from "@/hooks/whatsapp/use-global-shortcuts"
 import { useInboxConnection } from "@/hooks/whatsapp/use-inbox-connection"
 import { useInternalNotes } from "@/hooks/whatsapp/use-internal-notes"
@@ -70,6 +76,7 @@ import {
 import { formatJID } from "@/lib/whatsapp/format"
 import { truncatePreview } from "@/lib/whatsapp/quote"
 import { computeSLA } from "@/lib/whatsapp/sla"
+import { refreshGatewayState } from "@/store/gateway"
 
 import { ChatHeader } from "./chat/chat-header"
 import { CommandPalette } from "./chat/command-palette"
@@ -80,7 +87,7 @@ import { ConversationSearch } from "./chat/conversation-search"
 import { DragDropOverlay } from "./chat/drag-drop-overlay"
 import { EmptyConversationIllustration } from "./chat/empty-conversation-illustration"
 import { InboxSettingsMenu } from "./chat/inbox-settings-menu"
-import { LifecycleMenu, type LifecycleAction } from "./chat/lifecycle-menu"
+import { type LifecycleAction, LifecycleMenu } from "./chat/lifecycle-menu"
 import { MessageInput, type MessageInputHandle } from "./chat/message-input"
 import { MessageList } from "./chat/message-list"
 import { type ReplyTarget } from "./chat/reply-preview"
@@ -89,6 +96,22 @@ import { TagList } from "./chat/tag-list"
 
 const CHATS_QUERY_KEY = ["whatsapp", "chats"]
 const messagesQueryKey = (jid: string) => ["whatsapp", "messages", jid]
+const WHATSAPP_NATIVE_CONFIG_QUERY_KEY = [
+  "channels",
+  "whatsapp_native",
+  "config",
+] as const
+const WHATSAPP_NATIVE_QR_QUERY_KEY = ["whatsapp_native", "qr", "inbox"] as const
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function asBool(value: unknown): boolean {
+  return value === true
+}
 
 // ─── main page ────────────────────────────────────────────────────────────────
 
@@ -117,6 +140,54 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
     queryKey: CHATS_QUERY_KEY,
     queryFn: () => listWhatsAppChats(150),
     refetchInterval: 30_000,
+  })
+  const whatsAppNativeConfigQuery = useQuery({
+    queryKey: WHATSAPP_NATIVE_CONFIG_QUERY_KEY,
+    queryFn: () => getChannelConfig("whatsapp_native"),
+    staleTime: 10_000,
+  })
+  const whatsAppNativeEnabled = asBool(
+    whatsAppNativeConfigQuery.data?.config.enabled,
+  )
+  const whatsAppNativeStatusQuery = useQuery({
+    queryKey: WHATSAPP_NATIVE_QR_QUERY_KEY,
+    queryFn: getWhatsAppNativeQR,
+    enabled: whatsAppNativeEnabled,
+    refetchInterval: whatsAppNativeEnabled ? 5_000 : false,
+  })
+  const enableWhatsAppNativeMutation = useMutation({
+    mutationFn: async () => {
+      const currentConfig =
+        whatsAppNativeConfigQuery.data ??
+        (await getChannelConfig("whatsapp_native"))
+      const settings = asRecord(asRecord(currentConfig.config).settings)
+
+      await patchAppConfig({
+        channel_list: {
+          [currentConfig.config_key]: {
+            enabled: true,
+            type: "whatsapp_native",
+            settings: {
+              ...settings,
+              use_native: true,
+            },
+          },
+        },
+      })
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: WHATSAPP_NATIVE_CONFIG_QUERY_KEY,
+        }),
+        queryClient.invalidateQueries({ queryKey: WHATSAPP_NATIVE_QR_QUERY_KEY }),
+        refreshGatewayState({ force: true }),
+      ])
+      toast.success("WhatsApp Nativo ativado")
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : String(err))
+    },
   })
 
   const messagesQuery = useQuery({
@@ -161,6 +232,18 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
     [queryClient],
   )
   const { status: connectionStatus } = useInboxConnection(handleInboxEvent)
+  const whatsAppNativeStatus = whatsAppNativeStatusQuery.data?.status
+  const whatsAppNativeChecking =
+    whatsAppNativeConfigQuery.isLoading ||
+    (whatsAppNativeEnabled &&
+      whatsAppNativeStatusQuery.isLoading &&
+      !whatsAppNativeStatus)
+  const shouldShowWhatsAppNativeSetup =
+    whatsAppNativeChecking ||
+    whatsAppNativeConfigQuery.isError ||
+    !whatsAppNativeEnabled ||
+    whatsAppNativeStatusQuery.isError ||
+    (whatsAppNativeStatus !== undefined && whatsAppNativeStatus !== "confirmed")
 
   // Track optimistic message keys so MessageBubble renders the clock icon.
   const { pending: pendingIds, add: addPending } = usePendingMessages()
@@ -185,7 +268,9 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
       queryKey: ["whatsapp", "profile"],
     })
     for (const [key, profile] of all) {
-      const jid = Array.isArray(key) ? (key[2] as string | undefined) : undefined
+      const jid = Array.isArray(key)
+        ? (key[2] as string | undefined)
+        : undefined
       if (jid && profile) map[jid] = profile
     }
     return map
@@ -207,6 +292,8 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
     () => allChats.find((c) => c.jid === selectedJID) ?? null,
     [allChats, selectedJID],
   )
+  const showWhatsAppNativeSetupOnly =
+    shouldShowWhatsAppNativeSetup && !selectedChat
 
   const pauseMutation = useMutation({
     mutationFn: ({ jid, paused }: { jid: string; paused: boolean }) =>
@@ -293,7 +380,9 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
           queryClient.setQueryData<WhatsAppChat[]>(CHATS_QUERY_KEY, (prev) => {
             if (!prev) return prev
             return prev.map((c) =>
-              c.jid === chat.jid ? { ...c, unread_count: chat.unread_count } : c,
+              c.jid === chat.jid
+                ? { ...c, unread_count: chat.unread_count }
+                : c,
             )
           })
           toast.error(err instanceof Error ? err.message : String(err))
@@ -362,14 +451,16 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
   // ↑/↓ navigates the filtered list; Enter opens current; / focuses composer;
   // Ctrl+K opens the global palette.
   const selectedIndex = useMemo(
-    () => (selectedJID ? sortedChats.findIndex((c) => c.jid === selectedJID) : -1),
+    () =>
+      selectedJID ? sortedChats.findIndex((c) => c.jid === selectedJID) : -1,
     [selectedJID, sortedChats],
   )
 
   useGlobalShortcuts({
     onPrevConversation: () => {
       if (sortedChats.length === 0) return
-      const next = selectedIndex <= 0 ? sortedChats.length - 1 : selectedIndex - 1
+      const next =
+        selectedIndex <= 0 ? sortedChats.length - 1 : selectedIndex - 1
       const target = sortedChats[next]
       if (target) handleSelectChat(target.jid)
     },
@@ -403,27 +494,35 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
       </PageHeader>
 
       <div className="flex-1 overflow-hidden">
-        <div className="h-full lg:grid lg:grid-cols-[340px_minmax(0,1fr)]">
-          <ConversationList
-            chats={sortedChats}
-            selectedJID={selectedJID}
-            onSelect={handleSelectChat}
-            loading={chatsQuery.isLoading}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            unreadTotal={counts.unread}
-            onToggleRead={handleToggleRead}
-            onTogglePause={handleTogglePauseFromList}
-            filter={filter}
-            onFilterChange={setFilter}
-            sort={sort}
-            onSortChange={setSort}
-            tagOptions={tagOptions}
-            selectedTag={selectedTag}
-            onSelectedTagChange={setSelectedTag}
-            counts={counts}
-            hidden={mobileView === "chat"}
-          />
+        <div
+          className={`h-full lg:grid ${
+            showWhatsAppNativeSetupOnly
+              ? "lg:grid-cols-1"
+              : "lg:grid-cols-[340px_minmax(0,1fr)]"
+          }`}
+        >
+          {!showWhatsAppNativeSetupOnly && (
+            <ConversationList
+              chats={sortedChats}
+              selectedJID={selectedJID}
+              onSelect={handleSelectChat}
+              loading={chatsQuery.isLoading}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              unreadTotal={counts.unread}
+              onToggleRead={handleToggleRead}
+              onTogglePause={handleTogglePauseFromList}
+              filter={filter}
+              onFilterChange={setFilter}
+              sort={sort}
+              onSortChange={setSort}
+              tagOptions={tagOptions}
+              selectedTag={selectedTag}
+              onSelectedTagChange={setSelectedTag}
+              counts={counts}
+              hidden={mobileView === "chat"}
+            />
+          )}
 
           <ConversationPanel
             chat={selectedChat}
@@ -455,7 +554,17 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
             pendingIds={pendingIds}
             onDeleteLocal={handleDeleteLocal}
             onBack={handleBackToList}
-            hidden={mobileView === "list"}
+            hidden={mobileView === "list" && !showWhatsAppNativeSetupOnly}
+            whatsAppNativeSetup={{
+              shouldShow: shouldShowWhatsAppNativeSetup,
+              checking: whatsAppNativeChecking,
+              enabled: whatsAppNativeEnabled,
+              configError: whatsAppNativeConfigQuery.isError
+                ? whatsAppNativeConfigQuery.error
+                : null,
+              activating: enableWhatsAppNativeMutation.isPending,
+              onEnable: () => enableWhatsAppNativeMutation.mutate(),
+            }}
           />
         </div>
       </div>
@@ -582,7 +691,7 @@ function ConversationList({
               "pages.agent.whatsapp.search_placeholder",
               "Buscar nome, telefone…",
             )}
-            className="border-border/60 bg-muted/30 placeholder:text-muted-foreground/60 focus:ring-primary/20 w-full rounded-xl border py-2 pr-8 pl-8 text-xs outline-none transition-shadow focus:ring-2"
+            className="border-border/60 bg-muted/30 placeholder:text-muted-foreground/60 focus:ring-primary/20 w-full rounded-xl border py-2 pr-8 pl-8 text-xs transition-shadow outline-none focus:ring-2"
           />
           {hasSearch && (
             <button
@@ -653,6 +762,15 @@ function ConversationList({
 
 // ─── conversation panel (right) ──────────────────────────────────────────────
 
+interface WhatsAppNativeSetupPanelState {
+  shouldShow: boolean
+  checking: boolean
+  enabled: boolean
+  configError: Error | null
+  activating: boolean
+  onEnable: () => void
+}
+
 function ConversationPanel(props: {
   chat: WhatsAppChat | null
   messages: WhatsAppMessage[]
@@ -671,16 +789,27 @@ function ConversationPanel(props: {
   onDeleteLocal: (m: WhatsAppMessage) => void
   onBack: () => void
   hidden: boolean
+  whatsAppNativeSetup: WhatsAppNativeSetupPanelState
 }) {
   if (!props.chat) {
+    const showNativeSetup = props.whatsAppNativeSetup.shouldShow
+
     return (
       <section
-        className={`bg-muted/5 flex h-full items-center justify-center ${
+        className={`bg-muted/5 flex h-full ${
+          showNativeSetup
+            ? "items-start justify-center overflow-y-auto p-4 lg:p-6"
+            : "items-center justify-center"
+        } ${
           props.hidden ? "hidden lg:flex" : "flex"
         }`}
         aria-label="Painel de conversa"
       >
-        <EmptyConversationState />
+        {showNativeSetup ? (
+          <WhatsAppNativeSetupState setup={props.whatsAppNativeSetup} />
+        ) : (
+          <EmptyConversationState />
+        )}
       </section>
     )
   }
@@ -828,7 +957,9 @@ function ConversationView({
       queryClient.setQueryData(["whatsapp", "profile", chat.jid], saved)
     },
     onError: (err) =>
-      toast.error(err instanceof Error ? err.message : "Falha ao salvar perfil"),
+      toast.error(
+        err instanceof Error ? err.message : "Falha ao salvar perfil",
+      ),
   })
 
   const handleLifecycle = useCallback(
@@ -839,7 +970,9 @@ function ConversationView({
         return
       }
       const next: WhatsAppContactProfile = { ...base }
-      const tags = new Set((base.tags ?? []).map((t) => t.trim()).filter(Boolean))
+      const tags = new Set(
+        (base.tags ?? []).map((t) => t.trim()).filter(Boolean),
+      )
       if (action === "resolve") {
         next.lead_stage = "closed"
         tags.delete("archived")
@@ -894,7 +1027,9 @@ function ConversationView({
         chat={chat}
         displayName={displayName}
         avatarUrl={avatarUrl}
-        avatarLoading={avatarQuery.isFetching || refreshAvatarMutation.isPending}
+        avatarLoading={
+          avatarQuery.isFetching || refreshAvatarMutation.isPending
+        }
         autoPaused={autoPaused}
         connectionStatus={connectionStatus}
         togglingPause={togglingPause}
@@ -927,15 +1062,14 @@ function ConversationView({
         onOpenChange={setProfileSheetOpen}
         chat={chat}
         avatarUrl={avatarUrl}
-        avatarLoading={avatarQuery.isFetching || refreshAvatarMutation.isPending}
+        avatarLoading={
+          avatarQuery.isFetching || refreshAvatarMutation.isPending
+        }
         onRefreshAvatar={() => refreshAvatarMutation.mutate()}
         profile={profileQuery.data ?? null}
         insight={insightQuery.data ?? null}
         onProfileSaved={(updated) => {
-          queryClient.setQueryData(
-            ["whatsapp", "profile", chat.jid],
-            updated,
-          )
+          queryClient.setQueryData(["whatsapp", "profile", chat.jid], updated)
         }}
       />
 
@@ -1030,13 +1164,13 @@ function ContactContextBar({
 
   const stageBg: Record<string, string> = {
     qualified:
-      "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-800",
+      "bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-300 dark:ring-emerald-500/30",
     lead: "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:ring-blue-800",
     nurturing:
       "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:ring-amber-800",
   }
   const priorityBg: Record<string, string> = {
-    high: "bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/40 dark:text-red-400 dark:ring-red-800",
+    high: "bg-red-500/10 text-red-700 ring-red-500/20 dark:bg-red-500/20 dark:text-red-300 dark:ring-red-500/30",
     medium:
       "bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:ring-orange-800",
     low: "bg-muted text-foreground/70 ring-border",
@@ -1125,7 +1259,7 @@ function ProfileNotesSection({ chatJID }: { chatJID: string }) {
         {notes.slice(0, 8).map((note) => (
           <li
             key={note.id}
-            className="bg-background/70 ring-amber-200/60 rounded-lg p-2 ring-1 dark:ring-amber-800/40"
+            className="bg-background/70 rounded-lg p-2 ring-1 ring-amber-200/60 dark:ring-amber-800/40"
           >
             <p className="text-foreground/85 text-xs whitespace-pre-wrap">
               {note.content}
@@ -1483,7 +1617,10 @@ function ContactProfileSheet({
                         Produtos mencionados
                       </p>
                       {insight.products.map((p, i) => (
-                        <div key={i} className="flex items-center gap-2 text-xs">
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 text-xs"
+                        >
                           <span className="font-medium">{p.product}</span>
                           {p.quantity && (
                             <span className="text-foreground/60">
@@ -1560,6 +1697,63 @@ function ContactProfileSheet({
 
 // ─── empty states & skeletons ────────────────────────────────────────────────
 
+function WhatsAppNativeSetupState({
+  setup,
+}: {
+  setup: WhatsAppNativeSetupPanelState
+}) {
+  if (setup.checking) {
+    return (
+      <div className="animate-in fade-in-0 flex max-w-md flex-col items-center gap-3 px-6 text-center duration-200">
+        <IconLoader2 className="text-muted-foreground size-6 animate-spin" />
+        <p className="text-muted-foreground text-sm">
+          Verificando conexão do WhatsApp Nativo...
+        </p>
+      </div>
+    )
+  }
+
+  if (!setup.enabled || setup.configError) {
+    return (
+      <div className="animate-in fade-in-0 slide-in-from-bottom-2 my-auto flex max-w-md flex-col items-center gap-5 px-6 text-center duration-300">
+        <div className="bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 flex size-14 items-center justify-center rounded-xl">
+          <IconBrandWhatsapp className="size-7" />
+        </div>
+        <div className="space-y-1.5">
+          <h3 className="text-foreground text-lg font-semibold">
+            WhatsApp Nativo desativado
+          </h3>
+          <p className="text-foreground/70 text-sm leading-relaxed">
+            Ative o canal para receber e responder conversas pela Caixa
+            WhatsApp.
+          </p>
+          {setup.configError && (
+            <p className="text-red-700 dark:text-red-300 pt-1 text-xs">
+              {setup.configError.message}
+            </p>
+          )}
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          className="gap-2"
+          onClick={setup.onEnable}
+          disabled={setup.activating}
+        >
+          {setup.activating && <IconLoader2 className="size-4 animate-spin" />}
+          Ativar WhatsApp Nativo
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="animate-in fade-in-0 slide-in-from-bottom-2 my-auto w-full max-w-md px-4 py-6 duration-300">
+      <WhatsAppNativeForm enabled={setup.enabled} compact />
+    </div>
+  )
+}
+
 function EmptyConversationState() {
   return (
     <div className="animate-in fade-in-0 slide-in-from-bottom-2 flex max-w-md flex-col items-center gap-5 px-6 text-center duration-300">
@@ -1569,8 +1763,8 @@ function EmptyConversationState() {
           Selecione uma conversa para começar
         </h3>
         <p className="text-foreground/70 text-sm leading-relaxed">
-          Escolha um contato na lista à esquerda para visualizar as mensagens
-          e responder em tempo real.
+          Escolha um contato na lista à esquerda para visualizar as mensagens e
+          responder em tempo real.
         </p>
       </div>
       <div className="bg-muted/40 w-full space-y-2 rounded-xl p-4 text-left">

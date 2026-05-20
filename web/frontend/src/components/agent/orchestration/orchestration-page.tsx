@@ -557,7 +557,9 @@ export function OrchestrationPage() {
                     </div>
                     <AvatarUpload
                       value={selectedProfile.imageURL}
-                      onChange={(next) => updateSelectedProfile({ imageURL: next })}
+                      onChange={(next) =>
+                        updateSelectedProfile({ imageURL: next })
+                      }
                     />
                   </div>
                 </CardContent>
@@ -945,7 +947,9 @@ function AttendantRoleConfigEditor({
         <TextListField
           label="Regras de escalonamento"
           value={lines(attendant.escalation_rules)}
-          placeholder={"reclamacao grave\ndesconto ou excecao\ninformacao nao confirmada"}
+          placeholder={
+            "reclamacao grave\ndesconto ou excecao\ninformacao nao confirmada"
+          }
           onChange={(value) =>
             updateAttendant({ escalation_rules: splitLines(value) })
           }
@@ -997,7 +1001,9 @@ function SalesRoleConfigEditor({
         <TextListField
           label="Etapas do funil"
           value={lines(sales.funnel_stages)}
-          placeholder={"novo\nqualificacao\nproposta\nfollow_up\nganho\nperdido"}
+          placeholder={
+            "novo\nqualificacao\nproposta\nfollow_up\nganho\nperdido"
+          }
           onChange={(value) =>
             updateSales({ funnel_stages: splitLines(value) })
           }
@@ -1005,7 +1011,9 @@ function SalesRoleConfigEditor({
         <TextListField
           label="Campos de qualificação"
           value={lines(sales.qualification_fields)}
-          placeholder={"problema\nfit\nautoridade\nprazo\norcamento\nproximo_passo"}
+          placeholder={
+            "problema\nfit\nautoridade\nprazo\norcamento\nproximo_passo"
+          }
           onChange={(value) =>
             updateSales({ qualification_fields: splitLines(value) })
           }
@@ -1023,7 +1031,9 @@ function SalesRoleConfigEditor({
         <TextListField
           label="Regras de handoff"
           value={lines(sales.handoff_rules)}
-          placeholder={"lead qualificado com prazo\npedido de contrato\nexcecao comercial"}
+          placeholder={
+            "lead qualificado com prazo\npedido de contrato\nexcecao comercial"
+          }
           onChange={(value) =>
             updateSales({ handoff_rules: splitLines(value) })
           }
@@ -1325,7 +1335,9 @@ function AssistantRoleConfigEditor({
         <TextListField
           label="Escopos autorizados"
           value={lines(assistant.authorized_scopes)}
-          placeholder={"workspace\nagents\nreports\ndocuments\nagenda\norchestration"}
+          placeholder={
+            "workspace\nagents\nreports\ndocuments\nagenda\norchestration"
+          }
           onChange={(value) =>
             updateAssistant({ authorized_scopes: splitLines(value) })
           }
@@ -1351,7 +1363,9 @@ function AssistantRoleConfigEditor({
         <TextListField
           label="Exige confirmação"
           value={lines(assistant.requires_confirmation)}
-          placeholder={"editar agentes\nalterar permissoes\npublicar materiais\napagar arquivos"}
+          placeholder={
+            "editar agentes\nalterar permissoes\npublicar materiais\napagar arquivos"
+          }
           onChange={(value) =>
             updateAssistant({ requires_confirmation: splitLines(value) })
           }

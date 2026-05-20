@@ -1,9 +1,9 @@
-import { dedupeTags } from "@/lib/whatsapp/dedupe-tags"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { dedupeTags } from "@/lib/whatsapp/dedupe-tags"
 
 export interface TagListProps {
   tags: readonly string[] | null | undefined

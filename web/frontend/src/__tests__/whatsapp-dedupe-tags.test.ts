@@ -5,7 +5,11 @@ import { dedupeTags } from "@/lib/whatsapp/dedupe-tags"
 describe("dedupeTags", () => {
   it("returns empty buckets for null/undefined/empty input", () => {
     expect(dedupeTags(null)).toEqual({ visible: [], overflow: [], total: 0 })
-    expect(dedupeTags(undefined)).toEqual({ visible: [], overflow: [], total: 0 })
+    expect(dedupeTags(undefined)).toEqual({
+      visible: [],
+      overflow: [],
+      total: 0,
+    })
     expect(dedupeTags([])).toEqual({ visible: [], overflow: [], total: 0 })
   })
 

@@ -1,10 +1,9 @@
 import { IconChevronRight, IconClipboard } from "@tabler/icons-react"
 import { useState } from "react"
 
+import type { TemplateApplyPayload } from "@/components/agent/templates/types"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-
-import type { TemplateApplyPayload } from "@/components/agent/templates/types"
 
 import { describePayloadSources } from "./prompt-sources"
 
@@ -13,7 +12,10 @@ export interface PromptPreviewProps {
   defaultOpen?: boolean
 }
 
-export function PromptPreview({ payload, defaultOpen = false }: PromptPreviewProps) {
+export function PromptPreview({
+  payload,
+  defaultOpen = false,
+}: PromptPreviewProps) {
   const [open, setOpen] = useState(defaultOpen)
   const [copied, setCopied] = useState(false)
   const sections = payload ? describePayloadSources(payload) : []
@@ -52,7 +54,7 @@ export function PromptPreview({ payload, defaultOpen = false }: PromptPreviewPro
           <h3 id="prompt-preview-heading" className="text-sm font-semibold">
             Preview do prompt compilado
           </h3>
-          <span className="text-muted-foreground text-[10px] uppercase tracking-wide">
+          <span className="text-muted-foreground text-[10px] tracking-wide uppercase">
             tempo real
           </span>
         </div>
@@ -110,12 +112,10 @@ export function PromptPreview({ payload, defaultOpen = false }: PromptPreviewPro
 }
 
 const SOURCE_COLORS: Record<string, string> = {
-  profile:
-    "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
-  role:
-    "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+  profile: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+  role: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
   skills:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+    "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
   context:
     "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
   meta: "bg-muted text-muted-foreground",

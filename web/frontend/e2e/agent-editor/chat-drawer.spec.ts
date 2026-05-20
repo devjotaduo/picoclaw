@@ -7,7 +7,9 @@ test.describe("agent editor — chat drawer", () => {
       name: /Chat de teste/,
     })
     await expect(drawer).toBeVisible()
-    await expect(drawer.getByRole("heading", { name: /Chat de teste/ })).toBeVisible()
+    await expect(
+      drawer.getByRole("heading", { name: /Chat de teste/ }),
+    ).toBeVisible()
   })
 
   test("alterna a largura do drawer", async ({ editor }) => {

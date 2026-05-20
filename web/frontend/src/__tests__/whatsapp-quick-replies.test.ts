@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
+  type QuickReply,
   listQuickReplies,
   renderQuickReply,
   searchQuickReplies,
   upsertQuickReply,
-  type QuickReply,
 } from "@/lib/whatsapp/quick-replies"
 
 // JSDOM-less environment — give the lib a stubbed localStorage so it can persist.
@@ -27,7 +27,10 @@ class MemoryStorage {
 
 beforeEach(() => {
   // The createLocalStore wrapper guards `window`, so we have to attach one.
-  vi.stubGlobal("window", { localStorage: new MemoryStorage(), addEventListener: () => {} })
+  vi.stubGlobal("window", {
+    localStorage: new MemoryStorage(),
+    addEventListener: () => {},
+  })
 })
 afterEach(() => {
   vi.unstubAllGlobals()

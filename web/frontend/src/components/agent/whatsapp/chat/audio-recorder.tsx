@@ -56,9 +56,8 @@ export function AudioRecorder({
       const y = (height - barHeight) / 2
       // Read the live token so the waveform inherits theme (light/dark).
       ctx.fillStyle =
-        getComputedStyle(canvas)
-          .getPropertyValue("--wa-brand")
-          .trim() || "#25d366"
+        getComputedStyle(canvas).getPropertyValue("--wa-brand").trim() ||
+        "#25d366"
       ctx.fillRect(x, y, barWidth * 0.7, barHeight)
     }
   }, [waveform])
@@ -105,7 +104,10 @@ export function AudioRecorder({
         <TooltipContent side="top">Descartar</TooltipContent>
       </Tooltip>
 
-      <span className="bg-destructive size-2 shrink-0 animate-pulse rounded-full" aria-hidden="true" />
+      <span
+        className="bg-destructive size-2 shrink-0 animate-pulse rounded-full"
+        aria-hidden="true"
+      />
       <span className="text-foreground/75 w-12 shrink-0 text-[11px] tabular-nums">
         {state === "requesting" ? "—:—" : formatDuration(elapsedMs)}
       </span>
@@ -123,7 +125,7 @@ export function AudioRecorder({
           <Button
             type="button"
             size="icon"
-            className="size-9 shrink-0 rounded-full bg-wa-brand text-white hover:bg-wa-brand-hover"
+            className="bg-wa-brand hover:bg-wa-brand-hover size-9 shrink-0 rounded-full text-white"
             onClick={async () => {
               const clip = await stop()
               if (clip) onSend(clip)

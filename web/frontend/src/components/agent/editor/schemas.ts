@@ -2,12 +2,7 @@ import { z } from "zod"
 
 import type { TemplateApplyPayload } from "@/components/agent/templates/types"
 
-export type StepID =
-  | "identity"
-  | "role"
-  | "prompt"
-  | "knowledge"
-  | "routing"
+export type StepID = "identity" | "role" | "prompt" | "knowledge" | "routing"
 
 export interface StepValidation {
   id: StepID
@@ -22,32 +17,30 @@ export const identitySchema = z.object({
   language: z.string().optional(),
 })
 
-export const roleSchema = z
-  .string()
-  .transform((raw, ctx) => {
-    if (!raw.trim()) {
+export const roleSchema = z.string().transform((raw, ctx) => {
+  if (!raw.trim()) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Perfil operacional vazio",
+    })
+    return z.NEVER
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       ctx.addIssue({
         code: "custom",
-        message: "Perfil operacional vazio",
+        message: "JSON deve ser um objeto",
       })
       return z.NEVER
     }
-    try {
-      const parsed = JSON.parse(raw) as unknown
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        ctx.addIssue({
-          code: "custom",
-          message: "JSON deve ser um objeto",
-        })
-        return z.NEVER
-      }
-      return parsed as Record<string, unknown>
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "JSON inválido"
-      ctx.addIssue({ code: "custom", message })
-      return z.NEVER
-    }
-  })
+    return parsed as Record<string, unknown>
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "JSON inválido"
+    ctx.addIssue({ code: "custom", message })
+    return z.NEVER
+  }
+})
 
 export const promptSchema = z
   .object({
@@ -80,7 +73,13 @@ export interface ChecklistInput {
 }
 
 export function validateChecklist(input: ChecklistInput): StepValidation[] {
-  const { payload, roleConfigDraft, mainAgentID, assistantPhones, assistantGroups } = input
+  const {
+    payload,
+    roleConfigDraft,
+    mainAgentID,
+    assistantPhones,
+    assistantGroups,
+  } = input
 
   const identity = identitySchema.safeParse({
     name: payload?.name ?? "",
@@ -102,13 +101,17 @@ export function validateChecklist(input: ChecklistInput): StepValidation[] {
     : 0
   const knowledgePresent = Boolean(
     payload?.modules?.professionals_enabled ||
-      payload?.modules?.products_enabled ||
-      (payload?.knowledge_base?.faqs && payload.knowledge_base.faqs.length > 0),
+    payload?.modules?.products_enabled ||
+    (payload?.knowledge_base?.faqs && payload.knowledge_base.faqs.length > 0),
   )
   const knowledgeStep: StepValidation =
     skills > 0 || knowledgePresent
       ? { id: "knowledge", status: "complete", missing: [] }
-      : { id: "knowledge", status: "partial", missing: ["Adicione ao menos uma skill ou um módulo de conhecimento"] }
+      : {
+          id: "knowledge",
+          status: "partial",
+          missing: ["Adicione ao menos uma skill ou um módulo de conhecimento"],
+        }
 
   const routing = routingSchema.safeParse({
     mainAgentID,
@@ -140,7 +143,11 @@ function toStep<T>(
   const missing = result.error.issues.map((issue) => issue.message)
   return {
     id,
-    status: partialIfMissing ? "partial" : missing.length > 0 ? "error" : "empty",
+    status: partialIfMissing
+      ? "partial"
+      : missing.length > 0
+        ? "error"
+        : "empty",
     missing,
   }
 }

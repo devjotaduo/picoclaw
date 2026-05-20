@@ -19,7 +19,14 @@ export function EmptyConversationIllustration({
         </linearGradient>
       </defs>
 
-      <rect x="8" y="20" width="224" height="124" rx="20" fill="url(#bg-gradient)" />
+      <rect
+        x="8"
+        y="20"
+        width="224"
+        height="124"
+        rx="20"
+        fill="url(#bg-gradient)"
+      />
 
       {/* incoming bubble */}
       <g>

@@ -6,11 +6,15 @@ import {
 import { useAtomValue } from "jotai"
 
 import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { gatewayAtom } from "@/store/gateway"
 
-import { jidToPhone, formatPhoneBR } from "./whatsapp-format"
+import { formatPhoneBR, jidToPhone } from "./whatsapp-format"
 
 function maskPhone(phone: string): string {
   if (!phone) return ""
@@ -39,7 +43,7 @@ export function GatewayStatusBadge({
           <span
             role="status"
             aria-live="polite"
-            className="border-border/60 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 transition-colors duration-200 dark:bg-emerald-500/20 dark:text-emerald-300"
           >
             <IconCircleCheck className="size-3.5" aria-hidden="true" />
             Online · {maskPhone(phone)}
@@ -58,9 +62,9 @@ export function GatewayStatusBadge({
         role="status"
         aria-live="polite"
         className={cn(
-          "border-border/60 bg-muted/60 text-muted-foreground inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+          "border-border/60 bg-muted/60 text-muted-foreground inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors duration-200",
           gw.status === "error" &&
-            "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300",
+            "bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-300",
         )}
       >
         <IconCircleX className="size-3.5" aria-hidden="true" />

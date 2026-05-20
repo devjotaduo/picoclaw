@@ -31,9 +31,13 @@ test.describe("agent editor — navegação e read-only", () => {
     expect(body).not.toMatch(/12\d{16}@g\.us/)
   })
 
-  test("tem botões 'Versões' e 'Chat de teste' no header", async ({ editor }) => {
+  test("tem botões 'Versões' e 'Chat de teste' no header", async ({
+    editor,
+  }) => {
     await expect(editor.getByRole("button", { name: /Versões/ })).toBeVisible()
-    await expect(editor.getByRole("button", { name: /Chat de teste/ })).toBeVisible()
+    await expect(
+      editor.getByRole("button", { name: /Chat de teste/ }),
+    ).toBeVisible()
   })
 
   test("expõe filtros de status na sidebar", async ({ editor }) => {

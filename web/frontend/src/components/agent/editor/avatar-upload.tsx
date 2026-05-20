@@ -7,7 +7,13 @@ import { Button } from "@/components/ui/button"
 const MAX_INPUT_BYTES = 2 * 1024 * 1024
 const MAX_DIMENSION = 256
 const MAX_DATA_URL_BYTES = 512 * 1024
-const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp"]
+const ACCEPTED_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/svg+xml",
+  "image/webp",
+]
 
 async function fileToDataURL(file: File): Promise<string> {
   if (file.type === "image/svg+xml") {
@@ -16,7 +22,10 @@ async function fileToDataURL(file: File): Promise<string> {
     return `data:image/svg+xml;base64,${base64}`
   }
   const bitmap = await createImageBitmap(file)
-  const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height))
+  const scale = Math.min(
+    1,
+    MAX_DIMENSION / Math.max(bitmap.width, bitmap.height),
+  )
   const width = Math.round(bitmap.width * scale)
   const height = Math.round(bitmap.height * scale)
   const canvas = document.createElement("canvas")
@@ -49,7 +58,10 @@ export function AvatarUpload({
 
   const processFile = async (file: File | undefined) => {
     if (!file) return
-    if (!ACCEPTED_TYPES.includes(file.type) && !file.type.startsWith("image/")) {
+    if (
+      !ACCEPTED_TYPES.includes(file.type) &&
+      !file.type.startsWith("image/")
+    ) {
       toast.error("Formato inválido. Use PNG, JPG, SVG ou WebP.")
       return
     }
@@ -102,7 +114,9 @@ export function AvatarUpload({
               Remover
             </Button>
           </div>
-          <p className="text-muted-foreground text-xs">PNG, JPG ou SVG · até 2 MB</p>
+          <p className="text-muted-foreground text-xs">
+            PNG, JPG ou SVG · até 2 MB
+          </p>
         </div>
         <input
           ref={inputRef}
@@ -148,8 +162,12 @@ export function AvatarUpload({
           <IconUser className="size-5" aria-hidden="true" />
         )}
       </div>
-      <div className="text-sm font-medium">Arraste uma imagem ou clique para enviar</div>
-      <div className="text-muted-foreground text-xs">PNG, JPG ou SVG · até 2 MB</div>
+      <div className="text-sm font-medium">
+        Arraste uma imagem ou clique para enviar
+      </div>
+      <div className="text-muted-foreground text-xs">
+        PNG, JPG ou SVG · até 2 MB
+      </div>
       <input
         ref={inputRef}
         type="file"

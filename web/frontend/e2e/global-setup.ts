@@ -1,6 +1,7 @@
-import { type FullConfig, chromium, request } from "@playwright/test"
 import fs from "fs"
 import path from "path"
+
+import { type FullConfig, chromium, request } from "@playwright/test"
 
 /**
  * Performs a one-time launcher dashboard login and persists the
@@ -22,12 +23,7 @@ export default async function globalSetup(config: FullConfig) {
     config.projects[0]?.use.baseURL ??
     "http://localhost:18800"
   const password = process.env.E2E_PASSWORD
-  const authFile = path.join(
-    config.rootDir,
-    "e2e",
-    ".auth",
-    "launcher.json",
-  )
+  const authFile = path.join(config.rootDir, "e2e", ".auth", "launcher.json")
 
   if (!password) {
     if (process.env.CI) {

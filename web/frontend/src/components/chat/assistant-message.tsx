@@ -53,8 +53,7 @@ export function AssistantMessage({
     (attachment) => attachment.type === "audio",
   )
   const fileAttachments = attachments.filter(
-    (attachment) =>
-      attachment.type !== "image" && attachment.type !== "audio",
+    (attachment) => attachment.type !== "image" && attachment.type !== "audio",
   )
   const [isExpanded, setIsExpanded] = useState(true)
   const formattedTimestamp =
@@ -242,7 +241,7 @@ export function AssistantMessage({
               onClick={handleCopy}
             >
               {isCopied ? (
-                <IconCheck className="h-4 w-4 text-green-500" />
+                <IconCheck className="h-4 w-4 text-emerald-500" />
               ) : (
                 <IconCopy className="text-muted-foreground h-4 w-4" />
               )}

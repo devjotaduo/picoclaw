@@ -51,9 +51,8 @@ function NewTenantForm() {
         <header className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold">Novo tenant</h1>
           <p className="text-muted-foreground text-sm">
-            Provisiona um novo container com cópia exata do picoclaw principal:
-            credenciais, configs, env, workspace e agentes. Apenas a senha do
-            dashboard e a chave LiteLLM são geradas por tenant.
+            Provisiona um novo container a partir do launcher profile
+            selecionado.
           </p>
         </header>
         <form className="flex flex-col gap-3" onSubmit={onSubmit}>
@@ -87,6 +86,23 @@ function NewTenantForm() {
             />
           </div>
           <div className="flex flex-col gap-1.5">
+            <Label htmlFor="t-profile">Launcher profile</Label>
+            <select
+              id="t-profile"
+              value={profileId}
+              onChange={(e) => setProfileId(e.target.value)}
+              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+            >
+              <option value="">(padrão)</option>
+              {(profiles.data ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.is_default ? " · default" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="t-budget">Budget mensal USD (opcional)</Label>
             <Input
               id="t-budget"
@@ -115,7 +131,7 @@ function NewTenantForm() {
             </p>
           ) : null}
           {success ? (
-            <p className="text-sm text-emerald-600 dark:text-emerald-400">
+            <p className="text-sm text-emerald-700 dark:text-emerald-300">
               {success}
             </p>
           ) : null}

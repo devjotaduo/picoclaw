@@ -49,7 +49,11 @@ export function groupJIDToHandle(jid: string): string {
 }
 
 export function handleToGroupJID(handle: string): string {
-  const cleaned = handle.trim().replace(/^group:/, "").split("@")[0] ?? ""
+  const cleaned =
+    handle
+      .trim()
+      .replace(/^group:/, "")
+      .split("@")[0] ?? ""
   if (!cleaned) return ""
   return `${cleaned}@g.us`
 }

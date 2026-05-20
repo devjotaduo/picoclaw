@@ -442,7 +442,7 @@ export function EditModelSheet({
                         ? "text-destructive"
                         : modelValidation.level === "warning"
                           ? "text-yellow-600 dark:text-yellow-500"
-                          : "text-green-600 dark:text-green-500"
+                          : "text-emerald-700 dark:text-emerald-300"
                     }`}
                   >
                     <span>

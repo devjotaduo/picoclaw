@@ -6,7 +6,10 @@ import { buildUnavailableToolMessages } from "@/components/agent/hub/tool-suppor
 // Minimal TFunction mock: returns the key as-is
 const t = ((key: string) => key) as unknown as TFunction
 
-type ToolLike = { status: "enabled" | "disabled" | "blocked"; reason_code?: string }
+type ToolLike = {
+  status: "enabled" | "disabled" | "blocked"
+  reason_code?: string
+}
 
 describe("buildUnavailableToolMessages", () => {
   it("returns empty array when both tools are undefined", () => {

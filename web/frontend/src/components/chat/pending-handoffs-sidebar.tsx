@@ -5,14 +5,16 @@ import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
 
 import { type WhatsAppChat, listWhatsAppChats } from "@/api/whatsapp"
+import { cn } from "@/lib/utils"
 import { formatJID, formatRelativeTS } from "@/lib/whatsapp/format"
 import { truncatePreview } from "@/lib/whatsapp/quote"
-import { cn } from "@/lib/utils"
 
 const QUERY_KEY = ["whatsapp", "chats", "pending-handoffs"] as const
 
 function getChatDisplayName(chat: WhatsAppChat): string {
-  return chat.display_name?.trim() || chat.push_name?.trim() || formatJID(chat.jid)
+  return (
+    chat.display_name?.trim() || chat.push_name?.trim() || formatJID(chat.jid)
+  )
 }
 
 export function PendingHandoffsSidebar({ className }: { className?: string }) {
@@ -81,7 +83,7 @@ export function PendingHandoffsSidebar({ className }: { className?: string }) {
                     <span className="text-foreground truncate text-sm font-medium">
                       {name}
                     </span>
-                    <span className="text-muted-foreground shrink-0 text-[10px] uppercase tracking-wide">
+                    <span className="text-muted-foreground shrink-0 text-[10px] tracking-wide uppercase">
                       {formatRelativeTS(chat.last_message_ts)}
                     </span>
                   </div>
@@ -91,7 +93,7 @@ export function PendingHandoffsSidebar({ className }: { className?: string }) {
                     </p>
                   )}
                   {chat.unread_count > 0 && (
-                    <span className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 mt-1 w-fit rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+                    <span className="mt-1 w-fit rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
                       {t("chat.pendingHandoffs.unread", {
                         count: chat.unread_count,
                       })}

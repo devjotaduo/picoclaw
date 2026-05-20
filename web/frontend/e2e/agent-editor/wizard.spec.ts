@@ -6,14 +6,20 @@ test.describe("agent editor — wizard de novo agente (destrutivo)", () => {
     async (page) => {
       const start = Date.now()
       await page.goto("/agent/editor")
-      await page.getByRole("button", { name: /Novo agente/ }).first().click()
+      await page
+        .getByRole("button", { name: /Novo agente/ })
+        .first()
+        .click()
 
       // Step 1: template
-      const wizard = page.getByRole("dialog", { name: /Novo agente/ }).or(
-        page.getByText("Passos do wizard", { exact: false }),
-      )
+      const wizard = page
+        .getByRole("dialog", { name: /Novo agente/ })
+        .or(page.getByText("Passos do wizard", { exact: false }))
       await expect(wizard.first()).toBeVisible()
-      await page.getByRole("radio", { name: /Atendente/i }).first().click()
+      await page
+        .getByRole("radio", { name: /Atendente/i })
+        .first()
+        .click()
       await page.getByRole("button", { name: /Avançar/ }).click()
 
       // Step 2: identidade
@@ -43,12 +49,20 @@ test.describe("agent editor — wizard de novo agente (destrutivo)", () => {
     "wizard bloqueia ID duplicado no passo de Identidade",
     async (page) => {
       await page.goto("/agent/editor")
-      await page.getByRole("button", { name: /Novo agente/ }).first().click()
-      await page.getByRole("radio", { name: /Atendente/i }).first().click()
+      await page
+        .getByRole("button", { name: /Novo agente/ })
+        .first()
+        .click()
+      await page
+        .getByRole("radio", { name: /Atendente/i })
+        .first()
+        .click()
       await page.getByRole("button", { name: /Avançar/ }).click()
       await page.getByLabel(/Nome exibido/).fill("Ana")
       await page.getByLabel(/ID técnico/).fill("main")
-      await expect(page.getByRole("alert").filter({ hasText: /já existe/ })).toBeVisible()
+      await expect(
+        page.getByRole("alert").filter({ hasText: /já existe/ }),
+      ).toBeVisible()
       await expect(page.getByRole("button", { name: /Avançar/ })).toBeDisabled()
     },
   )

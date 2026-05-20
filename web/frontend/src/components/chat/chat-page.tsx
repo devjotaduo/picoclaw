@@ -172,8 +172,7 @@ export function ChatPage() {
   const canShowModelSelector =
     launcherPolicyQ.isSuccess &&
     launcherPolicyQ.data.ui?.show_model_selector !== false
-  const chatIntro =
-    launcherPolicyQ.data?.ui?.chat_intro?.trim() || ""
+  const chatIntro = launcherPolicyQ.data?.ui?.chat_intro?.trim() || ""
   const quickTasks = (launcherPolicyQ.data?.ui?.quick_tasks ?? []).filter(
     (task) => task.label.trim() && task.prompt.trim(),
   )
@@ -324,173 +323,172 @@ export function ChatPage() {
   return (
     <div className="bg-background/95 flex h-full">
       <div className="flex min-w-0 flex-1 flex-col">
-      <PageHeader
-        title={t("navigation.chat")}
-        className={`transition-shadow ${
-          hasScrolled ? "shadow-xs" : "shadow-none"
-        }`}
-        titleExtra={
-          hasChatHeaderControls ? (
-            <div className="flex min-w-0 items-center gap-2">
-              <ModelSelector
-                defaultModelName={defaultModelName}
-                apiKeyModels={apiKeyModels}
-                oauthModels={oauthModels}
-                localModels={localModels}
-                onValueChange={handleSetDefault}
+        <PageHeader
+          title=""
+          className={`transition-shadow ${
+            hasScrolled ? "shadow-xs" : "shadow-none"
+          }`}
+          titleExtra={
+            hasChatHeaderControls ? (
+              <div className="flex min-w-0 items-center gap-2">
+                <ModelSelector
+                  defaultModelName={defaultModelName}
+                  apiKeyModels={apiKeyModels}
+                  oauthModels={oauthModels}
+                  localModels={localModels}
+                  onValueChange={handleSetDefault}
+                />
+              </div>
+            ) : null
+          }
+        >
+          {showAssistantDetailsToggle && canToggleAssistantDetails && (
+            <div className="border-border/60 hidden items-center gap-2 rounded-lg border px-3 py-1.5 sm:flex">
+              <span className="text-muted-foreground text-sm">
+                {t("chat.showAssistantDetails")}
+              </span>
+              <Switch
+                checked={showAssistantDetails}
+                onCheckedChange={setShowAssistantDetails}
+                aria-label={t("chat.showAssistantDetails")}
+                size="sm"
               />
             </div>
-          ) : null
-        }
-      >
-        {showAssistantDetailsToggle && canToggleAssistantDetails && (
-          <div className="border-border/60 hidden items-center gap-2 rounded-lg border px-3 py-1.5 sm:flex">
-            <span className="text-muted-foreground text-sm">
-              {t("chat.showAssistantDetails")}
-            </span>
-            <Switch
-              checked={showAssistantDetails}
-              onCheckedChange={setShowAssistantDetails}
-              aria-label={t("chat.showAssistantDetails")}
-              size="sm"
-            />
-          </div>
-        )}
-
-        {showNewChatButton && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={newChat}
-            className="h-9 gap-2"
-          >
-            <IconPlus className="size-4" />
-            <span className="hidden sm:inline">{t("chat.newChat")}</span>
-          </Button>
-        )}
-
-        {showSessionHistoryButton && (
-          <SessionHistoryMenu
-            sessions={sessions}
-            activeSessionId={activeSessionId}
-            hasMore={hasMore}
-            loadError={loadError}
-            loadErrorMessage={loadErrorMessage}
-            observerRef={observerRef}
-            onOpenChange={(open) => {
-              if (open) {
-                void loadSessions(true)
-              }
-            }}
-            onSwitchSession={switchSession}
-            onDeleteSession={handleDeleteSession}
-          />
-        )}
-      </PageHeader>
-
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto px-4 py-6 md:px-8 lg:px-24 xl:px-48"
-      >
-        <div className="mx-auto flex w-full max-w-250 flex-col gap-8 pb-8">
-          {messages.length === 0 && !isTyping && (
-            <ChatEmptyState
-              hasAvailableModels={hasAvailableModels}
-              defaultModelName={defaultModelName}
-              isConnected={isGatewayRunning}
-              agent={mainAgent}
-              chatIntro={chatIntro}
-              quickTasks={quickTasks}
-              disabled={!canInput}
-              onQuickTask={(prompt) => {
-                if (!canInput) return
-                if (
-                  sendMessage({
-                    content: prompt,
-                    attachments: [],
-                    agentID: selectedAgentID,
-                  })
-                ) {
-                  setInput("")
-                  setAttachments([])
-                }
-              }}
-            />
           )}
 
-          {messages.map((msg) => {
-            if (
-              msg.kind === "thought" &&
-              (!showAssistantDetails || !canShowReasoning)
-            ) {
-              return null
-            }
-            if (
-              msg.kind === "tool_calls" &&
-              (!showAssistantDetails || !canShowToolCalls)
-            ) {
-              return null
-            }
+          {showNewChatButton && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={newChat}
+              className="h-9 gap-2"
+            >
+              <IconPlus className="size-4" />
+              <span className="hidden sm:inline">{t("chat.newChat")}</span>
+            </Button>
+          )}
 
-            return (
-              <div key={msg.id} className="flex w-full">
-                {msg.role === "assistant" ? (
-                  <AssistantMessage
-                    content={msg.content}
-                    attachments={msg.attachments}
-                    kind={msg.kind}
-                    toolCalls={msg.toolCalls}
-                    timestamp={msg.timestamp}
-                  />
-                ) : (
-                  <UserMessage
-                    content={msg.content}
-                    attachments={msg.attachments}
-                  />
-                )}
-              </div>
-            )
-          })}
+          {showSessionHistoryButton && (
+            <SessionHistoryMenu
+              sessions={sessions}
+              activeSessionId={activeSessionId}
+              hasMore={hasMore}
+              loadError={loadError}
+              loadErrorMessage={loadErrorMessage}
+              observerRef={observerRef}
+              onOpenChange={(open) => {
+                if (open) {
+                  void loadSessions(true)
+                }
+              }}
+              onSwitchSession={switchSession}
+              onDeleteSession={handleDeleteSession}
+            />
+          )}
+        </PageHeader>
 
-          {isTyping && <TypingIndicator />}
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto px-4 py-6 md:px-8 lg:px-24 xl:px-48"
+        >
+          <div className="mx-auto flex w-full max-w-250 flex-col gap-8 pb-8">
+            {messages.length === 0 && !isTyping && (
+              <ChatEmptyState
+                hasAvailableModels={hasAvailableModels}
+                defaultModelName={defaultModelName}
+                isConnected={isGatewayRunning}
+                agent={mainAgent}
+                chatIntro={chatIntro}
+                quickTasks={quickTasks}
+                disabled={!canInput}
+                onQuickTask={(prompt) => {
+                  if (!canInput) return
+                  if (
+                    sendMessage({
+                      content: prompt,
+                      attachments: [],
+                      agentID: selectedAgentID,
+                    })
+                  ) {
+                    setInput("")
+                    setAttachments([])
+                  }
+                }}
+              />
+            )}
+
+            {messages.map((msg) => {
+              if (
+                msg.kind === "thought" &&
+                (!showAssistantDetails || !canShowReasoning)
+              ) {
+                return null
+              }
+              if (
+                msg.kind === "tool_calls" &&
+                (!showAssistantDetails || !canShowToolCalls)
+              ) {
+                return null
+              }
+
+              return (
+                <div key={msg.id} className="flex w-full">
+                  {msg.role === "assistant" ? (
+                    <AssistantMessage
+                      content={msg.content}
+                      attachments={msg.attachments}
+                      kind={msg.kind}
+                      toolCalls={msg.toolCalls}
+                      timestamp={msg.timestamp}
+                    />
+                  ) : (
+                    <UserMessage
+                      content={msg.content}
+                      attachments={msg.attachments}
+                    />
+                  )}
+                </div>
+              )
+            })}
+
+            {isTyping && <TypingIndicator />}
+          </div>
         </div>
-      </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/gif,image/webp,image/bmp"
-        className="hidden"
-        onChange={handleImageSelection}
-      />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp,image/bmp"
+          className="hidden"
+          onChange={handleImageSelection}
+        />
 
-      <ChatComposer
-        input={input}
-        attachments={attachments}
-        onInputChange={setInput}
-        onAddImages={handleAddImages}
-        onAttachAudio={(audio) => setAttachments([audio])}
-        onRemoveAttachment={handleRemoveAttachment}
-        onSend={handleSend}
-        onContextDetail={() => {
-          if (
-            sendMessage({
-              content: "/context",
-              attachments: [],
-              agentID: selectedAgentID,
-            })
-          ) {
-            setInput("")
-          }
-        }}
-        inputDisabledReason={inputDisabledReason}
-        canSend={canSubmit}
-        contextUsage={contextUsage}
-      />
+        <ChatComposer
+          input={input}
+          attachments={attachments}
+          onInputChange={setInput}
+          onAddImages={handleAddImages}
+          onAttachAudio={(audio) => setAttachments([audio])}
+          onRemoveAttachment={handleRemoveAttachment}
+          onSend={handleSend}
+          onContextDetail={() => {
+            if (
+              sendMessage({
+                content: "/context",
+                attachments: [],
+                agentID: selectedAgentID,
+              })
+            ) {
+              setInput("")
+            }
+          }}
+          inputDisabledReason={inputDisabledReason}
+          canSend={canSubmit}
+          contextUsage={contextUsage}
+        />
       </div>
       <PendingHandoffsSidebar className="hidden xl:flex" />
     </div>
   )
 }
-

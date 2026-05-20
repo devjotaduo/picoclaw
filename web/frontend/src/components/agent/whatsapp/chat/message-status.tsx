@@ -42,7 +42,10 @@ export function MessageStatus({
   if (hasError) {
     return (
       <StatusIcon label={LABEL.error} className={className}>
-        <IconAlertCircle className="text-destructive size-3.5" aria-hidden="true" />
+        <IconAlertCircle
+          className="text-destructive size-3.5"
+          aria-hidden="true"
+        />
       </StatusIcon>
     )
   }
@@ -78,7 +81,10 @@ export function MessageStatus({
     case "read":
       return (
         <StatusIcon label={LABEL.read} className={className}>
-          <IconChecks className="text-wa-check-read size-3.5" aria-hidden="true" />
+          <IconChecks
+            className="text-wa-check-read size-3.5"
+            aria-hidden="true"
+          />
         </StatusIcon>
       )
   }

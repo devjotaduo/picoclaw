@@ -25,9 +25,7 @@ export function AgentTemplateGallery({
       aria-label="Galeria de templates"
       className={cn(
         "grid gap-3",
-        compact
-          ? "sm:grid-cols-2"
-          : "sm:grid-cols-2 lg:grid-cols-3",
+        compact ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3",
       )}
     >
       {templates.map((tmpl) => {
@@ -42,7 +40,7 @@ export function AgentTemplateGallery({
             aria-describedby={`tmpl-${tmpl.id}-desc`}
             onClick={() => onSelect(tmpl.id)}
             className={cn(
-              "border-border/60 bg-card focus-visible:ring-ring focus-visible:ring-offset-background flex flex-col items-start gap-2 rounded-2xl border p-4 text-left transition hover:border-foreground/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+              "border-border/60 bg-card focus-visible:ring-ring focus-visible:ring-offset-background hover:border-foreground/30 flex flex-col items-start gap-2 rounded-2xl border p-4 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
               active && "border-primary bg-primary/5 ring-primary/30 ring-2",
             )}
           >
@@ -58,10 +56,7 @@ export function AgentTemplateGallery({
                 )}
               </div>
               {active && (
-                <IconCheck
-                  className="text-primary size-4"
-                  aria-hidden="true"
-                />
+                <IconCheck className="text-primary size-4" aria-hidden="true" />
               )}
             </div>
             <div className="space-y-1">

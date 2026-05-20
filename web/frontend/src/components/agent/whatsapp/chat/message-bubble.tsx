@@ -1,4 +1,8 @@
-import { IconCornerDownLeft, IconDotsVertical, IconExternalLink } from "@tabler/icons-react"
+import {
+  IconCornerDownLeft,
+  IconDotsVertical,
+  IconExternalLink,
+} from "@tabler/icons-react"
 import { useMemo, useState } from "react"
 
 import type { WhatsAppMessage, WhatsAppMessageStatus } from "@/api/whatsapp"
@@ -32,10 +36,7 @@ interface InlineSegment {
   match: boolean
 }
 
-function renderInline(
-  text: string,
-  searchQuery: string,
-): React.ReactNode {
+function renderInline(text: string, searchQuery: string): React.ReactNode {
   const segments: InlineSegment[] = searchQuery
     ? splitByMatches(text, searchQuery)
     : [{ text, match: false }]
@@ -47,7 +48,11 @@ function renderInline(
     while ((m = reUrl.exec(seg.text)) !== null) {
       if (m.index > lastIndex) {
         out.push(
-          renderTextNode(seg.text.slice(lastIndex, m.index), seg.match, `${segIdx}-${lastIndex}`),
+          renderTextNode(
+            seg.text.slice(lastIndex, m.index),
+            seg.match,
+            `${segIdx}-${lastIndex}`,
+          ),
         )
       }
       const url = m[0]!
@@ -58,7 +63,7 @@ function renderInline(
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-1.5 block focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:outline-none"
+            className="focus-visible:ring-ring mt-1.5 block rounded-xl focus-visible:ring-2 focus-visible:outline-none"
             aria-label="Abrir imagem"
           >
             <img
@@ -150,13 +155,16 @@ export function MessageBubble({
     [message, pendingIds],
   )
 
-  const quoted = useMemo(() => parseQuotedContent(message.content), [message.content])
+  const quoted = useMemo(
+    () => parseQuotedContent(message.content),
+    [message.content],
+  )
   const bodyText = quoted?.body ?? message.content
 
   const bubbleClass = isOut
     ? isHuman
       ? "bg-wa-bubble-out-human ring-1 ring-sky-300/40 dark:ring-sky-700/40 text-foreground"
-      : "bg-wa-bubble-out text-wa-bubble-out-fg ring-1 ring-emerald-200/60 dark:ring-emerald-800/40"
+      : "bg-wa-bubble-out text-wa-bubble-out-fg ring-1 ring-emerald-500/20 dark:ring-emerald-500/30"
     : "bg-wa-bubble-in ring-1 ring-border/60 text-foreground"
 
   const operatorDisplay = useMemo(() => {
@@ -206,9 +214,7 @@ export function MessageBubble({
             className={`${bubbleClass} relative rounded-2xl px-3.5 py-2 shadow-xs ${
               isOut ? "rounded-tr-sm" : "rounded-tl-sm"
             } ${
-              isCurrentMatch
-                ? "ring-2 ring-amber-400 dark:ring-amber-500"
-                : ""
+              isCurrentMatch ? "ring-2 ring-amber-400 dark:ring-amber-500" : ""
             }`}
           >
             {quoted && (
@@ -217,11 +223,11 @@ export function MessageBubble({
                   isOut
                     ? "border-emerald-600/60 dark:border-emerald-400/70"
                     : "border-sky-500/60 dark:border-sky-400/70"
-                } bg-black/5 dark:bg-white/5 -mx-1 rounded px-2 py-1`}
+                } -mx-1 rounded bg-black/5 px-2 py-1 dark:bg-white/5`}
               >
                 <p className="text-foreground/70 text-[10px] font-semibold uppercase">
                   <IconCornerDownLeft
-                    className="mb-px mr-0.5 inline size-2.5"
+                    className="mr-0.5 mb-px inline size-2.5"
                     aria-hidden="true"
                   />
                   Em resposta
@@ -239,7 +245,7 @@ export function MessageBubble({
                 {operatorDisplay}
               </p>
             )}
-            <div className="break-words text-sm leading-relaxed whitespace-pre-wrap">
+            <div className="text-sm leading-relaxed break-words whitespace-pre-wrap">
               {renderInline(bodyText, searchQuery)}
             </div>
             {message.error && (

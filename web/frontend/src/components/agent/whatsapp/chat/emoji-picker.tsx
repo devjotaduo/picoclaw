@@ -26,9 +26,7 @@ export interface EmojiPickerProps {
  * renders the popover.
  */
 export function EmojiPicker({ open, onOpenChange, onPick }: EmojiPickerProps) {
-  const [activeCategory, setActiveCategory] = useState(
-    EMOJI_CATEGORIES[0]!.id,
-  )
+  const [activeCategory, setActiveCategory] = useState(EMOJI_CATEGORIES[0]!.id)
   const current =
     EMOJI_CATEGORIES.find((c) => c.id === activeCategory) ??
     EMOJI_CATEGORIES[0]!

@@ -1,16 +1,12 @@
-import {
-  IconCheck,
-  IconChevronLeft,
-  IconCopy,
-} from "@tabler/icons-react"
+import { IconCheck, IconChevronLeft, IconCopy } from "@tabler/icons-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
 import * as React from "react"
 
 import {
+  ControlplaneError,
   type SanityStatus,
   type TenantStatus,
-  ControlplaneError,
   deleteTenant,
   getTenant,
   recreateTenant,
@@ -124,7 +120,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
           type="button"
           onClick={handleCopy}
           aria-label={label}
-          className="text-muted-foreground hover:text-foreground hover:bg-muted/60 focus-visible:ring-ring inline-flex size-6 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline-hidden focus-visible:ring-2"
+          className="text-muted-foreground hover:text-foreground hover:bg-muted/60 focus-visible:ring-ring inline-flex size-6 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-hidden"
         >
           {copied ? (
             <IconCheck className="size-3.5 text-emerald-500" />
@@ -148,13 +144,13 @@ function MonoValue({
   truncate?: boolean
 }) {
   return (
-    <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+    <span className="inline-flex max-w-full min-w-0 items-center gap-1.5">
       <Tooltip>
         <TooltipTrigger asChild>
           <code
             className={cn(
               "font-mono text-xs",
-              truncate && "block min-w-0 max-w-full truncate",
+              truncate && "block max-w-full min-w-0 truncate",
             )}
           >
             {value}
@@ -175,8 +171,8 @@ function DetailRow({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-1 border-b border-border/40 py-2 last:border-b-0 sm:grid sm:grid-cols-[10rem_1fr] sm:items-center sm:gap-3">
-      <dt className="text-muted-foreground text-xs uppercase tracking-wide sm:text-sm sm:normal-case sm:tracking-normal">
+    <div className="border-border/40 flex flex-col gap-1 border-b py-2 last:border-b-0 sm:grid sm:grid-cols-[10rem_1fr] sm:items-center sm:gap-3">
+      <dt className="text-muted-foreground text-xs tracking-wide uppercase sm:text-sm sm:tracking-normal sm:normal-case">
         {label}
       </dt>
       <dd className="min-w-0 text-sm">{children}</dd>
@@ -327,7 +323,9 @@ function TenantDetail({ id }: { id: string }) {
               </CardHeader>
               <CardContent>
                 <dl className="flex flex-col">
-                  <DetailRow label="Status">{tenantStatusBadge(t.status)}</DetailRow>
+                  <DetailRow label="Status">
+                    {tenantStatusBadge(t.status)}
+                  </DetailRow>
                   <DetailRow label="Container">
                     {t.container_id ? (
                       <MonoValue
@@ -455,10 +453,7 @@ function TenantDetail({ id }: { id: string }) {
                   <code className="bg-muted block min-w-0 flex-1 truncate rounded p-2 font-mono text-sm">
                     {rotatedPassword}
                   </code>
-                  <CopyButton
-                    value={rotatedPassword}
-                    label="Copiar senha"
-                  />
+                  <CopyButton value={rotatedPassword} label="Copiar senha" />
                 </CardContent>
               </Card>
             ) : null}
@@ -482,7 +477,7 @@ function TenantDetail({ id }: { id: string }) {
                     Sem checks reportados.
                   </p>
                 ) : (
-                  <ul className="flex flex-col divide-y divide-border/40 text-sm">
+                  <ul className="divide-border/40 flex flex-col divide-y text-sm">
                     {(sanityQ.data?.sanity_checks ?? []).map((c) => (
                       <li
                         key={c.name}

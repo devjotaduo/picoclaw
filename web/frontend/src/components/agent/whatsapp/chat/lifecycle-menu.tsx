@@ -48,7 +48,8 @@ export function LifecycleMenu({
 }: LifecycleMenuProps) {
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignTo, setAssignTo] = useState("")
-  const isClosed = profile?.lead_stage === "closed" || profile?.lead_stage === "lost"
+  const isClosed =
+    profile?.lead_stage === "closed" || profile?.lead_stage === "lost"
   const isArchived = (profile?.tags ?? []).some(
     (t) => t.trim().toLowerCase() === "archived",
   )

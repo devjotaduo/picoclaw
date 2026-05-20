@@ -136,8 +136,7 @@ export function AgentWizard({
 
   const canAdvance = useMemo(() => {
     if (step === "template") return Boolean(draft.templateID)
-    if (step === "identity")
-      return draft.name.trim().length > 0 && !idConflict
+    if (step === "identity") return draft.name.trim().length > 0 && !idConflict
     if (step === "role") return true
     if (step === "prompt")
       return (
@@ -157,7 +156,7 @@ export function AgentWizard({
   function buildPayload(): TemplateApplyPayload | null {
     if (!tmpl) return null
     return {
-      ...JSON.parse(JSON.stringify(tmpl)) as TemplateApplyPayload,
+      ...(JSON.parse(JSON.stringify(tmpl)) as TemplateApplyPayload),
       agent_id: idPreview,
       template_id: tmpl.id,
       name: draft.name.trim() || tmpl.name,
@@ -217,7 +216,7 @@ export function AgentWizard({
                   active
                     ? "text-foreground"
                     : done
-                      ? "text-emerald-600 dark:text-emerald-400"
+                      ? "text-emerald-700 dark:text-emerald-300"
                       : "text-muted-foreground",
                 )}
               >
@@ -227,7 +226,7 @@ export function AgentWizard({
                     active
                       ? "bg-primary text-primary-foreground"
                       : done
-                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                        ? "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
                         : "bg-muted text-muted-foreground",
                   )}
                 >
@@ -275,9 +274,7 @@ export function AgentWizard({
                 <p
                   className={cn(
                     "text-xs",
-                    idConflict
-                      ? "text-destructive"
-                      : "text-muted-foreground",
+                    idConflict ? "text-destructive" : "text-muted-foreground",
                   )}
                   role={idConflict ? "alert" : undefined}
                 >
@@ -342,8 +339,8 @@ export function AgentWizard({
                 />
               </div>
               <p className="text-muted-foreground text-xs">
-                Os demais campos do papel ficam disponíveis na aba "Papel" depois
-                que o agente for criado.
+                Os demais campos do papel ficam disponíveis na aba "Papel"
+                depois que o agente for criado.
               </p>
             </div>
           )}
@@ -356,7 +353,10 @@ export function AgentWizard({
                   id="wizard-short"
                   value={draft.shortDescription}
                   onChange={(e) =>
-                    setDraft((d) => ({ ...d, shortDescription: e.target.value }))
+                    setDraft((d) => ({
+                      ...d,
+                      shortDescription: e.target.value,
+                    }))
                   }
                   placeholder="Frase curta sobre como este agente atua"
                 />
@@ -379,9 +379,12 @@ export function AgentWizard({
           {step === "review" && (
             <div className="space-y-3">
               <div className="border-border/60 rounded-xl border p-4">
-                <h3 className="text-sm font-semibold">{draft.name || idPreview}</h3>
+                <h3 className="text-sm font-semibold">
+                  {draft.name || idPreview}
+                </h3>
                 <p className="text-muted-foreground text-xs">
-                  Template: <span className="font-medium">{tmpl?.name ?? "—"}</span>
+                  Template:{" "}
+                  <span className="font-medium">{tmpl?.name ?? "—"}</span>
                 </p>
                 <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
                   <Field label="ID" value={idPreview} mono />

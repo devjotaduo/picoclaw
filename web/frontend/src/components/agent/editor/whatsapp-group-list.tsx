@@ -78,7 +78,7 @@ export function WhatsAppGroupList({
               onChange={(e) => rename(jid, e.target.value)}
               placeholder={shortGroupLabel(jid)}
               aria-label={`Apelido do grupo ${shortGroupLabel(jid)}`}
-              className="h-7 flex-1 border-transparent bg-transparent px-1.5 text-xs shadow-none focus-visible:bg-background"
+              className="focus-visible:bg-background h-7 flex-1 border-transparent bg-transparent px-1.5 text-xs shadow-none"
             />
             <button
               type="button"

@@ -14,7 +14,5 @@ export function isLauncherSetupPathname(pathname: string): boolean {
 
 /** True for any page that is part of the auth flow (login or setup). */
 export function isLauncherAuthPathname(pathname: string): boolean {
-  return (
-    isLauncherLoginPathname(pathname) || isLauncherSetupPathname(pathname)
-  )
+  return isLauncherLoginPathname(pathname) || isLauncherSetupPathname(pathname)
 }

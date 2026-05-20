@@ -35,10 +35,12 @@ const STATUS_ICONS: Record<
 }
 
 const STATUS_CLASSES: Record<StepValidation["status"], string> = {
-  complete: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
-  partial: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+  complete:
+    "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+  partial:
+    "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
   empty: "bg-muted text-muted-foreground",
-  error: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
+  error: "bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-300",
 }
 
 const STATUS_LABEL: Record<StepValidation["status"], string> = {
@@ -54,7 +56,9 @@ export function ProgressChecklist({
   onStepClick,
 }: ProgressChecklistProps) {
   const completed = steps.filter((s) => s.status === "complete").length
-  const ready = steps.every((s) => s.status === "complete" || s.status === "partial")
+  const ready = steps.every(
+    (s) => s.status === "complete" || s.status === "partial",
+  )
   const percent = Math.round((completed / steps.length) * 100)
 
   return (
@@ -74,7 +78,7 @@ export function ProgressChecklist({
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
             ready
-              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+              ? "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
               : "bg-muted text-muted-foreground",
           )}
         >
@@ -116,7 +120,7 @@ export function ProgressChecklist({
                   <Icon className="size-3.5" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="text-muted-foreground block text-[10px] uppercase tracking-wide">
+                  <span className="text-muted-foreground block text-[10px] tracking-wide uppercase">
                     {index + 1}
                   </span>
                   <span className="block truncate text-xs font-medium">

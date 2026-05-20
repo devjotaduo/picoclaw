@@ -80,7 +80,22 @@ const featureFallbacks: Record<string, string> = {
   whatsapp_reports: "whatsapp_inbox",
 }
 
+// SaaS tenants only see the whatsapp_native channel in the sidebar; other
+// channel-prefixed feature flags exist in the policy but are hidden from
+// the default sidebar to reduce clutter.
 const visibleSidebarChannelKeys = new Set(["whatsapp_native"])
+// Features hidden from the sidebar across the board (still reachable via
+// direct URLs / commands if the user knows where to find them).
+const hiddenSidebarFeatures = new Set([
+  "models",
+  "credentials",
+  "agent_hub",
+  "agent_templates",
+  "template_editor",
+  "skill_editor",
+  "tools",
+  "logs",
+])
 
 function fallbackFeature(feature: string): string | undefined {
   if (feature.startsWith("channel:")) {
@@ -326,7 +341,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       .map((group) => ({
         ...group,
         items: group.items.filter(
-          (item) => (!item.adminOnly || isSaasAdmin) && canRead(item.feature),
+          (item) =>
+            (!item.adminOnly || isSaasAdmin) &&
+            !hiddenSidebarFeatures.has(item.feature) &&
+            canRead(item.feature),
         ),
       }))
       .filter((group) => group.items.length > 0)
@@ -338,62 +356,61 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       collapsible="icon"
       className="bg-background border-r-border/20 border-r pt-3"
     >
-      <SidebarContent className="bg-background">
+      <SidebarContent className="bg-background gap-1 px-2 pt-3 pb-2">
         {navGroups.map((group) => {
-          const isFlatGroup = group.label === "navigation.agent_group"
+          const isFlatGroup =
+            group.label === "navigation.agent_group" ||
+            group.label === "navigation.chat" ||
+            group.label === "navigation.channels_group" ||
+            group.label === "navigation.config"
           const menuContent = (
             <SidebarMenu>
               {group.items.map((item) => {
-                      const isActive =
-                        currentPath === item.url ||
-                        (item.url !== "/" &&
-                          currentPath.startsWith(`${item.url}/`))
-                      const title =
-                        item.translateTitle === false
-                          ? item.title
-                          : t(item.title)
-                      return (
-                        <SidebarMenuItem key={item.title}>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={isActive}
-                            onClick={handleNavItemClick}
-                            tooltip={title}
-                            data-tour={
-                              item.url === "/models" ? "models-nav" : undefined
-                            }
-                            className={`h-9 px-3 ${isActive ? "bg-accent/80 text-foreground font-medium" : "text-muted-foreground hover:bg-muted/60"}`}
+                const isActive =
+                  currentPath === item.url ||
+                  (item.url !== "/" && currentPath.startsWith(`${item.url}/`))
+                const title =
+                  item.translateTitle === false ? item.title : t(item.title)
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      onClick={handleNavItemClick}
+                      tooltip={title}
+                      data-tour={
+                        item.url === "/models" ? "models-nav" : undefined
+                      }
+                      className={`h-9 px-3 ${isActive ? "bg-accent/80 text-foreground font-medium" : "text-muted-foreground hover:bg-muted/60"}`}
+                    >
+                      {item.external ? (
+                        <a href={item.url}>
+                          <item.icon className="size-4 opacity-60" />
+                          <span className="opacity-80">{title}</span>
+                        </a>
+                      ) : (
+                        <Link to={item.url}>
+                          <item.icon
+                            className={`size-4 ${isActive ? "opacity-100" : "opacity-60"}`}
+                          />
+                          <span
+                            className={isActive ? "opacity-100" : "opacity-80"}
                           >
-                            {item.external ? (
-                              <a href={item.url}>
-                                <item.icon className="size-4 opacity-60" />
-                                <span className="opacity-80">{title}</span>
-                              </a>
-                            ) : (
-                              <Link to={item.url}>
-                                <item.icon
-                                  className={`size-4 ${isActive ? "opacity-100" : "opacity-60"}`}
-                                />
-                                <span
-                                  className={
-                                    isActive ? "opacity-100" : "opacity-80"
-                                  }
-                                >
-                                  {title}
-                                </span>
-                              </Link>
-                            )}
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      )
-                    })}
+                            {title}
+                          </span>
+                        </Link>
+                      )}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              })}
             </SidebarMenu>
           )
 
           if (isFlatGroup) {
             return (
-              <SidebarGroup key={group.label} className="mb-1 px-2 py-0">
-                <SidebarGroupContent className="pt-1">
+              <SidebarGroup key={group.label} className="mb-0 px-0 py-0">
+                <SidebarGroupContent className="pt-0">
                   {menuContent}
                 </SidebarGroupContent>
               </SidebarGroup>
@@ -401,11 +418,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           }
 
           return (
-            <SidebarGroup key={group.label} className="mb-1 px-2 py-0">
+            <SidebarGroup key={group.label} className="mb-0.5 px-0 py-0">
               <SidebarGroupLabel className="px-2 py-1.5">
                 <span>{t(group.label)}</span>
               </SidebarGroupLabel>
-              <SidebarGroupContent className="pt-1">
+              <SidebarGroupContent className="pt-0">
                 {menuContent}
               </SidebarGroupContent>
             </SidebarGroup>
@@ -416,4 +433,3 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     </Sidebar>
   )
 }
-

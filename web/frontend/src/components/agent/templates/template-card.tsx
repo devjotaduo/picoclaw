@@ -70,7 +70,7 @@ export function TemplateCard({
                   </span>
                 ) : null}
                 {template.modules.products_enabled ? (
-                  <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold tracking-wider text-emerald-700 uppercase ring-1 ring-emerald-500/20 ring-inset dark:text-emerald-400">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold tracking-wider text-emerald-700 uppercase ring-1 ring-emerald-500/20 ring-inset dark:text-emerald-300">
                     <IconPackage className="size-3" />
                     {t("pages.agent.templates.card_badges.catalog")}
                   </span>

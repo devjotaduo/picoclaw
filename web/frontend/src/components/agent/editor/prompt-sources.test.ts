@@ -4,7 +4,9 @@ import type { TemplateApplyPayload } from "@/components/agent/templates/types"
 
 import { describePayloadSources } from "./prompt-sources"
 
-function payload(overrides: Partial<TemplateApplyPayload> = {}): TemplateApplyPayload {
+function payload(
+  overrides: Partial<TemplateApplyPayload> = {},
+): TemplateApplyPayload {
   return {
     template_id: "atendente-geral",
     name: "Ana",
@@ -30,8 +32,10 @@ function payload(overrides: Partial<TemplateApplyPayload> = {}): TemplateApplyPa
       when_to_route: [],
       route_message: "",
     },
-    handoff_summary_template: {} as TemplateApplyPayload["handoff_summary_template"],
-    structured_output_template: {} as TemplateApplyPayload["structured_output_template"],
+    handoff_summary_template:
+      {} as TemplateApplyPayload["handoff_summary_template"],
+    structured_output_template:
+      {} as TemplateApplyPayload["structured_output_template"],
     priority_rules: {} as TemplateApplyPayload["priority_rules"],
     knowledge_policy: [],
     security_rules: [],
@@ -52,12 +56,16 @@ function payload(overrides: Partial<TemplateApplyPayload> = {}): TemplateApplyPa
 describe("describePayloadSources", () => {
   it("yields a Profile section for the name", () => {
     const sections = describePayloadSources(payload())
-    expect(sections.some((s) => s.source === "profile" && s.key === "name")).toBe(true)
+    expect(
+      sections.some((s) => s.source === "profile" && s.key === "name"),
+    ).toBe(true)
   })
 
   it("classifies functions under Role", () => {
     const sections = describePayloadSources(payload())
-    expect(sections.some((s) => s.source === "role" && s.key === "functions")).toBe(true)
+    expect(
+      sections.some((s) => s.source === "role" && s.key === "functions"),
+    ).toBe(true)
   })
 
   it("counts active skills under Skills", () => {
@@ -75,19 +83,25 @@ describe("describePayloadSources", () => {
 
   it("omits Skills section when none are enabled", () => {
     const sections = describePayloadSources(
-      payload({ skill_configs: [{ name: "x", enabled: false, visible: false }] }),
+      payload({
+        skill_configs: [{ name: "x", enabled: false, visible: false }],
+      }),
     )
     expect(sections.find((s) => s.source === "skills")).toBeUndefined()
   })
 
   it("emits a Context section for the company name", () => {
     const sections = describePayloadSources(payload())
-    expect(sections.some((s) => s.source === "context" && s.key === "company")).toBe(true)
+    expect(
+      sections.some((s) => s.source === "context" && s.key === "company"),
+    ).toBe(true)
   })
 
   it("emits a Meta section with the template id", () => {
     const sections = describePayloadSources(payload())
-    const meta = sections.find((s) => s.source === "meta" && s.key === "template")
+    const meta = sections.find(
+      (s) => s.source === "meta" && s.key === "template",
+    )
     expect(meta?.preview).toBe("atendente-geral")
   })
 })

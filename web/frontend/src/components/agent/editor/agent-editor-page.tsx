@@ -2051,7 +2051,7 @@ export function AgentEditorPage() {
                                   <DropdownMenuItem
                                     onClick={() => handleDeleteAgent(agent)}
                                     disabled={deleteMutation.isPending}
-                                    className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/40"
+                                    className="text-red-700 focus:bg-red-500/10 focus:text-red-700 dark:text-red-300 dark:focus:bg-red-500/20"
                                   >
                                     <IconTrash className="size-3.5" />
                                     Remover
@@ -2239,7 +2239,7 @@ export function AgentEditorPage() {
             <div className="border-border/40 flex min-h-10 items-center justify-between gap-3 border-t px-6 py-3 text-xs">
               <div className="min-w-0 flex-1">
                 {rawError ? (
-                  <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
+                  <span className="flex items-center gap-1 text-red-700 dark:text-red-300">
                     <IconAlertTriangle className="size-3 shrink-0" />
                     <span className="truncate">{rawError}</span>
                   </span>
@@ -2659,10 +2659,10 @@ function IdentityProfileSection({
             {agent.default && <DefaultBadge />}
             <StatusBadge active={isActive} />
           </div>
-            <p className="text-muted-foreground text-sm">
-              {agentRoleLabel(agent)}
-            </p>
-          </div>
+          <p className="text-muted-foreground text-sm">
+            {agentRoleLabel(agent)}
+          </p>
+        </div>
         <div className="flex shrink-0 items-center gap-2">
           {!isActive && (
             <Button
@@ -2719,7 +2719,7 @@ function IdentityProfileSection({
                   <DropdownMenuItem
                     onClick={onDelete}
                     disabled={isDeleting}
-                    className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/40"
+                    className="text-red-700 focus:bg-red-500/10 focus:text-red-700 dark:text-red-300 dark:focus:bg-red-500/20"
                   >
                     {isDeleting ? (
                       <IconLoader2
@@ -3685,7 +3685,7 @@ function AgentDetailView({
                       size="sm"
                       onClick={onDelete}
                       disabled={isDeleting}
-                      className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40"
+                      className="border-red-500/20 text-red-700 hover:bg-red-500/10 hover:text-red-700 dark:border-red-500/30 dark:text-red-300 dark:hover:bg-red-500/20"
                     >
                       {isDeleting ? (
                         <IconLoader2 className="size-4 animate-spin" />
@@ -3994,7 +3994,7 @@ function ChatTab({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <p className="truncate text-sm font-semibold">{agentName}</p>
-              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-300">
                 <span
                   className="size-1.5 rounded-full bg-emerald-500"
                   aria-hidden="true"
@@ -5037,7 +5037,7 @@ function UnconfiguredState({
                 size="sm"
                 onClick={onDelete}
                 disabled={isDeleting}
-                className="border-red-200 text-red-600 hover:bg-red-50"
+                className="border-red-500/20 text-red-700 hover:bg-red-500/10"
               >
                 {isDeleting ? (
                   <IconLoader2 className="size-4 animate-spin" />

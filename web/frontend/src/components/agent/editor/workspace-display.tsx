@@ -39,8 +39,8 @@ export function WorkspaceDisplay({
       </TooltipTrigger>
       <TooltipContent className="max-w-md">
         <p className="text-xs">
-          O workspace é a pasta isolada onde o agente guarda prompts, skills
-          e dados de sessão. Cada agente roda em um workspace separado.
+          O workspace é a pasta isolada onde o agente guarda prompts, skills e
+          dados de sessão. Cada agente roda em um workspace separado.
         </p>
       </TooltipContent>
     </Tooltip>

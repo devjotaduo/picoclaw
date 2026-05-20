@@ -70,7 +70,10 @@ export function ConversationSearch({
       role="search"
       aria-label="Buscar na conversa"
     >
-      <IconSearch className="text-foreground/70 size-4 shrink-0" aria-hidden="true" />
+      <IconSearch
+        className="text-foreground/70 size-4 shrink-0"
+        aria-hidden="true"
+      />
       <Input
         ref={inputRef}
         type="search"
@@ -97,7 +100,7 @@ export function ConversationSearch({
               type="button"
               onClick={onPrev}
               disabled={matchCount === 0}
-              className="hover:bg-muted focus-visible:ring-ring flex size-7 items-center justify-center rounded-md transition-colors disabled:opacity-40 focus-visible:ring-2 focus-visible:outline-none"
+              className="hover:bg-muted focus-visible:ring-ring flex size-7 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"
               aria-label="Resultado anterior"
             >
               <IconChevronUp className="size-4" aria-hidden="true" />
@@ -111,7 +114,7 @@ export function ConversationSearch({
               type="button"
               onClick={onNext}
               disabled={matchCount === 0}
-              className="hover:bg-muted focus-visible:ring-ring flex size-7 items-center justify-center rounded-md transition-colors disabled:opacity-40 focus-visible:ring-2 focus-visible:outline-none"
+              className="hover:bg-muted focus-visible:ring-ring flex size-7 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"
               aria-label="Próximo resultado"
             >
               <IconChevronDown className="size-4" aria-hidden="true" />

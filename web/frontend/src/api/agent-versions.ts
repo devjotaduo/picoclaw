@@ -42,7 +42,9 @@ function encodeAgent(agentID: string): string {
 export async function listAgentVersions(
   agentID: string,
 ): Promise<AgentVersion[]> {
-  const res = await launcherFetch(`/api/agents/${encodeAgent(agentID)}/versions`)
+  const res = await launcherFetch(
+    `/api/agents/${encodeAgent(agentID)}/versions`,
+  )
   if (!res.ok) {
     throw new Error(await readError(res))
   }

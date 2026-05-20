@@ -44,7 +44,10 @@ interface InputDescriptor {
   capture?: "user" | "environment"
 }
 
-const INPUTS: Record<"image" | "video" | "document" | "camera", InputDescriptor> = {
+const INPUTS: Record<
+  "image" | "video" | "document" | "camera",
+  InputDescriptor
+> = {
   image: { accept: "image/*" },
   video: { accept: "video/*" },
   document: { accept: "*/*" },
@@ -99,7 +102,12 @@ export function AttachmentMenu({
           </TooltipTrigger>
           <TooltipContent side="top">Anexar</TooltipContent>
         </Tooltip>
-        <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-52">
+        <DropdownMenuContent
+          side="top"
+          align="start"
+          sideOffset={8}
+          className="w-52"
+        >
           <DropdownMenuItem
             onSelect={(e) => {
               e.preventDefault()

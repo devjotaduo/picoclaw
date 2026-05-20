@@ -215,7 +215,7 @@ export function ChatComposer({
   }
 
   return (
-    <div className="before:bg-background pointer-events-none relative z-10 -mt-[24px] shrink-0 overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] [scrollbar-gutter:stable] before:pointer-events-none before:absolute before:inset-x-0 before:top-[24px] before:bottom-0 before:content-[''] md:px-8 md:pb-8 lg:px-24 xl:px-48">
+    <div className="before:bg-background pointer-events-none relative z-10 -mt-[24px] shrink-0 [scrollbar-gutter:stable] overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] before:pointer-events-none before:absolute before:inset-x-0 before:top-[24px] before:bottom-0 before:content-[''] md:px-8 md:pb-8 lg:px-24 xl:px-48">
       <div className="bg-card border-border/60 pointer-events-auto relative mx-auto flex max-w-[1000px] flex-col rounded-2xl border p-3 shadow-sm">
         {attachments.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-2 px-2">
@@ -263,7 +263,7 @@ export function ChatComposer({
 
         {isRecording ? (
           <div className="flex min-h-[64px] items-center gap-3 px-2 py-1">
-            <span className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-red-500 uppercase">
+            <span className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-red-700 uppercase dark:text-red-300">
               <span className="relative inline-flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
@@ -271,7 +271,7 @@ export function ChatComposer({
               {t("chat.recording")}
             </span>
             <RecordingWaveform stream={activeStream} />
-            <span className="text-foreground/80 tabular-nums text-sm font-medium">
+            <span className="text-foreground/80 text-sm font-medium tabular-nums">
               {Math.floor(recordingSeconds / 60)
                 .toString()
                 .padStart(2, "0")}
@@ -316,7 +316,7 @@ export function ChatComposer({
               className={cn(
                 "h-8 w-8 rounded-full",
                 isRecording
-                  ? "bg-red-500 text-white shadow-[0_0_0_4px_rgba(239,68,68,0.18)] hover:bg-red-600"
+                  ? "bg-red-600 text-white shadow-[0_0_0_4px_rgba(220,38,38,0.16)] hover:bg-red-700"
                   : "text-muted-foreground hover:text-foreground",
               )}
               onClick={isRecording ? stopRecording : startRecording}

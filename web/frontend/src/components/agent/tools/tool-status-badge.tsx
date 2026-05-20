@@ -15,7 +15,7 @@ export function ToolStatusBadge({ status }: ToolStatusBadgeProps) {
       className={cn(
         "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium tracking-wide sm:text-[11px]",
         status === "enabled" &&
-          "bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400",
+          "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
         status === "blocked" &&
           "bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400",
         status === "disabled" &&

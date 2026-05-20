@@ -48,7 +48,7 @@ export function AppHeader() {
   const { theme, toggleTheme } = useTheme()
   const showSidebarToggle = false
   const showConnectionStatus = false
-  const showHeaderActions = false
+  const showHeaderActions = true
   const {
     state: gwState,
     loading: gwLoading,
@@ -207,11 +207,14 @@ export function AppHeader() {
             <TooltipTrigger asChild>
               <span
                 role="status"
-                aria-label={t("header.gateway.status.running", "Gateway online")}
-                className="hidden items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700 sm:inline-flex dark:bg-emerald-950/40 dark:text-emerald-300"
+                aria-label={t(
+                  "header.gateway.status.running",
+                  "Gateway online",
+                )}
+                className="hidden items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 transition-colors duration-200 sm:inline-flex dark:bg-emerald-500/20 dark:text-emerald-300"
                 data-tour="gateway-button"
               >
-                <span className="bg-emerald-500 size-1.5 rounded-full" />
+                <span className="size-1.5 rounded-full bg-emerald-500/90" />
                 {t("header.gateway.status.running", "Gateway online")}
               </span>
             </TooltipTrigger>
@@ -239,9 +242,9 @@ export function AppHeader() {
                   }
                   size="sm"
                   data-tour="gateway-button"
-                  className={`h-8 gap-2 px-3 ${
+                  className={`h-8 gap-2 px-3 transition-colors duration-200 ${
                     isStopped
-                      ? "bg-green-500 text-white hover:bg-green-600"
+                      ? "bg-emerald-600 text-white hover:bg-emerald-700"
                       : ""
                   } ${!canStart ? "pointer-events-none" : ""}`}
                   onClick={handleGatewayToggle}
@@ -294,7 +297,7 @@ export function AppHeader() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel className="text-[10px] uppercase tracking-wide">
+            <DropdownMenuLabel className="text-[10px] tracking-wide uppercase">
               {t("header.settings.appearance", "Aparência")}
             </DropdownMenuLabel>
             <DropdownMenuItem onClick={toggleTheme}>
@@ -310,13 +313,13 @@ export function AppHeader() {
             {isRunning && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-[10px] uppercase tracking-wide">
+                <DropdownMenuLabel className="text-[10px] tracking-wide uppercase">
                   {t("header.settings.gateway", "Gateway")}
                 </DropdownMenuLabel>
                 <DropdownMenuItem
                   onClick={handleGatewayToggle}
                   disabled={gwLoading}
-                  className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950/40"
+                  className="text-red-700 focus:bg-red-500/10 focus:text-red-700 dark:text-red-300 dark:focus:bg-red-500/20"
                 >
                   <IconPower className="size-3.5" />
                   {t("header.gateway.action.stop", "Parar gateway")}
