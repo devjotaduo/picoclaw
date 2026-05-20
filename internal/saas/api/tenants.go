@@ -59,6 +59,19 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Apply the canonical workspace overlay (same logic as the Clara
+	// auto-provision flow) so admin-created tenants get the curated agent
+	// roster / skills / config instead of an empty volume. Best-effort: a
+	// failure here is logged but does not roll back tenant creation.
+	if h.Cfg.AutoProvisionWorkspaceDir != "" {
+		if t, gerr := h.Tenants.Get(r.Context(), out.TenantID); gerr == nil && t != nil && t.VolumePath != "" {
+			if oerr := tenant.OverlayWorkspace(h.Cfg.AutoProvisionWorkspaceDir, t.VolumePath); oerr != nil {
+				log.Printf("workspace overlay failed for tenant %s: %v", out.TenantID, oerr)
+			} else if rerr := h.Provisioner.Restart(r.Context(), out.TenantID); rerr != nil {
+				log.Printf("restart after workspace overlay failed for tenant %s: %v", out.TenantID, rerr)
+			}
+		}
+	}
 	owner, err := h.Users.EnsureInvited(r.Context(), req.OwnerEmail)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "owner user error")
