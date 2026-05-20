@@ -52,8 +52,5 @@ export function splitByMatches(text: string, query: string): Segment[] {
 }
 
 function normalize(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
 }

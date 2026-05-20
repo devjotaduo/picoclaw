@@ -20,11 +20,85 @@ export interface GatewayStoreState {
 
 type GatewayStorePatch = Partial<GatewayStoreState>
 
+const GATEWAY_STATE_CACHE_KEY = "picoclaw.gateway.state.v1"
+const GATEWAY_STATE_CACHE_TTL_MS = 30_000
+
+function isGatewayState(value: unknown): value is GatewayState {
+  return (
+    value === "running" ||
+    value === "starting" ||
+    value === "restarting" ||
+    value === "stopping" ||
+    value === "stopped" ||
+    value === "error" ||
+    value === "unknown"
+  )
+}
+
+function readGatewayStateCache(): GatewayStoreState | null {
+  if (typeof window === "undefined") return null
+
+  try {
+    const raw = window.localStorage.getItem(GATEWAY_STATE_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as {
+      cachedAt?: number
+      state?: GatewayState
+      canStart?: boolean
+      startReason?: string
+      restartRequired?: boolean
+    }
+
+    if (
+      typeof parsed.cachedAt !== "number" ||
+      Date.now() - parsed.cachedAt > GATEWAY_STATE_CACHE_TTL_MS ||
+      !isGatewayState(parsed.state)
+    ) {
+      return null
+    }
+
+    return {
+      status: parsed.state,
+      canStart: typeof parsed.canStart === "boolean" ? parsed.canStart : true,
+      startReason:
+        typeof parsed.startReason === "string" ? parsed.startReason : undefined,
+      restartRequired:
+        typeof parsed.restartRequired === "boolean"
+          ? parsed.restartRequired
+          : false,
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeGatewayStateCache(state: GatewayStoreState) {
+  if (typeof window === "undefined" || state.status === "unknown") return
+
+  try {
+    window.localStorage.setItem(
+      GATEWAY_STATE_CACHE_KEY,
+      JSON.stringify({
+        cachedAt: Date.now(),
+        state: state.status,
+        canStart: state.canStart,
+        startReason: state.startReason,
+        restartRequired: state.restartRequired,
+      }),
+    )
+  } catch {
+    // Ignore storage errors (private mode/quota/etc).
+  }
+}
+
 const DEFAULT_GATEWAY_STATE: GatewayStoreState = {
   status: "unknown",
   canStart: true,
   restartRequired: false,
 }
+
+const CACHED_GATEWAY_STATE = readGatewayStateCache()
+const INITIAL_GATEWAY_STATE = CACHED_GATEWAY_STATE ?? DEFAULT_GATEWAY_STATE
 
 const GATEWAY_POLL_INTERVAL_MS = 2000
 const GATEWAY_TRANSIENT_POLL_INTERVAL_MS = 1000
@@ -35,7 +109,7 @@ interface RefreshGatewayStateOptions {
 }
 
 // Global atom for gateway state
-export const gatewayAtom = atom<GatewayStoreState>(DEFAULT_GATEWAY_STATE)
+export const gatewayAtom = atom<GatewayStoreState>(INITIAL_GATEWAY_STATE)
 
 let gatewayPollingSubscribers = 0
 let gatewayPollingTimer: ReturnType<typeof setTimeout> | null = null
@@ -78,6 +152,7 @@ export function updateGatewayStore(
     return normalizeGatewayStoreState(prev, nextPatch)
   })
   const nextState = store.get(gatewayAtom)
+  writeGatewayStateCache(nextState)
   if (nextState?.status !== "stopping") {
     clearGatewayStoppingTimeout()
   }

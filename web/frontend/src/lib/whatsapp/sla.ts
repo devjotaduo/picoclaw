@@ -14,7 +14,10 @@ const WARNING_AFTER_MIN = 15
 const BREACH_AFTER_MIN = 60
 
 export interface SLAInput {
-  chat: Pick<WhatsAppChat, "last_message_ts" | "last_direction" | "unread_count">
+  chat: Pick<
+    WhatsAppChat,
+    "last_message_ts" | "last_direction" | "unread_count"
+  >
   now: number
 }
 
@@ -31,7 +34,9 @@ export function computeSLA(input: SLAInput): SLAStatus | null {
   if (chat.unread_count <= 0) return null
   if (!chat.last_message_ts) return null
   const lastMs =
-    chat.last_message_ts < 1e10 ? chat.last_message_ts * 1000 : chat.last_message_ts
+    chat.last_message_ts < 1e10
+      ? chat.last_message_ts * 1000
+      : chat.last_message_ts
   const diffMin = Math.max(0, Math.floor((now - lastMs) / 60_000))
   return {
     waitingMinutes: diffMin,
@@ -51,7 +56,9 @@ export function formatDuration(minutes: number): string {
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60
   if (hours < 24) {
-    return rest === 0 ? `${hours}h` : `${hours}h${rest.toString().padStart(2, "0")}`
+    return rest === 0
+      ? `${hours}h`
+      : `${hours}h${rest.toString().padStart(2, "0")}`
   }
   const days = Math.floor(hours / 24)
   return `${days}d`

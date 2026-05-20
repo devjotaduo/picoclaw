@@ -1,6 +1,7 @@
-import { defineConfig, devices } from "@playwright/test"
 import path from "path"
 import { fileURLToPath } from "url"
+
+import { defineConfig, devices } from "@playwright/test"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -33,7 +34,10 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: false,
   retries: process.env.CI ? 2 : 0,
-  reporter: [["list"], ["html", { outputFolder: "./e2e/.report", open: "never" }]],
+  reporter: [
+    ["list"],
+    ["html", { outputFolder: "./e2e/.report", open: "never" }],
+  ],
   globalSetup: "./e2e/global-setup.ts",
   use: {
     baseURL:

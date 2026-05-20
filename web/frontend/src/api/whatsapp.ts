@@ -336,7 +336,11 @@ export async function deleteWhatsAppNote(
   }
 }
 
-export type InboxConnectionStatus = "connecting" | "online" | "reconnecting" | "offline"
+export type InboxConnectionStatus =
+  | "connecting"
+  | "online"
+  | "reconnecting"
+  | "offline"
 
 export interface OpenInboxStreamOptions {
   onEvent: (evt: InboxEvent) => void
@@ -380,7 +384,9 @@ export function openInboxStream(
   es.addEventListener("open", () => opts.onStatus?.("online"))
   es.addEventListener("error", (err) => {
     // readyState: 0 = CONNECTING (reconnect in flight), 2 = CLOSED.
-    opts.onStatus?.(es.readyState === EventSource.CLOSED ? "offline" : "reconnecting")
+    opts.onStatus?.(
+      es.readyState === EventSource.CLOSED ? "offline" : "reconnecting",
+    )
     opts.onError?.(err)
   })
   return () => {

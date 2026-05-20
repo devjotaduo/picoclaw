@@ -29,7 +29,7 @@ export function ContactAvatar({
   }
   return (
     <div
-      className={`${sizeClass} ${textClass} flex shrink-0 items-center justify-center rounded-full font-semibold select-none ring-2 ring-white/80 dark:ring-black/30 ${className}`}
+      className={`${sizeClass} ${textClass} flex shrink-0 items-center justify-center rounded-full font-semibold ring-2 ring-white/80 select-none dark:ring-black/30 ${className}`}
       style={{ backgroundColor: palette.bg, color: palette.fg }}
       aria-hidden="true"
     >

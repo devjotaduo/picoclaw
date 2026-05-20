@@ -114,13 +114,15 @@ export function TagInput({
           Adicionar
         </Button>
       </div>
-      {suggestions && availableSuggestions && availableSuggestions.length > 0 && (
-        <datalist id={`${id ?? "tag"}-suggestions`}>
-          {availableSuggestions.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-      )}
+      {suggestions &&
+        availableSuggestions &&
+        availableSuggestions.length > 0 && (
+          <datalist id={`${id ?? "tag"}-suggestions`}>
+            {availableSuggestions.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+        )}
       {error && (
         <p
           id={`${id ?? "tag"}-err`}

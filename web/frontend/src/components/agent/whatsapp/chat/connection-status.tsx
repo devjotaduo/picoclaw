@@ -14,24 +14,26 @@ export interface ConnectionStatusProps {
   className?: string
 }
 
-const COPY: Record<InboxConnectionStatus, { label: string; tooltip: string }> = {
-  connecting: {
-    label: "Conectando…",
-    tooltip: "Conectando ao gateway WhatsApp",
-  },
-  online: {
-    label: "Online",
-    tooltip: "Gateway WhatsApp conectado e recebendo eventos em tempo real",
-  },
-  reconnecting: {
-    label: "Reconectando…",
-    tooltip: "Conexão instável. Tentando restabelecer o stream.",
-  },
-  offline: {
-    label: "Offline",
-    tooltip: "Sem conexão com o gateway. Mensagens não chegarão em tempo real.",
-  },
-}
+const COPY: Record<InboxConnectionStatus, { label: string; tooltip: string }> =
+  {
+    connecting: {
+      label: "Conectando…",
+      tooltip: "Conectando ao gateway WhatsApp",
+    },
+    online: {
+      label: "Online",
+      tooltip: "Gateway WhatsApp conectado e recebendo eventos em tempo real",
+    },
+    reconnecting: {
+      label: "Reconectando…",
+      tooltip: "Conexão instável. Tentando restabelecer o stream.",
+    },
+    offline: {
+      label: "Offline",
+      tooltip:
+        "Sem conexão com o gateway. Mensagens não chegarão em tempo real.",
+    },
+  }
 
 const DOT: Record<InboxConnectionStatus, string> = {
   connecting: "bg-amber-500",
@@ -51,12 +53,12 @@ export function ConnectionStatus({
     <Tooltip delayDuration={400}>
       <TooltipTrigger asChild>
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium leading-none ${
+          className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] leading-none font-medium ${
             status === "offline"
               ? "text-destructive bg-destructive/10"
               : status === "online"
-                ? "text-emerald-700 bg-emerald-500/10 dark:text-emerald-300"
-                : "text-amber-700 bg-amber-500/10 dark:text-amber-300"
+                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                : "bg-amber-500/10 text-amber-700 dark:text-amber-300"
           } ${className}`}
           role="status"
           aria-live="polite"

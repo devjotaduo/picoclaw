@@ -277,19 +277,19 @@
   --pink-hover: #c04873;
 
   /* ===== BORDAS / CONTROLES ===== */
-  --border-subtle: rgba(255, 255, 255, 0.10);
-  --border-default: rgba(255, 255, 255, 0.20);
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --border-default: rgba(255, 255, 255, 0.2);
   --border-strong: rgba(255, 255, 255, 0.35);
-  --fill-control: rgba(255, 255, 255, 0.10);
-  --fill-control-hover: rgba(255, 255, 255, 0.20);
+  --fill-control: rgba(255, 255, 255, 0.1);
+  --fill-control-hover: rgba(255, 255, 255, 0.2);
   --fill-ghost-hover: rgba(255, 255, 255, 0.05);
 
   /* ===== ESCALA NEUTRA ===== */
-  --gray-0:   #ffffff;
-  --gray-10:  #fcfcfb;
-  --gray-20:  #f9f9f7;
-  --gray-30:  #f6f6f4;
-  --gray-50:  #f0efec;
+  --gray-0: #ffffff;
+  --gray-10: #fcfcfb;
+  --gray-20: #f9f9f7;
+  --gray-30: #f6f6f4;
+  --gray-50: #f0efec;
   --gray-100: #e1e0d9;
   --gray-200: #c3c2b7;
   --gray-300: #a5a49a;
@@ -304,9 +304,13 @@
   --gray-900: #0b0b0b;
 
   /* ===== TIPOGRAFIA ===== */
-  --font-sans: "Anthropic Sans", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans:
+    "Anthropic Sans", system-ui, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
   --font-serif: "Anthropic Serif", Georgia, "Times New Roman", serif;
-  --font-mono: "Anthropic Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-mono:
+    "Anthropic Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    monospace;
   --text-size-caption: 13px;
   --text-size-body: 15px;
   --text-size-heading: 15px;
@@ -332,7 +336,8 @@
   /* ===== SOMBRAS ===== */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-popover: 0 8px 24px rgb(0 0 0 / 0.32), 0 2px 6px rgb(0 0 0 / 0.2);
 
   /* ===== MOVIMENTO ===== */
@@ -360,8 +365,8 @@
   --accent: #383835;
   --accent-foreground: #f9f9f7;
   --destructive: #e34948;
-  --border: rgba(255, 255, 255, 0.10);
-  --input: rgba(255, 255, 255, 0.10);
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.1);
   --ring: #d97757;
   --chart-1: #3987e5;
   --chart-2: #0ca30c;
@@ -374,7 +379,7 @@
   --sidebar-primary-foreground: #f9f9f7;
   --sidebar-accent: #383835;
   --sidebar-accent-foreground: #f9f9f7;
-  --sidebar-border: rgba(255, 255, 255, 0.10);
+  --sidebar-border: rgba(255, 255, 255, 0.1);
   --sidebar-ring: #d97757;
 
   /* WhatsApp brand & bubble palette (dark) */

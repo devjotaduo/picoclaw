@@ -8,10 +8,7 @@ import {
 import { useState } from "react"
 import { toast } from "sonner"
 
-import type {
-  WhatsAppMessage,
-  WhatsAppMessageStatus,
-} from "@/api/whatsapp"
+import type { WhatsAppMessage, WhatsAppMessageStatus } from "@/api/whatsapp"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -169,7 +166,7 @@ export function MessageContextMenu({
             {message.message_id && (
               <>
                 <dt className="text-foreground/60">WhatsApp ID</dt>
-                <dd className="font-mono break-all text-[11px]">
+                <dd className="font-mono text-[11px] break-all">
                   {message.message_id}
                 </dd>
               </>

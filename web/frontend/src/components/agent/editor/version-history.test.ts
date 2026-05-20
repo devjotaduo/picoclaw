@@ -44,7 +44,9 @@ afterEach(() => {
   ;(globalThis as { window: unknown }).window = ORIGINAL_WINDOW
 })
 
-function fakePayload(overrides: Partial<TemplateApplyPayload> = {}): TemplateApplyPayload {
+function fakePayload(
+  overrides: Partial<TemplateApplyPayload> = {},
+): TemplateApplyPayload {
   return {
     template_id: "atendente-geral",
     name: "Ana",
@@ -70,8 +72,10 @@ function fakePayload(overrides: Partial<TemplateApplyPayload> = {}): TemplateApp
       when_to_route: [],
       route_message: "",
     },
-    handoff_summary_template: {} as TemplateApplyPayload["handoff_summary_template"],
-    structured_output_template: {} as TemplateApplyPayload["structured_output_template"],
+    handoff_summary_template:
+      {} as TemplateApplyPayload["handoff_summary_template"],
+    structured_output_template:
+      {} as TemplateApplyPayload["structured_output_template"],
     priority_rules: {} as TemplateApplyPayload["priority_rules"],
     knowledge_policy: [],
     security_rules: [],
@@ -139,7 +143,7 @@ describe("deleteVersion", () => {
 describe("formatPayload", () => {
   it("returns pretty JSON for a payload", () => {
     const out = formatPayload(fakePayload({ name: "Ana" }))
-    expect(out).toContain("\"name\": \"Ana\"")
+    expect(out).toContain('"name": "Ana"')
   })
 
   it("returns empty for null", () => {

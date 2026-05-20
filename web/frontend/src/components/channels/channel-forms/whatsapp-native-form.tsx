@@ -36,6 +36,7 @@ type PairingStatus = WhatsAppNativeQRStatus
 
 interface WhatsAppNativeFormProps {
   enabled: boolean
+  compact?: boolean
 }
 
 function maskPhone(raw: string): string {
@@ -46,7 +47,10 @@ function maskPhone(raw: string): string {
   return `+${head} ●●●● ${tail}`
 }
 
-export function WhatsAppNativeForm({ enabled }: WhatsAppNativeFormProps) {
+export function WhatsAppNativeForm({
+  enabled,
+  compact = false,
+}: WhatsAppNativeFormProps) {
   const { t } = useTranslation()
   const { state: gatewayState } = useGateway()
 
@@ -64,7 +68,7 @@ export function WhatsAppNativeForm({ enabled }: WhatsAppNativeFormProps) {
 
   const triggerRestart = useCallback(
     async (silent: boolean) => {
-      if (restartInFlightRef.current) return
+      if (restartInFlightRef.current) return false
       restartInFlightRef.current = true
       if (!silent) setRefreshing(true)
       setRefreshError("")
@@ -73,14 +77,15 @@ export function WhatsAppNativeForm({ enabled }: WhatsAppNativeFormProps) {
       try {
         await restartGateway()
         await refreshGatewayState({ force: true })
-      } catch (e) {
+        return true
+      } catch {
+        const message = t("channels.whatsappNative.refreshError")
+        setSnapshot({ status: "offline", error: message })
+        setLoading(false)
         if (!silent) {
-          setRefreshError(
-            e instanceof Error
-              ? e.message
-              : t("channels.whatsappNative.refreshError"),
-          )
+          setRefreshError(message)
         }
+        return false
       } finally {
         restartInFlightRef.current = false
         if (!silent) setRefreshing(false)
@@ -93,23 +98,26 @@ export function WhatsAppNativeForm({ enabled }: WhatsAppNativeFormProps) {
     const gen = pollGenRef.current
     try {
       const resp = await getWhatsAppNativeQR()
-      if (gen !== pollGenRef.current) return
+      if (gen !== pollGenRef.current) return null
       if (resp.status === "expired" && !autoRefreshedRef.current) {
         autoRefreshedRef.current = true
         setSnapshot({ status: "idle" })
         void triggerRestart(true)
-        return
+        return { status: "idle" } satisfies WhatsAppNativeQRResponse
       }
       if (resp.status === "wait" || resp.status === "confirmed") {
         autoRefreshedRef.current = true
       }
       setSnapshot(resp)
+      return resp
     } catch {
-      if (gen !== pollGenRef.current) return
-      setSnapshot({
+      if (gen !== pollGenRef.current) return null
+      const offlineSnapshot: WhatsAppNativeQRResponse = {
         status: "offline",
         error: t("channels.whatsappNative.errorOffline"),
-      })
+      }
+      setSnapshot(offlineSnapshot)
+      return offlineSnapshot
     } finally {
       if (gen === pollGenRef.current) setLoading(false)
     }
@@ -147,8 +155,41 @@ export function WhatsAppNativeForm({ enabled }: WhatsAppNativeFormProps) {
 
   const handleRefresh = useCallback(() => {
     autoRefreshedRef.current = true
-    void triggerRestart(false)
-  }, [triggerRestart])
+    setRefreshError("")
+
+    const showStillOffline = (next: WhatsAppNativeQRResponse | null) => {
+      if (
+        next?.status === "offline" ||
+        next?.status === "error" ||
+        next?.status === "disabled"
+      ) {
+        setRefreshError(
+          t("channels.whatsappNative.stillOffline", "Ainda offline."),
+        )
+      }
+    }
+
+    if (status === "expired" || status === "offline" || status === "error") {
+      void (async () => {
+        const restarted = await triggerRestart(false)
+        if (!restarted) return
+        setRefreshing(true)
+        try {
+          const next = await fetchSnapshot()
+          showStillOffline(next)
+        } finally {
+          setRefreshing(false)
+        }
+      })()
+      return
+    }
+
+    setRefreshing(true)
+    setLoading(true)
+    void fetchSnapshot()
+      .then(showStillOffline)
+      .finally(() => setRefreshing(false))
+  }, [fetchSnapshot, status, t, triggerRestart])
 
   const handleDisconnect = useCallback(async () => {
     setDisconnecting(true)
@@ -166,6 +207,36 @@ export function WhatsAppNativeForm({ enabled }: WhatsAppNativeFormProps) {
       setDisconnecting(false)
     }
   }, [t, triggerRestart])
+
+  if (compact) {
+    return (
+      <Card className="mx-auto w-full max-w-sm overflow-hidden p-0 shadow-sm">
+        <CardContent className="flex flex-col items-center gap-4 p-4">
+          <div className="flex w-full justify-end">
+            <StatusPill status={status} />
+          </div>
+
+          <PairingStage
+            status={status}
+            qrDataURI={qrDataURI}
+            phoneNumber={phoneNumber}
+            loading={loading}
+            compact
+          />
+
+          <CompactActions
+            status={status}
+            refreshing={refreshing}
+            refreshError={refreshError}
+            onRefresh={handleRefresh}
+            disconnecting={disconnecting}
+            disconnectError={disconnectError}
+            onDisconnect={handleDisconnect}
+          />
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card className="overflow-hidden p-0 shadow-sm">
@@ -312,6 +383,7 @@ interface PairingStageProps {
   qrDataURI: string
   phoneNumber: string
   loading: boolean
+  compact?: boolean
 }
 
 function PairingStage({
@@ -319,6 +391,7 @@ function PairingStage({
   qrDataURI,
   phoneNumber,
   loading,
+  compact = false,
 }: PairingStageProps) {
   const { t } = useTranslation()
 
@@ -333,7 +406,9 @@ function PairingStage({
 
   return (
     <div
-      className="relative flex items-center justify-center px-8 py-10 md:px-10 md:py-12"
+      className={`relative flex items-center justify-center ${
+        compact ? "w-full px-3 py-4" : "px-8 py-10 md:px-10 md:py-12"
+      }`}
       style={{
         background:
           "radial-gradient(circle at 30% 20%, rgba(37, 211, 102, 0.10), transparent 60%), radial-gradient(circle at 80% 90%, rgba(18, 140, 126, 0.10), transparent 55%), linear-gradient(180deg, rgba(8, 14, 12, 0.04) 0%, transparent 100%)",
@@ -344,7 +419,9 @@ function PairingStage({
         <CornerBrackets active={status === "wait" || status === "scanned"} />
 
         <div
-          className="relative h-56 w-56 overflow-hidden rounded-[28px] border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_24px_50px_-30px_rgba(18,140,126,0.55)] sm:h-64 sm:w-64"
+          className={`relative overflow-hidden rounded-[28px] border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_24px_50px_-30px_rgba(18,140,126,0.55)] ${
+            compact ? "h-48 w-48" : "h-56 w-56 sm:h-64 sm:w-64"
+          }`}
           style={{
             background:
               "linear-gradient(155deg, #0d1311 0%, #0a0f0d 50%, #060b09 100%)",
@@ -398,11 +475,13 @@ function PairingStage({
           {showSpinner && !showQR && (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-white/70">
               <IconLoader2 className="h-7 w-7 animate-spin" />
-              <p className="text-xs tracking-wide">
-                {status === "scanned"
-                  ? t("channels.whatsappNative.confirmOnPhone")
-                  : t("channels.whatsappNative.generating")}
-              </p>
+              {!compact && (
+                <p className="text-xs tracking-wide">
+                  {status === "scanned"
+                    ? t("channels.whatsappNative.confirmOnPhone")
+                    : t("channels.whatsappNative.generating")}
+                </p>
+              )}
             </div>
           )}
 
@@ -436,40 +515,48 @@ function PairingStage({
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15">
                 <IconRefresh size={22} className="text-amber-300" />
               </div>
-              <p className="px-6 text-center text-xs leading-relaxed">
-                {t("channels.whatsappNative.expiredHint")}
-              </p>
+              {!compact && (
+                <p className="px-6 text-center text-xs leading-relaxed">
+                  {t("channels.whatsappNative.expiredHint")}
+                </p>
+              )}
             </div>
           )}
 
           {showError && (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-white/70">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/15">
-                <IconX size={22} className="text-red-300" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
+                <IconX size={22} className="text-red-700 dark:text-red-300" />
               </div>
-              <p className="px-6 text-center text-xs leading-relaxed">
-                {t("channels.whatsappNative.errorGeneric")}
-              </p>
+              {!compact && (
+                <p className="px-6 text-center text-xs leading-relaxed">
+                  {t("channels.whatsappNative.errorGeneric")}
+                </p>
+              )}
             </div>
           )}
 
           {showOffline && (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center text-white/60">
               <IconBrandWhatsapp size={28} className="text-white/40" />
-              <p className="text-[11px] tracking-[0.18em] uppercase">
-                {status === "disabled"
-                  ? t("channels.whatsappNative.disabledHint")
-                  : t("channels.whatsappNative.offlineHint")}
-              </p>
+              {!compact && (
+                <p className="text-[11px] tracking-[0.18em] uppercase">
+                  {status === "disabled"
+                    ? t("channels.whatsappNative.disabledHint")
+                    : t("channels.whatsappNative.offlineHint")}
+                </p>
+              )}
             </div>
           )}
 
           {showIdle && (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-white/60">
               <IconLoader2 className="h-6 w-6 animate-spin opacity-70" />
-              <p className="text-[11px] tracking-[0.18em] uppercase">
-                {t("channels.whatsappNative.starting")}
-              </p>
+              {!compact && (
+                <p className="text-[11px] tracking-[0.18em] uppercase">
+                  {t("channels.whatsappNative.starting")}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -537,6 +624,89 @@ function CornerBrackets({ active }: { active: boolean }) {
         }}
       />
     </>
+  )
+}
+
+function CompactActions({
+  status,
+  refreshing,
+  refreshError,
+  onRefresh,
+  disconnecting,
+  disconnectError,
+  onDisconnect,
+}: {
+  status: PairingStatus
+  refreshing: boolean
+  refreshError: string
+  onRefresh: () => void
+  disconnecting: boolean
+  disconnectError: string
+  onDisconnect: () => void
+}) {
+  const { t } = useTranslation()
+
+  const canRefresh =
+    status === "expired" ||
+    status === "error" ||
+    status === "offline" ||
+    status === "wait" ||
+    status === "scanned"
+
+  if (status === "confirmed") {
+    return (
+      <div className="flex w-full flex-col items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={disconnecting}
+          onClick={onDisconnect}
+          className="h-8 gap-2 text-red-700 hover:bg-red-500/10 hover:text-red-700 dark:text-red-300"
+        >
+          {disconnecting ? (
+            <IconLoader2 size={14} className="animate-spin" />
+          ) : (
+            <IconPlugConnectedX size={14} />
+          )}
+          {t("channels.whatsappNative.disconnect")}
+        </Button>
+        {disconnectError && (
+          <p className="max-w-xs text-center text-[11px] text-red-700 dark:text-red-300">
+            {disconnectError}
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  if (!canRefresh) return null
+
+  return (
+    <div className="flex w-full flex-col items-center gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={refreshing}
+        onClick={onRefresh}
+        className="h-8 gap-2"
+      >
+        {refreshing ? (
+          <IconLoader2 size={14} className="animate-spin" />
+        ) : (
+          <IconRefresh size={14} />
+        )}
+        {refreshing
+          ? t("channels.whatsappNative.refreshing")
+          : t("channels.whatsappNative.refresh")}
+      </Button>
+      {refreshError && (
+        <p className="max-w-xs text-center text-[11px] text-red-700 dark:text-red-300">
+          {refreshError}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -630,8 +800,8 @@ function Instructions({
       </ol>
 
       {status === "error" && errorMessage && (
-        <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2">
-          <p className="font-mono text-[11px] break-all text-red-600 dark:text-red-300">
+        <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2">
+          <p className="font-mono text-[11px] break-all text-red-700 dark:text-red-300">
             {errorMessage}
           </p>
         </div>
@@ -663,7 +833,7 @@ function Instructions({
               : t("channels.whatsappNative.refresh")}
           </Button>
           {refreshError && (
-            <p className="text-[11px] text-red-600 dark:text-red-300">
+            <p className="text-[11px] text-red-700 dark:text-red-300">
               {refreshError}
             </p>
           )}
@@ -691,7 +861,7 @@ function Instructions({
             size="sm"
             disabled={disconnecting}
             onClick={onDisconnect}
-            className="gap-2 self-start border-red-500/40 text-red-600 hover:border-red-500/70 hover:bg-red-500/5 hover:text-red-600 dark:text-red-400"
+            className="gap-2 self-start border-red-500/30 text-red-700 hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-700 dark:text-red-300"
           >
             {disconnecting ? (
               <IconLoader2 size={14} className="animate-spin" />
@@ -703,7 +873,7 @@ function Instructions({
               : t("channels.whatsappNative.disconnect")}
           </Button>
           {disconnectError && (
-            <p className="text-[11px] text-red-600 dark:text-red-300">
+            <p className="text-[11px] text-red-700 dark:text-red-300">
               {disconnectError}
             </p>
           )}

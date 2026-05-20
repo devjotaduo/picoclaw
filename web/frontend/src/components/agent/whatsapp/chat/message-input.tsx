@@ -18,10 +18,7 @@ import {
 } from "@/lib/whatsapp/attachment-placeholder"
 import { buildQuotedMessage } from "@/lib/whatsapp/quote"
 
-import {
-  type AttachmentKind,
-  AttachmentMenu,
-} from "./attachment-menu"
+import { type AttachmentKind, AttachmentMenu } from "./attachment-menu"
 import { AudioRecorder } from "./audio-recorder"
 import { EmojiPicker } from "./emoji-picker"
 import { QuickRepliesPopover } from "./quick-replies-popover"
@@ -170,7 +167,7 @@ export function MessageInput({
       if (e.key === ":" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const el = e.currentTarget
         const pos = el.selectionStart ?? 0
-        const prevChar = pos === 0 ? "" : value[pos - 1] ?? ""
+        const prevChar = pos === 0 ? "" : (value[pos - 1] ?? "")
         if (prevChar === "" || /\s/.test(prevChar)) {
           e.preventDefault()
           setEmojiOpen(true)
@@ -194,7 +191,7 @@ export function MessageInput({
   return (
     <div
       className={`border-border/40 bg-background border-t ${
-        noteMode ? "ring-amber-400/40 ring-inset ring-2" : ""
+        noteMode ? "ring-2 ring-amber-400/40 ring-inset" : ""
       }`}
     >
       {replyTarget && onCancelReply && (
@@ -243,9 +240,7 @@ export function MessageInput({
                 variant={noteMode ? "default" : "ghost"}
                 size="icon"
                 className={`size-9 shrink-0 ${
-                  noteMode
-                    ? "bg-amber-500 text-white hover:bg-amber-600"
-                    : ""
+                  noteMode ? "bg-amber-500 text-white hover:bg-amber-600" : ""
                 }`}
                 onClick={() => setNoteMode((v) => !v)}
                 aria-pressed={noteMode}
@@ -290,14 +285,14 @@ export function MessageInput({
                   onChange={handleChange}
                   onKeyDown={handleKeyDown}
                   placeholder={
-                    noteMode
-                      ? "Escreva uma nota interna…"
-                      : placeholder
+                    noteMode ? "Escreva uma nota interna…" : placeholder
                   }
                   disabled={sending || disabled}
                   rows={1}
-                  className="min-h-10 max-h-32 flex-1 resize-none rounded-xl text-sm"
-                  aria-label={noteMode ? "Conteúdo da nota interna" : "Mensagem a enviar"}
+                  className="max-h-32 min-h-10 flex-1 resize-none rounded-xl text-sm"
+                  aria-label={
+                    noteMode ? "Conteúdo da nota interna" : "Mensagem a enviar"
+                  }
                 />
               }
             />
@@ -315,12 +310,21 @@ export function MessageInput({
                 className={`h-10 w-10 shrink-0 rounded-xl ${
                   noteMode
                     ? "bg-amber-500 text-white hover:bg-amber-600"
-                    : "bg-wa-brand text-white hover:bg-wa-brand-hover"
+                    : "bg-wa-brand hover:bg-wa-brand-hover text-white"
                 }`}
-                aria-label={sending ? "Enviando" : noteMode ? "Salvar nota" : "Enviar mensagem"}
+                aria-label={
+                  sending
+                    ? "Enviando"
+                    : noteMode
+                      ? "Salvar nota"
+                      : "Enviar mensagem"
+                }
               >
                 {sending ? (
-                  <IconLoader2 className="size-4 animate-spin" aria-hidden="true" />
+                  <IconLoader2
+                    className="size-4 animate-spin"
+                    aria-hidden="true"
+                  />
                 ) : (
                   <IconSend className="size-4" aria-hidden="true" />
                 )}

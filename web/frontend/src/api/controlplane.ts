@@ -10,7 +10,6 @@
  * when the launcher process has PICOCLAW_SAAS_ADMIN_MODE=true plus the four
  * required env vars (see web/backend/api/saas_client.go).
  */
-
 import { launcherFetch } from "@/api/http"
 
 const BASE = "/api/admin/saas"
@@ -207,7 +206,9 @@ export async function deleteTenant(id: string): Promise<void> {
   await call<void>(`/tenants/${encodeURIComponent(id)}`, { method: "DELETE" })
 }
 
-export async function listLauncherProfiles(): Promise<LauncherProfileSummary[]> {
+export async function listLauncherProfiles(): Promise<
+  LauncherProfileSummary[]
+> {
   const data = await call<{ profiles: LauncherProfileSummary[] }>(
     "/launcher-profiles",
   )

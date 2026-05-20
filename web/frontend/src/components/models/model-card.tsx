@@ -76,9 +76,9 @@ export function ModelCard({
             className={[
               "mt-0.5 h-2 w-2 shrink-0 rounded-full",
               model.is_default
-                ? "bg-green-400 shadow-[0_0_0_2px_rgba(74,222,128,0.35)]"
+                ? "bg-emerald-400 shadow-[0_0_0_2px_rgba(16,185,129,0.30)]"
                 : status === "available"
-                  ? "bg-green-500"
+                  ? "bg-emerald-500"
                   : status === "unreachable"
                     ? "bg-amber-500"
                     : "bg-muted-foreground/25",

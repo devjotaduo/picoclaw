@@ -65,8 +65,9 @@ describe("applyFilter", () => {
       d: profile({ chat_jid: "d", assigned_to: "ANA" }),
     }
     expect(
-      applyFilter(chats, "mine", { profilesByJid: profiles, me: "ana" })
-        .map((c) => c.jid),
+      applyFilter(chats, "mine", { profilesByJid: profiles, me: "ana" }).map(
+        (c) => c.jid,
+      ),
     ).toEqual(["a", "d"])
   })
 

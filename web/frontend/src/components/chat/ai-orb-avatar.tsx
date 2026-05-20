@@ -38,13 +38,7 @@ export function AIOrbAvatar({ className }: AIOrbAvatarProps) {
         fill="none"
       >
         <defs>
-          <filter
-            id="ai-orb-warp"
-            x="-20%"
-            y="-20%"
-            width="140%"
-            height="140%"
-          >
+          <filter id="ai-orb-warp" x="-20%" y="-20%" width="140%" height="140%">
             <feTurbulence
               type="fractalNoise"
               baseFrequency="0.018"
@@ -153,13 +147,7 @@ export function AIOrbAvatar({ className }: AIOrbAvatarProps) {
         <circle cx="50" cy="50" r="49.4" fill="url(#ai-orb-rim)" />
 
         <g filter="url(#ai-orb-warp)">
-          <ellipse
-            cx="50"
-            cy="50"
-            rx="32"
-            ry="32"
-            fill="url(#ai-orb-core)"
-          >
+          <ellipse cx="50" cy="50" rx="32" ry="32" fill="url(#ai-orb-core)">
             <animate
               attributeName="rx"
               values="30;36;28;34;30"

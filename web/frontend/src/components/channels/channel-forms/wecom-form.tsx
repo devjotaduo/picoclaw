@@ -183,7 +183,7 @@ export function WecomForm({
       if (isBound) {
         return (
           <div className="flex flex-col items-center gap-3 py-6">
-            <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400">
+            <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">
               <IconCheck size={16} />
               {t("channels.wecom.bound")}
             </div>
@@ -277,10 +277,10 @@ export function WecomForm({
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10">
             <IconCheck
               size={28}
-              className="text-emerald-600 dark:text-emerald-400"
+              className="text-emerald-700 dark:text-emerald-300"
             />
           </div>
-          <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
             {t("channels.wecom.bound")}
           </p>
           {botID && (

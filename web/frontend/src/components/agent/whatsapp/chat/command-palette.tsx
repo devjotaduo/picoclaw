@@ -78,7 +78,9 @@ export function CommandPalette({
                         onOpenChange(false)
                       }}
                     >
-                      {a.icon ?? <IconBolt className="mr-2 size-4" aria-hidden="true" />}
+                      {a.icon ?? (
+                        <IconBolt className="mr-2 size-4" aria-hidden="true" />
+                      )}
                       {a.label}
                     </CommandItem>
                   ))}
@@ -98,7 +100,7 @@ export function CommandPalette({
                   }}
                 >
                   <IconBrandWhatsapp
-                    className="text-[#25d366] mr-2 size-4"
+                    className="mr-2 size-4 text-[#25d366]"
                     aria-hidden="true"
                   />
                   <span className="flex-1 truncate">{label}</span>
@@ -114,4 +116,3 @@ export function CommandPalette({
     </Dialog>
   )
 }
-

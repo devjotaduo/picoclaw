@@ -20,10 +20,18 @@ export function contrastInfo(
   const ratio = contrastRatio(foreground, background)
   const rounded = Math.round(ratio * 10) / 10
   if (ratio >= 7) {
-    return { ratio: rounded, level: "AAA", label: `Contraste: ${rounded}:1 · AAA` }
+    return {
+      ratio: rounded,
+      level: "AAA",
+      label: `Contraste: ${rounded}:1 · AAA`,
+    }
   }
   if (ratio >= 4.5) {
-    return { ratio: rounded, level: "AA", label: `Contraste: ${rounded}:1 · AA` }
+    return {
+      ratio: rounded,
+      level: "AA",
+      label: `Contraste: ${rounded}:1 · AA`,
+    }
   }
   if (ratio >= 3) {
     return {
@@ -32,7 +40,11 @@ export function contrastInfo(
       label: `Contraste: ${rounded}:1 · AA somente texto grande`,
     }
   }
-  return { ratio: rounded, level: "fail", label: `Contraste: ${rounded}:1 · insuficiente` }
+  return {
+    ratio: rounded,
+    level: "fail",
+    label: `Contraste: ${rounded}:1 · insuficiente`,
+  }
 }
 
 function parseHex(value: string): [number, number, number] | null {
@@ -50,7 +62,9 @@ function parseHex(value: string): [number, number, number] | null {
   return [r, g, b]
 }
 
-function relativeLuminance(rgb: [number, number, number] | null): number | null {
+function relativeLuminance(
+  rgb: [number, number, number] | null,
+): number | null {
   if (!rgb) return null
   const [r, g, b] = rgb.map((channel) => {
     const s = channel / 255

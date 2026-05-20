@@ -1,9 +1,10 @@
-import { IconChevronDown, IconClockHour4, IconStar, IconTag } from "@tabler/icons-react"
-
 import {
-  type ConversationFilter,
-  type ConversationSort,
-} from "@/lib/whatsapp/conversation-filter"
+  IconChevronDown,
+  IconClockHour4,
+  IconStar,
+  IconTag,
+} from "@tabler/icons-react"
+
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -15,6 +16,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  type ConversationFilter,
+  type ConversationSort,
+} from "@/lib/whatsapp/conversation-filter"
 
 export interface ConversationFiltersProps {
   filter: ConversationFilter
@@ -127,7 +132,10 @@ export function ConversationFilters({
             <IconChevronDown className="size-3 opacity-60" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-h-72 w-52 overflow-y-auto">
+        <DropdownMenuContent
+          align="start"
+          className="max-h-72 w-52 overflow-y-auto"
+        >
           <DropdownMenuLabel>Tags disponíveis</DropdownMenuLabel>
           {tagOptions.length === 0 && (
             <DropdownMenuLabel className="text-foreground/70 text-[11px] font-normal">
@@ -170,7 +178,10 @@ export function ConversationFilters({
                 <IconClockHour4 className="size-3" aria-hidden="true" />
               )}
               {sort === "priority" ? "Prioridade" : "Recente"}
-              <IconChevronDown className="size-3 opacity-60" aria-hidden="true" />
+              <IconChevronDown
+                className="size-3 opacity-60"
+                aria-hidden="true"
+              />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">

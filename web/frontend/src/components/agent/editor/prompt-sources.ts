@@ -1,11 +1,6 @@
 import type { TemplateApplyPayload } from "@/components/agent/templates/types"
 
-export type PromptSource =
-  | "profile"
-  | "role"
-  | "skills"
-  | "context"
-  | "meta"
+export type PromptSource = "profile" | "role" | "skills" | "context" | "meta"
 
 export interface PromptSection {
   key: string
@@ -23,8 +18,7 @@ const SOURCE_LABELS: Record<PromptSource, string> = {
 }
 
 function clip(value: unknown, max = 120): string {
-  const str =
-    typeof value === "string" ? value : JSON.stringify(value ?? "")
+  const str = typeof value === "string" ? value : JSON.stringify(value ?? "")
   return str.length > max ? `${str.slice(0, max)}…` : str
 }
 
@@ -81,8 +75,7 @@ export function describePayloadSources(
       preview: clip(payload.prohibitions.join(" · ")),
     })
   }
-  const skillCount =
-    payload.skill_configs?.filter((s) => s.enabled).length ?? 0
+  const skillCount = payload.skill_configs?.filter((s) => s.enabled).length ?? 0
   if (skillCount > 0) {
     sections.push({
       key: "skills",

@@ -2,15 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 import {
+  type WhatsAppInternalNote,
   addWhatsAppNote,
   deleteWhatsAppNote,
   listWhatsAppNotes,
-  type WhatsAppInternalNote,
 } from "@/api/whatsapp"
 import {
-  addNote as localAddNote,
-  internalNotesStore,
   type InternalNote,
+  internalNotesStore,
+  addNote as localAddNote,
   listNotes as localListNotes,
   removeNote as localRemoveNote,
 } from "@/lib/whatsapp/internal-notes"
@@ -43,7 +43,9 @@ function toLocalShape(server: WhatsAppInternalNote): InternalNote {
  * returns 404 — older launchers without the `wa_internal_notes` table
  * remain usable on a single device.
  */
-export function useInternalNotes(chatJID: string | null): UseInternalNotesResult {
+export function useInternalNotes(
+  chatJID: string | null,
+): UseInternalNotesResult {
   const queryClient = useQueryClient()
   const [localOnly, setLocalOnly] = useState(false)
   const [localFallback, setLocalFallback] = useState<InternalNote[]>(() =>
@@ -58,8 +60,7 @@ export function useInternalNotes(chatJID: string | null): UseInternalNotesResult
       } catch (err) {
         // Trip the localStorage fallback on 404 / network failure so dev
         // dashboards without the backend update keep working.
-        const message =
-          err instanceof Error ? err.message : String(err)
+        const message = err instanceof Error ? err.message : String(err)
         if (message.includes("404") || message.includes("Failed to fetch")) {
           setLocalOnly(true)
           return []

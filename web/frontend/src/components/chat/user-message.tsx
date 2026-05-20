@@ -55,7 +55,7 @@ export function UserMessage({ content, attachments = [] }: UserMessageProps) {
         >
           {isCommand ? (
             <div className="flex items-start gap-2.5">
-              <span className="font-bold text-emerald-600 select-none dark:text-emerald-400">
+              <span className="font-bold text-emerald-700 select-none dark:text-emerald-300">
                 ❯
               </span>
               <span className="mt-[1px]">{content}</span>

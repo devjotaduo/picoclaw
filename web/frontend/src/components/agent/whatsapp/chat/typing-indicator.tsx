@@ -8,7 +8,10 @@ export interface TypingIndicatorProps {
  * "Digitando…" indicator. The three dots are pure CSS via animate-bounce
  * with staggered delays — no extra dep, no canvas.
  */
-export function TypingIndicator({ name, className = "" }: TypingIndicatorProps) {
+export function TypingIndicator({
+  name,
+  className = "",
+}: TypingIndicatorProps) {
   return (
     <span
       className={`text-foreground/70 inline-flex items-center gap-1 text-[11px] ${className}`}

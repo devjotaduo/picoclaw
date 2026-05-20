@@ -21,7 +21,9 @@ function msg(overrides: Partial<WhatsAppMessage> = {}): WhatsAppMessage {
 
 describe("deriveMessageStatus", () => {
   it("returns null for inbound messages", () => {
-    expect(deriveMessageStatus({ message: msg({ direction: "in" }) })).toBeNull()
+    expect(
+      deriveMessageStatus({ message: msg({ direction: "in" }) }),
+    ).toBeNull()
   })
 
   it("returns 'pending' when message id is in the optimistic set", () => {
@@ -35,9 +37,9 @@ describe("deriveMessageStatus", () => {
   })
 
   it("uses explicit backend status when present", () => {
-    expect(
-      deriveMessageStatus({ message: msg({ status: "read" }) }),
-    ).toBe("read")
+    expect(deriveMessageStatus({ message: msg({ status: "read" }) })).toBe(
+      "read",
+    )
   })
 
   it("maps read_at > 0 to 'read'", () => {
@@ -47,9 +49,9 @@ describe("deriveMessageStatus", () => {
   })
 
   it("maps delivered=true (without read_at) to 'delivered'", () => {
-    expect(
-      deriveMessageStatus({ message: msg({ delivered: true }) }),
-    ).toBe("delivered")
+    expect(deriveMessageStatus({ message: msg({ delivered: true }) })).toBe(
+      "delivered",
+    )
   })
 
   it("falls back to 'sent' for old undelivered messages", () => {

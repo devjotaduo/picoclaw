@@ -200,7 +200,9 @@ function diffStrings(
 function longestCommonSubsequence(a: string[], b: string[]): string[] {
   const m = a.length
   const n = b.length
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0))
+  const dp: number[][] = Array.from({ length: m + 1 }, () =>
+    Array(n + 1).fill(0),
+  )
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
       if (a[i - 1] === b[j - 1]) {
@@ -227,10 +229,7 @@ function longestCommonSubsequence(a: string[], b: string[]): string[] {
   return out
 }
 
-function compactContext(
-  lines: DiffLine[],
-  contextLines: number,
-): DiffLine[] {
+function compactContext(lines: DiffLine[], contextLines: number): DiffLine[] {
   if (contextLines <= 0) return lines.filter((l) => l.kind !== "context")
   const out: DiffLine[] = []
   for (let i = 0; i < lines.length; i++) {

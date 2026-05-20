@@ -1,8 +1,8 @@
 import {
   IconCheckbox,
+  IconChecks,
   IconCircleOff,
   IconCircleX,
-  IconChecks,
   IconMail,
   IconMailOpened,
   IconPin,
@@ -43,7 +43,7 @@ function UnreadBadge({ count }: { count: number }) {
   if (count <= 0) return null
   return (
     <span
-      className="bg-wa-brand flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-white shadow-sm"
+      className="bg-wa-brand flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white tabular-nums shadow-sm"
       aria-label={`${count} mensagens não lidas`}
     >
       {count > 99 ? "99+" : count}
@@ -171,7 +171,10 @@ export function ConversationListItem({
               >
                 {chat.unread_count > 0 ? (
                   <>
-                    <IconMailOpened className="mr-2 size-3.5" aria-hidden="true" />
+                    <IconMailOpened
+                      className="mr-2 size-3.5"
+                      aria-hidden="true"
+                    />
                     Marcar como lida
                   </>
                 ) : (
@@ -191,7 +194,10 @@ export function ConversationListItem({
               >
                 {chat.paused ? (
                   <>
-                    <IconCheckbox className="mr-2 size-3.5" aria-hidden="true" />
+                    <IconCheckbox
+                      className="mr-2 size-3.5"
+                      aria-hidden="true"
+                    />
                     Reativar agente
                   </>
                 ) : (

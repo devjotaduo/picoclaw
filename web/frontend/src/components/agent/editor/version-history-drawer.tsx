@@ -2,6 +2,7 @@ import { IconHistory, IconRotate, IconTrash } from "@tabler/icons-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useEffect, useMemo, useState } from "react"
 
+import type { TemplateApplyPayload } from "@/components/agent/templates/types"
 import { Button } from "@/components/ui/button"
 import {
   Sheet,
@@ -11,8 +12,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
-
-import type { TemplateApplyPayload } from "@/components/agent/templates/types"
 
 import {
   type DiffLine,
@@ -46,14 +45,14 @@ export function VersionHistoryDrawer({
     staleTime: 30_000,
   })
 
-  const versions = useMemo(
-    () => versionsQuery.data ?? [],
-    [versionsQuery.data],
-  )
+  const versions = useMemo(() => versionsQuery.data ?? [], [versionsQuery.data])
 
   useEffect(() => {
     if (!open) return
-    if (versions.length > 0 && (selectedID === null || !versions.some((v) => v.id === selectedID))) {
+    if (
+      versions.length > 0 &&
+      (selectedID === null || !versions.some((v) => v.id === selectedID))
+    ) {
       setSelectedID(versions[0]!.id)
     }
     if (versions.length === 0 && selectedID !== null) {
@@ -74,7 +73,9 @@ export function VersionHistoryDrawer({
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteVersion(agentID, id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["agent-versions", agentID] })
+      void queryClient.invalidateQueries({
+        queryKey: ["agent-versions", agentID],
+      })
     },
   })
 
@@ -95,8 +96,8 @@ export function VersionHistoryDrawer({
             Histórico de versões
           </SheetTitle>
           <SheetDescription>
-            Sincronizado com o launcher; até 20 versões por agente. Recentes
-            no topo.
+            Sincronizado com o launcher; até 20 versões por agente. Recentes no
+            topo.
           </SheetDescription>
         </SheetHeader>
         <div className="grid min-h-0 flex-1 grid-cols-1 sm:grid-cols-[200px_1fr]">
@@ -107,8 +108,8 @@ export function VersionHistoryDrawer({
               </p>
             ) : versions.length === 0 ? (
               <p className="text-muted-foreground p-4 text-xs">
-                Nenhuma versão salva ainda. Versões são criadas
-                automaticamente a cada salvamento bem-sucedido do prompt.
+                Nenhuma versão salva ainda. Versões são criadas automaticamente
+                a cada salvamento bem-sucedido do prompt.
               </p>
             ) : (
               <ul role="list" className="divide-border/40 divide-y">
@@ -174,7 +175,11 @@ export function VersionHistoryDrawer({
               aria-label="Diff entre versões"
               className="min-h-0 flex-1 overflow-auto p-4 font-mono text-[11px] leading-relaxed"
             >
-              {selected ? renderDiff(diff) : <span className="text-muted-foreground">—</span>}
+              {selected ? (
+                renderDiff(diff)
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )}
             </pre>
           </main>
         </div>
@@ -189,8 +194,10 @@ function renderDiff(lines: DiffLine[]) {
       key={idx}
       className={cn(
         "block whitespace-pre-wrap",
-        line.kind === "add" && "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300",
-        line.kind === "remove" && "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300",
+        line.kind === "add" &&
+          "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+        line.kind === "remove" &&
+          "bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-300",
         line.kind === "context" && "text-muted-foreground",
       )}
     >

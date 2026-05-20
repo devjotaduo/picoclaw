@@ -45,7 +45,7 @@ export function DeactivateAgentDialog({
     <Dialog open={open} onOpenChange={(o) => (!o ? onCancel() : undefined)}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <div className="bg-amber-100 dark:bg-amber-950/40 mb-2 flex size-9 items-center justify-center rounded-full">
+          <div className="mb-2 flex size-9 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/40">
             <IconAlertTriangle
               className="size-5 text-amber-700 dark:text-amber-300"
               aria-hidden="true"
@@ -62,13 +62,16 @@ export function DeactivateAgentDialog({
         <div className="border-border/60 bg-muted/30 max-h-48 overflow-y-auto rounded-lg border">
           {isLoadingConversations ? (
             <div className="text-muted-foreground flex items-center gap-2 p-3 text-xs">
-              <IconLoader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              <IconLoader2
+                className="size-3.5 animate-spin"
+                aria-hidden="true"
+              />
               Carregando conversas ativas…
             </div>
           ) : count === 0 ? (
             <p className="text-muted-foreground p-3 text-xs">
-              Nenhuma conversa ativa no momento. Ainda assim, novos contatos
-              não serão atendidos automaticamente.
+              Nenhuma conversa ativa no momento. Ainda assim, novos contatos não
+              serão atendidos automaticamente.
             </p>
           ) : (
             <ul role="list" className="divide-border/40 divide-y">

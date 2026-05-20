@@ -20,7 +20,11 @@ describe("computeSLA", () => {
   it("returns null when the last direction was outbound (we already replied)", () => {
     expect(
       computeSLA({
-        chat: chat({ last_direction: "out", unread_count: 0, last_message_ts: NOW - 60_000 }),
+        chat: chat({
+          last_direction: "out",
+          unread_count: 0,
+          last_message_ts: NOW - 60_000,
+        }),
         now: NOW,
       }),
     ).toBeNull()
@@ -29,7 +33,11 @@ describe("computeSLA", () => {
   it("returns null when there's no unread (chat already opened)", () => {
     expect(
       computeSLA({
-        chat: chat({ last_direction: "in", unread_count: 0, last_message_ts: NOW - 60_000 }),
+        chat: chat({
+          last_direction: "in",
+          unread_count: 0,
+          last_message_ts: NOW - 60_000,
+        }),
         now: NOW,
       }),
     ).toBeNull()
@@ -37,7 +45,11 @@ describe("computeSLA", () => {
 
   it("classifies fresh waits as 'ok'", () => {
     const sla = computeSLA({
-      chat: chat({ last_direction: "in", unread_count: 1, last_message_ts: NOW - 5 * 60_000 }),
+      chat: chat({
+        last_direction: "in",
+        unread_count: 1,
+        last_message_ts: NOW - 5 * 60_000,
+      }),
       now: NOW,
     })
     expect(sla?.level).toBe("ok")
@@ -47,7 +59,11 @@ describe("computeSLA", () => {
 
   it("escalates to 'warning' after 15 min", () => {
     const sla = computeSLA({
-      chat: chat({ last_direction: "in", unread_count: 1, last_message_ts: NOW - 30 * 60_000 }),
+      chat: chat({
+        last_direction: "in",
+        unread_count: 1,
+        last_message_ts: NOW - 30 * 60_000,
+      }),
       now: NOW,
     })
     expect(sla?.level).toBe("warning")
@@ -55,7 +71,11 @@ describe("computeSLA", () => {
 
   it("escalates to 'breach' after 60 min", () => {
     const sla = computeSLA({
-      chat: chat({ last_direction: "in", unread_count: 1, last_message_ts: NOW - 90 * 60_000 }),
+      chat: chat({
+        last_direction: "in",
+        unread_count: 1,
+        last_message_ts: NOW - 90 * 60_000,
+      }),
       now: NOW,
     })
     expect(sla?.level).toBe("breach")
@@ -65,7 +85,11 @@ describe("computeSLA", () => {
   it("accepts ts in seconds OR milliseconds", () => {
     const inSeconds = Math.floor((NOW - 10 * 60_000) / 1000)
     const sla = computeSLA({
-      chat: chat({ last_direction: "in", unread_count: 1, last_message_ts: inSeconds }),
+      chat: chat({
+        last_direction: "in",
+        unread_count: 1,
+        last_message_ts: inSeconds,
+      }),
       now: NOW,
     })
     expect(sla?.waitingMinutes).toBe(10)

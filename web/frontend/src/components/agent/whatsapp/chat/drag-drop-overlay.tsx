@@ -8,7 +8,7 @@ export function DragDropOverlay({ visible }: DragDropOverlayProps) {
   if (!visible) return null
   return (
     <div
-      className="bg-primary/8 ring-primary/40 pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl ring-2 ring-dashed backdrop-blur-[2px]"
+      className="bg-primary/8 ring-primary/40 ring-dashed pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl ring-2 backdrop-blur-[2px]"
       role="presentation"
       aria-hidden="true"
     >

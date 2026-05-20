@@ -82,7 +82,10 @@ export function RecordingWaveform({
             barsRef.current[i] = el
           }}
           className="block h-full w-[3px] origin-center rounded-full bg-gradient-to-t from-violet-500 via-fuchsia-500 to-cyan-400 shadow-[0_0_8px_rgba(168,85,247,0.4)] will-change-transform"
-          style={{ transform: "scaleY(0.08)", transition: "transform 70ms ease-out" }}
+          style={{
+            transform: "scaleY(0.08)",
+            transition: "transform 70ms ease-out",
+          }}
         />
       ))}
     </div>

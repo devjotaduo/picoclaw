@@ -1,11 +1,6 @@
 import type { WhatsAppChat, WhatsAppContactProfile } from "@/api/whatsapp"
 
-export type ConversationFilter =
-  | "all"
-  | "unread"
-  | "mine"
-  | "paused"
-  | "tag"
+export type ConversationFilter = "all" | "unread" | "mine" | "paused" | "tag"
 
 export type ConversationSort = "recent" | "priority"
 
@@ -51,9 +46,7 @@ export function applyFilter(
       if (!tag) return [...chats]
       return chats.filter((c) => {
         const profile = ctx.profilesByJid?.[c.jid]
-        return (profile?.tags ?? []).some(
-          (t) => t.trim().toLowerCase() === tag,
-        )
+        return (profile?.tags ?? []).some((t) => t.trim().toLowerCase() === tag)
       })
     }
   }
@@ -67,8 +60,10 @@ export function applySort(
   const list = [...chats]
   if (sort === "priority") {
     list.sort((a, b) => {
-      const pa = PRIORITY_RANK[ctx.profilesByJid?.[a.jid]?.priority ?? "none"] ?? 0
-      const pb = PRIORITY_RANK[ctx.profilesByJid?.[b.jid]?.priority ?? "none"] ?? 0
+      const pa =
+        PRIORITY_RANK[ctx.profilesByJid?.[a.jid]?.priority ?? "none"] ?? 0
+      const pb =
+        PRIORITY_RANK[ctx.profilesByJid?.[b.jid]?.priority ?? "none"] ?? 0
       if (pa !== pb) return pb - pa
       return b.last_message_ts - a.last_message_ts
     })

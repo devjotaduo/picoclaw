@@ -1,12 +1,12 @@
-import type {
-  WhatsAppMessage,
-  WhatsAppMessageStatus,
-} from "@/api/whatsapp"
+import type { WhatsAppMessage, WhatsAppMessageStatus } from "@/api/whatsapp"
 
 const PENDING_GRACE_MS = 60_000
 
 export interface DeriveStatusInput {
-  message: Pick<WhatsAppMessage, "direction" | "delivered" | "status" | "ts" | "read_at" | "error">
+  message: Pick<
+    WhatsAppMessage,
+    "direction" | "delivered" | "status" | "ts" | "read_at" | "error"
+  >
   optimisticIds?: ReadonlySet<number | string>
   optimisticKey?: number | string
   now?: number
@@ -19,7 +19,10 @@ export function deriveMessageStatus(
   if (message.direction !== "out") return null
   if (message.error) return "sent"
   if (message.status) return message.status
-  if (input.optimisticKey != null && input.optimisticIds?.has(input.optimisticKey)) {
+  if (
+    input.optimisticKey != null &&
+    input.optimisticIds?.has(input.optimisticKey)
+  ) {
     return "pending"
   }
   if (message.read_at && message.read_at > 0) return "read"

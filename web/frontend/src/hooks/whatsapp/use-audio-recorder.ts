@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
-export type RecorderState = "idle" | "requesting" | "recording" | "stopped" | "error"
+export type RecorderState =
+  | "idle"
+  | "requesting"
+  | "recording"
+  | "stopped"
+  | "error"
 
 export interface AudioClip {
   blob: Blob
@@ -42,7 +47,9 @@ export function useAudioRecorder(): UseAudioRecorderResult {
   const startTsRef = useRef(0)
   const timerRef = useRef<number | null>(null)
   const rafRef = useRef<number | null>(null)
-  const stopResolverRef = useRef<((clip: AudioClip | null) => void) | null>(null)
+  const stopResolverRef = useRef<((clip: AudioClip | null) => void) | null>(
+    null,
+  )
 
   const cleanup = useCallback(() => {
     if (timerRef.current != null) {
@@ -87,7 +94,10 @@ export function useAudioRecorder(): UseAudioRecorderResult {
       const mimeType =
         preferred.find((m) => MediaRecorder.isTypeSupported(m)) ?? ""
 
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+      const recorder = new MediaRecorder(
+        stream,
+        mimeType ? { mimeType } : undefined,
+      )
       recorderRef.current = recorder
       chunksRef.current = []
       recorder.addEventListener("dataavailable", (e) => {

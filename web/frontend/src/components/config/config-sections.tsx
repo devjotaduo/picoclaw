@@ -986,9 +986,9 @@ export function ExecSection({ form, onFieldChange }: ExecSectionProps) {
                 <div
                   className={`rounded-md p-2 text-sm ${
                     testResult.allowed
-                      ? "bg-green-500/10 text-green-600"
+                      ? "bg-emerald-500/10 text-emerald-700"
                       : testResult.blocked
-                        ? "bg-red-500/10 text-red-600"
+                        ? "bg-red-500/10 text-red-700"
                         : "bg-muted text-muted-foreground"
                   }`}
                 >

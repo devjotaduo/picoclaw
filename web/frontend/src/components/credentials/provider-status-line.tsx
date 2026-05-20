@@ -15,11 +15,11 @@ export function ProviderStatusLine({
 
   const style =
     status === "connected"
-      ? "bg-green-500/10 text-green-700 dark:text-green-300"
+      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
       : status === "needs_refresh"
         ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
         : status === "expired"
-          ? "bg-red-500/10 text-red-700 dark:text-red-300"
+          ? "bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-300"
           : "bg-muted text-muted-foreground"
 
   return (

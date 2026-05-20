@@ -143,7 +143,7 @@ export function SkillEditorPage() {
               {t("pages.agent.skill_editor.loading")}
             </div>
           ) : rawQuery.isError ? (
-            <div className="p-6 text-sm text-red-500">
+            <div className="p-6 text-sm text-red-700 dark:text-red-300">
               {rawQuery.error instanceof Error
                 ? rawQuery.error.message
                 : t("pages.agent.skill_editor.load_error")}

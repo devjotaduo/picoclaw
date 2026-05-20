@@ -29,12 +29,12 @@ pnpm test:e2e:report
 
 ## Variáveis de ambiente
 
-| Variável | Padrão | Descrição |
-|---|---|---|
-| `E2E_BASE_URL` | `http://localhost:18800` | URL do launcher. `PLAYWRIGHT_BASE_URL` também é aceito como alias legado. |
-| `E2E_PASSWORD` | _(unset)_ | Senha do dashboard. Quando ausente, o setup pula login (útil para launchers sem auth). |
-| `E2E_DESTRUCTIVE` | `0` | Quando `1`, habilita specs que mutam agentes reais. |
-| `CI` | _(unset)_ | Quando setado, Playwright faz retries 2x e o setup loga `E2E_PASSWORD` ausente como warning. |
+| Variável          | Padrão                   | Descrição                                                                                    |
+| ----------------- | ------------------------ | -------------------------------------------------------------------------------------------- |
+| `E2E_BASE_URL`    | `http://localhost:18800` | URL do launcher. `PLAYWRIGHT_BASE_URL` também é aceito como alias legado.                    |
+| `E2E_PASSWORD`    | _(unset)_                | Senha do dashboard. Quando ausente, o setup pula login (útil para launchers sem auth).       |
+| `E2E_DESTRUCTIVE` | `0`                      | Quando `1`, habilita specs que mutam agentes reais.                                          |
+| `CI`              | _(unset)_                | Quando setado, Playwright faz retries 2x e o setup loga `E2E_PASSWORD` ausente como warning. |
 
 ## Autenticação automatizada
 
@@ -50,14 +50,14 @@ Para invalidar a sessão, basta apagar `e2e/.auth/`.
 
 ## Cobertura (15 testes em 6 arquivos)
 
-| Spec                                       | Tipo        | Cobre |
-|--------------------------------------------|-------------|---|
-| `agent-editor/navigation.spec.ts`          | read-only   | Checklist 5 etapas, URL sync, máscaras de path/JID, header, filtros |
-| `agent-editor/chat-drawer.spec.ts`         | read-only   | Abre/fecha drawer, alterna largura, Esc fecha |
-| `agent-editor/versions.spec.ts`            | read-only ★ | Drawer com estado vazio; restauração via fixture localStorage |
-| `agent-editor/wizard.spec.ts`              | destrutivo  | Criar Atendente em <60s; bloqueio de ID duplicado |
-| `agent-editor/save-bar.spec.ts`            | destrutivo  | Dirty tracking; atalho Ctrl+S |
-| `agent-editor/deactivate.spec.ts`          | destrutivo  | Modal com impacto; cancelar mantém estado |
+| Spec                               | Tipo        | Cobre                                                               |
+| ---------------------------------- | ----------- | ------------------------------------------------------------------- |
+| `agent-editor/navigation.spec.ts`  | read-only   | Checklist 5 etapas, URL sync, máscaras de path/JID, header, filtros |
+| `agent-editor/chat-drawer.spec.ts` | read-only   | Abre/fecha drawer, alterna largura, Esc fecha                       |
+| `agent-editor/versions.spec.ts`    | read-only ★ | Drawer com estado vazio; restauração via fixture localStorage       |
+| `agent-editor/wizard.spec.ts`      | destrutivo  | Criar Atendente em <60s; bloqueio de ID duplicado                   |
+| `agent-editor/save-bar.spec.ts`    | destrutivo  | Dirty tracking; atalho Ctrl+S                                       |
+| `agent-editor/deactivate.spec.ts`  | destrutivo  | Modal com impacto; cancelar mantém estado                           |
 
 ★ A maior parte do spec de versões usa fixtures de `localStorage`, sem efeitos colaterais. O subcaso destrutivo restaura uma versão real via UI.
 

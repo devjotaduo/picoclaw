@@ -87,10 +87,12 @@ export function ChatEmptyState({
   }
 
   const agentName = (agent?.name || agent?.id || "").trim()
-  const heading = agentName ? t("chat.welcomeWithAgent", { name: agentName }) : t("chat.welcome")
-  const description = (chatIntro && chatIntro.length > 0
-    ? chatIntro
-    : t("chat.welcomeDesc")) as string
+  const heading = agentName
+    ? t("chat.welcomeWithAgent", { name: agentName })
+    : t("chat.welcome")
+  const description = (
+    chatIntro && chatIntro.length > 0 ? chatIntro : t("chat.welcomeDesc")
+  ) as string
   const tasks = (quickTasks ?? []).filter(
     (task) => task.label.trim() && task.prompt.trim(),
   )

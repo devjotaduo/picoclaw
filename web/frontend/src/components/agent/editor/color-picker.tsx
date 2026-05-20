@@ -69,9 +69,7 @@ export function ColorPicker({
             const v = e.target.value
             if (HEX_RE.test(v)) onChange(v.startsWith("#") ? v : `#${v}`)
           }}
-          aria-describedby={
-            ariaDescription ? `${inputId}-desc` : undefined
-          }
+          aria-describedby={ariaDescription ? `${inputId}-desc` : undefined}
           placeholder="#0F172A"
           className="font-mono text-xs"
           maxLength={7}
@@ -82,7 +80,11 @@ export function ColorPicker({
           {ariaDescription}
         </p>
       )}
-      <div role="group" aria-label="Cores sugeridas" className="flex flex-wrap gap-1.5">
+      <div
+        role="group"
+        aria-label="Cores sugeridas"
+        className="flex flex-wrap gap-1.5"
+      >
         {presets.map((preset) => {
           const active = normalizeHex(preset) === normalizeHex(value)
           return (
@@ -108,13 +110,13 @@ export function ColorPicker({
           className={cn(
             "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium",
             contrast.level === "AAA" &&
-              "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+              "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
             contrast.level === "AA" &&
-              "bg-emerald-100/80 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300",
+              "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
             contrast.level === "AA-large" &&
               "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
             contrast.level === "fail" &&
-              "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
+              "bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-300",
           )}
         >
           {contrast.label}

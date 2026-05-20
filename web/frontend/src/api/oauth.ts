@@ -1,7 +1,16 @@
 import { launcherFetch } from "@/api/http"
 
-export type OAuthProvider = "openai" | "anthropic" | "google-antigravity" | "github-copilot"
-export type OAuthMethod = "browser" | "device_code" | "token" | "claude_code" | "gh_cli"
+export type OAuthProvider =
+  | "openai"
+  | "anthropic"
+  | "google-antigravity"
+  | "github-copilot"
+export type OAuthMethod =
+  | "browser"
+  | "device_code"
+  | "token"
+  | "claude_code"
+  | "gh_cli"
 
 export interface OAuthProviderStatus {
   provider: OAuthProvider

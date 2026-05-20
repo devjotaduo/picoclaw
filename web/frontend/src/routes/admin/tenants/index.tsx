@@ -3,8 +3,8 @@ import { Link, createFileRoute } from "@tanstack/react-router"
 import * as React from "react"
 
 import {
-  type Tenant,
   ControlplaneError,
+  type Tenant,
   listTenants,
   restartTenant,
   resumeTenant,
@@ -73,131 +73,131 @@ function TenantsList() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 sm:p-6">
-      <header className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Tenants</h1>
-          <p className="text-muted-foreground text-sm">
-            {tenants.length} de {data?.length ?? 0} mostrado
-            {tenants.length === 1 ? "" : "s"}.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => refetch()}>
-            Recarregar
-          </Button>
-          <Button asChild>
-            <Link to="/admin/tenants/new">Novo tenant</Link>
-          </Button>
-          <Button asChild variant="secondary">
-            <Link to="/admin/clone">Clonar</Link>
-          </Button>
-        </div>
-      </header>
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 sm:p-6">
+        <header className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold">Tenants</h1>
+            <p className="text-muted-foreground text-sm">
+              {tenants.length} de {data?.length ?? 0} mostrado
+              {tenants.length === 1 ? "" : "s"}.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => refetch()}>
+              Recarregar
+            </Button>
+            <Button asChild>
+              <Link to="/admin/tenants/new">Novo tenant</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link to="/admin/clone">Clonar</Link>
+            </Button>
+          </div>
+        </header>
 
-      <Input
-        placeholder="Filtrar por id, nome, subdomínio ou e-mail"
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-      />
+        <Input
+          placeholder="Filtrar por id, nome, subdomínio ou e-mail"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
 
-      {error ? (
-        <div className="text-destructive text-sm" role="alert">
-          {error}
-        </div>
-      ) : null}
+        {error ? (
+          <div className="text-destructive text-sm" role="alert">
+            {error}
+          </div>
+        ) : null}
 
-      {isLoading ? (
-        <div className="text-muted-foreground text-sm">Carregando…</div>
-      ) : (
-        <div className="border-border rounded-md border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left">
-              <tr>
-                <th className="p-2">ID</th>
-                <th className="p-2">Nome</th>
-                <th className="p-2">Sub</th>
-                <th className="p-2">Owner</th>
-                <th className="p-2">Status</th>
-                <th className="p-2 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tenants.map((t) => (
-                <tr key={t.id} className="border-t">
-                  <td className="p-2 font-mono text-xs">{t.id}</td>
-                  <td className="p-2">
-                    <Link
-                      to="/admin/tenants/$id"
-                      params={{ id: t.id }}
-                      className="hover:underline"
-                    >
-                      {t.display_name}
-                    </Link>
-                  </td>
-                  <td className="p-2 font-mono text-xs">{t.subdomain}</td>
-                  <td className="p-2">{t.owner_email}</td>
-                  <td className="p-2">{statusBadge(t.status)}</td>
-                  <td className="p-2 text-right">
-                    <div className="flex justify-end gap-1">
-                      {t.status === "active" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={busy === t.id}
-                          onClick={() =>
-                            doAction(t.id, () => suspendTenant(t.id))
-                          }
-                        >
-                          Suspender
-                        </Button>
-                      ) : null}
-                      {t.status === "suspended" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={busy === t.id}
-                          onClick={() =>
-                            doAction(t.id, () => resumeTenant(t.id))
-                          }
-                        >
-                          Retomar
-                        </Button>
-                      ) : null}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={busy === t.id}
-                        onClick={() =>
-                          doAction(t.id, () => restartTenant(t.id))
-                        }
-                      >
-                        Restart
-                      </Button>
-                      <Button asChild variant="secondary" size="sm">
-                        <Link to="/admin/tenants/$id" params={{ id: t.id }}>
-                          Detalhe
-                        </Link>
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {tenants.length === 0 ? (
+        {isLoading ? (
+          <div className="text-muted-foreground text-sm">Carregando…</div>
+        ) : (
+          <div className="border-border rounded-md border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-left">
                 <tr>
-                  <td
-                    className="text-muted-foreground p-4 text-center"
-                    colSpan={6}
-                  >
-                    Sem tenants.
-                  </td>
+                  <th className="p-2">ID</th>
+                  <th className="p-2">Nome</th>
+                  <th className="p-2">Sub</th>
+                  <th className="p-2">Owner</th>
+                  <th className="p-2">Status</th>
+                  <th className="p-2 text-right">Ações</th>
                 </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+              </thead>
+              <tbody>
+                {tenants.map((t) => (
+                  <tr key={t.id} className="border-t">
+                    <td className="p-2 font-mono text-xs">{t.id}</td>
+                    <td className="p-2">
+                      <Link
+                        to="/admin/tenants/$id"
+                        params={{ id: t.id }}
+                        className="hover:underline"
+                      >
+                        {t.display_name}
+                      </Link>
+                    </td>
+                    <td className="p-2 font-mono text-xs">{t.subdomain}</td>
+                    <td className="p-2">{t.owner_email}</td>
+                    <td className="p-2">{statusBadge(t.status)}</td>
+                    <td className="p-2 text-right">
+                      <div className="flex justify-end gap-1">
+                        {t.status === "active" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={busy === t.id}
+                            onClick={() =>
+                              doAction(t.id, () => suspendTenant(t.id))
+                            }
+                          >
+                            Suspender
+                          </Button>
+                        ) : null}
+                        {t.status === "suspended" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={busy === t.id}
+                            onClick={() =>
+                              doAction(t.id, () => resumeTenant(t.id))
+                            }
+                          >
+                            Retomar
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busy === t.id}
+                          onClick={() =>
+                            doAction(t.id, () => restartTenant(t.id))
+                          }
+                        >
+                          Restart
+                        </Button>
+                        <Button asChild variant="secondary" size="sm">
+                          <Link to="/admin/tenants/$id" params={{ id: t.id }}>
+                            Detalhe
+                          </Link>
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {tenants.length === 0 ? (
+                  <tr>
+                    <td
+                      className="text-muted-foreground p-4 text-center"
+                      colSpan={6}
+                    >
+                      Sem tenants.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

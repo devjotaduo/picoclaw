@@ -4,7 +4,9 @@ import { type AgentEditorTab, TABS_ORDER, isValidTab } from "./tabs-nav"
 
 const PARAM = "tab"
 
-export function readInitialTab(fallback: AgentEditorTab = "identity"): AgentEditorTab {
+export function readInitialTab(
+  fallback: AgentEditorTab = "identity",
+): AgentEditorTab {
   if (typeof window === "undefined") return fallback
   const params = new URLSearchParams(window.location.search)
   const raw = params.get(PARAM)
