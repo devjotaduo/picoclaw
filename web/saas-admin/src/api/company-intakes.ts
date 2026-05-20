@@ -94,8 +94,21 @@ export async function generatePublicIntakeReport(id: string, resumeToken: string
   });
 }
 
+export type SubmittedIntake = CompanyIntake & {
+  // Optional provisioning result added by the backend when
+  // PICOCLAW_SAAS_AUTO_PROVISION=true and the intake has email + company.
+  tenant_provisioned?: boolean;
+  tenant_already_exists?: boolean;
+  provision_error?: string;
+  url?: string;
+  subdomain?: string;
+  login_mode?: "magic_link" | "password";
+  check_email?: boolean;
+  initial_password?: string;
+};
+
 export async function submitPublicIntake(id: string, resumeToken: string) {
-  return api<CompanyIntake>(`/api/v1/public/company-intakes/${encodeURIComponent(id)}/submit`, {
+  return api<SubmittedIntake>(`/api/v1/public/company-intakes/${encodeURIComponent(id)}/submit`, {
     method: "POST",
     body: JSON.stringify({ resume_token: resumeToken }),
   });

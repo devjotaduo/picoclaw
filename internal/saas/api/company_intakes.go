@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -292,7 +293,48 @@ func (h *Handler) handleSubmitCompanyIntake(w http.ResponseWriter, r *http.Reque
 		handleIntakeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toPublicIntakeResponse(submitted))
+
+	// Auto-provision: now that the visitor has supplied email + whatsapp via
+	// ClaraFinalize, hand the qualified+submitted intake to the provisioner.
+	// (Previously this ran during the chat SSE, but at that point contact_email
+	// was still empty — Sofia's mark_qualified fires before the finalize form
+	// collects the contact info.) We return the provision result in the same
+	// response so the UI can show the dashboard URL + login mode in one shot.
+	base := toPublicIntakeResponse(submitted)
+	// Convert struct -> map so we can splice in provisioning fields.
+	resp := map[string]any{}
+	if raw, mErr := json.Marshal(base); mErr == nil {
+		_ = json.Unmarshal(raw, &resp)
+	}
+	notLinked := submitted.LinkedTenantID == nil || *submitted.LinkedTenantID == ""
+	if h.AutoProvision != nil && notLinked && submitted.ContactEmail != "" && submitted.CompanyName != "" {
+		log.Printf("submit: AutoProvision.Run starting intake=%s company=%q email=%q", id, submitted.CompanyName, submitted.ContactEmail)
+		res, perr := h.AutoProvision.Run(r.Context(), submitted, clientIP(r))
+		switch {
+		case perr != nil:
+			log.Printf("submit: AutoProvision.Run ERR intake=%s err=%v", id, perr)
+			resp["provision_error"] = perr.Error()
+		case res.AlreadyExists:
+			log.Printf("submit: AutoProvision tenant_already_exists intake=%s url=%s", id, res.URL)
+			resp["tenant_already_exists"] = true
+			resp["url"] = res.URL
+			resp["subdomain"] = res.Subdomain
+			resp["email"] = res.Email
+		default:
+			log.Printf("submit: AutoProvision tenant_provisioned intake=%s url=%s mode=%s", id, res.URL, res.LoginMode)
+			resp["tenant_provisioned"] = true
+			resp["url"] = res.URL
+			resp["subdomain"] = res.Subdomain
+			resp["email"] = res.Email
+			resp["login_mode"] = res.LoginMode
+			if res.LoginMode == "magic_link" {
+				resp["check_email"] = true
+			} else if res.InitialPassword != "" {
+				resp["initial_password"] = res.InitialPassword
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) handleListCompanyIntakes(w http.ResponseWriter, r *http.Request) {

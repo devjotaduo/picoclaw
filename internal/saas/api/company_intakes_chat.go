@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -299,9 +300,12 @@ func (h *Handler) handleCompanyIntakeChat(w http.ResponseWriter, r *http.Request
 	}
 
 	if shouldQualify {
+		log.Printf("clara: shouldQualify=true intake=%s reason=%q", id, qualifiedReason)
 		if _, err := h.CompanyIntakes.MarkQualified(ctx, id, tokenHash); err != nil {
+			log.Printf("clara: MarkQualified FAILED intake=%s err=%v", id, err)
 			emit("error", map[string]any{"message": "mark qualified: " + err.Error()})
 		} else {
+			log.Printf("clara: MarkQualified ok intake=%s", id)
 			// Flag the intake for Sofia's WhatsApp follow-up. We store both a
 			// boolean (for fast admin filters) and a list of topics that still
 			// need clarification — derived from what Clara *didn't* capture.
@@ -314,45 +318,12 @@ func (h *Handler) handleCompanyIntakeChat(w http.ResponseWriter, r *http.Request
 				emit("qualified", map[string]any{"reason": qualifiedReason})
 			}
 
-			// Auto-provision: when enabled, hand the qualified intake off to
-			// the provisioner so the visitor gets a working dashboard URL +
-			// login before the SSE stream closes. AutoProvision is nil when
-			// the feature is disabled in config — branch on the field, not on
-			// a re-check of Cfg.AutoProvisionEnabled.
-			if h.AutoProvision != nil {
-				latestIntake, ierr := h.CompanyIntakes.GetByToken(ctx, id, tokenHash)
-				if ierr == nil && latestIntake != nil {
-					emit("provisioning_started", nil)
-					res, perr := h.AutoProvision.Run(ctx, latestIntake, clientIP(r))
-					switch {
-					case perr != nil:
-						emit("provision_error", map[string]any{"message": perr.Error()})
-					case res.AlreadyExists:
-						emit("tenant_already_exists", map[string]any{
-							"url":       res.URL,
-							"subdomain": res.Subdomain,
-							"email":     res.Email,
-						})
-					default:
-						payload := map[string]any{
-							"subdomain":  res.Subdomain,
-							"url":        res.URL,
-							"email":      res.Email,
-							"login_mode": res.LoginMode,
-						}
-						if res.LoginMode == "magic_link" {
-							payload["check_email"] = true
-							// Don't leak the actual magic link URL over SSE —
-							// it's a one-shot credential that Supabase already
-							// emailed to the visitor. Browser only needs to
-							// know the email was sent.
-						} else if res.InitialPassword != "" {
-							payload["initial_password"] = res.InitialPassword
-						}
-						emit("tenant_provisioned", payload)
-					}
-				}
-			}
+			// Auto-provision was previously invoked here, but Sofia's
+			// mark_qualified fires BEFORE ClaraFinalize collects the visitor's
+			// email — contact_email is always empty at this point and the
+			// provisioner would reject with ErrMissingContact. The /submit
+			// handler now owns the AutoProvision.Run call, where the contact
+			// data is finally complete.
 		}
 	}
 
