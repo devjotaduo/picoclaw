@@ -1,8 +1,0 @@
-
-FIELD_NAME                      FIELD_TYPE                FIELD_LENGTH FIELD_SCALE FIELD_POSITION     NOT_NULL 
-=============================== ========================= ============ =========== ============== ============ 
-ID                              INTEGER                              4           0              0            1 
-GRUPO                           VARCHAR                             20           0              1            0 
-DESCONTO                        NUMERIC                              8          -2              2            0 
-PATH_IMG                        VARCHAR                            300           0              3            0 
-

@@ -1,7 +1,8 @@
 import {
   IconArrowUp,
+  IconFileText,
   IconMicrophone,
-  IconPhotoPlus,
+  IconPaperclip,
   IconPlayerStopFilled,
   IconX,
 } from "@tabler/icons-react"
@@ -38,7 +39,7 @@ interface ChatComposerProps {
   input: string
   attachments: ChatAttachment[]
   onInputChange: (value: string) => void
-  onAddImages: () => void
+  onAddAttachments: () => void
   onAttachAudio: (attachment: ChatAttachment) => void
   onRemoveAttachment: (index: number) => void
   onSend: () => void
@@ -82,7 +83,7 @@ export function ChatComposer({
   input,
   attachments,
   onInputChange,
-  onAddImages,
+  onAddAttachments,
   onAttachAudio,
   onRemoveAttachment,
   onSend,
@@ -214,13 +215,43 @@ export function ChatComposer({
     }
   }
 
+  const formatAttachmentType = (attachment: ChatAttachment) => {
+    const contentType = attachment.contentType?.split(";")[0]?.trim()
+    if (contentType) {
+      return contentType
+    }
+
+    const extension = attachment.filename?.split(".").pop()?.toUpperCase()
+    return extension || t("chat.uploadedFile")
+  }
+
   return (
     <div className="before:bg-background pointer-events-none relative z-10 -mt-[24px] shrink-0 [scrollbar-gutter:stable] overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] before:pointer-events-none before:absolute before:inset-x-0 before:top-[24px] before:bottom-0 before:content-[''] md:px-8 md:pb-8 lg:px-24 xl:px-48">
       <div className="bg-card border-border/60 pointer-events-auto relative mx-auto flex max-w-[1000px] flex-col rounded-2xl border p-3 shadow-sm">
         {attachments.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-2 px-2">
             {attachments.map((attachment, index) =>
-              attachment.type === "audio" ? (
+              attachment.type === "image" ? (
+                <div
+                  key={`${attachment.url}-${index}`}
+                  className="bg-background relative h-20 w-20 overflow-hidden rounded-xl border"
+                >
+                  <img
+                    src={attachment.url}
+                    alt={attachment.filename || t("chat.uploadedImage")}
+                    className="h-full w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onRemoveAttachment(index)}
+                    className="bg-background/85 text-foreground absolute top-1 right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border shadow-sm transition hover:bg-white"
+                    aria-label={t("chat.removeImage")}
+                    title={t("chat.removeImage")}
+                  >
+                    <IconX className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : attachment.type === "audio" ? (
                 <div
                   key={`${attachment.url}-${index}`}
                   className="bg-background relative flex items-center gap-2 rounded-xl border px-3 py-2"
@@ -239,19 +270,25 @@ export function ChatComposer({
               ) : (
                 <div
                   key={`${attachment.url}-${index}`}
-                  className="bg-background relative h-20 w-20 overflow-hidden rounded-xl border"
+                  className="bg-background relative flex max-w-64 items-center gap-3 rounded-xl border px-3 py-2 pr-9"
                 >
-                  <img
-                    src={attachment.url}
-                    alt={attachment.filename || t("chat.uploadedImage")}
-                    className="h-full w-full object-cover"
-                  />
+                  <div className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+                    <IconFileText className="size-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-foreground truncate text-sm font-medium">
+                      {attachment.filename || t("chat.uploadedFile")}
+                    </div>
+                    <div className="text-muted-foreground truncate text-xs">
+                      {formatAttachmentType(attachment)}
+                    </div>
+                  </div>
                   <button
                     type="button"
                     onClick={() => onRemoveAttachment(index)}
                     className="bg-background/85 text-foreground absolute top-1 right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border shadow-sm transition hover:bg-white"
-                    aria-label={t("chat.removeImage")}
-                    title={t("chat.removeImage")}
+                    aria-label={t("chat.removeFile")}
+                    title={t("chat.removeFile")}
                   >
                     <IconX className="h-3.5 w-3.5" />
                   </button>
@@ -302,12 +339,12 @@ export function ChatComposer({
               variant="ghost"
               size="icon"
               className="text-muted-foreground hover:text-foreground h-8 w-8 rounded-full"
-              onClick={onAddImages}
+              onClick={onAddAttachments}
               disabled={!canInput || isRecording}
-              aria-label={t("chat.attachImage")}
-              title={t("chat.attachImage")}
+              aria-label={t("chat.attachFile")}
+              title={t("chat.attachFile")}
             >
-              <IconPhotoPlus className="size-4" />
+              <IconPaperclip className="size-4" />
             </Button>
             <Button
               type="button"

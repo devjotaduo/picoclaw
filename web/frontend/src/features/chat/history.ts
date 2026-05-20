@@ -30,9 +30,20 @@ function toChatAttachments({
         }) satisfies ChatAttachment,
     )
 
-  const legacyMediaAttachments = (media ?? [])
-    .filter((item) => item.startsWith("data:image/"))
-    .map((url) => ({ type: "image" as const, url }))
+  const legacyMediaAttachments: ChatAttachment[] = []
+  for (const url of media ?? []) {
+    if (url.startsWith("data:image/")) {
+      legacyMediaAttachments.push({ type: "image", url })
+      continue
+    }
+    if (url.startsWith("data:audio/")) {
+      legacyMediaAttachments.push({ type: "audio", url })
+      continue
+    }
+    if (url.startsWith("data:application/") || url.startsWith("data:text/")) {
+      legacyMediaAttachments.push({ type: "file", url })
+    }
+  }
 
   const merged = [...(normalizedAttachments ?? []), ...legacyMediaAttachments]
 

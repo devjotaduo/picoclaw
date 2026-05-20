@@ -136,11 +136,6 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const composerRef = useRef<MessageInputHandle | null>(null)
 
-  const chatsQuery = useQuery({
-    queryKey: CHATS_QUERY_KEY,
-    queryFn: () => listWhatsAppChats(150),
-    refetchInterval: 30_000,
-  })
   const whatsAppNativeConfigQuery = useQuery({
     queryKey: WHATSAPP_NATIVE_CONFIG_QUERY_KEY,
     queryFn: () => getChannelConfig("whatsapp_native"),
@@ -154,6 +149,14 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
     queryFn: getWhatsAppNativeQR,
     enabled: whatsAppNativeEnabled,
     refetchInterval: whatsAppNativeEnabled ? 5_000 : false,
+  })
+  const whatsAppNativeStatus = whatsAppNativeStatusQuery.data?.status
+  const canRefreshConversations = whatsAppNativeStatus === "confirmed"
+  const chatsQuery = useQuery({
+    queryKey: CHATS_QUERY_KEY,
+    queryFn: () => listWhatsAppChats(150),
+    enabled: canRefreshConversations,
+    refetchInterval: canRefreshConversations ? 30_000 : false,
   })
   const enableWhatsAppNativeMutation = useMutation({
     mutationFn: async () => {
@@ -193,7 +196,7 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
   const messagesQuery = useQuery({
     queryKey: messagesQueryKey(selectedJID ?? ""),
     queryFn: () => listWhatsAppMessages(selectedJID ?? "", 200),
-    enabled: !!selectedJID,
+    enabled: !!selectedJID && canRefreshConversations,
   })
 
   // Live SSE updates with connection-status tracking.
@@ -231,8 +234,10 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
     },
     [queryClient],
   )
-  const { status: connectionStatus } = useInboxConnection(handleInboxEvent)
-  const whatsAppNativeStatus = whatsAppNativeStatusQuery.data?.status
+  const { status: connectionStatus } = useInboxConnection(
+    handleInboxEvent,
+    canRefreshConversations,
+  )
   const whatsAppNativeChecking =
     whatsAppNativeConfigQuery.isLoading ||
     (whatsAppNativeEnabled &&
@@ -250,11 +255,11 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
 
   // Mark read on chat open.
   useEffect(() => {
-    if (!selectedJID) return
+    if (!selectedJID || !canRefreshConversations) return
     markWhatsAppChatRead(selectedJID)
       .then(() => queryClient.invalidateQueries({ queryKey: CHATS_QUERY_KEY }))
       .catch(() => {})
-  }, [selectedJID, queryClient])
+  }, [selectedJID, queryClient, canRefreshConversations])
 
   // Profile cache used by the filter/sort layer. Reads every cached profile
   // out of TanStack Query so the filter chips reflect tags/priorities the
@@ -490,6 +495,7 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
             void queryClient.invalidateQueries({ queryKey: CHATS_QUERY_KEY })
           }
           isRefreshing={chatsQuery.isFetching}
+          canRefresh={canRefreshConversations}
         />
       </PageHeader>
 
@@ -578,6 +584,7 @@ export function WhatsAppInboxPage({ initialJID }: WhatsAppInboxPageProps = {}) {
           {
             id: "refresh",
             label: "Atualizar conversas",
+            disabled: !canRefreshConversations || chatsQuery.isFetching,
             onSelect: () =>
               void queryClient.invalidateQueries({ queryKey: CHATS_QUERY_KEY }),
           },

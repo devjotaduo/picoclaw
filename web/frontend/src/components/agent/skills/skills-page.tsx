@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 import { DeleteDialog } from "./delete-dialog"
 import { DetailSheet } from "./detail-sheet"
@@ -97,6 +98,15 @@ export function SkillsPage() {
           ) : (
             <section className="animate-in fade-in space-y-3 duration-300 md:duration-500">
               <Stats stats={stats} />
+
+              <div
+                className={cn(
+                  "border-border/40 bg-muted/25 text-muted-foreground",
+                  "rounded-lg border px-4 py-3 text-sm leading-relaxed",
+                )}
+              >
+                {t("pages.agent.skills.source_note")}
+              </div>
 
               <div className="flex flex-col gap-4 py-3">
                 <FilterBar

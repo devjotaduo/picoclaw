@@ -1,3 +1,5 @@
+import { IconFileText } from "@tabler/icons-react"
+
 import { cn } from "@/lib/utils"
 import type { ChatAttachment } from "@/store/chat"
 
@@ -15,6 +17,18 @@ export function UserMessage({ content, attachments = [] }: UserMessageProps) {
   const audioAttachments = attachments.filter(
     (attachment) => attachment.type === "audio",
   )
+  const fileAttachments = attachments.filter(
+    (attachment) =>
+      attachment.type !== "image" && attachment.type !== "audio",
+  )
+
+  const formatAttachmentType = (attachment: ChatAttachment) => {
+    const contentType = attachment.contentType?.split(";")[0]?.trim()
+    if (contentType) {
+      return contentType
+    }
+    return attachment.filename?.split(".").pop()?.toUpperCase() || "Arquivo"
+  }
 
   return (
     <div className="flex w-full flex-col items-end gap-1.5">
@@ -40,6 +54,29 @@ export function UserMessage({ content, attachments = [] }: UserMessageProps) {
               src={attachment.url}
               className="max-w-full"
             />
+          ))}
+        </div>
+      )}
+
+      {fileAttachments.length > 0 && (
+        <div className="flex max-w-[70%] flex-col items-end gap-2">
+          {fileAttachments.map((attachment, index) => (
+            <div
+              key={`${attachment.url}-${index}`}
+              className="bg-card text-card-foreground border-border/70 flex max-w-full items-center gap-3 rounded-xl border px-3 py-2 shadow-sm"
+            >
+              <div className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg">
+                <IconFileText className="size-4" />
+              </div>
+              <div className="min-w-0 text-left">
+                <div className="truncate text-sm font-medium">
+                  {attachment.filename || "Documento enviado"}
+                </div>
+                <div className="text-muted-foreground truncate text-xs">
+                  {formatAttachmentType(attachment)}
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       )}

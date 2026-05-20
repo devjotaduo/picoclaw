@@ -5,7 +5,7 @@
 GO?=go
 WEB_GO?=$(GO)
 CGO_ENABLED?=0
-GO_BUILD_TAGS?=goolm,stdjson
+GO_BUILD_TAGS?=goolm,stdjson,whatsapp_native
 GOFLAGS?=-v -tags $(GO_BUILD_TAGS)
 GOCACHE?=$(abspath ../.cache/go-build)
 GOMODCACHE?=$(abspath ../.cache/go-mod)

@@ -62,7 +62,13 @@
   "chat": {
     "welcome": "Como posso te ajudar hoje?",
     "welcomeWithAgent": "Olá! Sou {{name}}, como posso te ajudar?",
-    "welcomeDesc": "Pergunte sobre clima, configurações ou qualquer outra tarefa. Estou aqui para ajudar.",
+    "welcomeDesc": "Descreva o que você precisa e eu encaminho para o melhor fluxo.",
+    "agentIntro": {
+      "attendant": "{{name}} ajuda com atendimento, triagem, dúvidas, encaminhamentos e agendamentos.",
+      "sales": "{{name}} ajuda a qualificar leads, preparar propostas e acompanhar vendas.",
+      "marketing": "{{name}} ajuda a criar campanhas, conteúdos e materiais visuais.",
+      "assistant": "{{name}} ajuda com agenda, relatórios, documentos e coordenação dos agentes."
+    },
     "placeholder": "Inicie uma nova mensagem...",
     "disabledPlaceholder": {
       "gatewayUnknown": "Não é possível conversar: o status do Gateway ainda está sendo verificado. Aguarde e atualize a página ou reinicie o Launcher se necessário.",
@@ -111,8 +117,11 @@
     "contextTitle": "Contexto",
     "contextDetail": "Ver Detalhes",
     "attachImage": "Adicionar imagens",
+    "attachFile": "Adicionar imagem ou documento",
     "removeImage": "Remover imagem",
     "uploadedImage": "Imagem enviada",
+    "removeFile": "Remover documento",
+    "uploadedFile": "Documento enviado",
     "recordAudio": "Gravar áudio",
     "stopRecording": "Parar gravação",
     "recording": "Gravando",
@@ -123,6 +132,9 @@
     "invalidImage": "\"{{name}}\" não é um arquivo de imagem suportado.",
     "imageTooLarge": "\"{{name}}\" excede o limite de {{size}}.",
     "imageReadFailed": "Falha ao ler \"{{name}}\".",
+    "invalidAttachment": "\"{{name}}\" não é um arquivo suportado.",
+    "attachmentTooLarge": "\"{{name}}\" excede o limite de {{size}}.",
+    "attachmentReadFailed": "Falha ao ler \"{{name}}\".",
     "empty": {
       "noConfiguredModel": "Nenhum Modelo Configurado",
       "noConfiguredModelDescription": "Você precisa configurar pelo menos um modelo de IA com uma API Key antes de iniciar o chat.",
@@ -152,23 +164,23 @@
     },
     "gateway": {
       "stopDialog": {
-        "title": "Parar o Serviço de Gateway?",
-        "description": "Tem certeza de que deseja parar o gateway? Isso desconectará suas sessões de chat ativas e interromperá a inferência.",
-        "confirm": "Parar Gateway"
+        "title": "Desconectar o serviço?",
+        "description": "Tem certeza de que deseja desconectar o serviço? As conversas ativas serão interrompidas até conectar novamente.",
+        "confirm": "Desconectar"
       },
       "action": {
-        "start": "Iniciar Gateway",
-        "stop": "Parar Gateway",
-        "restart": "Reiniciar Gateway",
-        "running": "Gateway rodando"
+        "start": "Conectar",
+        "stop": "Desconectar",
+        "restart": "Reconectar",
+        "running": "Serviço conectado"
       },
       "status": {
-        "starting": "Iniciando Gateway...",
-        "restarting": "Reiniciando Gateway...",
-        "stopping": "Parando Gateway...",
-        "running": "Gateway online"
+        "starting": "Conectando...",
+        "restarting": "Reconectando...",
+        "stopping": "Desconectando...",
+        "running": "Conectado"
       },
-      "restartRequired": "Alterações de configuração requerem reiniciar o gateway para ter efeito."
+      "restartRequired": "Alterações de configuração precisam reconectar o serviço para ter efeito."
     }
   },
   "common": {
@@ -700,14 +712,15 @@
           "source": "Tipo"
         },
         "origin": {
-          "all": "Todos os Tipos",
+          "all": "Todas as Skills",
           "builtin": "Embutida",
           "third_party": "Terceiros",
           "manual": "Manual"
         },
         "summary": {
-          "total": "Total de Skills"
+          "total": "Skills no workspace"
         },
+        "source_note": "Essas skills vêm da pasta workspace/skills deste projeto. Skills instaladas por arquivo ou repositórios configurados também aparecem aqui depois de salvas no workspace.",
         "detail_tabs": {
           "preview": "Visualização",
           "raw": "Bruto",

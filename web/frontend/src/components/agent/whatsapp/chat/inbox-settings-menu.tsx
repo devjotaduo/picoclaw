@@ -30,6 +30,7 @@ import { useGateway } from "@/hooks/use-gateway"
 export interface InboxSettingsMenuProps {
   onRefresh?: () => void
   isRefreshing?: boolean
+  canRefresh?: boolean
 }
 
 /**
@@ -40,6 +41,7 @@ export interface InboxSettingsMenuProps {
 export function InboxSettingsMenu({
   onRefresh,
   isRefreshing,
+  canRefresh = true,
 }: InboxSettingsMenuProps) {
   const { stop, loading: gatewayLoading, state: gatewayState } = useGateway()
   const [stopOpen, setStopOpen] = useState(false)
@@ -64,9 +66,10 @@ export function InboxSettingsMenu({
             <DropdownMenuItem
               onSelect={(e) => {
                 e.preventDefault()
+                if (!canRefresh) return
                 onRefresh()
               }}
-              disabled={isRefreshing}
+              disabled={isRefreshing || !canRefresh}
             >
               {isRefreshing ? (
                 <IconLoader2 className="mr-2 size-3.5 animate-spin" />

@@ -679,6 +679,36 @@ func configureAllowedChannelConfig(ch *config.Channel, item channelCatalogItem) 
 	return changed
 }
 
+func ensureWhatsAppNativeChannelConfig(cfg *config.Config) bool {
+	if !isChannelNameAllowed(config.ChannelWhatsAppNative) {
+		return false
+	}
+
+	changed := false
+	if cfg.Channels == nil {
+		cfg.Channels = config.ChannelsConfig{}
+		changed = true
+	}
+
+	ch := cfg.Channels.Get(config.ChannelWhatsApp)
+	if ch == nil {
+		ch = &config.Channel{}
+		ch.SetName(config.ChannelWhatsApp)
+		cfg.Channels[config.ChannelWhatsApp] = ch
+		changed = true
+	}
+
+	item := channelCatalogItem{
+		Name:      config.ChannelWhatsAppNative,
+		ConfigKey: config.ChannelWhatsApp,
+		Variant:   "native",
+	}
+	if configureAllowedChannelConfig(ch, item) {
+		changed = true
+	}
+	return changed
+}
+
 func channelSettingsType(
 	defaultCfg *config.Config,
 	channelName string,

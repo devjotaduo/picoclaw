@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/sipeed/picoclaw/pkg/config"
@@ -196,7 +197,7 @@ func TestAudioModelTranscriberTranscribe(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for unsupported audio format, got nil")
 		}
-		if got := err.Error(); got != `unsupported audio format for "`+badPath+`"` {
+		if got, want := err.Error(), "unsupported audio format for "+strconv.Quote(badPath); got != want {
 			t.Fatalf("error = %q, want unsupported format error", got)
 		}
 	})

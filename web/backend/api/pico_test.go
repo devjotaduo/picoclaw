@@ -119,6 +119,88 @@ func TestEnsurePicoChannel_DisablesExistingPicoWhenRestricted(t *testing.T) {
 	}
 }
 
+func TestEnsurePicoChannel_EnablesWhatsAppNativeByDefault(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	cfg := config.DefaultConfig()
+	cfg.Channels["whatsapp"].Enabled = false
+	cfg.Channels["whatsapp"].Type = config.ChannelWhatsApp
+	raw, err := json.Marshal(map[string]any{
+		"use_native": false,
+		"bridge_url": "http://bridge.local",
+	})
+	if err != nil {
+		t.Fatalf("marshal whatsapp settings: %v", err)
+	}
+	cfg.Channels["whatsapp"].Settings = config.RawNode(raw)
+	if err := config.SaveConfig(configPath, cfg); err != nil {
+		t.Fatalf("SaveConfig() error = %v", err)
+	}
+
+	h := NewHandler(configPath)
+	changed, err := h.EnsurePicoChannel()
+	if err != nil {
+		t.Fatalf("EnsurePicoChannel() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("EnsurePicoChannel() should report changed when whatsapp native needs normalization")
+	}
+
+	cfg, err = config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	whatsapp := cfg.Channels["whatsapp"]
+	if !whatsapp.Enabled {
+		t.Fatal("whatsapp should be enabled")
+	}
+	if whatsapp.Type != config.ChannelWhatsAppNative {
+		t.Fatalf("whatsapp type = %q, want %q", whatsapp.Type, config.ChannelWhatsAppNative)
+	}
+	decoded, err := whatsapp.GetDecoded()
+	if err != nil {
+		t.Fatalf("GetDecoded() error = %v", err)
+	}
+	whatsappCfg := decoded.(*config.WhatsAppSettings)
+	if !whatsappCfg.UseNative {
+		t.Fatal("whatsapp should use the native adapter")
+	}
+	if whatsappCfg.BridgeURL != "" {
+		t.Fatalf("bridge_url = %q, want empty", whatsappCfg.BridgeURL)
+	}
+}
+
+func TestEnsurePicoChannel_DoesNotForceWhatsAppNativeWhenNotAllowed(t *testing.T) {
+	t.Setenv(allowedChannelsEnv, "telegram")
+
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	cfg := config.DefaultConfig()
+	cfg.Channels["whatsapp"].Enabled = true
+	cfg.Channels["whatsapp"].Type = config.ChannelWhatsAppNative
+	if err := config.SaveConfig(configPath, cfg); err != nil {
+		t.Fatalf("SaveConfig() error = %v", err)
+	}
+
+	h := NewHandler(configPath)
+	changed, err := h.EnsurePicoChannel()
+	if err != nil {
+		t.Fatalf("EnsurePicoChannel() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("EnsurePicoChannel() should report changed when channel policy disables whatsapp")
+	}
+
+	cfg, err = config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.Channels["whatsapp"].Enabled {
+		t.Fatal("whatsapp should stay disabled when it is not allowed")
+	}
+	if !cfg.Channels["telegram"].Enabled {
+		t.Fatal("telegram should be enabled by allowed channel policy")
+	}
+}
+
 func TestEnsurePicoChannel_DoesNotEnableTokenQuery(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.json")
 	h := NewHandler(configPath)

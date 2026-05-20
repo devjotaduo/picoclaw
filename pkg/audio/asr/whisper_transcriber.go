@@ -3,6 +3,7 @@ package asr
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -91,6 +92,10 @@ func (t *WhisperTranscriber) TranscribeData(
 	data []byte,
 	filename string,
 ) (*TranscriptionResponse, error) {
+	if t.usesJSONTranscriptionRequest() {
+		return t.transcribeJSONData(ctx, data, filename)
+	}
+
 	logger.InfoCF("voice", "Starting whisper transcription from memory", map[string]any{
 		"bytes":    len(data),
 		"filename": filename,
@@ -137,6 +142,14 @@ func (t *WhisperTranscriber) Transcribe(ctx context.Context, audioFilePath strin
 		"provider":   t.providerName,
 	})
 
+	if t.usesJSONTranscriptionRequest() {
+		data, err := os.ReadFile(audioFilePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read audio file %s: %w", audioFilePath, err)
+		}
+		return t.TranscribeData(ctx, data, filepath.Base(audioFilePath))
+	}
+
 	audioFile, err := os.Open(audioFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open audio file %s: %w", audioFilePath, err)
@@ -173,6 +186,54 @@ func (t *WhisperTranscriber) Transcribe(ctx context.Context, audioFilePath strin
 	}
 
 	return t.doRequest(ctx, &requestBody, writer.FormDataContentType(), fileInfo.Size())
+}
+
+func (t *WhisperTranscriber) usesJSONTranscriptionRequest() bool {
+	return strings.EqualFold(t.providerName, "openrouter")
+}
+
+func (t *WhisperTranscriber) transcribeJSONData(
+	ctx context.Context,
+	data []byte,
+	filename string,
+) (*TranscriptionResponse, error) {
+	logger.InfoCF("voice", "Starting JSON transcription from memory", map[string]any{
+		"bytes":    len(data),
+		"filename": filename,
+		"format":   transcriptionAudioFormat(filename),
+		"model":    t.modelID,
+		"provider": t.providerName,
+	})
+
+	payload := map[string]any{
+		"input_audio": map[string]any{
+			"data":   base64.StdEncoding.EncodeToString(data),
+			"format": transcriptionAudioFormat(filename),
+		},
+		"model": t.modelID,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal transcription request: %w", err)
+	}
+
+	requestBody := bytes.NewBuffer(body)
+	return t.doRequest(ctx, requestBody, "application/json", int64(len(data)))
+}
+
+func transcriptionAudioFormat(filename string) string {
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(filename)), ".")
+	switch ext {
+	case "oga":
+		return "ogg"
+	case "mpga", "mpeg":
+		return "mp3"
+	case "":
+		return "webm"
+	default:
+		return ext
+	}
 }
 
 func (t *WhisperTranscriber) doRequest(

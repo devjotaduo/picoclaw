@@ -17,6 +17,7 @@ export interface CommandPaletteAction {
   id: string
   label: string
   icon?: React.ReactNode
+  disabled?: boolean
   onSelect: () => void
 }
 
@@ -73,6 +74,7 @@ export function CommandPalette({
                     <CommandItem
                       key={a.id}
                       value={`action ${a.label}`}
+                      disabled={a.disabled}
                       onSelect={() => {
                         a.onSelect()
                         onOpenChange(false)

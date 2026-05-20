@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import { getLauncherAuthStatus } from "@/api/launcher-auth"
 import { AppLayout } from "@/components/app-layout"
 import { initializeChatStore } from "@/features/chat/controller"
-import { isLauncherAuthPathname } from "@/lib/launcher-login-path"
+import { isLauncherPublicPathname } from "@/lib/launcher-login-path"
 
 const RootLayout = () => {
   // Prefer the real address bar path: stale embedded bundles may not register
@@ -23,18 +23,21 @@ const RootLayout = () => {
       ? globalThis.location.pathname || "/"
       : routerState.pathname
 
-  const isAuthPage =
-    isLauncherAuthPathname(windowPath) ||
-    isLauncherAuthPathname(routerState.pathname) ||
+  const isPublicPage =
+    isLauncherPublicPathname(windowPath) ||
+    isLauncherPublicPathname(routerState.pathname) ||
     routerState.matches.some(
-      (m) => m.routeId === "/launcher-login" || m.routeId === "/launcher-setup",
+      (m) =>
+        m.routeId === "/launcher-login" ||
+        m.routeId === "/launcher-setup" ||
+        m.routeId === "/sofia-onboarding",
     )
 
   const [authError, setAuthError] = useState<string | null>(null)
 
   // Session guard: proactively check auth status on every page load.
   useEffect(() => {
-    if (isAuthPage) return
+    if (isPublicPage) return
     void getLauncherAuthStatus()
       .then((s) => {
         if (!s.initialized) {
@@ -58,16 +61,16 @@ const RootLayout = () => {
           )
         }
       })
-  }, [isAuthPage])
+  }, [isPublicPage])
 
   useEffect(() => {
-    if (isAuthPage) {
+    if (isPublicPage) {
       return
     }
     initializeChatStore()
-  }, [isAuthPage])
+  }, [isPublicPage])
 
-  if (isAuthPage) {
+  if (isPublicPage) {
     return (
       <>
         <Outlet />

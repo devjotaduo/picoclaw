@@ -30,8 +30,8 @@ import type { ChatAttachment } from "@/store/chat"
 import { showAssistantDetailsAtom } from "@/store/chat"
 import type { GatewayState } from "@/store/gateway"
 
-const MAX_IMAGE_SIZE_BYTES = 7 * 1024 * 1024
-const MAX_IMAGE_SIZE_LABEL = "7 MB"
+const MAX_ATTACHMENT_SIZE_BYTES = 20 * 1024 * 1024
+const MAX_ATTACHMENT_SIZE_LABEL = "20 MB"
 const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -39,6 +39,47 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/webp",
   "image/bmp",
 ])
+const ALLOWED_DOCUMENT_TYPES = new Set([
+  "application/json",
+  "application/msword",
+  "application/pdf",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/csv",
+  "text/markdown",
+  "text/plain",
+])
+const ALLOWED_DOCUMENT_EXTENSIONS = new Set([
+  "csv",
+  "doc",
+  "docx",
+  "json",
+  "md",
+  "pdf",
+  "ppt",
+  "pptx",
+  "txt",
+  "xls",
+  "xlsx",
+])
+const DOCUMENT_EXTENSION_CONTENT_TYPES: Record<string, string> = {
+  csv: "text/csv",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  json: "application/json",
+  md: "text/markdown",
+  pdf: "application/pdf",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  txt: "text/plain",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+const ATTACHMENT_ACCEPT =
+  "image/jpeg,image/png,image/gif,image/webp,image/bmp,application/pdf,text/plain,text/markdown,text/csv,application/json,.pdf,.txt,.md,.csv,.json,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -54,6 +95,43 @@ function readFileAsDataUrl(file: File): Promise<string> {
       reject(reader.error || new Error("Failed to read file"))
     reader.readAsDataURL(file)
   })
+}
+
+function getFileExtension(name: string): string {
+  const lastDot = name.lastIndexOf(".")
+  if (lastDot < 0 || lastDot === name.length - 1) {
+    return ""
+  }
+  return name.slice(lastDot + 1).toLowerCase()
+}
+
+function isSupportedAttachment(file: File): boolean {
+  if (
+    ALLOWED_IMAGE_TYPES.has(file.type) ||
+    ALLOWED_DOCUMENT_TYPES.has(file.type)
+  ) {
+    return true
+  }
+
+  return ALLOWED_DOCUMENT_EXTENSIONS.has(getFileExtension(file.name))
+}
+
+function resolveAttachmentType(file: File): ChatAttachment["type"] {
+  return file.type.startsWith("image/") ? "image" : "file"
+}
+
+function resolveAttachmentContentType(file: File): string | undefined {
+  if (file.type) {
+    return file.type
+  }
+  return DOCUMENT_EXTENSION_CONTENT_TYPES[getFileExtension(file.name)]
+}
+
+function normalizeDataUrlContentType(url: string, contentType?: string): string {
+  if (!contentType) {
+    return url
+  }
+  return url.replace(/^data:[^;,]*(?=;base64,)/, `data:${contentType}`)
 }
 
 function resolveChatInputDisabledReason({
@@ -141,6 +219,7 @@ export function ChatPage() {
   } = usePicoChat()
 
   const selectedAgentID = mainAgentID
+  const assistantName = (mainAgent?.name || mainAgent?.id || "").trim()
 
   const { state: gwState } = useGateway()
   const isGatewayRunning = gwState === "running"
@@ -259,7 +338,7 @@ export function ChatPage() {
     }
   }
 
-  const handleAddImages = () => {
+  const handleAddAttachments = () => {
     if (!canInput) return
     fileInputRef.current?.click()
   }
@@ -268,7 +347,9 @@ export function ChatPage() {
     setAttachments((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
   }
 
-  const handleImageSelection = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleAttachmentSelection = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
     const files = Array.from(event.target.files ?? [])
     event.target.value = ""
 
@@ -278,34 +359,39 @@ export function ChatPage() {
 
     const nextAttachments: ChatAttachment[] = []
     for (const file of files) {
-      if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+      if (!isSupportedAttachment(file)) {
         toast.error(
-          t("chat.invalidImage", {
+          t("chat.invalidAttachment", {
             name: file.name,
           }),
         )
         continue
       }
 
-      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
         toast.error(
-          t("chat.imageTooLarge", {
+          t("chat.attachmentTooLarge", {
             name: file.name,
-            size: MAX_IMAGE_SIZE_LABEL,
+            size: MAX_ATTACHMENT_SIZE_LABEL,
           }),
         )
         continue
       }
 
       try {
+        const contentType = resolveAttachmentContentType(file)
         nextAttachments.push({
-          type: "image",
+          type: resolveAttachmentType(file),
           filename: file.name,
-          url: await readFileAsDataUrl(file),
+          url: normalizeDataUrlContentType(
+            await readFileAsDataUrl(file),
+            contentType,
+          ),
+          contentType,
         })
       } catch {
         toast.error(
-          t("chat.imageReadFailed", {
+          t("chat.attachmentReadFailed", {
             name: file.name,
           }),
         )
@@ -438,6 +524,7 @@ export function ChatPage() {
                     <AssistantMessage
                       content={msg.content}
                       attachments={msg.attachments}
+                      assistantName={assistantName}
                       kind={msg.kind}
                       toolCalls={msg.toolCalls}
                       timestamp={msg.timestamp}
@@ -459,16 +546,16 @@ export function ChatPage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/gif,image/webp,image/bmp"
+          accept={ATTACHMENT_ACCEPT}
           className="hidden"
-          onChange={handleImageSelection}
+          onChange={handleAttachmentSelection}
         />
 
         <ChatComposer
           input={input}
           attachments={attachments}
           onInputChange={setInput}
-          onAddImages={handleAddImages}
+          onAddAttachments={handleAddAttachments}
           onAttachAudio={(audio) => setAttachments([audio])}
           onRemoveAttachment={handleRemoveAttachment}
           onSend={handleSend}

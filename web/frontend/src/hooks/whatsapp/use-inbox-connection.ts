@@ -15,8 +15,11 @@ export interface UseInboxConnectionResult {
 
 export function useInboxConnection(
   onEvent: (evt: InboxEvent) => void,
+  enabled = true,
 ): UseInboxConnectionResult {
-  const [status, setStatus] = useState<InboxConnectionStatus>("connecting")
+  const [status, setStatus] = useState<InboxConnectionStatus>(
+    enabled ? "connecting" : "offline",
+  )
   const [lastEventAt, setLastEventAt] = useState<number | null>(null)
   const onEventRef = useRef(onEvent)
 
@@ -27,6 +30,12 @@ export function useInboxConnection(
   }, [onEvent])
 
   useEffect(() => {
+    if (!enabled) {
+      setStatus("offline")
+      setLastEventAt(null)
+      return
+    }
+
     const close = openInboxStream({
       onEvent: (evt) => {
         setLastEventAt(Date.now())
@@ -35,7 +44,7 @@ export function useInboxConnection(
       onStatus: (next) => setStatus(next),
     })
     return close
-  }, [])
+  }, [enabled])
 
   // Demote "online" to "reconnecting" if we haven't heard anything in
   // STALE_AFTER_MS. The backend pings every 25s, but EventSource ignores

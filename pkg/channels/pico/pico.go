@@ -60,6 +60,20 @@ var allowedInlineAudioMIMETypes = map[string]struct{}{
 	"audio/wave":             {},
 }
 
+var allowedInlineDocumentMIMETypes = map[string]struct{}{
+	"application/json":              {},
+	"application/msword":            {},
+	"application/pdf":               {},
+	"application/vnd.ms-excel":      {},
+	"application/vnd.ms-powerpoint": {},
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation": {},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":         {},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document":   {},
+	"text/csv":      {},
+	"text/markdown": {},
+	"text/plain":    {},
+}
+
 func outboundMessageIsThought(msg bus.OutboundMessage) bool {
 	if len(msg.Context.Raw) == 0 {
 		return false
@@ -1086,7 +1100,7 @@ func inlineImageValue(item any) (string, error) {
 	case string:
 		value = strings.TrimSpace(value)
 		if value == "" {
-			return "", fmt.Errorf("image payload is empty")
+			return "", fmt.Errorf("media payload is empty")
 		}
 		return value, nil
 	case map[string]any:
@@ -1095,9 +1109,9 @@ func inlineImageValue(item any) (string, error) {
 				return strings.TrimSpace(raw), nil
 			}
 		}
-		return "", fmt.Errorf("image payload must include url or data_url")
+		return "", fmt.Errorf("media payload must include url or data_url")
 	default:
-		return "", fmt.Errorf("image payload must be a string or object")
+		return "", fmt.Errorf("media payload must be a string or object")
 	}
 }
 
@@ -1105,9 +1119,8 @@ func validateInlineImageDataURL(mediaURL string) error {
 	if mediaURL == "" {
 		return fmt.Errorf("media payload is empty")
 	}
-	if !strings.HasPrefix(mediaURL, "data:image/") &&
-		!strings.HasPrefix(mediaURL, "data:audio/") {
-		return fmt.Errorf("only inline image or audio data URLs are supported")
+	if !strings.HasPrefix(mediaURL, "data:") {
+		return fmt.Errorf("only inline image, audio, or document data URLs are supported")
 	}
 
 	header, data, found := strings.Cut(mediaURL, ",")
@@ -1136,6 +1149,10 @@ func validateInlineImageDataURL(mediaURL string) error {
 			if _, ok := allowedInlineAudioMIMETypes[mimeType]; !ok {
 				return fmt.Errorf("unsupported audio format: %s", mimeWithCodec)
 			}
+		}
+	case strings.HasPrefix(mimeType, "application/") || strings.HasPrefix(mimeType, "text/"):
+		if _, ok := allowedInlineDocumentMIMETypes[mimeType]; !ok {
+			return fmt.Errorf("unsupported document format: %s", mimeType)
 		}
 	default:
 		return fmt.Errorf("unsupported media format: %s", mimeType)

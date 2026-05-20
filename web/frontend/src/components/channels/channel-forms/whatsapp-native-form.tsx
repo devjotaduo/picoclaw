@@ -210,9 +210,11 @@ export function WhatsAppNativeForm({
 
   if (compact) {
     return (
-      <Card className="mx-auto w-full max-w-sm overflow-hidden p-0 shadow-sm">
-        <CardContent className="flex flex-col items-center gap-4 p-4">
-          <div className="flex w-full justify-end">
+      <Card className="border-border/70 bg-card relative mx-auto w-full max-w-md overflow-hidden p-0 shadow-sm">
+        <div className="bg-[radial-gradient(circle,color-mix(in_oklab,var(--wa-brand)_12%,transparent),transparent_66%)] pointer-events-none absolute inset-x-12 top-14 h-40 opacity-60 blur-2xl" />
+        <div className="via-[color-mix(in_oklab,var(--wa-brand)_14%,transparent)] pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent to-transparent" />
+        <CardContent className="relative flex flex-col items-center gap-3 p-4">
+          <div className="flex w-full justify-end px-1">
             <StatusPill status={status} />
           </div>
 
@@ -407,11 +409,14 @@ function PairingStage({
   return (
     <div
       className={`relative flex items-center justify-center ${
-        compact ? "w-full px-3 py-4" : "px-8 py-10 md:px-10 md:py-12"
+        compact
+          ? "min-h-[268px] w-full px-6 pt-5 pb-4"
+          : "px-8 py-10 md:px-10 md:py-12"
       }`}
       style={{
-        background:
-          "radial-gradient(circle at 30% 20%, rgba(37, 211, 102, 0.10), transparent 60%), radial-gradient(circle at 80% 90%, rgba(18, 140, 126, 0.10), transparent 55%), linear-gradient(180deg, rgba(8, 14, 12, 0.04) 0%, transparent 100%)",
+        background: compact
+          ? "radial-gradient(circle at 50% 42%, color-mix(in oklab, var(--wa-brand) 5%, transparent), transparent 62%)"
+          : "radial-gradient(circle at 30% 20%, rgba(37, 211, 102, 0.10), transparent 60%), radial-gradient(circle at 80% 90%, rgba(18, 140, 126, 0.10), transparent 55%), linear-gradient(180deg, rgba(8, 14, 12, 0.04) 0%, transparent 100%)",
       }}
     >
       <div className="relative">
