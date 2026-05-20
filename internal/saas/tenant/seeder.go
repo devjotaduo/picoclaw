@@ -88,6 +88,43 @@ func SeedPicoConfig(_ context.Context, volumeDir, litellmBase, llmKey string) er
 	return nil
 }
 
+// EnsureTenantWhatsAppNativeConfig is a final provisioning guard for tenant
+// volumes. It keeps WhatsApp Native enabled even when the copied launcher
+// profile or template was created before the SaaS channel policy existed.
+func EnsureTenantWhatsAppNativeConfig(volumeDir string) error {
+	cfgPath := filepath.Join(volumeDir, "config.json")
+	cfg := map[string]any{}
+
+	data, err := os.ReadFile(cfgPath)
+	if err == nil {
+		if len(strings.TrimSpace(string(data))) > 0 {
+			if err := json.Unmarshal(data, &cfg); err != nil {
+				return fmt.Errorf("parse config.json: %w", err)
+			}
+			if cfg == nil {
+				cfg = map[string]any{}
+			}
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("read config.json: %w", err)
+	}
+
+	if cfg["version"] == nil {
+		cfg["version"] = 3
+	}
+	ensureWhatsAppNativeOnlyChannels(cfg)
+
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	out = append(out, '\n')
+	if err := os.WriteFile(cfgPath, out, 0o600); err != nil {
+		return fmt.Errorf("write config.json: %w", err)
+	}
+	return nil
+}
+
 func defaultPicoConfig(litellmBase string) map[string]any {
 	return map[string]any{
 		"version": 3,

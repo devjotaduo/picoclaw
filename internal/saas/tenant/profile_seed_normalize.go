@@ -106,6 +106,7 @@ func normalizeDefaultLauncherProfileConfig(root map[string]any) error {
 		root["version"] = float64(3)
 	}
 	ensureDefaultLauncherUI(root)
+	ensureWhatsAppNativeOnlyChannels(root)
 
 	agents := ensureSeedMap(root, "agents")
 	defaults := ensureSeedMap(agents, "defaults")

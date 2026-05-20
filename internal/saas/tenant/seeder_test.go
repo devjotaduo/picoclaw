@@ -196,3 +196,76 @@ func TestSeedPicoConfigFallsBackWhenProfileDefaultHasNoCredential(t *testing.T) 
 		t.Fatalf("fallback api_keys = %#v, want file://litellm.key", fallback["api_keys"])
 	}
 }
+
+func TestEnsureTenantWhatsAppNativeConfigRepairsCopiedProfile(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(cfgPath, []byte(`{
+	  "version": 3,
+	  "model_list": [{"model_name": "custom", "provider": "openrouter"}],
+	  "channel_list": {
+	    "telegram": {"enabled": true, "type": "telegram"},
+	    "whatsapp": {"enabled": false, "type": "whatsapp", "settings": {"use_native": false, "bridge_url": "http://bridge"}}
+	  }
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsureTenantWhatsAppNativeConfig(dir); err != nil {
+		t.Fatalf("EnsureTenantWhatsAppNativeConfig: %v", err)
+	}
+
+	cfg := readSeederConfig(t, cfgPath)
+	if _, ok := cfg["model_list"]; !ok {
+		t.Fatal("model_list should be preserved")
+	}
+	channels := cfg["channel_list"].(map[string]any)
+	if got := channels["telegram"].(map[string]any)["enabled"]; got != false {
+		t.Fatalf("telegram enabled = %v, want false", got)
+	}
+	whatsapp := channels["whatsapp"].(map[string]any)
+	if got := whatsapp["enabled"]; got != true {
+		t.Fatalf("whatsapp enabled = %v, want true", got)
+	}
+	if got := whatsapp["type"]; got != "whatsapp_native" {
+		t.Fatalf("whatsapp type = %v, want whatsapp_native", got)
+	}
+	settings := whatsapp["settings"].(map[string]any)
+	if got := settings["use_native"]; got != true {
+		t.Fatalf("use_native = %v, want true", got)
+	}
+	if got := settings["bridge_url"]; got != "" {
+		t.Fatalf("bridge_url = %v, want empty", got)
+	}
+}
+
+func TestEnsureTenantWhatsAppNativeConfigCreatesMinimalConfig(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := EnsureTenantWhatsAppNativeConfig(dir); err != nil {
+		t.Fatalf("EnsureTenantWhatsAppNativeConfig: %v", err)
+	}
+
+	cfg := readSeederConfig(t, filepath.Join(dir, "config.json"))
+	channels := cfg["channel_list"].(map[string]any)
+	whatsapp := channels["whatsapp"].(map[string]any)
+	if got := whatsapp["enabled"]; got != true {
+		t.Fatalf("whatsapp enabled = %v, want true", got)
+	}
+	if got := whatsapp["type"]; got != "whatsapp_native" {
+		t.Fatalf("whatsapp type = %v, want whatsapp_native", got)
+	}
+}
+
+func readSeederConfig(t *testing.T, path string) map[string]any {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}

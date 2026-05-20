@@ -53,7 +53,10 @@ func TestNormalizeDefaultLauncherProfileSeedRepairsLegacyAgents(t *testing.T) {
 	    ]
 	  },
 	  "model_list": [{"model_name": "openrouter-sonnet-4.5", "provider": "openrouter"}],
-	  "channel_list": {"whatsapp": {"enabled": true, "type": "whatsapp_native"}}
+	  "channel_list": {
+	    "telegram": {"enabled": true, "type": "telegram"},
+	    "whatsapp": {"enabled": false, "type": "whatsapp", "settings": {"use_native": false, "bridge_url": "http://bridge"}}
+	  }
 	}`), 0o600)
 	mustWrite(t, filepath.Join(seed, "agents", "programador", "AGENT.md"), []byte("legacy programador"), 0o644)
 
@@ -81,6 +84,25 @@ func TestNormalizeDefaultLauncherProfileSeedRepairsLegacyAgents(t *testing.T) {
 	}
 	if _, ok := root["channel_list"]; !ok {
 		t.Fatal("channel_list should be preserved")
+	}
+	channels := root["channel_list"].(map[string]any)
+	telegram := channels["telegram"].(map[string]any)
+	if got := telegram["enabled"]; got != false {
+		t.Fatalf("telegram enabled = %v, want false", got)
+	}
+	whatsapp := channels["whatsapp"].(map[string]any)
+	if got := whatsapp["enabled"]; got != true {
+		t.Fatalf("whatsapp enabled = %v, want true", got)
+	}
+	if got := whatsapp["type"]; got != "whatsapp_native" {
+		t.Fatalf("whatsapp type = %v, want whatsapp_native", got)
+	}
+	settings := whatsapp["settings"].(map[string]any)
+	if got := settings["use_native"]; got != true {
+		t.Fatalf("whatsapp use_native = %v, want true", got)
+	}
+	if got := settings["bridge_url"]; got != "" {
+		t.Fatalf("whatsapp bridge_url = %v, want empty", got)
 	}
 
 	agents := root["agents"].(map[string]any)
