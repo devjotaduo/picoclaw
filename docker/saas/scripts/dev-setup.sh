@@ -36,6 +36,13 @@ if ! grep -q '^docker/saas/traefik/certs/' "$REPO_DIR/.gitignore" 2>/dev/null; t
   echo 'docker/saas/traefik/certs/' >> "$REPO_DIR/.gitignore"
 fi
 
+# 5. Activate the dev TLS dynamic config (gitignored so prod never sees it).
+DYNAMIC_DIR="$REPO_DIR/docker/saas/traefik/dynamic"
+if [ -f "$DYNAMIC_DIR/dev-tls.yml.sample" ] && [ ! -f "$DYNAMIC_DIR/dev-tls.yml" ]; then
+  cp "$DYNAMIC_DIR/dev-tls.yml.sample" "$DYNAMIC_DIR/dev-tls.yml"
+  echo "==> Activated dev-tls.yml (gitignored)"
+fi
+
 echo
 echo "==> Done. Now start the stack with the dev override:"
 echo "   docker compose -f docker/saas/docker-compose.yml -f docker/saas/docker-compose.dev.yml --env-file .env up -d --build"

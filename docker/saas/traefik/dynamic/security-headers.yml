@@ -16,9 +16,6 @@ http:
         period: 15m
         burst: 3
 
-  routers: {}
-  services: {}
-
 tls:
   options:
     default:

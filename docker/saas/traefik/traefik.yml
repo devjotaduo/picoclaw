@@ -25,9 +25,11 @@ entryPoints:
 
 providers:
   docker:
-    # Talk to the docker socket via the filtering proxy. The proxy enforces
-    # which endpoints we're allowed to hit; raw socket is no longer exposed.
-    endpoint: "tcp://dockerproxy:2375"
+    # Mount /var/run/docker.sock directly. The dockerproxy v0.3 strips the
+    # Docker API version negotiation headers, which makes Traefik fall back to
+    # API 1.24 — rejected by Docker daemon >= 29.x (MinAPIVersion 1.40).
+    # The proxy is still in front of the controlplane for tenant create/start.
+    endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
     network: saas_edge
     watch: true
@@ -35,13 +37,6 @@ providers:
     directory: /etc/traefik/dynamic
     watch: true
 
-certificatesResolvers:
-  letsencrypt:
-    acme:
-      email: "${LE_EMAIL}"
-      storage: "/letsencrypt/acme.json"
-      dnsChallenge:
-        provider: cloudflare
-        resolvers:
-          - "1.1.1.1:53"
-          - "8.8.8.8:53"
+# certificatesResolvers are defined via docker-compose `command:` flags so the
+# `${LE_EMAIL}` placeholder gets interpolated by docker-compose (Traefik does
+# not interpolate env vars inside the static YAML).

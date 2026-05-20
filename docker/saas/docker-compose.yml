@@ -79,13 +79,22 @@ services:
       - dockerproxy
     command:
       - "--configFile=/etc/traefik/traefik.yml"
+      # ACME resolver via CLI flags so docker-compose interpolates ${LE_EMAIL}
+      # (Traefik does not interpolate env vars inside the static YAML).
+      - "--certificatesresolvers.letsencrypt.acme.email=${LE_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
     ports:
       - "80:80"
       - "443:443"
     environment:
       LE_EMAIL: ${LE_EMAIL}
-      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
     volumes:
+      # Direct socket bind — dockerproxy v0.3 strips API version negotiation
+      # headers, which makes Traefik fall back to API 1.24 (rejected by Docker
+      # daemon >= 29.x). See docs/operations/saas-vps-deploy.md.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
       - traefik_letsencrypt:/letsencrypt
@@ -233,7 +242,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=saas_edge"
-      - "traefik.http.routers.controlplane.rule=Host(`admin.${SAAS_BASE_DOMAIN}`) || HostRegexp(`[a-z0-9-]+\\.${SAAS_BASE_DOMAIN}`)"
+      - "traefik.http.routers.controlplane.rule=Host(`${SAAS_BASE_DOMAIN}`) || Host(`admin.${SAAS_BASE_DOMAIN}`) || HostRegexp(`[a-z0-9-]+\\.${SAAS_BASE_DOMAIN}`)"
       - "traefik.http.routers.controlplane.entrypoints=websecure"
       - "traefik.http.routers.controlplane.tls.certresolver=letsencrypt"
       - "traefik.http.routers.controlplane.middlewares=security-headers@file"
