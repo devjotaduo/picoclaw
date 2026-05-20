@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Watches Docker for tenant-container lifecycle events and re-runs
+# picoclaw-traefik-tenants whenever the set of running tenants changes.
+# Debounced: bursts of events (start+health+stop on recreate) collapse to a
+# single regeneration after a 3s quiet window.
+#
+# Installed by docker/saas/scripts/tenant-router/install.sh into
+# /usr/local/sbin/ with a systemd unit at picoclaw-tenant-router.service.
+set -u
+export SAAS_BASE_DOMAIN="${SAAS_BASE_DOMAIN:-jotaduo.com}"
+GEN="${TENANT_ROUTER_GEN:-/usr/local/sbin/picoclaw-traefik-tenants}"
+DEBOUNCE=${DEBOUNCE_SECONDS:-3}
+
+# Run once at startup so the file reflects current state.
+"$GEN" || true
+
+# Filter only the events that change the set of healthy backends. Ignore
+# health-check exec_* events (they fire every 30s and don't change routing).
+docker events \
+    --filter 'type=container' \
+    --filter 'label=picoclaw.saas.managed=true' \
+    --filter 'event=create' \
+    --filter 'event=start' \
+    --filter 'event=die' \
+    --filter 'event=destroy' \
+    --filter 'event=rename' \
+    --format '{{.Time}} {{.Action}} {{.Actor.Attributes.name}}' \
+| while read -r line; do
+    pending=1
+    last="$line"
+    # Drain any additional events that arrive within DEBOUNCE seconds.
+    while [ "$pending" = "1" ]; do
+        if read -r -t "$DEBOUNCE" extra; then
+            last="$extra"
+        else
+            pending=0
+        fi
+    done
+    echo "$(date -Is) trigger: $last"
+    "$GEN" || echo "$(date -Is) generator failed (exit $?)"
+done
