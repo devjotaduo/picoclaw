@@ -8,7 +8,17 @@
 //   * transparency Sheet shows what the agent extracted so far
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Sparkles, CheckCircle2, AlertCircle, X } from "lucide-react";
+import {
+	Send,
+	Sparkles,
+	CheckCircle2,
+	AlertCircle,
+	X,
+	Copy,
+	ExternalLink,
+	Mail,
+	Loader2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -41,6 +51,8 @@ import {
 	type ClaraChatState,
 	type ClaraExtracted,
 	type ClaraMessage,
+	type ClaraProvisioned,
+	type ClaraProvisioningStatus,
 } from "./useClaraChat";
 
 export type ClaraChatProps = {
@@ -119,6 +131,14 @@ export function ClaraChat(props: ClaraChatProps) {
 			<MessageList chat={chat} />
 
 			<LimitWarning chat={chat} />
+
+			<ProvisionBanner
+				intakeId={props.intakeId}
+				resumeToken={props.resumeToken}
+				status={chat.provisioning}
+				provisioned={chat.provisioned}
+				error={chat.provisionError}
+			/>
 
 			<ErrorBanner error={chat.error} />
 
@@ -471,6 +491,262 @@ function Composer({
 				>
 					<Send className="h-4 w-4" />
 				</Button>
+			</div>
+		</div>
+	);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Provision banner — appears once the auto-provision flow fires after
+// mark_qualified. Three states:
+//   * provisioning  → calm "estamos preparando seu painel" spinner
+//   * provisioned   → success card with login CTA (+ resend on magic link)
+//   * error         → soft warning; the operator team picks up the follow-up
+
+function ProvisionBanner({
+	intakeId,
+	resumeToken,
+	status,
+	provisioned,
+	error,
+}: {
+	intakeId: string;
+	resumeToken: string;
+	status: ClaraProvisioningStatus;
+	provisioned: ClaraProvisioned | null;
+	error: string;
+}) {
+	if (status === "idle") return null;
+
+	if (status === "provisioning") {
+		return (
+			<div
+				className="border-t border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900 sm:px-6"
+				role="status"
+				aria-live="polite"
+			>
+				<div className="mx-auto flex max-w-2xl items-center gap-2">
+					<Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+					<span>Preparando seu painel agora — só um instante…</span>
+				</div>
+			</div>
+		);
+	}
+
+	if (status === "error") {
+		return (
+			<div
+				className="border-t border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:px-6"
+				role="status"
+				aria-live="polite"
+			>
+				<div className="mx-auto flex max-w-2xl items-start gap-2">
+					<AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+					<span>
+						Tive um problema técnico aqui ao montar seu painel ({error}). Sem
+						stress — nossa equipe já recebeu o aviso e vai falar com você.
+					</span>
+				</div>
+			</div>
+		);
+	}
+
+	if (!provisioned) return null;
+
+	if (provisioned.alreadyExists) {
+		return (
+			<ProvisionSuccessCard
+				title="Você já tem painel ativo"
+				subtitle={`Acessa em ${friendlyURL(provisioned.url)}`}
+				url={provisioned.url}
+				email={provisioned.email}
+				secondaryLine="Use o link que você já recebeu no email para entrar."
+			/>
+		);
+	}
+
+	if (provisioned.loginMode === "magic_link") {
+		return (
+			<ProvisionSuccessCard
+				title="Seu painel está pronto!"
+				subtitle={`Está em ${friendlyURL(provisioned.url)}`}
+				url={provisioned.url}
+				email={provisioned.email}
+				secondaryLine={
+					provisioned.checkEmail
+						? "Acabei de te mandar um link de acesso no email. Clica nele pra entrar."
+						: undefined
+				}
+				resend={
+					provisioned.checkEmail
+						? { intakeId, resumeToken, email: provisioned.email }
+						: undefined
+				}
+			/>
+		);
+	}
+
+	// password mode
+	return (
+		<ProvisionSuccessCard
+			title="Seu painel está pronto!"
+			subtitle={`Está em ${friendlyURL(provisioned.url)}`}
+			url={provisioned.url}
+			email={provisioned.email}
+			password={provisioned.initialPassword}
+		/>
+	);
+}
+
+function friendlyURL(url: string): string {
+	try {
+		return new URL(url).host;
+	} catch {
+		return url;
+	}
+}
+
+function ProvisionSuccessCard({
+	title,
+	subtitle,
+	url,
+	email,
+	password,
+	secondaryLine,
+	resend,
+}: {
+	title: string;
+	subtitle: string;
+	url: string;
+	email: string;
+	password?: string;
+	secondaryLine?: string;
+	resend?: { intakeId: string; resumeToken: string; email: string };
+}) {
+	const [copied, setCopied] = useState<"" | "email" | "password" | "all">("");
+	const [resendState, setResendState] = useState<"idle" | "sending" | "sent" | "error">(
+		"idle",
+	);
+
+	const copy = (text: string, kind: "email" | "password" | "all") => {
+		if (!navigator.clipboard) return;
+		void navigator.clipboard.writeText(text).then(() => {
+			setCopied(kind);
+			window.setTimeout(() => setCopied(""), 1800);
+		});
+	};
+
+	const doResend = async () => {
+		if (!resend) return;
+		setResendState("sending");
+		try {
+			const res = await fetch(
+				`/api/v1/public/company-intakes/${encodeURIComponent(resend.intakeId)}/resend-link`,
+				{
+					method: "POST",
+					credentials: "include",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ resume_token: resend.resumeToken }),
+				},
+			);
+			setResendState(res.ok ? "sent" : "error");
+		} catch {
+			setResendState("error");
+		}
+	};
+
+	return (
+		<div className="border-t border-emerald-200 bg-emerald-50 px-4 py-4 sm:px-6">
+			<div className="mx-auto max-w-2xl">
+				<div className="flex items-start gap-3">
+					<CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+					<div className="flex-1">
+						<p className="text-sm font-medium text-emerald-900">{title}</p>
+						<p className="text-xs text-emerald-700">{subtitle}</p>
+						{secondaryLine && (
+							<p className="mt-1 text-xs text-emerald-700">{secondaryLine}</p>
+						)}
+
+						{password && (
+							<dl className="mt-3 space-y-2 text-xs">
+								<div className="flex items-center gap-2">
+									<dt className="w-16 shrink-0 text-emerald-700">Email</dt>
+									<dd className="flex flex-1 items-center gap-1">
+										<code className="rounded bg-white px-1.5 py-0.5 font-mono text-emerald-900">
+											{email}
+										</code>
+										<button
+											type="button"
+											onClick={() => copy(email, "email")}
+											className="rounded p-1 text-emerald-700 hover:bg-emerald-100"
+											aria-label="Copiar email"
+										>
+											<Copy className="h-3 w-3" />
+										</button>
+										{copied === "email" && (
+											<span className="text-emerald-600">copiado</span>
+										)}
+									</dd>
+								</div>
+								<div className="flex items-center gap-2">
+									<dt className="w-16 shrink-0 text-emerald-700">Senha</dt>
+									<dd className="flex flex-1 items-center gap-1">
+										<code className="rounded bg-white px-1.5 py-0.5 font-mono text-emerald-900">
+											{password}
+										</code>
+										<button
+											type="button"
+											onClick={() => copy(password, "password")}
+											className="rounded p-1 text-emerald-700 hover:bg-emerald-100"
+											aria-label="Copiar senha"
+										>
+											<Copy className="h-3 w-3" />
+										</button>
+										{copied === "password" && (
+											<span className="text-emerald-600">copiado</span>
+										)}
+									</dd>
+								</div>
+								<button
+									type="button"
+									onClick={() => copy(`${email}\n${password}`, "all")}
+									className="mt-1 text-xs text-emerald-700 underline-offset-2 hover:underline"
+								>
+									Copiar email + senha
+								</button>
+							</dl>
+						)}
+
+						<div className="mt-3 flex flex-wrap items-center gap-2">
+							<a
+								href={url}
+								target="_blank"
+								rel="noopener noreferrer"
+								className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+							>
+								<ExternalLink className="h-3.5 w-3.5" />
+								Entrar no meu painel
+							</a>
+							{resend && (
+								<button
+									type="button"
+									onClick={() => void doResend()}
+									disabled={resendState === "sending" || resendState === "sent"}
+									className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-60"
+								>
+									<Mail className="h-3.5 w-3.5" />
+									{resendState === "sent"
+										? "Link reenviado"
+										: resendState === "sending"
+											? "Enviando…"
+											: resendState === "error"
+												? "Tentar de novo"
+												: "Reenviar link"}
+								</button>
+							)}
+						</div>
+					</div>
+				</div>
 			</div>
 		</div>
 	);

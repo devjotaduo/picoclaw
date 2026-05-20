@@ -1,6 +1,7 @@
 ---
 name: responder-duvidas
 description: Responde dúvidas simples usando a memória validada da empresa.
+visibility: atendimento
 ---
 
 # Skill: Responder Dúvidas

@@ -1,6 +1,7 @@
 ---
 name: atualizar-memoria
 description: Sugere ou registra atualizações úteis na memória da empresa.
+visibility: global
 ---
 
 # Skill: Atualizar Memória

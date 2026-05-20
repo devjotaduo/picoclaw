@@ -1,6 +1,7 @@
 ---
 name: reclamacao-simples
 description: Lida com reclamações simples e identifica quando escalar.
+visibility: suporte
 ---
 
 # Skill: Reclamação Simples

@@ -12,6 +12,29 @@ Esta memória organiza informações úteis da empresa. Não salvar conversa int
 - Nenhum agente deve inventar informação ausente na memória.
 - Se faltar informação importante, chamar Rafael ou Atendimento Humano.
 
+## Retenção de dados
+Ver política completa em `config/privacy-policy.md` (seção 3).
+
+Resumo:
+- leads.md: arquivar após 12 meses sem interação.
+- atendimentos.md: arquivar após 24 meses.
+- clientes.md: arquivar 12 meses após fim da relação comercial.
+- vendas.md: arquivar após 5 anos (obrigação fiscal).
+- suporte.md: arquivar após 24 meses.
+- humano.md: arquivar após 36 meses.
+
+## Formato obrigatório de registro
+Todo registro novo deve incluir:
+```
+id: [identificador único, ex: ATD-20260520-001]
+data: [YYYY-MM-DD]
+fonte: [agente ou humano que registrou]
+status: validado | pendente
+expira_em: [YYYY-MM-DD ou "permanente"]
+informacao: [conteúdo resumido]
+observacao: [opcional]
+```
+
 ## Arquivos de memória
 - Empresa: empresa.md
 - Canais autorizados: canais-autorizados.md

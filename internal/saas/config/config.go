@@ -64,6 +64,32 @@ type Config struct {
 
 	MailerFrom     string
 	MailerAdminURL string
+
+	// Auto-provision: when enabled, mark_qualified on a Clara chat triggers
+	// tenant creation + Supabase user creation automatically. Default off so
+	// the existing manual flow stays unchanged.
+	AutoProvisionEnabled   bool
+	AutoProvisionProfile   string // launcher profile id seeded on new tenant
+	AutoProvisionPerIPDay  int    // max auto-provisions per client IP per 24h
+	AutoProvisionLoginMode string // "magic_link" or "password"
+	// AutoProvisionWorkspaceDir, when set, points to a local directory whose
+	// contents are overlaid into the new tenant's <volume>/workspace/ AFTER
+	// the profile seed runs. Lets the operator point auto-provision at e.g.
+	// workspace-assistente/ so new tenants get the Sofia agent files they
+	// have been editing locally instead of the profile's frozen copy.
+	// Per-tenant runtime state (sessions, memory, whatsapp/matrix state) is
+	// preserved by the overlay skip list — only agent definition files get
+	// overwritten.
+	AutoProvisionWorkspaceDir string
+
+	// Supabase Auth — used as the source of truth for tenant dashboard logins
+	// when tenant.auth_backend = 'supabase'. The controlplane verifies the
+	// JWT and continues signing trusted_gateway HMAC headers to the launcher.
+	SupabaseProjectRef     string
+	SupabaseAnonKey        string
+	SupabaseServiceRoleKey string
+	SupabaseJWTSecret      string
+	SupabaseSiteURL        string
 }
 
 func Load() (*Config, error) {
@@ -121,6 +147,18 @@ func Load() (*Config, error) {
 	if c.MailerAdminURL == "" && c.TenantBaseDomain != "" {
 		c.MailerAdminURL = "https://adm." + c.TenantBaseDomain
 	}
+
+	c.AutoProvisionEnabled = envBool("PICOCLAW_SAAS_AUTO_PROVISION", false)
+	c.AutoProvisionProfile = envOr("PICOCLAW_SAAS_AUTO_PROVISION_PROFILE", "default-business")
+	c.AutoProvisionPerIPDay = envInt("PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY", 3)
+	c.AutoProvisionLoginMode = envOr("PICOCLAW_SAAS_AUTO_PROVISION_LOGIN_MODE", "magic_link")
+	c.AutoProvisionWorkspaceDir = os.Getenv("PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR")
+
+	c.SupabaseProjectRef = os.Getenv("SUPABASE_PROJECT_REF")
+	c.SupabaseAnonKey = os.Getenv("SUPABASE_ANON_KEY")
+	c.SupabaseServiceRoleKey = os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+	c.SupabaseJWTSecret = os.Getenv("SUPABASE_JWT_SECRET")
+	c.SupabaseSiteURL = envOr("SUPABASE_SITE_URL", "https://"+c.TenantBaseDomain)
 
 	if c.PGDSN == "" {
 		return nil, fmt.Errorf("PG_DSN is required")

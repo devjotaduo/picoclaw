@@ -19,10 +19,12 @@ type Answers struct {
 	SystemNotes    string   `json:"system_notes,omitempty"`
 	Pains          []string `json:"pains,omitempty"`
 
-	// Light-onboarding fields collected by Clara to seed the 4 default
-	// agents (Ana, Leo, Maya, Sofia). All optional — Clara only sets a field
-	// when the visitor mentions it explicitly. Technical follow-up (prices,
-	// CRM credentials, etc.) happens later via Sofia on WhatsApp.
+	// Light-onboarding fields collected by Clara to seed the canonical
+	// Jotaduo team (Clara, Marcos, Camila, Lia, Rafael) plus Sofia who
+	// runs the in-panel onboarding interview. All optional — Clara only
+	// sets a field when the visitor mentions it explicitly. Deep follow-up
+	// (segment playbooks, prices, CRM creds) happens in the panel with
+	// Sofia after the magic link login.
 	Website             string `json:"website,omitempty"`
 	Instagram           string `json:"instagram,omitempty"`
 	CRMName             string `json:"crm_name,omitempty"`
@@ -172,7 +174,7 @@ type IntakeMutation struct {
 
 	// MarkQualified, when true, instructs the handler to call MarkQualified
 	// in the store. The Reason goes into chat_messages metadata only.
-	MarkQualified  bool
+	MarkQualified   bool
 	QualifiedReason string
 
 	// HandoffRequested mirrors MarkQualified for the manual-review escalation.
@@ -292,14 +294,14 @@ func Apply(name string, rawArgs json.RawMessage, current *Answers) (*IntakeMutat
 		}
 		agent := strings.ToLower(strings.TrimSpace(in.Agent))
 		switch agent {
-		case "ana", "leo", "maya", "sofia":
+		case "clara", "marcos", "camila", "lia", "rafael":
 			current.PriorityAgent = agent
 			if r := strings.TrimSpace(in.Reason); r != "" {
 				current.PriorityReason = r
 			}
 			m.AnswersDelta = current
 		default:
-			return nil, fmt.Errorf("priority agent must be one of ana|leo|maya|sofia, got %q", in.Agent)
+			return nil, fmt.Errorf("priority agent must be one of clara|marcos|camila|lia|rafael, got %q", in.Agent)
 		}
 
 	case ToolSetProblemArea:

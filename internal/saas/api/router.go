@@ -1,11 +1,14 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/sipeed/picoclaw/internal/saas/auth"
 	"github.com/sipeed/picoclaw/internal/saas/config"
 	"github.com/sipeed/picoclaw/internal/saas/mailer"
 	"github.com/sipeed/picoclaw/internal/saas/store"
@@ -28,6 +31,20 @@ type Handler struct {
 	ClaraRateLimit *rateLimiter
 	CRM            *crmClient
 	Mailer         *mailer.Mailer
+	// Supabase is the optional Auth client for tenants whose dashboard logins
+	// are gated by Supabase JWT instead of the legacy local sessions table.
+	// Nil when SUPABASE_* env vars are unset — controlplane stays fully
+	// functional on the legacy auth path.
+	Supabase *auth.SupabaseClient
+	// AutoProvision wires Clara's mark_qualified directly to a tenant
+	// container + Supabase user. Nil when PICOCLAW_SAAS_AUTO_PROVISION=false.
+	AutoProvision *AutoProvisioner
+	// Reminders schedules + cancels nudge emails for the onboarding flow.
+	// Same lifecycle as AutoProvision (only meaningful when that's on).
+	Reminders *store.IntakeReminderStore
+	// ReminderWorker drains the queue in the background. Started by Routes().
+	// Nil when prerequisites (mailer + auto-provision) aren't satisfied.
+	ReminderWorker *ReminderWorker
 	adminRoutes    http.Handler
 }
 
@@ -51,7 +68,47 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 	if cfg.OpenCRMURL != "" {
 		h.CRM = newCRMClient(cfg.OpenCRMURL)
 	}
+
+	// Supabase is opt-in: when project_ref/anon/service_role/jwt_secret are
+	// configured we wire it up, otherwise the controlplane stays on the
+	// legacy local-auth path with no behavior change.
+	supa, err := auth.NewSupabaseClient(
+		cfg.SupabaseProjectRef,
+		cfg.SupabaseAnonKey,
+		cfg.SupabaseServiceRoleKey,
+		cfg.SupabaseJWTSecret,
+		cfg.SupabaseSiteURL,
+	)
+	if err == nil {
+		h.Supabase = supa
+		// Provisioner needs the same handle to clean up the Supabase user on
+		// tenant delete. SupabaseClient implements SupabaseDeleter.
+		if prov != nil {
+			prov.Supabase = supa
+		}
+	} else if !errIsNotConfigured(err) {
+		log.Printf("supabase client init failed: %v (falling back to legacy auth)", err)
+	}
+
+	h.AutoProvision = NewAutoProvisioner(cfg, prov, h.Supabase, db)
+	h.Reminders = &store.IntakeReminderStore{DB: db}
+	h.ReminderWorker = NewReminderWorker(cfg, db, mlr)
+
 	return h
+}
+
+// StartBackground spawns long-running goroutines (reminder worker, etc.).
+// Caller passes a context that, when cancelled, stops them gracefully.
+// Idempotent: safe to call once at boot; subsequent calls are no-ops on
+// already-started workers.
+func (h *Handler) StartBackground(ctx context.Context) {
+	if h.ReminderWorker != nil {
+		h.ReminderWorker.Start(ctx)
+	}
+}
+
+func errIsNotConfigured(err error) bool {
+	return err == auth.ErrSupabaseNotConfigured
 }
 
 func (h *Handler) Routes() http.Handler {
@@ -87,6 +144,7 @@ func (h *Handler) Routes() http.Handler {
 		r.Post("/public/company-intakes/{id}/report", h.handleGenerateCompanyIntakeReport)
 		r.Post("/public/company-intakes/{id}/submit", h.handleSubmitCompanyIntake)
 		r.Post("/public/company-intakes/{id}/chat", h.handleCompanyIntakeChat)
+		r.Post("/public/company-intakes/{id}/resend-link", h.handleResendMagicLink)
 
 		r.Group(func(r chi.Router) {
 			r.Use(h.requireAuth)

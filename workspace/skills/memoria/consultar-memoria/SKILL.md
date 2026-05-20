@@ -1,6 +1,7 @@
 ---
 name: consultar-memoria
 description: Consulta a memória da empresa antes de responder, vender, atender ou encaminhar.
+visibility: global
 ---
 
 # Skill: Consultar Memória

@@ -24,6 +24,9 @@ build/
 
 # Secrets & Config (keep templates, ignore actual secrets)
 .env
+.env.local
+.env.*.local
+docker/saas/.env.supabase.local
 config/config.json
 .security.yml
 onboard

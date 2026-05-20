@@ -1,6 +1,7 @@
 ---
 name: resumo-para-humano
 description: Prepara resumo claro para o humano assumir o atendimento.
+visibility: global
 ---
 
 # Skill: Resumo para Humano

@@ -47,7 +47,7 @@ export type ClaraExtracted = {
 	crmNotes?: string;
 	quotingPersonalized?: boolean;
 	quotingNotes?: string;
-	priorityAgent?: "ana" | "leo" | "maya" | "sofia";
+	priorityAgent?: "clara" | "marcos" | "camila" | "lia" | "rafael";
 	priorityReason?: string;
 
 	// Structured pain tag (problemArea) + how the visitor sells today
@@ -70,6 +70,27 @@ export type ClaraProblemArea =
 
 export type ClaraStatus = "idle" | "sending" | "streaming" | "error";
 
+// ClaraProvisioned mirrors the `tenant_provisioned` SSE event payload. Drawn
+// straight from the AutoProvisioner on the controlplane after a successful
+// mark_qualified. Magic-link mode just sets checkEmail=true (Supabase already
+// emailed the visitor); password mode includes initialPassword for the UI to
+// surface as copyable credentials.
+export type ClaraProvisioned = {
+	url: string;
+	subdomain: string;
+	email: string;
+	loginMode: "magic_link" | "password";
+	checkEmail?: boolean;
+	initialPassword?: string;
+	alreadyExists?: boolean;
+};
+
+export type ClaraProvisioningStatus =
+	| "idle"
+	| "provisioning"
+	| "provisioned"
+	| "error";
+
 export type ClaraChatState = {
 	messages: ClaraMessage[];
 	status: ClaraStatus;
@@ -77,6 +98,9 @@ export type ClaraChatState = {
 	qualified: boolean;
 	qualifiedReason: string;
 	extracted: ClaraExtracted;
+	provisioning: ClaraProvisioningStatus;
+	provisioned: ClaraProvisioned | null;
+	provisionError: string;
 	send: (text: string) => Promise<void>;
 	cancel: () => void;
 };
@@ -132,6 +156,9 @@ export function useClaraChat({
 	const [qualified, setQualified] = useState(false);
 	const [qualifiedReason, setQualifiedReason] = useState("");
 	const [extracted, setExtracted] = useState<ClaraExtracted>(emptyExtracted);
+	const [provisioning, setProvisioning] = useState<ClaraProvisioningStatus>("idle");
+	const [provisioned, setProvisioned] = useState<ClaraProvisioned | null>(null);
+	const [provisionError, setProvisionError] = useState("");
 
 	const abortRef = useRef<AbortController | null>(null);
 
@@ -309,6 +336,45 @@ export function useClaraChat({
 						setQualified(true);
 						if (typeof ev.reason === "string") setQualifiedReason(ev.reason);
 						return;
+					case "provisioning_started":
+						setProvisioning("provisioning");
+						setProvisionError("");
+						return;
+					case "tenant_provisioned": {
+						const loginMode =
+							ev.login_mode === "password" ? "password" : "magic_link";
+						setProvisioned({
+							url: typeof ev.url === "string" ? ev.url : "",
+							subdomain: typeof ev.subdomain === "string" ? ev.subdomain : "",
+							email: typeof ev.email === "string" ? ev.email : "",
+							loginMode,
+							checkEmail: ev.check_email === true,
+							initialPassword:
+								typeof ev.initial_password === "string"
+									? ev.initial_password
+									: undefined,
+						});
+						setProvisioning("provisioned");
+						return;
+					}
+					case "tenant_already_exists":
+						setProvisioned({
+							url: typeof ev.url === "string" ? ev.url : "",
+							subdomain: typeof ev.subdomain === "string" ? ev.subdomain : "",
+							email: typeof ev.email === "string" ? ev.email : "",
+							loginMode: "magic_link",
+							alreadyExists: true,
+						});
+						setProvisioning("provisioned");
+						return;
+					case "provision_error":
+						setProvisioning("error");
+						setProvisionError(
+							typeof ev.message === "string"
+								? ev.message
+								: "não consegui criar seu painel agora",
+						);
+						return;
 					case "warning":
 						return; // truncation hint, etc. Non-fatal.
 					case "tool_error":
@@ -356,10 +422,25 @@ export function useClaraChat({
 			qualified,
 			qualifiedReason,
 			extracted,
+			provisioning,
+			provisioned,
+			provisionError,
 			send,
 			cancel,
 		}),
-		[messages, status, error, qualified, qualifiedReason, extracted, send, cancel],
+		[
+			messages,
+			status,
+			error,
+			qualified,
+			qualifiedReason,
+			extracted,
+			provisioning,
+			provisioned,
+			provisionError,
+			send,
+			cancel,
+		],
 	);
 
 	return value;
@@ -406,7 +487,15 @@ function priorityAgentOrPrev(
 	v: unknown,
 	prev: ClaraExtracted["priorityAgent"],
 ): ClaraExtracted["priorityAgent"] {
-	if (v === "ana" || v === "leo" || v === "maya" || v === "sofia") return v;
+	if (
+		v === "clara" ||
+		v === "marcos" ||
+		v === "camila" ||
+		v === "lia" ||
+		v === "rafael"
+	) {
+		return v;
+	}
 	return prev;
 }
 
@@ -495,7 +584,13 @@ export function extractFromIntake(
 	};
 	const priority = (): ClaraExtracted["priorityAgent"] => {
 		const v = answers["priority_agent"];
-		return v === "ana" || v === "leo" || v === "maya" || v === "sofia" ? v : undefined;
+		return v === "clara" ||
+			v === "marcos" ||
+			v === "camila" ||
+			v === "lia" ||
+			v === "rafael"
+			? v
+			: undefined;
 	};
 	const quoting = (): boolean | undefined => {
 		const v = answers["quoting_personalized"];

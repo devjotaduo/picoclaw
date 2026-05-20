@@ -1,6 +1,7 @@
 ---
 name: chamar-agentes
 description: Define quando e como Rafael deve acionar Clara, Marcos, Camila ou Atendimento Humano.
+visibility: interno
 ---
 
 # Skill: Chamar Agentes

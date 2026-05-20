@@ -197,9 +197,34 @@ services:
       ALERT_FROM: ${ALERT_FROM:-}
       ALERT_TO: ${ALERT_TO:-}
       ALERT_DISK_THRESHOLD_PCT: ${ALERT_DISK_THRESHOLD_PCT:-85}
+      # Auto-provision: when true, Clara's mark_qualified hands off directly
+      # to the provisioner so qualified visitors get a working dashboard URL
+      # before the SSE stream closes. Keep false until Supabase is wired and
+      # the per-IP rate-limit is tuned for production traffic.
+      PICOCLAW_SAAS_AUTO_PROVISION: ${PICOCLAW_SAAS_AUTO_PROVISION:-false}
+      PICOCLAW_SAAS_AUTO_PROVISION_PROFILE: ${PICOCLAW_SAAS_AUTO_PROVISION_PROFILE:-default-business}
+      PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY: ${PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY:-3}
+      PICOCLAW_SAAS_AUTO_PROVISION_LOGIN_MODE: ${PICOCLAW_SAAS_AUTO_PROVISION_LOGIN_MODE:-magic_link}
+      PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR: ${PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR:-}
+      # Supabase: source of truth for tenant dashboard logins when set. Leave
+      # blank to keep the legacy local sessions auth path (no behavior change
+      # to existing tenants — auth_backend='local' rows ignore these vars).
+      SUPABASE_PROJECT_REF: ${SUPABASE_PROJECT_REF:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
+      SUPABASE_SITE_URL: ${SUPABASE_SITE_URL:-https://${SAAS_BASE_DOMAIN}}
     volumes:
       - /srv/saas/tenants:/srv/saas/tenants
       - controlplane_data:/var/lib/picoclaw-saas
+      # Read-only bind for the canonical operator workspace that auto-provision
+      # copies into each new tenant volume. Same path inside/outside the
+      # container so PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR is portable.
+      # OverlayWorkspace skips operator runtime state (whatsapp/, sessions/,
+      # state/, *.log, *.db) and treats memory/* as non-clobbering so new
+      # tenants get the empty template files and existing tenants keep what
+      # they've accumulated.
+      - /srv/picoclaw/workspace:/srv/picoclaw/workspace:ro
     networks:
       - saas_edge
       - saas_llm

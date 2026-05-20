@@ -1,6 +1,7 @@
 ---
 name: classificar-lead
 description: Classifica leads como frio, morno ou quente.
+visibility: comercial
 ---
 
 # Skill: Classificar Lead

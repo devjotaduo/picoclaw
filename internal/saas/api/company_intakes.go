@@ -581,10 +581,12 @@ func buildFallbackCompanyIntakeReport(intake *store.CompanyIntake) (json.RawMess
 		"budget_and_calculation_rules": fmt.Sprint(answers["budget_rules"]),
 		"future_integrations":          systems,
 		"agent_recommendations": map[string]any{
-			"Ana":   "Atender no WhatsApp público, responder dúvidas frequentes, fazer triagem e encaminhar oportunidades.",
-			"Leo":   "Classificar leads, registrar interesse, conduzir follow-up e organizar oportunidades comerciais.",
-			"Maya":  "Transformar diferenciais e materiais em campanhas, posts, catálogos e páginas simples.",
-			"Sofia": "Apoiar o dono com agenda, relatórios, documentos e coordenação dos demais agentes.",
+			"Clara":  "Atender no WhatsApp público, responder dúvidas frequentes, fazer triagem e encaminhar oportunidades.",
+			"Marcos": "Classificar leads, registrar interesse, conduzir follow-up e organizar oportunidades comerciais.",
+			"Camila": "Cuidar de pós-venda, suporte e reclamações; consultar histórico e orientar o cliente.",
+			"Lia":    "Transformar diferenciais e materiais em campanhas, posts, catálogos e páginas simples.",
+			"Rafael": "Acompanhar a operação de forma interna, alertar o dono sobre leads quentes, atendimentos parados e oportunidades.",
+			"Sofia":  "Receber o dono no painel, conduzir onboarding por segmento, validar memória da empresa.",
 		},
 		"missing_data": missingIntakeData(intake, answers),
 		"risks_and_limits": append([]string{
@@ -593,7 +595,7 @@ func buildFallbackCompanyIntakeReport(intake *store.CompanyIntake) (json.RawMess
 		}, rules...),
 		"recommended_next_steps": []string{
 			"Confirmar se os materiais enviados representam preços e ofertas atuais.",
-			"Definir perguntas obrigatórias de qualificação para Ana e Leo.",
+			"Definir perguntas obrigatórias de qualificação para Clara e Marcos.",
 			"Mapear regras de orçamento com exemplos reais antes de automatizar cálculo.",
 			"Escolher quais sistemas precisam integração depois da revisão interna.",
 		},

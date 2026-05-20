@@ -1,6 +1,7 @@
 ---
 name: atendimento-suporte
 description: Atende dúvidas e problemas de suporte.
+visibility: suporte
 ---
 
 # Skill: Atendimento de Suporte

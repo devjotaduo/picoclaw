@@ -1,6 +1,7 @@
 ---
 name: assistente-proativo
 description: Permite que Rafael identifique oportunidades, riscos e próximos passos para o dono.
+visibility: interno
 ---
 
 # Skill: Assistente Proativo

@@ -239,17 +239,17 @@ func (h *Handler) handleCompanyIntakeChat(w http.ResponseWriter, r *http.Request
 			if lerr == nil && latest != nil {
 				snap := answersSnapshot(latest)
 				payload := map[string]any{
-					"company_name": latest.CompanyName,
-					"contact_name": latest.ContactName,
-					"segments":     snap.segments,
-					"channels":     snap.channels,
-					"pains":        snap.pains,
-					"systems":      snap.systems,
-					"offer":        snap.offer,
-					"website":      snap.website,
-					"instagram":    snap.instagram,
-					"crm_name":     snap.crmName,
-					"crm_notes":    snap.crmNotes,
+					"company_name":         latest.CompanyName,
+					"contact_name":         latest.ContactName,
+					"segments":             snap.segments,
+					"channels":             snap.channels,
+					"pains":                snap.pains,
+					"systems":              snap.systems,
+					"offer":                snap.offer,
+					"website":              snap.website,
+					"instagram":            snap.instagram,
+					"crm_name":             snap.crmName,
+					"crm_notes":            snap.crmNotes,
 					"quoting_personalized": snap.quotingPersonalized,
 					"quoting_notes":        snap.quotingNotes,
 					"priority_agent":       snap.priorityAgent,
@@ -312,6 +312,46 @@ func (h *Handler) handleCompanyIntakeChat(w http.ResponseWriter, r *http.Request
 				})
 			} else {
 				emit("qualified", map[string]any{"reason": qualifiedReason})
+			}
+
+			// Auto-provision: when enabled, hand the qualified intake off to
+			// the provisioner so the visitor gets a working dashboard URL +
+			// login before the SSE stream closes. AutoProvision is nil when
+			// the feature is disabled in config — branch on the field, not on
+			// a re-check of Cfg.AutoProvisionEnabled.
+			if h.AutoProvision != nil {
+				latestIntake, ierr := h.CompanyIntakes.GetByToken(ctx, id, tokenHash)
+				if ierr == nil && latestIntake != nil {
+					emit("provisioning_started", nil)
+					res, perr := h.AutoProvision.Run(ctx, latestIntake, clientIP(r))
+					switch {
+					case perr != nil:
+						emit("provision_error", map[string]any{"message": perr.Error()})
+					case res.AlreadyExists:
+						emit("tenant_already_exists", map[string]any{
+							"url":       res.URL,
+							"subdomain": res.Subdomain,
+							"email":     res.Email,
+						})
+					default:
+						payload := map[string]any{
+							"subdomain":  res.Subdomain,
+							"url":        res.URL,
+							"email":      res.Email,
+							"login_mode": res.LoginMode,
+						}
+						if res.LoginMode == "magic_link" {
+							payload["check_email"] = true
+							// Don't leak the actual magic link URL over SSE —
+							// it's a one-shot credential that Supabase already
+							// emailed to the visitor. Browser only needs to
+							// know the email was sent.
+						} else if res.InitialPassword != "" {
+							payload["initial_password"] = res.InitialPassword
+						}
+						emit("tenant_provisioned", payload)
+					}
+				}
 			}
 		}
 	}
