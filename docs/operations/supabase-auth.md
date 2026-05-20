@@ -23,13 +23,21 @@ verifier. Migration of legacy tenants is opt-in and out-of-scope here.
 ## Architecture in one diagram
 
 ```
-Visitor ──▶ /pre-cadastro                    (saas-admin frontend)
+Visitor ──▶ /pre-cadastro                    (saas-admin frontend, Clara default)
         │
         ▼ SSE chat
    ┌────────────────────────────────────┐
    │ controlplane: Clara                │  internal/saas/api/company_intakes_chat.go
-   │   ├─ mark_qualified                │  internal/saas/clara/clara_system.txt
-   │   └─ if AUTO_PROVISION enabled:    │
+   │   └─ mark_qualified tool           │  internal/saas/clara/clara_system.txt
+   │      sets status = qualified       │  (intake row, NOT yet a tenant)
+   └────────────────────────────────────┘
+        │
+        ▼ visitor enters email + WhatsApp on ClaraFinalize
+   ┌────────────────────────────────────┐
+   │ POST /api/v1/public/.../submit     │  internal/saas/api/company_intakes.go
+   │   ├─ status = submitted            │
+   │   └─ if AUTO_PROVISION enabled     │
+   │      AND intake has email+company: │
    │        ▼                           │
    │      AutoProvisioner.Run           │  internal/saas/api/company_intakes_provision.go
    │        ├─ dedup by owner_email     │
@@ -45,8 +53,15 @@ Visitor ──▶ /pre-cadastro                    (saas-admin frontend)
    │        ├─ SetSupabaseUserID            │
    │        └─ CompanyIntakes.LinkTenant    │
    │        ▼                           │
-   │   emit SSE tenant_provisioned      │  → frontend ProvisionSuccessCard
+   │   /submit response carries the     │  → frontend ProvisionSuccessCard
+   │   URL + login_mode + magic-link    │     in ClaraFinalize/ClaraDone
    └────────────────────────────────────┘
+
+Why /submit and not the chat SSE? Clara's `mark_qualified` fires BEFORE the
+finalize form collects the visitor's email, so the provisioner would always
+reject with ErrMissingContact if called from the chat handler. Moving the
+call to /submit means the contact data is guaranteed populated.
+```
 
 Later: visitor clicks magic link / enters password
        ▼
@@ -214,10 +229,20 @@ channel available at boot. The full lifecycle:
 ```
 T+0s    Maria conversa com Clara em jotaduo.com/pre-cadastro.
         Clara extrai 10 pontos (nome, empresa, segmento, canais,
-        dor, foco prioritário) e o frontend coleta email + WhatsApp
-        no card final.
+        dor, foco prioritário). Cap de turnos é generoso
+        (ClaraMaxTurns=120 = ~60 user turns); o frontend avisa
+        em soft 50 / hard 56 só pra fechar a conversa antes do
+        cap real.
 
-T+~3s   mark_qualified dispara. AutoProvisioner.Run executa:
+T+~Ns   mark_qualified dispara. Status do intake muda pra
+        'qualified' (campo qualified_at). NADA é provisionado
+        ainda — falta o email.
+
+        O frontend muda do chat para ClaraFinalize, onde Maria
+        confirma email + WhatsApp.
+
+T+~N+Ms POST /api/v1/public/company-intakes/{id}/submit dispara.
+        Status muda pra 'submitted'. AutoProvisioner.Run executa:
           1. dedup por email
           2. rate-limit per IP
           3. Provisioner.Create (Docker + LiteLLM + Supabase user)
@@ -230,6 +255,8 @@ T+~3s   mark_qualified dispara. AutoProvisioner.Run executa:
              portanto a seed do passo 4 ganha
           6. Restart container
         Supabase envia magic link pra Maria.
+        O /submit retorna { url, login_mode, check_email, ... }
+        e ClaraFinalize mostra o card de sucesso inline.
 
 T+~30s  Maria recebe email, clica no magic link. Supabase autentica,
         cookie sb-<projectRef>-auth-token cai em .jotaduo.com, browser
@@ -492,7 +519,8 @@ tenants entirely.
 | Verify fails for ES256 tokens | JWKS endpoint unreachable from controlplane | `curl https://<ref>.supabase.co/auth/v1/.well-known/jwks.json` from inside the container. |
 | Verify fails for HS256 tokens | Project uses asymmetric keys now; the HS256 token is from a different project or forged | Inspect the token: `echo $JWT | cut -d. -f1 | base64 -d`. |
 | Every dashboard request redirects to `/login` | `auth_backend='supabase'` but cookie not present, or wrong domain | Confirm cookie scope is `.jotaduo.com`, not `<sub>.jotaduo.com`. |
-| Auto-provision works manually but not via Clara | `PICOCLAW_SAAS_AUTO_PROVISION=false`, or Clara never reaches `mark_qualified` | `docker logs controlplane | grep mark_qualified`; ensure intake has contact_email + company_name. |
+| Auto-provision works manually but not via Clara | `PICOCLAW_SAAS_AUTO_PROVISION=false`, or visitor never hit /submit (mark_qualified alone no longer provisions — see lifecycle above) | `docker logs controlplane \| grep -E "clara:\|submit:"`; ensure intake has contact_email + company_name and reached the ClaraFinalize step. |
+| Tenant subdomain returns TLS `unrecognized name` | Traefik only pre-issues certs for concrete `Host()` routers; the controlplane uses `HostRegexp` which doesn't trigger ACME | Confirm `picoclaw-tenant-router.service` is running on the VPS (see `docker/saas/scripts/tenant-router/install.sh` and `docs/operations/saas-vps-deploy.md` step 8). |
 
 ## Rollback (turn it all off)
 
