@@ -28,7 +28,9 @@ type Config struct {
 	// because it handles casual Portuguese best; overridable via env.
 	ClaraModel string
 	// ClaraMaxTurns hard-caps a single intake's chat history to prevent runaway
-	// token spend. Default 16 (≈ 8 user + 8 assistant turns).
+	// token spend. Default 120 (≈ 60 user + 60 assistant turns) — Sofia uses
+	// segment-aware playbooks and the conversation typically runs 20-40 turns
+	// before mark_qualified.
 	ClaraMaxTurns int
 	// ClaraRateLimitPerIP / ClaraRateWindow set the per-IP rate limit for the
 	// chat endpoint (messages per window). Default 30 / 10min.
@@ -106,7 +108,7 @@ func Load() (*Config, error) {
 		// (claude-sonnet-4-5 is mapped to openrouter/anthropic/claude-sonnet-4.5
 		// in deploy/litellm/config.yaml). Override via env when bumping the upstream.
 		ClaraModel:          envOr("CLARA_MODEL", "claude-sonnet-4-5"),
-		ClaraMaxTurns:       envInt("CLARA_MAX_TURNS", 28), // up to ~14 user turns × 2 roles
+		ClaraMaxTurns:       envInt("CLARA_MAX_TURNS", 120), // up to ~60 user turns × 2 roles
 		ClaraRateLimitPerIP: envInt("CLARA_RATE_LIMIT_PER_IP", 30),
 		ClaraRateWindow:     time.Duration(envInt("CLARA_RATE_WINDOW_SECONDS", 600)) * time.Second,
 		ClaraEnabled:        envBool("CLARA_ENABLED", true),
