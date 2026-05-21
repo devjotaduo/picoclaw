@@ -137,8 +137,8 @@ func RewriteConfigLiteLLMKey(volumePath, newKey string) error {
 		return fmt.Errorf("read config.json: %w", err)
 	}
 	var cfg map[string]any
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return fmt.Errorf("parse config.json: %w", err)
+	if jerr := json.Unmarshal(data, &cfg); jerr != nil {
+		return fmt.Errorf("parse config.json: %w", jerr)
 	}
 	list, _ := cfg["model_list"].([]any)
 	for _, m := range list {
@@ -297,11 +297,11 @@ func BuildWorkspaceFrontend(ctx context.Context, hostPath string) (string, error
 // many TS errors can blow past that, but the tail is what's useful for
 // diagnosing — the first 95% is `pnpm install` chatter that nobody reads.
 func truncateLog(s string) string {
-	const cap = 64 * 1024
-	if len(s) <= cap {
+	const maxBytes = 64 * 1024
+	if len(s) <= maxBytes {
 		return s
 	}
-	return "[...truncated, showing last 64 KiB...]\n" + s[len(s)-cap:]
+	return "[...truncated, showing last 64 KiB...]\n" + s[len(s)-maxBytes:]
 }
 
 // WorkspaceFrontendDistPath returns the absolute host path of the workspace's

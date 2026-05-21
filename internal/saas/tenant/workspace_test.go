@@ -17,10 +17,10 @@ func TestCopyWorkspaceHome(t *testing.T) {
 	homeSrc := filepath.Join(wsRoot, WorkspaceHomeSubdir)
 
 	files := map[string]string{
-		"config.json":          `{"model_list":[{"api_key":"${LITELLM_KEY}"}]}`,
-		".security.yml":        "permissions: []",
-		"workspace/AGENT.md":   "# Clara\n",
-		"workspace/SOUL.md":    "voz: BR-PT",
+		"config.json":                     `{"model_list":[{"api_key":"${LITELLM_KEY}"}]}`,
+		".security.yml":                   "permissions: []",
+		"workspace/AGENT.md":              "# Clara\n",
+		"workspace/SOUL.md":               "voz: BR-PT",
 		"workspace/agents/sofia/AGENT.md": "# Sofia",
 	}
 	for rel, content := range files {
@@ -105,7 +105,10 @@ func TestSubstituteConfigPlaceholders(t *testing.T) {
 
 	bin, _ := os.ReadFile(filepath.Join(dst, "workspace/skills/raw/data.bin"))
 	if !strings.Contains(string(bin), "${LITELLM_KEY}") {
-		t.Errorf("data.bin was unexpectedly substituted — placeholder scan must be limited to known config files: %q", bin)
+		t.Errorf(
+			"data.bin was unexpectedly substituted — placeholder scan must be limited to known config files: %q",
+			bin,
+		)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/sipeed/picoclaw/internal/saas/policy"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 	"github.com/sipeed/picoclaw/internal/saas/tenant"
@@ -254,7 +255,11 @@ func (h *Handler) handleReadWorkspaceFile(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if info.Size() > maxWorkspaceFileBytes {
-		writeError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("file is larger than %d bytes", maxWorkspaceFileBytes))
+		writeError(
+			w,
+			http.StatusRequestEntityTooLarge,
+			fmt.Sprintf("file is larger than %d bytes", maxWorkspaceFileBytes),
+		)
 		return
 	}
 	data, err := os.ReadFile(full)
@@ -286,7 +291,11 @@ func (h *Handler) handleWriteWorkspaceFile(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if len(req.Content) > maxWorkspaceFileBytes {
-		writeError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("content larger than %d bytes", maxWorkspaceFileBytes))
+		writeError(
+			w,
+			http.StatusRequestEntityTooLarge,
+			fmt.Sprintf("content larger than %d bytes", maxWorkspaceFileBytes),
+		)
 		return
 	}
 	full, err := resolveWorkspaceFile(ws.HostPath, req.Path)
@@ -438,7 +447,8 @@ func resolveWorkspaceFile(hostPath, rel string) (string, error) {
 		return "", errors.New("path must be relative")
 	}
 	cleaned := filepath.Clean(rel)
-	if cleaned == "." || strings.HasPrefix(cleaned, "..") || strings.Contains(cleaned, ".."+string(filepath.Separator)) {
+	if cleaned == "." || strings.HasPrefix(cleaned, "..") ||
+		strings.Contains(cleaned, ".."+string(filepath.Separator)) {
 		return "", errors.New("path must not contain ..")
 	}
 	// Only allow files inside the three known subtrees.

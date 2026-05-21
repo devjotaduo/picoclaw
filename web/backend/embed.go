@@ -67,7 +67,15 @@ func registerEmbedRoutes(mux *http.ServeMux) {
 			mux.Handle("/", spaHandler(os.DirFS(dir)))
 			return
 		}
-		logger.WarnC("web", fmt.Sprintf("%s=%s set but %s/index.html missing or empty — falling back to embedded dist", frontendDistDirEnv, dir, dir))
+		logger.WarnC(
+			"web",
+			fmt.Sprintf(
+				"%s=%s set but %s/index.html missing or empty — falling back to embedded dist",
+				frontendDistDirEnv,
+				dir,
+				dir,
+			),
+		)
 	}
 
 	// Attempt to get the subdirectory 'dist' where Vite usually builds

@@ -412,7 +412,11 @@ func (h *Handler) handleBootstrapOnboardingTenant(w http.ResponseWriter, r *http
 	if wsID == "" {
 		ws, lerr := h.Workspaces.GetBySlug(r.Context(), "onboarding")
 		if lerr != nil {
-			writeError(w, http.StatusBadRequest, "create a workspace with slug 'onboarding' first, or pass workspace_id in the body")
+			writeError(
+				w,
+				http.StatusBadRequest,
+				"create a workspace with slug 'onboarding' first, or pass workspace_id in the body",
+			)
 			return
 		}
 		wsID = ws.ID
@@ -487,23 +491,23 @@ func (h *Handler) handleSetCRMLinks(w http.ResponseWriter, r *http.Request) {
 
 func summarizeTenant(t *store.Tenant) map[string]any {
 	return map[string]any{
-		"id":                               t.ID,
-		"display_name":                     t.DisplayName,
-		"owner_email":                      t.OwnerEmail,
-		"subdomain":                        t.Subdomain,
-		"status":                           t.Status,
-		"container_id":                     t.ContainerID,
-		"mem_limit_mb":                     t.MemLimitMB,
-		"cpu_quota":                        t.CPUQuota,
-		"monthly_budget_usd":               t.MonthlyBudgetUSD,
-		"initial_password_delivered":       t.InitialPasswordDelivered,
-		"last_error":                       t.LastError,
-		"created_at":                       t.CreatedAt,
-		"suspended_at":                     t.SuspendedAt,
-		"crm_contact_id":                   t.CRMContactID,
-		"crm_company_id":                   t.CRMCompanyID,
-		"crm_deal_id":                      t.CRMDealID,
-		"workspace_id":              t.WorkspaceID,
-		"workspace_version_applied": t.WorkspaceVersionApplied,
+		"id":                         t.ID,
+		"display_name":               t.DisplayName,
+		"owner_email":                t.OwnerEmail,
+		"subdomain":                  t.Subdomain,
+		"status":                     t.Status,
+		"container_id":               t.ContainerID,
+		"mem_limit_mb":               t.MemLimitMB,
+		"cpu_quota":                  t.CPUQuota,
+		"monthly_budget_usd":         t.MonthlyBudgetUSD,
+		"initial_password_delivered": t.InitialPasswordDelivered,
+		"last_error":                 t.LastError,
+		"created_at":                 t.CreatedAt,
+		"suspended_at":               t.SuspendedAt,
+		"crm_contact_id":             t.CRMContactID,
+		"crm_company_id":             t.CRMCompanyID,
+		"crm_deal_id":                t.CRMDealID,
+		"workspace_id":               t.WorkspaceID,
+		"workspace_version_applied":  t.WorkspaceVersionApplied,
 	}
 }

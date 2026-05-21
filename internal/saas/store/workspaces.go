@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
 	"github.com/sipeed/picoclaw/internal/saas/policy"
 )
 
@@ -26,19 +27,19 @@ var ErrWorkspaceNotFound = errors.New("workspace not found")
 // stored explicitly so a future workspace-moved-to-different-mount can be
 // represented without renaming the slug.
 type Workspace struct {
-	ID                 string
-	Name               string
-	Slug               string
-	Description        string
-	HostPath           string
-	IsDefaultAuto      bool
-	IsAvailableManual  bool
-	RolePolicyJSON     []byte
-	FrontendBuiltAt    *time.Time
-	FrontendBuildLog   string
-	Version            int64
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	ID                string
+	Name              string
+	Slug              string
+	Description       string
+	HostPath          string
+	IsDefaultAuto     bool
+	IsAvailableManual bool
+	RolePolicyJSON    []byte
+	FrontendBuiltAt   *time.Time
+	FrontendBuildLog  string
+	Version           int64
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 // RolePolicy unmarshals the JSONB column into a typed policy struct and
