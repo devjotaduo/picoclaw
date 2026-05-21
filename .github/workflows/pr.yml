@@ -45,9 +45,13 @@ jobs:
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
       - name: Run Govulncheck
-        # govulncheck doesn't natively support an allowlist; we parse the
-        # JSON output ourselves and fail only if a vulnerability OTHER than
-        # the documented accepted-risk set is found.
+        # govulncheck doesn't natively support an allowlist; we run it for
+        # the human-readable report and then parse the text output to keep
+        # only the vulnerabilities the scanner says our code actually calls
+        # into (the "Vulnerability #N: GO-..." headers, NOT the broader
+        # "Informational" section that lists every advisory touching any
+        # transitive dep). We fail only when a *called* vulnerability is
+        # outside the documented accepted-risk allowlist.
         #
         # Accepted-risk allowlist (revisit at each renovate/dependabot pass):
         #   GO-2026-4887 (CVE-2026-34040) — Moby/Docker AuthZ plugin bypass
@@ -64,24 +68,27 @@ jobs:
         #     controlplane or tenant containers.
         run: |
           set +e
-          govulncheck -C . -format json ./... > /tmp/vuln.json
-          govulncheck -C . -format text ./...
+          govulncheck -C . -format text ./... | tee /tmp/vuln.txt
           rc=$?
           if [ $rc -eq 0 ]; then
             echo "govulncheck: no vulnerabilities — pass."
             exit 0
           fi
-          # Extract OSV IDs of vulnerabilities the scanner believes our code
-          # actually calls into (mode=traces).
-          CALLED=$(jq -r 'select(.osv) | .osv.id' /tmp/vuln.json | sort -u)
+          # Extract IDs from "Vulnerability #N: GO-YYYY-NNNN" headers —
+          # these are the ones with confirmed call paths from our code.
+          CALLED=$(grep -oE 'Vulnerability #[0-9]+: GO-[0-9]+-[0-9]+' /tmp/vuln.txt | grep -oE 'GO-[0-9]+-[0-9]+' | sort -u)
+          if [ -z "$CALLED" ]; then
+            echo "::error::govulncheck failed (rc=$rc) but no 'Vulnerability #N' headers found — inspect log."
+            exit $rc
+          fi
           UNEXPECTED=$(echo "$CALLED" | grep -vE '^(GO-2026-4887|GO-2026-4883)$' || true)
           if [ -n "$UNEXPECTED" ]; then
-            echo "::error::govulncheck found unaccepted vulnerabilities:"
+            echo "::error::govulncheck found unaccepted called vulnerabilities:"
             echo "$UNEXPECTED"
             exit 1
           fi
           echo "govulncheck: only accepted-risk vulnerabilities present — pass."
-          echo "Accepted: $CALLED"
+          echo "Accepted: $(echo $CALLED | tr '\n' ' ')"
 
   test:
     name: Tests
