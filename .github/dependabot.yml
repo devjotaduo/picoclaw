@@ -10,6 +10,11 @@ updates:
     labels:
       - "dependencies"
       - "go"
+    groups:
+      go-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   # Frontend dependencies
   - package-ecosystem: "npm"
@@ -19,9 +24,19 @@ updates:
     labels:
       - "dependencies"
       - "frontend"
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
