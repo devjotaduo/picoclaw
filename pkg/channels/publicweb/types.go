@@ -3,10 +3,14 @@
 // the launcher's HTTP layer (Phase 5: /api/public/chat and
 // /api/public/chat/stream).
 //
-// Visitor identity is derived from sha256(session_cookie + "|" + ip)[:8] and
+// Visitor identity is derived from sha256(session_id + "|" + ip)[:8] and
 // prefixed with "public-web:" so the agent memory layer never sees the raw
-// cookie. The allowlist is hard-coded to "*" because public chat is anonymous
-// by design — rate limiting and captcha enforcement live at the HTTP layer.
+// session token. The session_id is whatever the HTTP layer supplies in the
+// request body (POST /api/public/chat) or query string (GET /stream) — the
+// frontend chooses how to mint it (browser session cookie, sessionStorage
+// uuid, etc). The allowlist is hard-coded to "*" because public chat is
+// anonymous by design — rate limiting and captcha enforcement live at the
+// HTTP layer.
 package publicweb
 
 // Settings is the (mostly informational) settings struct for the public-web

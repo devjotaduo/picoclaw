@@ -487,13 +487,41 @@ Mailgun, etc. — only `SMTP_HOST/PORT/USER/PASSWORD` change.
    MAILER_ADMIN_URL=https://adm.jotaduo.com
    ```
 
-6. **Disable Supabase's outbound email** so the owner doesn't receive a
-   duplicate magic-link email from Supabase Auth on top of ours. Dashboard →
-   Auth → Email Templates → SMTP Settings — uncheck "Enable custom SMTP" if
-   you had set it; with the default Supabase SMTP, the `AdminGenerateLink`
-   call simply returns the link without sending an email when SMTP is not
-   custom-configured, which is what we want. Our own email already contains
-   the magic link.
+6. **Configure Supabase Auth's own SMTP** (choose one of two options):
+
+   **Option A — leave it disabled (simplest).** Dashboard → Auth → Email
+   Templates → SMTP Settings — ensure "Enable custom SMTP" is off. With
+   no custom SMTP, `AdminGenerateLink` returns the link without sending
+   an email (the built-in Supabase sender is rate-limited to ~4/h and only
+   ships to project team emails anyway). Our own `Mailer.SendCredentialsEmail`
+   already delivers the magic link, so the owner gets exactly one email.
+   The trade-off: `ResendMagicLink` (the public `/resend-link` endpoint)
+   won't reach end users — only project team members can receive it.
+
+   **Option B — point Supabase Auth at the same Brevo account** so
+   `ResendMagicLink` and other Supabase-driven emails work for real users
+   without hitting the 4/h built-in limit. Run the helper script (only
+   touches Supabase Auth config, not the controlplane's `Mailer`):
+
+   ```bash
+   export SUPABASE_ACCESS_TOKEN="sbp_..."     # https://supabase.com/dashboard/account/tokens
+   export SMTP_USER="$SMTP_USER"              # same value as step 5 above
+   export SMTP_PASSWORD="$SMTP_PASSWORD"      # same value as step 5
+   export MAILER_FROM="$MAILER_FROM"          # used as smtp_admin_email
+   ./scripts/supabase-configure-smtp.sh        # PATCHes /config/auth via Management API
+   ```
+
+   This sets `rate_limit_email_sent: 10/h` on the Supabase Auth side —
+   intentionally low because the primary delivery is our own `Mailer`;
+   Supabase Auth is only used for resend/recover edge cases. Because
+   `AdminGenerateLink` would normally send a magic-link email when a
+   custom SMTP is configured, you'd get TWO emails on tenant creation
+   (one from Supabase, one from us). To prevent that: in the dashboard,
+   open Auth → Email Templates → "Magic Link" and uncheck the "Enabled"
+   toggle. The `AdminGenerateLink` call still returns the URL via the
+   API even when the template is off; only the email send is suppressed.
+   The "Reset password" and "Confirm signup" templates can stay enabled
+   if you want those flows to email visitors.
 
 7. **Restart the controlplane**:
 

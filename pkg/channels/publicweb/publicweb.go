@@ -121,9 +121,19 @@ func (c *Channel) Send(ctx context.Context, msg bus.OutboundMessage) ([]string, 
 		return nil, fmt.Errorf("publicweb: outbound message missing chat_id: %w", channels.ErrSendFailed)
 	}
 
+	// Hold the read lock for the entire lookup + send. UnsubscribeStream and
+	// SubscribeStream both close the per-session chan under the write lock,
+	// so releasing the lock before the non-blocking send opens a race window
+	// where another goroutine can close(stream) between RUnlock and `stream
+	// <- msg`, panicking with "send on closed channel". Keeping the RLock
+	// held forces those to wait until the send completes (or hits the
+	// default branch). The select below never blocks the lock for more than
+	// a single attempt — the consumer's actual drain happens in its own
+	// goroutine.
 	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	stream, ok := c.streams[sessionID]
-	c.mu.RUnlock()
 	if !ok {
 		return nil, ErrNoStream
 	}
