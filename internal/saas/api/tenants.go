@@ -9,17 +9,19 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	supaauth "github.com/sipeed/picoclaw/internal/saas/auth"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 	"github.com/sipeed/picoclaw/internal/saas/tenant"
 )
 
 type createTenantReq struct {
-	DisplayName      string   `json:"display_name"`
-	OwnerEmail       string   `json:"owner_email"`
-	Subdomain        string   `json:"subdomain"`
-	MonthlyBudgetUSD *float64 `json:"monthly_budget_usd,omitempty"`
-	MemLimitMB       int      `json:"mem_limit_mb,omitempty"`
-	CPUQuota         float64  `json:"cpu_quota,omitempty"`
+	DisplayName       string   `json:"display_name"`
+	OwnerEmail        string   `json:"owner_email"`
+	Subdomain         string   `json:"subdomain"`
+	MonthlyBudgetUSD  *float64 `json:"monthly_budget_usd,omitempty"`
+	MemLimitMB        int      `json:"mem_limit_mb,omitempty"`
+	CPUQuota          float64  `json:"cpu_quota,omitempty"`
+	LauncherProfileID string   `json:"launcher_profile_id,omitempty"`
 }
 
 func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
@@ -39,6 +41,20 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// Dedup by owner email — mirrors AutoProvisioner.Run. Surfaced as 409 with
+	// the existing tenant info so the admin UI can deep-link instead of
+	// silently no-op'ing a destructive click.
+	if existing, err := h.Tenants.GetByOwnerEmail(r.Context(), req.OwnerEmail); err == nil && existing != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":     "owner already has a tenant",
+			"tenant_id": existing.ID,
+			"url":       tenantURL(h.Cfg, existing.Subdomain),
+		})
+		return
+	} else if err != nil && !errors.Is(err, store.ErrTenantNotFound) {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
 	if _, err := h.Tenants.GetBySubdomain(r.Context(), req.Subdomain); err == nil {
 		writeError(w, http.StatusConflict, "subdomain already taken")
 		return
@@ -47,13 +63,26 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// When Supabase is configured, the tenant's dashboard login is gated by
+	// Supabase JWT — skip seeding a local bcrypt password and record
+	// auth_backend accordingly. Otherwise stay on the legacy local-password
+	// + controlplane invite-token flow.
+	useSupabase := h.Supabase != nil
+	authBackend := "local"
+	if useSupabase {
+		authBackend = "supabase"
+	}
+
 	out, err := h.Provisioner.Create(r.Context(), tenant.CreateInput{
-		DisplayName:      req.DisplayName,
-		OwnerEmail:       req.OwnerEmail,
-		Subdomain:        req.Subdomain,
-		MonthlyBudgetUSD: req.MonthlyBudgetUSD,
-		MemLimitMB:       req.MemLimitMB,
-		CPUQuota:         req.CPUQuota,
+		DisplayName:           req.DisplayName,
+		OwnerEmail:            req.OwnerEmail,
+		Subdomain:             req.Subdomain,
+		MonthlyBudgetUSD:      req.MonthlyBudgetUSD,
+		MemLimitMB:            req.MemLimitMB,
+		CPUQuota:              req.CPUQuota,
+		LauncherProfileID:     req.LauncherProfileID,
+		SkipDashboardPassword: useSupabase,
+		AuthBackend:           authBackend,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -72,6 +101,10 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	// Controlplane membership stays per-tenant regardless of dashboard auth
+	// backend — the platform admin still needs a row to manage memberships
+	// from adm.<base>/users.
 	owner, err := h.Users.EnsureInvited(r.Context(), req.OwnerEmail)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "owner user error")
@@ -81,20 +114,76 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "owner membership error")
 		return
 	}
-	var ownerInviteToken string
-	var ownerInviteExpiresAt time.Time
-	if actor, ok := userFromContext(r.Context()); ok {
-		if inv, token, err := h.Invites.Create(r.Context(), out.TenantID, req.OwnerEmail, store.RoleTenantOwner, actor.ID, 7*24*time.Hour); err == nil {
-			ownerInviteToken = token
-			ownerInviteExpiresAt = inv.ExpiresAt
-		} else {
-			log.Printf("invite: owner invite failed for tenant %s: %v", out.TenantID, err)
-		}
+
+	resp := map[string]any{
+		"tenant_id": out.TenantID,
+		"url":       out.URL,
 	}
 
-	if ownerInviteToken != "" && h.Mailer != nil && h.Mailer.Enabled() {
-		inviteURL := h.Mailer.AdminBaseURL() + "/accept-invite?token=" + ownerInviteToken
-		go h.Mailer.SendInviteEmail(req.OwnerEmail, req.DisplayName, string(store.RoleTenantOwner), inviteURL, ownerInviteExpiresAt)
+	if useSupabase {
+		// Cria o user com senha (EmailConfirm=true) — Supabase em mode
+		// 'password' não envia email automaticamente, então a entrega é
+		// nossa.
+		userID, _, suerr := h.Supabase.CreateTenantOwner(
+			req.OwnerEmail, out.TenantID, req.Subdomain,
+			supaauth.LoginModePassword, out.InitialPassword,
+		)
+		if suerr != nil {
+			// Best-effort rollback so we don't leave an orphan tenant without
+			// a way to log in.
+			_ = h.Provisioner.Delete(r.Context(), out.TenantID)
+			writeError(w, http.StatusInternalServerError, "supabase user: "+suerr.Error())
+			return
+		}
+		if err := h.Tenants.SetSupabaseUserID(r.Context(), out.TenantID, userID); err != nil {
+			writeError(w, http.StatusInternalServerError, "save supabase user id: "+err.Error())
+			return
+		}
+		// Gera magic link extra para o mesmo user — entrega-se URL + login
+		// + senha + magic link juntos no mesmo email. Falha aqui não é
+		// fatal: o tenant continua acessível via email + senha.
+		var magicLink string
+		if ml, mlerr := h.Supabase.GenerateMagicLink(req.OwnerEmail, req.Subdomain); mlerr != nil {
+			log.Printf("supabase magic link generation failed for tenant %s: %v", out.TenantID, mlerr)
+		} else {
+			magicLink = ml
+		}
+
+		resp["supabase_user_id"] = userID
+		resp["initial_password"] = out.InitialPassword
+		if magicLink != "" {
+			resp["magic_link"] = magicLink
+		}
+		if h.Mailer != nil && h.Mailer.Enabled() {
+			go h.Mailer.SendCredentialsEmail(req.OwnerEmail, req.DisplayName, out.URL, req.OwnerEmail, out.InitialPassword, magicLink)
+			resp["info"] = "Email com URL, login, senha e magic link enviado para o owner."
+		} else {
+			resp["info"] = "Tenant created. Save the credentials now — they will not be shown again."
+			resp["warning"] = "SMTP não configurado — entregue email + senha (e magic link) manualmente."
+		}
+	} else {
+		// Legacy invite-token flow — kept as a fallback for deployments
+		// without Supabase Auth wired in.
+		var ownerInviteToken string
+		var ownerInviteExpiresAt time.Time
+		if actor, ok := userFromContext(r.Context()); ok {
+			if inv, token, err := h.Invites.Create(r.Context(), out.TenantID, req.OwnerEmail, store.RoleTenantOwner, actor.ID, 7*24*time.Hour); err == nil {
+				ownerInviteToken = token
+				ownerInviteExpiresAt = inv.ExpiresAt
+			} else {
+				log.Printf("invite: owner invite failed for tenant %s: %v", out.TenantID, err)
+			}
+		}
+		if ownerInviteToken != "" && h.Mailer != nil && h.Mailer.Enabled() {
+			inviteURL := h.Mailer.AdminBaseURL() + "/accept-invite?token=" + ownerInviteToken
+			go h.Mailer.SendInviteEmail(req.OwnerEmail, req.DisplayName, string(store.RoleTenantOwner), inviteURL, ownerInviteExpiresAt)
+		}
+		resp["owner_invite_token"] = ownerInviteToken
+		if h.Mailer == nil || !h.Mailer.Enabled() {
+			resp["warning"] = "SMTP is not configured — share the invite token manually."
+		} else {
+			resp["info"] = "Invite email was sent to the owner. The token is included as a delivery fallback."
+		}
 	}
 
 	// Best-effort: mirror the new tenant as a Contact in open-crm. Failures
@@ -109,16 +198,6 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	resp := map[string]any{
-		"tenant_id":          out.TenantID,
-		"url":                out.URL,
-		"owner_invite_token": ownerInviteToken,
-	}
-	if h.Mailer == nil || !h.Mailer.Enabled() {
-		resp["warning"] = "SMTP is not configured — share the invite token manually."
-	} else {
-		resp["info"] = "Invite email was sent to the owner. The token is included as a delivery fallback."
-	}
 	writeJSON(w, http.StatusCreated, resp)
 }
 

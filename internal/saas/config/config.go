@@ -70,10 +70,9 @@ type Config struct {
 	// Auto-provision: when enabled, mark_qualified on a Clara chat triggers
 	// tenant creation + Supabase user creation automatically. Default off so
 	// the existing manual flow stays unchanged.
-	AutoProvisionEnabled   bool
-	AutoProvisionProfile   string // launcher profile id seeded on new tenant
-	AutoProvisionPerIPDay  int    // max auto-provisions per client IP per 24h
-	AutoProvisionLoginMode string // "magic_link" or "password"
+	AutoProvisionEnabled  bool
+	AutoProvisionProfile  string // launcher profile id seeded on new tenant
+	AutoProvisionPerIPDay int    // max auto-provisions per client IP per 24h
 	// AutoProvisionWorkspaceDir, when set, points to a local directory whose
 	// contents are overlaid into the new tenant's <volume>/workspace/ AFTER
 	// the profile seed runs. Lets the operator point auto-provision at e.g.
@@ -153,7 +152,6 @@ func Load() (*Config, error) {
 	c.AutoProvisionEnabled = envBool("PICOCLAW_SAAS_AUTO_PROVISION", false)
 	c.AutoProvisionProfile = envOr("PICOCLAW_SAAS_AUTO_PROVISION_PROFILE", "default-business")
 	c.AutoProvisionPerIPDay = envInt("PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY", 3)
-	c.AutoProvisionLoginMode = envOr("PICOCLAW_SAAS_AUTO_PROVISION_LOGIN_MODE", "magic_link")
 	c.AutoProvisionWorkspaceDir = os.Getenv("PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR")
 
 	c.SupabaseProjectRef = os.Getenv("SUPABASE_PROJECT_REF")
