@@ -74,6 +74,27 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		return
 	}
 
+	// Public-onboarding tenants accept anonymous traffic on a tiny set of chat
+	// endpoints. Skip Supabase JWT but still sign trusted_gateway HMAC so the
+	// launcher knows the request came from the controlplane. Sentinel values
+	// are used for UserID/Role because the launcher's VerifyRequest rejects
+	// empty claims; the agent identifies the visitor via session id.
+	if t.IsPublic && isPublicChatRoute(r.URL.Path) {
+		h.proxyTenantRequest(w, r, target, func(req *http.Request) {
+			gatewayauth.AnnotateRequest(req, h.Cfg.GatewaySharedSecret, gatewayauth.Claims{
+				TenantID: t.ID,
+				// Anonymous visitors don't have a Supabase user; the launcher's
+				// VerifyRequest rejects empty UserID/Role, so we sign with sentinels.
+				// The "public" role is recognized by the public-chat handlers only;
+				// it grants no privileges on regular dashboard routes (which never
+				// hit this code path — they go through authenticateTenantRequest).
+				UserID: "anonymous",
+				Role:   "public",
+			}, time.Now())
+		})
+		return
+	}
+
 	userID, userEmail, role, ok := h.authenticateTenantRequest(w, r, t)
 	if !ok {
 		return
@@ -296,6 +317,20 @@ func isPublicTenantStatic(method, rawPath string) bool {
 	default:
 		return false
 	}
+}
+
+// isPublicChatRoute returns true for the small set of paths a public-onboarding
+// tenant exposes to anonymous visitors (no Supabase JWT). Anything else still
+// goes through the normal authenticateTenantRequest path even on a public tenant.
+func isPublicChatRoute(rawPath string) bool {
+	p := path.Clean("/" + strings.TrimPrefix(rawPath, "/"))
+	switch p {
+	case "/api/public/chat",
+		"/api/public/chat/stream",
+		"/api/public/chat/health":
+		return true
+	}
+	return strings.HasPrefix(p, "/api/public/chat/")
 }
 
 func rejectTenantGatewayAuth(w http.ResponseWriter, r *http.Request, baseDomain string) {
