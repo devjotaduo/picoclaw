@@ -1,9 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Check, Loader2 } from "lucide-react";
 import { createTenant, getTenant, markPasswordDelivered, type CreateTenantInput, type CreateTenantResponse } from "@/api/tenants";
-import { listLauncherProfiles } from "@/api/launcher-profiles";
+import { listWorkspaces } from "@/api/workspaces";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Dialog } from "@/components/ui/dialog";
@@ -24,6 +24,7 @@ export function NewTenant() {
     display_name: "",
     owner_email: "",
     subdomain: "",
+    workspace_id: "",
     monthly_budget_usd: 5,
     mem_limit_mb: 512,
     cpu_quota: 0.5,
@@ -32,13 +33,20 @@ export function NewTenant() {
   const [copied, setCopied] = useState(false);
   const [subdomainError, setSubdomainError] = useState<string | null>(null);
   const subdomainRef = useRef<HTMLInputElement>(null);
-  const profilesQ = useQuery({ queryKey: ["launcher-profiles"], queryFn: listLauncherProfiles });
-  const profiles = profilesQ.data?.profiles ?? [];
-  const defaultProfile = profiles.find((profile) => profile.is_default);
-  const alternateProfiles = profiles.filter((profile) => !profile.is_default);
-  const defaultProfileLabel = defaultProfile
-    ? `Use current default: ${defaultProfile.name} · v${defaultProfile.version}`
-    : "Use current default";
+  const workspacesQ = useQuery({
+    queryKey: ["workspaces", "manual"],
+    queryFn: () => listWorkspaces({ manualOnly: true }),
+  });
+  const workspaces = workspacesQ.data?.workspaces ?? [];
+  const defaultWorkspace = workspaces.find((ws) => ws.is_default_auto);
+  // Pre-select the auto-default workspace so the admin can click "Create"
+  // without thinking; they can switch via the dropdown when needed.
+  useEffect(() => {
+    if (!form.workspace_id && defaultWorkspace) {
+      setForm((prev) => ({ ...prev, workspace_id: defaultWorkspace.id }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultWorkspace?.id]);
 
   const m = useMutation({
     mutationFn: (input: CreateTenantInput) => createTenant(input),
@@ -149,20 +157,42 @@ export function NewTenant() {
           )}
         </div>
         <div>
-          <Label htmlFor="launcher_profile_id">Launcher profile</Label>
-          <select
-            id="launcher_profile_id"
-            value={form.launcher_profile_id ?? ""}
-            onChange={(e) => setForm({ ...form, launcher_profile_id: e.target.value || undefined })}
-            className="flex h-9 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1 text-sm text-zinc-100"
-          >
-            <option value="">{defaultProfileLabel}</option>
-            {alternateProfiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.name} · v{profile.version}
-              </option>
-            ))}
-          </select>
+          <Label htmlFor="workspace_id">Workspace</Label>
+          {workspaces.length === 0 ? (
+            <p className="rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
+              Nenhum workspace cadastrado.{" "}
+              <a className="underline" href="/workspaces">
+                Crie um workspace primeiro
+              </a>{" "}
+              — sem isso o tenant não pode ser provisionado.
+            </p>
+          ) : (
+            <>
+              <select
+                id="workspace_id"
+                required
+                value={form.workspace_id}
+                onChange={(e) => setForm({ ...form, workspace_id: e.target.value })}
+                className="flex h-9 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1 text-sm text-zinc-100"
+              >
+                <option value="">— escolha um workspace —</option>
+                {workspaces.map((ws) => (
+                  <option key={ws.id} value={ws.id}>
+                    {ws.name} · v{ws.version}
+                    {ws.is_default_auto ? " (default auto)" : ""}
+                    {ws.frontend_built_at ? "" : " · frontend não compilado"}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-zinc-500">
+                Traz config.json, agentes, skills e o frontend compilado.{" "}
+                <a className="underline" href="/workspaces">
+                  Gerenciar workspaces
+                </a>
+                .
+              </p>
+            </>
+          )}
         </div>
         <div className="rounded border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400">
           O owner recebe por email: <strong>URL</strong>,{" "}

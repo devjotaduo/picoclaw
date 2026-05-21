@@ -120,28 +120,90 @@ For multi-agent deployments, channel-layer behavior lookup must resolve the same
 
 Gateway readiness rule: `/health` means the process is alive; `/ready` means the shared channel HTTP server is ready. The channel manager must mark the shared `health.Server` not-ready during setup/stop/reload and ready only after channels start or reload successfully. See `docs/architecture/template-runtime-business-rules.md` for the full contract and regression commands.
 
-## SaaS launcher profiles
+## SaaS workspaces (tenant content)
 
-Launcher profiles are the central business mechanism for deciding what base `picoclaw-launcher` a tenant receives. They are managed in the integrated SaaS admin (`web/saas-admin`, `internal/saas/api`), not in the legacy `/opt/1panel/www/sites/picosaas` tree.
+Every tenant is seeded from a **Workspace** — a single, admin-managed
+directory under `PICOCLAW_WORKSPACE_DIR` (default
+`/srv/picoclaw-workspaces/<slug>/`). This replaces the legacy three-layer
+overlay system (`TenantTemplateDir` + `LauncherProfile.SeedPath` +
+`AutoProvisionWorkspaceDir`); migration `0013_drop_launcher_profiles.sql`
+retired the old tables. Deep dive: `docs/architecture/workspaces.md`.
 
-Profile data is stored in Postgres table `launcher_profiles`; the seed files live under `TENANT_PROFILE_DIR` (default `/var/lib/picoclaw-saas/launcher-profiles`). Each profile has its own sanitized `$PICOCLAW_HOME` seed plus `role_policy_json`. The seed may include `config.json`, `.security.yml`, `workspace/AGENT.md`, `workspace/SOUL.md`, `workspace/behavior.json`, skills, tools, and other allowed workspace files.
+Each workspace contains three subdirs the admin manages via
+`adm.<base>/workspaces`:
 
-Never propagate live tenant state through profiles. The copy/import/apply path must preserve or skip dashboard auth DBs, LiteLLM keys, OAuth/channel secrets, sessions, memory, logs, PID/socket files, WhatsApp/Matrix/channel runtime state, and runtime env state. `SeedPicoConfig` still creates a tenant-specific `litellm.key` after the profile seed is copied.
+- `home/` — bind-mounted into the tenant container at `/root/.picoclaw`.
+  Contains `config.json` (with `${LITELLM_KEY}`, `${LITELLM_URL}`,
+  `${TENANT_ID}` placeholders), `.security.yml`, `workspace/AGENT.md`,
+  `workspace/SOUL.md`, `workspace/behavior.json`, agents/, skills/,
+  memory templates, etc. Files NEVER in `home/`: `dashboardauth.db`
+  (provisioner generates), `launcher_policy.json` (provisioner writes
+  from the workspace's `role_policy_json` DB column), `workspace/sessions/`,
+  `workspace/whatsapp/`, `state/`, `runtime-user-env/` (all runtime state).
+- `frontend-src/` — editable React source per workspace (same stack as
+  `web/frontend/`, but each workspace is a divergent fork). Not mounted
+  into the tenant.
+- `frontend-dist/` — compiled vite output, bind-mounted **read-only**
+  into the tenant at `/var/lib/picoclaw-frontend`. The launcher's
+  `web/backend/embed.go` honors `PICOCLAW_FRONTEND_DIST_DIR` and serves
+  from this bind when it has a non-empty `index.html`; otherwise falls
+  back to the embedded dist.
 
-New tenants receive the selected launcher profile automatically. Existing tenants receive profile changes only through explicit `Apply profile`, which makes a backup under the tenant volume, merges managed files, preserves secrets/runtime state, writes `launcher_policy.json`, updates `launcher_profile_version_applied`, and restarts the active launcher when needed.
+Two flags on each workspace row drive selection:
 
-Role policy is enforced twice: the SaaS controlplane blocks proxied tenant API calls before forwarding to `tenant-<id>:18800`, and the launcher blocks local trusted-gateway requests with the same feature policy. The launcher frontend uses `/api/launcher/policy` only for navigation/UX; backend enforcement is the source of truth.
+- `is_default_auto` (DB-unique) — auto-provisioner uses this one when
+  Clara qualifies a lead. Without one marked, `AutoProvisioner.Run`
+  fails fast with a clear error (no fallback).
+- `is_available_manual` — appears in the admin "New tenant" dropdown.
+  Set to `false` for workspaces dedicated to automation (e.g. the
+  onboarding tenant slug).
 
-Current production routing state as of `2026-05-20`:
+Provisioning is a fixed five-step flow in `Provisioner.runProvision`:
+mkdir volume → `CopyWorkspaceHome` (single authoritative copy) → optional
+`SeedDashboardPassword` → generate LiteLLM virtual key +
+`SubstituteConfigPlaceholders` → `WriteLauncherPolicy` from
+`role_policy_json` → docker create+start with two bind-mounts. `buildSpec`
+re-attaches the frontend bind on every `Recreate` / `lifecycle.Restart` so
+visual customizations survive container recreation.
 
-- Live SaaS host: `155.138.210.187` (Vultr Ubuntu 24.04, Docker 29.5.1). Bootstrap procedure: `docs/operations/saas-vps-deploy.md`.
-- Admin domains: both `admin.jotaduo.com` and `adm.jotaduo.com` resolve to the controlplane. The controlplane redirects unauthenticated tenant requests to `adm.<base>/login`, so the `adm.` host must exist (the apex `jotaduo.com` + `admin.` are also configured for SSO via cookie scope `.jotaduo.com`).
-- Reverse proxy is **Traefik v3.5** in this deployment (not OpenResty). Traefik mounts `/var/run/docker.sock` directly and the Docker daemon ships with `DOCKER_MIN_API_VERSION=1.24` so Traefik's docker provider (still negotiating to API 1.24) is accepted by Docker 29.x.
-- Tenant subdomains get their TLS cert lazily: a separate systemd unit, `picoclaw-tenant-router.service` (installed by `docker/saas/scripts/tenant-router/install.sh`), watches docker events and writes a concrete `Host(<sub>.<base>)` router per running tenant into `traefik/dynamic/tenants.yml`. Traefik then requests the Let's Encrypt cert on first hit. The controlplane router itself still uses a `HostRegexp` for routing — only the cert issuance needs concrete hostnames.
-- Tenant containers must not be exposed directly by Traefik (label `traefik.enable=false`). They run `picoclaw-launcher:latest` with `PICOCLAW_AUTH_MODE=trusted_gateway` and receive signed trusted headers from the controlplane.
-- Current default launcher profile is `default-business`, stored at `/srv/saas/controlplane/data/launcher-profiles/default-business/seed` inside the host volume and mounted in the controlplane at `/var/lib/picoclaw-saas/launcher-profiles/default-business/seed`.
-- Auto-provision is enabled (`PICOCLAW_SAAS_AUTO_PROVISION=true`). Sofia (Clara persona) talks to visitors at `https://jotaduo.com/pre-cadastro`; on `/submit` (not on the chat SSE — see below) the `AutoProvisioner.Run` creates the Docker tenant, the Supabase user (password mode, `EmailConfirm=true`), and a magic link, then `Mailer.SendCredentialsEmail` delivers **URL + email + senha inicial + magic link** in a single transactional email. The manual `/tenants/new` flow in the controlplane admin does the same thing.
-- `PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR=/srv/picoclaw/workspace` is the canonical workspace overlay applied on every new tenant. Edit `workspace/` locally, `scp -r workspace root@vps:/srv/picoclaw/`, new tenants pick it up; existing tenants are unaffected.
+Role policy is enforced twice: the SaaS controlplane blocks proxied
+tenant API calls before forwarding to `tenant-<id>:18800`, and the
+launcher blocks local trusted-gateway requests with the same feature
+policy. The launcher frontend uses `/api/launcher/policy` only for
+navigation/UX; backend enforcement is the source of truth.
+
+Per-workspace frontend compile: admin clicks "Compilar frontend" →
+`POST /api/v1/workspaces/{id}/frontend/build` → spawns
+`docker run --rm node:24-alpine3.23` with bind-mounts for `frontend-src/`
+and `frontend-dist/`, runs `pnpm install --frozen-lockfile && pnpm vite
+build`. 5-minute hard timeout; combined log tail capped at 64 KiB and
+stored in `workspaces.frontend_build_log` for the admin UI to display.
+
+Clone (tenant → tenant): preserves runtime state via `CopyVolumeRaw`,
+generates a fresh LiteLLM key, then `RewriteConfigLiteLLMKey` parses the
+cloned `config.json` and replaces every `model_list[].api_key` so the
+clone doesn't burn the source tenant's LiteLLM budget. Inherits
+`src.WorkspaceID` so the frontend bind survives.
+
+Current production state as of `2026-05-21`:
+
+- Live SaaS host: `155.138.210.187` (Vultr Ubuntu 24.04, Docker 29.5.1).
+  Bootstrap procedure: `docs/operations/saas-vps-deploy.md`.
+- Admin domains: both `admin.jotaduo.com` and `adm.jotaduo.com` resolve
+  to the controlplane.
+- Reverse proxy is **Traefik v3.5** with `picoclaw-tenant-router.service`
+  writing a concrete `Host(<sub>.<base>)` router per running tenant into
+  `traefik/dynamic/tenants.yml` so Let's Encrypt can issue certs.
+- Tenant containers run `picoclaw-launcher:latest` with
+  `PICOCLAW_AUTH_MODE=trusted_gateway`, `traefik.enable=false`, and
+  receive signed trusted headers from the controlplane.
+- Auto-provision is enabled (`PICOCLAW_SAAS_AUTO_PROVISION=true`).
+  Operator must keep at least one workspace marked `is_default_auto`
+  via the admin UI — there is no env-var fallback.
+- Workspaces directory `/srv/picoclaw-workspaces` is bind-mounted
+  read-write into the controlplane container; edits via the admin
+  propagate to NEW tenants automatically (existing tenants need
+  re-provision or manual copy).
 
 Sofia public-onboarding contract (must not regress when touching `internal/saas/api/company_intakes_*.go`):
 
@@ -153,7 +215,7 @@ Sofia public-onboarding contract (must not regress when touching `internal/saas/
 
 ### Admin panel embutido em `web/frontend`
 
-O caminho essencial de operação de tenants (list, create, clone, suspend/resume/restart, rotate password) vive embutido no `picoclaw-launcher` em `web/frontend/src/routes/admin/*`. Ele NÃO substitui `web/saas-admin` — fluxos periféricos (audit, users, intakes públicos, CRM, AgentEdit, SkillsList, AgentSettings, AcceptInvite, ServerHealth, LauncherProfiles) seguem em `adm.<dominio>`.
+O caminho essencial de operação de tenants (list, create, clone, suspend/resume/restart, rotate password) vive embutido no `picoclaw-launcher` em `web/frontend/src/routes/admin/*`. Ele NÃO substitui `web/saas-admin` — fluxos periféricos (audit, users, intakes públicos, CRM, AgentEdit, SkillsList, AgentSettings, AcceptInvite, ServerHealth, **Workspaces**) seguem em `adm.<dominio>`.
 
 - **Sem login separado.** O admin entra pelo `/launcher-login` do próprio launcher (mesmo cookie de dashboard). As rotas `/admin/*` ficam dentro do `AppLayout` normal (sidebar + header). Não há `/admin/login`, `AdminGuard` cross-subdomain, cookie de controlplane no browser, ou CORS.
 - **Proxy backend**: `web/backend/api/saas_proxy.go` registra `/api/admin/saas/*` no launcher, que repassa para `<PICOCLAW_SAAS_BASE_URL>/api/v1/*` no controlplane usando credenciais armazenadas em arquivo 600 (`/etc/picoclaw/saas-admin.env`). Login é lazy + retry em 401 (`saas_client.go`).

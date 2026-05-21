@@ -174,10 +174,10 @@ set -a; . docker/saas/.env.supabase.local; set +a
 go test -run TestSupabaseE2E -v ./internal/saas/auth/
 ```
 
-## Installing the tenant workspace overlay
+## Installing the tenant workspace
 
-`workspace/` in the repo root is the canonical operator workspace and the
-source for auto-provision overlays. It carries:
+`workspace/` in the repo root is the canonical operator workspace template
+and the source for the first SaaS Workspace. It carries:
 
 - 5 agents: Rafael (proactive interno), Clara (atendente), Marcos (vendas),
   Camila (suporte), Atendimento Humano — defined in `workspace/agents/*.md`.
@@ -193,37 +193,36 @@ source for auto-provision overlays. It carries:
 - 5 config files (company-profile, tone-of-voice, authorized-channels,
   escalation-rules, lead-scoring) — also empty templates.
 
-OverlayWorkspace strips the operator-specific runtime on the way into each
-tenant: `whatsapp/`, `matrix/`, `sessions/`, `state/`, `runtime-user-env/`,
-`logs/`, any `*.log` (including `heartbeat.log` which carries the operator's
-channel IDs), and the usual `*.pid` / `*.sock` / `*.key` / `*.db` files.
-`memory/*` is copy-if-missing — fresh tenants receive the template files,
-existing tenants keep their accumulated data on re-overlay.
+To bootstrap a SaaS environment from this template:
 
-The compose files declare a read-only bind from `/srv/picoclaw/workspace`
-(host) to the same path inside the controlplane container. To install on
-the VPS:
+1. Sync the repo's `workspace/` into the host at
+   `/srv/picoclaw-workspaces/default-business/home/workspace/`. Plus a
+   `home/config.json` with the `${LITELLM_KEY}` placeholder and a
+   `home/.security.yml`. The exact files an admin-managed workspace must
+   contain are in [`docs/architecture/workspaces.md`](../architecture/workspaces.md).
 
-```bash
-# from your dev box, sync the operator workspace up
-scp -r workspace root@vps.jotaduo.com:/srv/picoclaw/
+   ```bash
+   # from your dev box
+   ssh root@vps.jotaduo.com 'install -d /srv/picoclaw-workspaces/default-business'
+   scp -r workspace root@vps.jotaduo.com:/srv/picoclaw-workspaces/default-business/home/
+   scp config.json .security.yml root@vps.jotaduo.com:/srv/picoclaw-workspaces/default-business/home/
+   ```
 
-# on the VPS, ensure permissions
-ssh root@vps.jotaduo.com 'chmod -R a+rX /srv/picoclaw/workspace'
+2. Insert the DB row via `POST /api/v1/workspaces` (or use the admin UI's
+   "Importar do $PICOCLAW_HOME" pointing at
+   `/srv/picoclaw-workspaces/default-business/home`). Mark
+   `is_default_auto=true` so the auto-provisioner picks it up; mark
+   `is_available_manual=true` so it appears in the New Tenant dropdown.
 
-# bring up the controlplane (or restart if already running)
-ssh root@vps.jotaduo.com 'cd /srv/saas && docker compose -f docker-compose.yml --env-file .env up -d controlplane'
-```
+3. Optionally compile the per-workspace frontend (`/workspaces` →
+   "Compilar frontend") if you want a custom UI; the launcher falls back
+   to its embedded dist when no compiled build exists.
 
-The env var `PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR=/srv/picoclaw/workspace`
-defaults from `.env.supabase.example`. Leave it blank to disable the overlay
-and fall back to the launcher_profile seed only.
-
-To iterate: edit `workspace/` locally, re-`scp`, no controlplane restart
-needed (the overlay reads the dir at provision time). New tenants pick up
-the changes automatically. Existing tenants are unaffected — they need an
-explicit "Apply profile" or a manual file copy. The `memory/*` carve-out
-means re-uploading `workspace/` will NOT clobber tenants' real data.
+The compose file binds `/srv/picoclaw-workspaces` (host) at the same
+path inside the controlplane container, read-write so the admin file
+editor can persist changes. Edits via the admin UI propagate to NEW
+tenants automatically; existing tenants need a re-provision (or a manual
+re-copy of the home/ subtree into their volume).
 
 ## Onboarding lifecycle (Clara → Sofia handoff)
 
@@ -423,12 +422,14 @@ agendados com esse canal — sem mudar o schema.
 # Edit docker/saas/.env
 PICOCLAW_SAAS_AUTO_PROVISION=true
 PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY=3
-PICOCLAW_SAAS_AUTO_PROVISION_PROFILE=default-business
+# Auto-provision picks the workspace marked `is_default_auto` — mark one
+# via adm.<base>/workspaces before turning this on, otherwise Clara's
+# qualifier returns "no workspace is marked is_default_auto" and the
+# provision attempt fails fast.
+#
 # Note: login mode is no longer a toggle. When Supabase is configured the
 # new tenant owner always receives email + senha AND a magic link in the
 # same transactional email (rendered from credentials.{html,txt}.tmpl).
-# Optional: overlay the operator's local agent files on top of the profile
-# PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR=/srv/picoclaw/workspace-assistente
 
 docker compose -f docker/saas/docker-compose.yml up -d controlplane
 ```

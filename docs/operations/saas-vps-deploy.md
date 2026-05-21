@@ -72,15 +72,16 @@ install -d -m 755 /srv/saas/controlplane/data
 install -d -m 755 /srv/saas/controlplane/data/launcher-profiles
 install -d -m 755 /srv/saas/backups
 install -d -m 755 /srv/saas/opencrm/data
-install -d -m 755 /srv/picoclaw          # workspace overlay lives here
+install -d -m 755 /srv/picoclaw-workspaces  # workspaces live here (one dir per slug)
 ```
 
-## 4. Repo + workspace
+## 4. Repo + first workspace
 
 Either git-clone or scp a `git archive HEAD` tarball into
-`/srv/saas/picoclaw/`. Then drop the canonical workspace template into
-`/srv/picoclaw/workspace/` (this is what `OverlayWorkspace` reads when
-`PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR=/srv/picoclaw/workspace`).
+`/srv/saas/picoclaw/`. Workspaces are created via the admin UI
+(`adm.<base>/workspaces`) after the controlplane is running — see
+[`docs/architecture/workspaces.md`](../architecture/workspaces.md) for
+the on-disk layout the admin creates.
 
 ## 5. `.env`
 
@@ -105,7 +106,7 @@ OPENROUTER_API_KEY=sk-or-v1-...
 
 TENANT_IMAGE=picoclaw-launcher:latest
 TENANT_HOST_DATA_DIR=/srv/saas/tenants
-TENANT_PROFILE_DIR=/srv/saas/controlplane/data/launcher-profiles
+PICOCLAW_WORKSPACE_DIR=/srv/picoclaw-workspaces
 
 SUPABASE_PROJECT_REF=...
 SUPABASE_ANON_KEY=...
@@ -114,9 +115,10 @@ SUPABASE_JWT_SECRET=                # empty for ES256 projects; keyfunc uses JWK
 SUPABASE_SITE_URL=https://jotaduo.com
 
 PICOCLAW_SAAS_AUTO_PROVISION=true
-PICOCLAW_SAAS_AUTO_PROVISION_PROFILE=default-business
 PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY=3
-PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR=/srv/picoclaw/workspace
+# Auto-provision picks the workspace marked `is_default_auto`. Operator
+# creates one via adm.<base>/workspaces and toggles the flag — there is
+# no env var to override.
 # Login mode is no longer a toggle: when Supabase is configured the new
 # tenant owner receives email + senha AND a magic link in the same
 # transactional email (credentials.{html,txt}.tmpl).

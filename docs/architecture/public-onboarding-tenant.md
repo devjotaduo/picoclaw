@@ -132,19 +132,28 @@ VITE_ONBOARDING_TENANT_URL=https://onboarding.jotaduo.com
 
 ## Bootstrap (one-time per environment)
 
-1. Ensure `PICOCLAW_ONBOARDING_CALLBACK_SECRET` is set on the controlplane
-   and exported into the onboarding tenant container by the bootstrap
-   endpoint (TODO: confirm provisioner threads it into the container env;
-   see `internal/saas/tenant/provisioner.go buildSpec`).
-2. Place the workspace template:
-   ```bash
-   scp -r workspace-onboarding root@vps:/srv/picoclaw/
-   ```
+1. Set `PICOCLAW_ONBOARDING_CALLBACK_SECRET` on the controlplane (and
+   recommended `PICOCLAW_ONBOARDING_CALLBACK_URL`). `buildSpec`
+   propagates both into every `is_public=true` tenant container
+   automatically; without the secret the skill scripts inside the
+   container exit non-zero and Clara has to apologize in chat.
+
+2. Create the onboarding workspace via the admin UI:
+   - `/workspaces` → "Importar do $PICOCLAW_HOME" pointing at
+     `/srv/picoclaw/workspace-onboarding` (or "Novo workspace" + paste
+     the files via the editor), giving it slug `onboarding`.
+   - Click "Compilar frontend" if you want a per-workspace UI build
+     (optional — the embedded launcher dist is the fallback).
+
 3. Run the bootstrap:
    ```bash
    export ADM_SESSION_COOKIE="<your platform_admin session cookie>"
    ./scripts/provision-onboarding-tenant.sh
    ```
+   The endpoint resolves the workspace by `slug="onboarding"` (override
+   by passing `workspace_id` in the body). When the controlplane has no
+   HMAC secret set, the JSON response includes a `warning` field.
+
 4. Verify:
    ```bash
    curl -sS https://onboarding.jotaduo.com/api/public/chat/health  # → {"ok":true}
@@ -155,28 +164,26 @@ VITE_ONBOARDING_TENANT_URL=https://onboarding.jotaduo.com
    # → SSE: event: open → eventual {text: "..."} from the agent
    ```
 
-## Known gaps (follow-ups outside this branch)
+## Known gaps (follow-ups)
 
-- **Phase 10 functional cutover.** The frontend flag is read but the fetch
-  path still uses the legacy endpoint. Real cutover requires either:
-  (a) an event-shape adapter in `useClaraChat.ts` that maps the
-  publicweb `{text:"..."}` chunks onto the legacy `{type, delta, ...}`
-  structure + the secondary GET for the SSE stream; or
-  (b) richer events emitted by `publicweb.Channel.Send` and the onboarding
-  skills (`tenant_provisioned`, `extracted`, `tool_applied`) matching the
-  current SSE contract.
-- **Provisioner needs to thread `PICOCLAW_ONBOARDING_CALLBACK_SECRET` +
-  `PICOCLAW_ONBOARDING_CALLBACK_URL` into the onboarding tenant container.**
-  Today `buildSpec` doesn't know about these vars. Either special-case
-  `is_public=true` tenants or accept the vars as part of the bootstrap
-  payload.
-- **DDoS protection on `/api/public/chat`.** The channel has a settings
-  field `RequireCaptchaHeader` but the controlplane doesn't validate the
-  header value. Wire Cloudflare Turnstile (or similar) when activating
-  in prod.
+- **Phase 10 functional cutover.** `useClaraChat.ts` reads
+  `VITE_USE_ONBOARDING_TENANT` but still hits the legacy
+  `/api/v1/public/company-intakes/{id}/chat` endpoint. Real cutover
+  needs either (a) an event-shape adapter mapping the publicweb
+  `{text:"..."}` chunks onto the legacy `{type, delta, ...}` structure
+  + the secondary GET for the SSE stream, or (b) richer SSE events
+  emitted by `publicweb.Channel.Send` matching the legacy contract.
 - **IP-roaming visitors.** Identity is `sha256(session_id+ip)[:8]`, so a
-  mobile→wifi switch mid-conversation creates a new identity and the agent
-  loses context. Acceptable v1; revisit if real-world complaint.
-- **Phase 11 — delete `internal/saas/clara/`.** Wait at least 1-2 weeks of
-  stable parallel operation with the flag flipped in prod before removing
-  the ~3000-LOC legacy handler.
+  mobile→wifi switch mid-conversation creates a new identity and the
+  agent loses context. Acceptable v1; revisit if real-world complaint.
+- **Phase 11 — delete `internal/saas/clara/`.** Wait at least 1-2 weeks
+  of stable parallel operation with the flag flipped in prod before
+  removing the ~3000-LOC legacy handler.
+
+Already addressed (no longer gaps):
+
+- ✅ `buildSpec` propagates `PICOCLAW_ONBOARDING_CALLBACK_SECRET` +
+  `_URL` into every `is_public=true` tenant container.
+- ✅ Cloudflare Turnstile verification lives in
+  `internal/saas/api/turnstile.go`, opt-in via `TURNSTILE_SECRET_KEY`.
+  Fail-closed (403 on token rejection or Cloudflare infra failure).

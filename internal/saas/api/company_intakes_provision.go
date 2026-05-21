@@ -56,6 +56,9 @@ type AutoProvisioner struct {
 	Provisioner    *tenant.Provisioner
 	Supabase       *supaauth.SupabaseClient
 	Tenants        *store.TenantStore
+	// Workspaces feeds the new selectable-template flow. When a workspace is
+	// marked is_default_auto, Run() uses it instead of LauncherProfile.
+	Workspaces     *store.WorkspaceStore
 	CompanyIntakes *store.CompanyIntakeStore
 	Reminders      *store.IntakeReminderStore // optional; when nil, no nudge emails
 	// Mailer entrega o email "seu painel está pronto" com email + senha
@@ -83,6 +86,7 @@ func NewAutoProvisioner(
 		Provisioner:    prov,
 		Supabase:       supa,
 		Tenants:        &store.TenantStore{DB: db},
+		Workspaces:     &store.WorkspaceStore{DB: db},
 		CompanyIntakes: &store.CompanyIntakeStore{DB: db},
 		Reminders:      &store.IntakeReminderStore{DB: db},
 		Mailer:         mlr,
@@ -145,11 +149,25 @@ func (a *AutoProvisioner) Run(
 		authBackend = "supabase"
 	}
 
+	// Resolve the workspace marked is_default_auto. Auto-provision is
+	// workspace-only now — operator must mark one workspace as default
+	// before Clara can qualify the first lead.
+	if a.Workspaces == nil {
+		return nil, errors.New("auto-provision: workspaces store is not configured")
+	}
+	ws, werr := a.Workspaces.GetDefaultAuto(ctx)
+	if werr != nil {
+		if errors.Is(werr, store.ErrWorkspaceNotFound) {
+			return nil, errors.New("auto-provision: no workspace is marked is_default_auto")
+		}
+		return nil, fmt.Errorf("resolve default-auto workspace: %w", werr)
+	}
+
 	out, err := a.Provisioner.Create(ctx, tenant.CreateInput{
 		DisplayName:           company,
 		OwnerEmail:            email,
 		Subdomain:             subdomain,
-		LauncherProfileID:     a.Cfg.AutoProvisionProfile,
+		WorkspaceID:           ws.ID,
 		MemLimitMB:            512,
 		CPUQuota:              0.5,
 		SkipDashboardPassword: useSupabase,
@@ -170,27 +188,6 @@ func (a *AutoProvisioner) Run(
 		if serr := tenant.SeedTenantFromIntake(t.VolumePath, intake); serr != nil {
 			// Log via the error path; the rest of provisioning proceeds.
 			return nil, fmt.Errorf("seed intake: %w", serr)
-		}
-	}
-
-	// Overlay the operator's currently-configured local workspace on top of
-	// whatever the profile seeded, then restart the container so the launcher
-	// reloads AGENT.md / SOUL.md / behavior.json / skills/ from disk. Lets
-	// the operator edit workspace/ locally and have new tenants reflect the
-	// live state, not a frozen profile copy. Memory files are non-clobbering
-	// in the overlay, so the intake seed above wins for new tenants and
-	// existing tenants keep their accumulated data on re-overlay.
-	if a.Cfg.AutoProvisionWorkspaceDir != "" {
-		if t == nil {
-			t, gerr = a.Tenants.Get(ctx, out.TenantID)
-		}
-		if gerr == nil && t != nil && t.VolumePath != "" {
-			if oerr := tenant.OverlayWorkspace(a.Cfg.AutoProvisionWorkspaceDir, t.VolumePath); oerr != nil {
-				return nil, fmt.Errorf("overlay workspace: %w", oerr)
-			}
-			if rerr := a.Provisioner.Restart(ctx, out.TenantID); rerr != nil {
-				return nil, fmt.Errorf("restart after workspace overlay: %w", rerr)
-			}
 		}
 	}
 

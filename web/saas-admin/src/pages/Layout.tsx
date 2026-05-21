@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
-import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, SlidersHorizontal, ClipboardList, UserCog, LayoutDashboard, FileText, Activity, KeyRound } from "lucide-react";
+import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, ClipboardList, UserCog, LayoutDashboard, FileText, Activity, KeyRound, FolderTree } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,7 @@ export function Layout() {
   const loc = useLocation();
   const params = useParams<{ id?: string }>();
   const inCrm = loc.pathname.startsWith("/crm");
-  const inProfiles = loc.pathname.startsWith("/launcher-profiles");
+  const inWorkspaces = loc.pathname.startsWith("/workspaces");
   const inTenant = loc.pathname.startsWith("/tenants/");
   // When navigating within a tenant route, params.id may not be populated here
   // since Layout renders outside the nested route. Extract id from pathname directly.
@@ -67,8 +67,8 @@ export function Layout() {
           )}
 
           {isPlatformAdmin && (
-            <SideLink to="/launcher-profiles" icon={<SlidersHorizontal className="h-4 w-4" />} active={inProfiles}>
-              Launcher profiles
+            <SideLink to="/workspaces" icon={<FolderTree className="h-4 w-4" />} active={inWorkspaces}>
+              Workspaces
             </SideLink>
           )}
           {isPlatformAdmin && (

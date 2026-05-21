@@ -17,13 +17,15 @@ import (
 )
 
 type createTenantReq struct {
-	DisplayName       string   `json:"display_name"`
-	OwnerEmail        string   `json:"owner_email"`
-	Subdomain         string   `json:"subdomain"`
-	MonthlyBudgetUSD  *float64 `json:"monthly_budget_usd,omitempty"`
-	MemLimitMB        int      `json:"mem_limit_mb,omitempty"`
-	CPUQuota          float64  `json:"cpu_quota,omitempty"`
-	LauncherProfileID string   `json:"launcher_profile_id,omitempty"`
+	DisplayName      string   `json:"display_name"`
+	OwnerEmail       string   `json:"owner_email"`
+	Subdomain        string   `json:"subdomain"`
+	MonthlyBudgetUSD *float64 `json:"monthly_budget_usd,omitempty"`
+	MemLimitMB       int      `json:"mem_limit_mb,omitempty"`
+	CPUQuota         float64  `json:"cpu_quota,omitempty"`
+	// WorkspaceID is required: selects the Workspace whose home/ subtree
+	// seeds the tenant volume and whose frontend-dist/ is bind-mounted.
+	WorkspaceID string `json:"workspace_id"`
 }
 
 func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +84,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		MonthlyBudgetUSD:      req.MonthlyBudgetUSD,
 		MemLimitMB:            req.MemLimitMB,
 		CPUQuota:              req.CPUQuota,
-		LauncherProfileID:     req.LauncherProfileID,
+		WorkspaceID:           req.WorkspaceID,
 		SkipDashboardPassword: useSupabase,
 		AuthBackend:           authBackend,
 	})
@@ -90,19 +92,9 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	// Apply the canonical workspace overlay (same logic as the Clara
-	// auto-provision flow) so admin-created tenants get the curated agent
-	// roster / skills / config instead of an empty volume. Best-effort: a
-	// failure here is logged but does not roll back tenant creation.
-	if h.Cfg.AutoProvisionWorkspaceDir != "" {
-		if t, gerr := h.Tenants.Get(r.Context(), out.TenantID); gerr == nil && t != nil && t.VolumePath != "" {
-			if oerr := tenant.OverlayWorkspace(h.Cfg.AutoProvisionWorkspaceDir, t.VolumePath); oerr != nil {
-				log.Printf("workspace overlay failed for tenant %s: %v", out.TenantID, oerr)
-			} else if rerr := h.Provisioner.Restart(r.Context(), out.TenantID); rerr != nil {
-				log.Printf("restart after workspace overlay failed for tenant %s: %v", out.TenantID, rerr)
-			}
-		}
-	}
+	// Workspace selection (req.WorkspaceID) is the authoritative source of
+	// tenant content now; the provisioner's runProvision already copies
+	// home/ into the volume and substitutes ${LITELLM_KEY} during Create.
 
 	// Controlplane membership stays per-tenant regardless of dashboard auth
 	// backend — the platform admin still needs a row to manage memberships
@@ -358,9 +350,11 @@ func (h *Handler) handleRotatePassword(w http.ResponseWriter, r *http.Request) {
 // All fields default to sane onboarding-tenant values, so callers (typically
 // scripts/provision-onboarding-tenant.sh) can POST an empty body.
 type bootstrapOnboardingReq struct {
-	DisplayName         string `json:"display_name"`
-	Subdomain           string `json:"subdomain"`
-	WorkspaceOverlayDir string `json:"workspace_overlay_dir"`
+	DisplayName string `json:"display_name"`
+	Subdomain   string `json:"subdomain"`
+	// WorkspaceID picks the workspace to seed the onboarding tenant from.
+	// When empty, falls back to a workspace whose slug is "onboarding".
+	WorkspaceID string `json:"workspace_id"`
 }
 
 // handleBootstrapOnboardingTenant provisions the singleton public onboarding
@@ -410,6 +404,20 @@ func (h *Handler) handleBootstrapOnboardingTenant(w http.ResponseWriter, r *http
 	// non-empty value the controlplane can audit later.
 	ownerEmail := "ops@" + strings.Trim(h.Cfg.TenantBaseDomain, ".")
 
+	// Resolve the workspace that seeds the onboarding tenant. Explicit id
+	// wins; otherwise we look up by the conventional "onboarding" slug. If
+	// the operator hasn't created either, bail with a clear message so the
+	// bootstrap script doesn't half-provision a tenant pointing at nothing.
+	wsID := strings.TrimSpace(req.WorkspaceID)
+	if wsID == "" {
+		ws, lerr := h.Workspaces.GetBySlug(r.Context(), "onboarding")
+		if lerr != nil {
+			writeError(w, http.StatusBadRequest, "create a workspace with slug 'onboarding' first, or pass workspace_id in the body")
+			return
+		}
+		wsID = ws.ID
+	}
+
 	out, err := h.Provisioner.Create(r.Context(), tenant.CreateInput{
 		DisplayName: req.DisplayName,
 		OwnerEmail:  ownerEmail,
@@ -418,35 +426,30 @@ func (h *Handler) handleBootstrapOnboardingTenant(w http.ResponseWriter, r *http
 		CPUQuota:    0.5,
 		IsPublic:    true,
 		AuthBackend: "local", // public tenant has no Supabase user
+		WorkspaceID: wsID,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Workspace overlay — same pattern as handleCreateTenant, but the overlay
-	// dir is request-scoped so the operator can point at any path on the host
-	// (defaults to /srv/picoclaw/workspace-onboarding). Best-effort: logged on
-	// failure, never rolls back tenant creation.
-	overlayDir := strings.TrimSpace(req.WorkspaceOverlayDir)
-	if overlayDir == "" {
-		overlayDir = "/srv/picoclaw/workspace-onboarding"
-	}
-	if t, gerr := h.Tenants.Get(r.Context(), out.TenantID); gerr == nil && t != nil && t.VolumePath != "" {
-		if oerr := tenant.OverlayWorkspace(overlayDir, t.VolumePath); oerr != nil {
-			log.Printf("workspace overlay failed for onboarding tenant %s: %v", out.TenantID, oerr)
-		} else if rerr := h.Provisioner.Restart(r.Context(), out.TenantID); rerr != nil {
-			log.Printf("restart after workspace overlay failed for onboarding tenant %s: %v", out.TenantID, rerr)
-		}
+	// Surface a clear warning when the HMAC secret is unset on the
+	// controlplane — without it, the skill scripts inside the container
+	// exit non-zero and Clara can't mark intakes qualified. Container
+	// boots either way, so the bootstrap doesn't fail.
+	var warning string
+	if h.Cfg.OnboardingCallbackSecret == "" {
+		warning = "PICOCLAW_ONBOARDING_CALLBACK_SECRET is unset on the controlplane — the onboarding skills will exit with a `required` env error. Set it and `Restart` this tenant before flipping VITE_USE_ONBOARDING_TENANT."
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"tenant_id":             out.TenantID,
-		"url":                   out.URL,
-		"subdomain":             req.Subdomain,
-		"is_public":             true,
-		"workspace_overlay_dir": overlayDir,
-		"info":                  "Onboarding tenant provisioned. Next: complete Phases 4-7 of the plan so the public-web channel + chat endpoints are functional.",
+		"tenant_id":    out.TenantID,
+		"url":          out.URL,
+		"subdomain":    req.Subdomain,
+		"is_public":    true,
+		"workspace_id": wsID,
+		"warning":      warning,
+		"info":         "Onboarding tenant provisioned. Content is now driven by the chosen workspace — edit it via /workspaces in the admin.",
 	})
 }
 
@@ -500,7 +503,7 @@ func summarizeTenant(t *store.Tenant) map[string]any {
 		"crm_contact_id":                   t.CRMContactID,
 		"crm_company_id":                   t.CRMCompanyID,
 		"crm_deal_id":                      t.CRMDealID,
-		"launcher_profile_id":              t.LauncherProfileID,
-		"launcher_profile_version_applied": t.LauncherProfileVersionApplied,
+		"workspace_id":              t.WorkspaceID,
+		"workspace_version_applied": t.WorkspaceVersionApplied,
 	}
 }

@@ -1,61 +1,89 @@
 # workspace-onboarding
 
-Workspace template overlay for the **public onboarding tenant**
-(`is_public=true`). Provisioned by `scripts/provision-onboarding-tenant.sh`.
+Reference content for the **public onboarding tenant** (`is_public=true`).
+The operator creates a Workspace from this directory (slug `onboarding`)
+via `adm.<base>/workspaces` and then runs
+`scripts/provision-onboarding-tenant.sh` to provision the tenant.
 
 ## What's here
 
-- `agents/clara/` — Clara, the public-facing onboarding agent. Ported from
-  `internal/saas/clara/clara_system.txt`.
-- `config.json` — picoclaw config with the `public-web` channel enabled.
+- `agents/clara/` — Clara, the public-facing onboarding agent. Ported
+  from the legacy `internal/saas/clara/clara_system.txt`.
+- `config.json` — picoclaw config with the `public-web` channel enabled
+  (carries the `${LITELLM_KEY}` placeholder).
 - `skills/onboarding-mark-qualified/` — HMAC-signed callback skill that
   marks the intake as qualified on the controlplane.
 - `skills/onboarding-submit-intake/` — HMAC-signed callback skill that
   submits the finalized intake and triggers `AutoProvisioner.Run`.
 
-## When this overlays
+## How to install (one-time per environment)
 
-`provision-onboarding-tenant.sh` calls
-`POST /api/v1/tenants/onboarding/bootstrap`, which creates a tenant with
-`IsPublic=true` and overlays this directory into the tenant's
-`$PICOCLAW_HOME/workspace/`.
+1. Copy the directory contents into a workspace `home/` subtree on the
+   host:
+   ```bash
+   ssh root@vps.jotaduo.com 'install -d /srv/picoclaw-workspaces/onboarding/home/workspace'
+   scp -r workspace-onboarding/agents workspace-onboarding/skills \
+       root@vps.jotaduo.com:/srv/picoclaw-workspaces/onboarding/home/workspace/
+   scp workspace-onboarding/config.json \
+       root@vps.jotaduo.com:/srv/picoclaw-workspaces/onboarding/home/
+   ```
 
-## Phase status
+2. Insert the DB row via the admin UI (`/workspaces` → "Importar do
+   $PICOCLAW_HOME" with `source_path=/srv/picoclaw-workspaces/onboarding/home`)
+   OR `POST /api/v1/workspaces` with body
+   `{"name":"Onboarding","slug":"onboarding","is_available_manual":false}`.
 
-| Phase | Status | Notes |
-|---|---|---|
-| 4 — `pkg/channels/publicweb/` channel | ✅ in this PR |
-| 5 — launcher endpoints (`/api/public/chat`, `/stream`, `/health`) | ✅ in this PR |
-| 6 — skill scripts (HMAC callback bash) | ✅ in this PR |
-| 7 — controlplane callback endpoint | ✅ in this PR |
-| 10 — frontend cutover (`VITE_USE_ONBOARDING_TENANT`) | 🚧 stub — real cutover needs an SSE event-shape adapter (see `useClaraChat.ts` TODO) |
+3. Optionally compile a per-workspace frontend variant (the embedded
+   launcher dist is the default fallback).
+
+4. Run the bootstrap (resolves workspace by slug `onboarding`):
+   ```bash
+   ./scripts/provision-onboarding-tenant.sh
+   ```
+
+## How this consumes the workspace
+
+`POST /api/v1/tenants/onboarding/bootstrap` resolves the workspace by
+slug (default `onboarding`, override with `workspace_id` in the body)
+and calls `Provisioner.Create` with `IsPublic=true`. The standard
+provisioning flow takes over from there — see
+[`docs/architecture/workspaces.md`](../docs/architecture/workspaces.md).
 
 ## What works after bootstrap
 
-- Container subiu com canal `public-web` ativo.
-- POST `/api/public/chat` aceita mensagens anônimas com `{session_id, message}` (202).
-- GET `/api/public/chat/stream?session_id=…` entrega a resposta do agente via SSE.
-- Clara invoca os skills `onboarding-mark-qualified` / `onboarding-submit-intake`,
-  que postam HMAC-assinados ao controlplane → `MarkQualifiedByID` /
-  `AutoProvisioner.Run`.
+- Container running with channel `public-web` active.
+- POST `/api/public/chat` accepts anonymous messages with
+  `{session_id, message}` → 202.
+- GET `/api/public/chat/stream?session_id=…` delivers agent replies via
+  SSE.
+- Clara invokes skills `onboarding-mark-qualified` and
+  `onboarding-submit-intake`, which HMAC-POST to the controlplane →
+  `MarkQualifiedByID` / `AutoProvisioner.Run`.
 
-## Required env on the onboarding tenant container
+## Required env on the controlplane
 
-The skill scripts read these — the provisioner needs to thread them into the
-container env at boot. Documented as a follow-up in
-`docs/architecture/public-onboarding-tenant.md`:
+The provisioner already threads these into every `IsPublic=true` tenant
+container automatically (see `internal/saas/tenant/provisioner.go`
+`buildSpec`). Set them on the **controlplane host** so the provisioner
+has something to inject:
 
 ```
-PICOCLAW_ONBOARDING_CALLBACK_URL=https://adm.jotaduo.com
-PICOCLAW_ONBOARDING_CALLBACK_SECRET=<hex-32-bytes, same as controlplane>
+PICOCLAW_ONBOARDING_CALLBACK_URL=https://adm.<base>
+PICOCLAW_ONBOARDING_CALLBACK_SECRET=<hex-32-bytes>
 ```
 
-## What still requires work to go live in prod
+Without the secret the skill scripts inside the tenant container exit
+non-zero and Clara has to apologize to the visitor instead of returning
+the panel URL.
 
-- Provisioner `buildSpec` must inject the two env vars above (~10 lines TODO).
-- Frontend cutover (Phase 10) — the chat at `adm.<base>/pre-cadastro` still
-  hits the legacy `/api/v1/public/company-intakes/{id}/chat` handler in the
-  controlplane. Flipping `VITE_USE_ONBOARDING_TENANT=true` requires an SSE
-  event-shape adapter or richer events emitted by `publicweb.Channel.Send`.
-- Captcha verification on `RequireCaptchaHeader` (Cloudflare Turnstile or
-  similar — the channel only checks header presence, not validity).
+## Open items
+
+- **Frontend cutover (Phase 10)** — the chat at `<base>/pre-cadastro`
+  still hits the legacy `/api/v1/public/company-intakes/{id}/chat`
+  handler. Flipping `VITE_USE_ONBOARDING_TENANT=true` requires an SSE
+  event-shape adapter in `useClaraChat.ts`. TODO marker lives at
+  `web/saas-admin/src/pages/pre-cadastro/clara/useClaraChat.ts`.
+- **Cloudflare Turnstile widget** on the frontend — server-side verify
+  is already in place (`internal/saas/api/turnstile.go`, opt-in via
+  `TURNSTILE_SECRET_KEY`). Until the React widget ships, keep the secret
+  unset or every POST will 403.
