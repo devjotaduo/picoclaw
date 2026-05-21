@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -246,20 +245,7 @@ func readDiskHealth(paths []string) []diskHealth {
 		}
 		seen[p] = struct{}{}
 		entry := diskHealth{Path: p}
-		var st syscall.Statfs_t
-		if err := syscall.Statfs(p, &st); err == nil {
-			block := float64(st.Bsize)
-			total := float64(st.Blocks) * block
-			free := float64(st.Bavail) * block
-			used := total - free
-			if total > 0 {
-				entry.Available = true
-				entry.TotalGB = total / (1 << 30)
-				entry.UsedGB = used / (1 << 30)
-				entry.FreeGB = free / (1 << 30)
-				entry.UsedPct = (1 - float64(st.Bavail)/float64(st.Blocks)) * 100
-			}
-		}
+		fillDiskHealth(p, &entry)
 		out = append(out, entry)
 	}
 	return out
