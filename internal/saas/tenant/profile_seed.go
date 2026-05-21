@@ -378,7 +378,7 @@ func cleanSeedFilePath(relPath string) (string, error) {
 }
 
 func hasWindowsDrivePrefix(path string) bool {
-	if len(path) < 3 || path[1] != ':' || path[2] != '/' {
+	if len(path) < 2 || path[1] != ':' {
 		return false
 	}
 	drive := path[0]
