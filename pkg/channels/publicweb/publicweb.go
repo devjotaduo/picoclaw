@@ -34,6 +34,12 @@ var ErrNoStream = errors.New("publicweb: no active stream for session")
 // its own; the launcher's HTTP layer (Phase 5) drives inbound by calling
 // AcceptInbound and consumes outbound by reading from the channels
 // returned by SubscribeStream.
+//
+// Channel implements channels.WebhookHandler (see http.go): when the
+// channel is enabled, the manager's shared HTTP server auto-registers it
+// under /api/public/chat. The launcher reverse-proxies anonymous traffic
+// from the same path to the gateway port — no direct exposure of the
+// gateway listener is required.
 type Channel struct {
 	*channels.BaseChannel
 
