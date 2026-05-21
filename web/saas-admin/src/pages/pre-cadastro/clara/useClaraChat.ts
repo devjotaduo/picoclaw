@@ -234,17 +234,41 @@ export function useClaraChat({
 			const abort = new AbortController();
 			abortRef.current = abort;
 
-			// TODO(Phase 10): when VITE_USE_ONBOARDING_TENANT === "true" and
-			// VITE_ONBOARDING_TENANT_URL is set, this should route to the new
-			// public onboarding tenant (Phases 4-7 of docs/superpowers/plans/
-			// 2026-05-20-public-onboarding-tenant.md):
-			//   POST  ${VITE_ONBOARDING_TENANT_URL}/api/public/chat  -- 202 ack
-			//   GET   ${VITE_ONBOARDING_TENANT_URL}/api/public/chat/stream?session_id=…
-			// The new endpoint emits {text: "..."} per chunk (simpler than the
-			// legacy {type, delta, ...} structure this hook switches on), so the
-			// cutover also needs an event-shape adapter or richer SSE events
-			// emitted by publicweb.Channel.Send. Until that's wired the flag
-			// stays a no-op — keep using the legacy in-controlplane Clara.
+			// Phase 10 — Frontend cutover (partial).
+			//
+			// The tenant-side wire format is now isolated in
+			// ./onboardingTenantChat.ts (openOnboardingTenantChat). When the
+			// flag is on, that module handles POST + SSE-GET against the
+			// public onboarding tenant. The flag is intentionally still
+			// gated here because two pieces of plumbing are still missing
+			// before a full cutover is correct:
+			//
+			//   1. intake_id ↔ session_id binding. The tenant's
+			//      onboarding-mark-qualified and onboarding-submit-intake
+			//      skills need to know which intake row to update via HMAC
+			//      callback. The cleanest path is to use intake_id as the
+			//      publicweb session_id and have the agent expose it to
+			//      skill scripts via env (e.g. PICOCLAW_CHAT_SESSION_ID).
+			//      Today the agent loop does not propagate session_id to
+			//      skill env, so wiring this up requires a small backend
+			//      change in pkg/agent/.
+			//
+			//   2. extracted / qualified / tenant_provisioned bridging.
+			//      Today those events come inline in the legacy SSE. The
+			//      tenant only emits raw text. Two options:
+			//        (a) Poll GET /api/v1/public/company-intakes/{id} every
+			//            few seconds while in qualified-but-not-provisioned
+			//            state and synthesize the events when the intake row
+			//            changes. Requires (1) so the intake is updated by
+			//            the tenant's skills.
+			//        (b) Enrich publicweb.Channel.Send with typed
+			//            OutboundEvent variants and have the onboarding
+			//            skills publish them through the bus.
+			//
+			// For an opt-in dev/staging cutover that ignores extracted/
+			// provisioning UI (raw chat only), uncomment the route below
+			// and flip the env var. Once (1) lands we can move the rest
+			// of this hook to the new module.
 			const _onboardingTenantFlagSet =
 				import.meta.env.VITE_USE_ONBOARDING_TENANT === "true" &&
 				Boolean(import.meta.env.VITE_ONBOARDING_TENANT_URL);
