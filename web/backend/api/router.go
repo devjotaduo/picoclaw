@@ -109,6 +109,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Pendencias extracted from memory files (PENDENCIAS: blocks).
 	h.registerPendenciasRoutes(mux)
 
+	// Per-agent readiness semaforo (workspace memory completeness).
+	h.registerReadinessRoutes(mux)
+
 	// Cron jobs read-only view (reads workspace/cron/jobs.json).
 	h.registerCronRoutes(mux)
 

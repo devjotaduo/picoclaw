@@ -50,3 +50,17 @@ expira_em: YYYY-MM-DD (para site/conteúdo temporário)
 
 ## Aprendizados acumulados
 - [ATUALIZAR após cada campanha]
+
+## PENDENCIAS: dados básicos de marketing
+
+Lia precisa destes campos antes de rodar o cron `lia-marketing-daily`
+e gerar conteúdo. Sem eles, qualquer post sai genérico.
+
+- Cores primárias e secundárias (hex)
+- Tipografia oficial
+- Caminho da logo
+- Estilo da empresa (minimalista | colorido | fotográfico | ilustrado)
+- Elementos obrigatórios em toda arte
+- Personas (mínimo 1, ideal 2)
+- @ do Instagram comercial
+- Aniversário da empresa (DD/MM)

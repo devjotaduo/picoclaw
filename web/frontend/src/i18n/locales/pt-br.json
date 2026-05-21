@@ -22,6 +22,7 @@
     "config": "Configuração",
     "logs": "Logs",
     "operation_group": "Operação",
+    "readiness": "Prontidão",
     "memory": "Memória",
     "pendencias": "Pendências",
     "cron": "Cron",

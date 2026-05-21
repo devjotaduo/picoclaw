@@ -19,6 +19,25 @@ Informações proibidas de falar:
 Segmento detectado:
 Status da informação: pendente de validação
 
+## PENDENCIAS: cadastro da empresa (bloqueante para go-live)
+
+Sem estes campos preenchidos, Luna/Marcos/Camila não conseguem atender clientes
+sem inventar dados. Sofia deve conduzir o dono pelo onboarding.
+
+- Nome oficial da empresa
+- Segmento (saude | alimentacao | varejo | servicos | beleza | educacao | imobiliaria | outro)
+- Descrição curta do negócio em uma frase
+- Produtos ou serviços principais
+- Horário de funcionamento (dias e faixa)
+- Endereço (ou "atendimento 100% online")
+- Regiões atendidas
+- Número de WhatsApp comercial
+- Site oficial (se houver)
+- Formas de pagamento aceitas
+- Pode falar preço? (sim | só faixa | nunca)
+- Quando devo chamar humano? (regras de handoff)
+- Informações proibidas de falar com cliente
+
 # Campos específicos do segmento (Sofia preenche conforme o playbook)
 # Os nomes abaixo são exemplos. Só apareçam se a Sofia precisar deles.
 # saude        → Canal de agendamento, Convênios aceitos, Especialidades, Política de cancelamento

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SofiaOnboardingRouteImport } from './routes/sofia-onboarding'
+import { Route as ReadinessRouteImport } from './routes/readiness'
 import { Route as PendenciasRouteImport } from './routes/pendencias'
 import { Route as ModelsRouteImport } from './routes/models'
 import { Route as MemoryRouteImport } from './routes/memory'
@@ -44,6 +45,11 @@ import { Route as AdminTenantsIdRouteImport } from './routes/admin/tenants/$id'
 const SofiaOnboardingRoute = SofiaOnboardingRouteImport.update({
   id: '/sofia-onboarding',
   path: '/sofia-onboarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReadinessRoute = ReadinessRouteImport.update({
+  id: '/readiness',
+  path: '/readiness',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PendenciasRoute = PendenciasRouteImport.update({
@@ -210,6 +216,7 @@ export interface FileRoutesByFullPath {
   '/memory': typeof MemoryRoute
   '/models': typeof ModelsRoute
   '/pendencias': typeof PendenciasRoute
+  '/readiness': typeof ReadinessRoute
   '/sofia-onboarding': typeof SofiaOnboardingRoute
   '/admin/clone': typeof AdminCloneRoute
   '/agent/agents': typeof AgentAgentsRoute
@@ -243,6 +250,7 @@ export interface FileRoutesByTo {
   '/memory': typeof MemoryRoute
   '/models': typeof ModelsRoute
   '/pendencias': typeof PendenciasRoute
+  '/readiness': typeof ReadinessRoute
   '/sofia-onboarding': typeof SofiaOnboardingRoute
   '/admin/clone': typeof AdminCloneRoute
   '/agent/agents': typeof AgentAgentsRoute
@@ -277,6 +285,7 @@ export interface FileRoutesById {
   '/memory': typeof MemoryRoute
   '/models': typeof ModelsRoute
   '/pendencias': typeof PendenciasRoute
+  '/readiness': typeof ReadinessRoute
   '/sofia-onboarding': typeof SofiaOnboardingRoute
   '/admin/clone': typeof AdminCloneRoute
   '/agent/agents': typeof AgentAgentsRoute
@@ -312,6 +321,7 @@ export interface FileRouteTypes {
     | '/memory'
     | '/models'
     | '/pendencias'
+    | '/readiness'
     | '/sofia-onboarding'
     | '/admin/clone'
     | '/agent/agents'
@@ -345,6 +355,7 @@ export interface FileRouteTypes {
     | '/memory'
     | '/models'
     | '/pendencias'
+    | '/readiness'
     | '/sofia-onboarding'
     | '/admin/clone'
     | '/agent/agents'
@@ -378,6 +389,7 @@ export interface FileRouteTypes {
     | '/memory'
     | '/models'
     | '/pendencias'
+    | '/readiness'
     | '/sofia-onboarding'
     | '/admin/clone'
     | '/agent/agents'
@@ -412,6 +424,7 @@ export interface RootRouteChildren {
   MemoryRoute: typeof MemoryRoute
   ModelsRoute: typeof ModelsRoute
   PendenciasRoute: typeof PendenciasRoute
+  ReadinessRoute: typeof ReadinessRoute
   SofiaOnboardingRoute: typeof SofiaOnboardingRoute
   AdminCloneRoute: typeof AdminCloneRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -427,6 +440,13 @@ declare module '@tanstack/react-router' {
       path: '/sofia-onboarding'
       fullPath: '/sofia-onboarding'
       preLoaderRoute: typeof SofiaOnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/readiness': {
+      id: '/readiness'
+      path: '/readiness'
+      fullPath: '/readiness'
+      preLoaderRoute: typeof ReadinessRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pendencias': {
@@ -708,6 +728,7 @@ const rootRouteChildren: RootRouteChildren = {
   MemoryRoute: MemoryRoute,
   ModelsRoute: ModelsRoute,
   PendenciasRoute: PendenciasRoute,
+  ReadinessRoute: ReadinessRoute,
   SofiaOnboardingRoute: SofiaOnboardingRoute,
   AdminCloneRoute: AdminCloneRoute,
   AdminIndexRoute: AdminIndexRoute,
