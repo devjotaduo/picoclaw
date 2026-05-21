@@ -45,7 +45,43 @@ jobs:
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
       - name: Run Govulncheck
-        run: govulncheck -C . -format text ./...
+        # govulncheck doesn't natively support an allowlist; we parse the
+        # JSON output ourselves and fail only if a vulnerability OTHER than
+        # the documented accepted-risk set is found.
+        #
+        # Accepted-risk allowlist (revisit at each renovate/dependabot pass):
+        #   GO-2026-4887 (CVE-2026-34040) — Moby/Docker AuthZ plugin bypass
+        #     on oversized request bodies. Fixed in github.com/moby/moby/v2
+        #     >= v2.0.0-beta.8 only; the github.com/docker/docker module path
+        #     this repo depends on has no fixed version. Migrating to /v2 is
+        #     a breaking-API change tracked separately. Risk is bounded
+        #     because the controlplane talks to a trusted local Docker
+        #     socket — no AuthZ plugin is in play.
+        #   GO-2026-4883 (CVE-2026-33997) — Moby off-by-one in plugin
+        #     privilege validation. Same module-path situation as #4887; no
+        #     fix for docker/docker. Risk bounded by the same trusted-socket
+        #     argument: we never load third-party Docker plugins on the
+        #     controlplane or tenant containers.
+        run: |
+          set +e
+          govulncheck -C . -format json ./... > /tmp/vuln.json
+          govulncheck -C . -format text ./...
+          rc=$?
+          if [ $rc -eq 0 ]; then
+            echo "govulncheck: no vulnerabilities — pass."
+            exit 0
+          fi
+          # Extract OSV IDs of vulnerabilities the scanner believes our code
+          # actually calls into (mode=traces).
+          CALLED=$(jq -r 'select(.osv) | .osv.id' /tmp/vuln.json | sort -u)
+          UNEXPECTED=$(echo "$CALLED" | grep -vE '^(GO-2026-4887|GO-2026-4883)$' || true)
+          if [ -n "$UNEXPECTED" ]; then
+            echo "::error::govulncheck found unaccepted vulnerabilities:"
+            echo "$UNEXPECTED"
+            exit 1
+          fi
+          echo "govulncheck: only accepted-risk vulnerabilities present — pass."
+          echo "Accepted: $CALLED"
 
   test:
     name: Tests
