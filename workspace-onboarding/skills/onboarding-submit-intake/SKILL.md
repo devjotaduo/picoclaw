@@ -23,9 +23,19 @@ inclua os detalhes na sua mensagem final ao visitante.
 
 ## Arguments
 
-- `intake_id` (string, required) — id do intake do contexto inicial.
 - `contact_email` (string, required) — email confirmado pelo visitante.
 - `contact_whatsapp` (string, optional) — WhatsApp confirmado.
+
+O `intake_id` é resolvido automaticamente a partir de
+`$PICOCLAW_CHAT_SESSION_ID` (injetado pelo `ExecTool` com o `session_id`
+da sessão publicweb atual, que o browser configura igual ao `intake_id`).
+
+Para rodar manualmente fora do agente (debug), passe o id explícito como
+primeiro argumento:
+
+```
+scripts/submit-intake.sh <intake_id> <contact_email> [contact_whatsapp]
+```
 
 ## Side effects
 
@@ -39,7 +49,7 @@ transacional. **Side effects amplos — só chame uma vez.**
 ## Script
 
 ```
-scripts/submit-intake.sh "$INTAKE_ID" "$CONTACT_EMAIL" "$CONTACT_WHATSAPP"
+scripts/submit-intake.sh "$CONTACT_EMAIL" "$CONTACT_WHATSAPP"
 ```
 
 stdout (200) = JSON com detalhes do tenant provisionado. Exit não-zero = falha.

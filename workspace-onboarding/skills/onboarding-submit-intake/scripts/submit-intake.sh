@@ -13,8 +13,15 @@
 #   PICOCLAW_ONBOARDING_CALLBACK_URL
 #   PICOCLAW_ONBOARDING_CALLBACK_SECRET
 #
+# Auto-detected env (injected by pkg/tools.ExecTool from the active chat
+# context — see buildToolEnv in pkg/tools/shell.go):
+#   PICOCLAW_CHAT_SESSION_ID   the publicweb session_id, which the browser
+#                              sets to the intake_id. Used as default for
+#                              <intake_id> when no positional arg is passed.
+#
 # Usage:
-#   submit-intake.sh <intake_id> <contact_email> [contact_whatsapp]
+#   submit-intake.sh <contact_email> [contact_whatsapp]              # 2 args: intake_id defaults to $PICOCLAW_CHAT_SESSION_ID
+#   submit-intake.sh <intake_id> <contact_email> [contact_whatsapp]  # 3 args: explicit override
 #
 # Exit codes:
 #   0   success (controlplane returned 200, provisioning info in stdout)
@@ -24,14 +31,32 @@
 
 set -euo pipefail
 
-if [[ $# -lt 2 ]]; then
-  echo "usage: submit-intake.sh <intake_id> <contact_email> [contact_whatsapp]" >&2
+# Two calling conventions:
+#   * 1-2 args: contact_email[, contact_whatsapp] — intake_id from env.
+#   * 3 args:   intake_id, contact_email, contact_whatsapp — full override.
+#
+# Detect by counting args. Email is the only mandatory field either way.
+if [[ $# -ge 3 ]]; then
+  INTAKE_ID="$1"
+  CONTACT_EMAIL="$2"
+  CONTACT_WHATSAPP="${3:-}"
+elif [[ $# -ge 1 ]]; then
+  INTAKE_ID="${PICOCLAW_CHAT_SESSION_ID:-}"
+  CONTACT_EMAIL="$1"
+  CONTACT_WHATSAPP="${2:-}"
+else
+  echo "usage: submit-intake.sh <contact_email> [contact_whatsapp] | <intake_id> <contact_email> [contact_whatsapp]" >&2
   exit 1
 fi
 
-INTAKE_ID="$1"
-CONTACT_EMAIL="$2"
-CONTACT_WHATSAPP="${3:-}"
+if [[ -z "$INTAKE_ID" ]]; then
+  echo "submit-intake: intake_id missing — pass as \$1 (3-arg form) or set PICOCLAW_CHAT_SESSION_ID" >&2
+  exit 1
+fi
+if [[ -z "$CONTACT_EMAIL" ]]; then
+  echo "submit-intake: contact_email is required" >&2
+  exit 1
+fi
 URL="${PICOCLAW_ONBOARDING_CALLBACK_URL:?PICOCLAW_ONBOARDING_CALLBACK_URL required}"
 SECRET="${PICOCLAW_ONBOARDING_CALLBACK_SECRET:?PICOCLAW_ONBOARDING_CALLBACK_SECRET required}"
 

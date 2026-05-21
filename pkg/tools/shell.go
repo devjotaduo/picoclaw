@@ -28,6 +28,29 @@ var (
 	sessionManagerMu     sync.RWMutex
 )
 
+// buildToolEnv extends the parent process environment with PICOCLAW_CHAT_*
+// vars derived from the request-scoped tool context. Skill scripts run by
+// the agent (notably the public-onboarding tenant's onboarding-mark-qualified
+// and onboarding-submit-intake) read PICOCLAW_CHAT_SESSION_ID to identify
+// which intake row the controlplane callback should target, without the LLM
+// having to round-trip the ID through the conversation.
+//
+// Empty values are omitted so a CLI run (no chat context) doesn't shadow a
+// PICOCLAW_CHAT_* var the operator set deliberately in their shell.
+func buildToolEnv(ctx context.Context) []string {
+	env := os.Environ()
+	if v := ToolChannel(ctx); v != "" {
+		env = append(env, "PICOCLAW_CHAT_CHANNEL="+v)
+	}
+	if v := ToolChatID(ctx); v != "" {
+		env = append(env, "PICOCLAW_CHAT_SESSION_ID="+v)
+	}
+	if v := ToolSenderID(ctx); v != "" {
+		env = append(env, "PICOCLAW_CHAT_SENDER_ID="+v)
+	}
+	return env
+}
+
 func getSessionManager() *SessionManager {
 	sessionManagerMu.RLock()
 	defer sessionManagerMu.RUnlock()
@@ -372,6 +395,7 @@ func (t *ExecTool) runSync(ctx context.Context, command, cwd string) *ToolResult
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
+	cmd.Env = buildToolEnv(ctx)
 
 	prepareCommandForTermination(cmd)
 
@@ -484,6 +508,7 @@ func (t *ExecTool) runBackground(ctx context.Context, command, cwd string, ptyEn
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
+	cmd.Env = buildToolEnv(ctx)
 
 	prepareCommandForTermination(cmd)
 
