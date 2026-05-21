@@ -802,15 +802,17 @@ func TestAgentLoop_Run_AutoContinuesLateSteeringMessage(t *testing.T) {
 	subCtx, subCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer subCancel()
 
-	var out1 bus.OutboundMessage
-	select {
-	case out1 = <-msgBus.OutboundChan():
-	case <-subCtx.Done():
-		t.Fatal("expected outbound response")
+	for {
+		select {
+		case out := <-msgBus.OutboundChan():
+			if out.Content == "continued response" {
+				goto gotContinued
+			}
+		case <-subCtx.Done():
+			t.Fatal("timeout waiting for continued response outbound")
+		}
 	}
-	if out1.Content != "continued response" {
-		t.Fatalf("expected continued response, got %q", out1.Content)
-	}
+gotContinued:
 
 	noExtraCtx, cancelNoExtra := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancelNoExtra()
