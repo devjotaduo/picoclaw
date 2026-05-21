@@ -32,6 +32,16 @@ if [ ! -f "$COMPOSE_FILE" ]; then
   exit 1
 fi
 
+# Verify the .env file exists. Production keeps it at the repo root, NOT
+# alongside the compose file. Missing this would crashloop the controlplane
+# on recreate (JWT_SECRET, POSTGRES_PASSWORD, etc. resolve to empty strings).
+ENV_FILE="${PICOCLAW_ENV_FILE:-/srv/saas/picoclaw/.env}"
+if [ ! -f "$ENV_FILE" ]; then
+  echo "ERROR: env file not found at $ENV_FILE" >&2
+  echo "       (override with PICOCLAW_ENV_FILE env if it's elsewhere)" >&2
+  exit 1
+fi
+
 # GHCR auth: not strictly required if the package is public, but warn
 # loudly so private repos don't fail silently at 3 AM.
 if ! grep -q ghcr.io /root/.docker/config.json 2>/dev/null; then
