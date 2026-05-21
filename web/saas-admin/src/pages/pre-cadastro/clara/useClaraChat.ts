@@ -123,6 +123,20 @@ const emptyExtracted: ClaraExtracted = {
 	systems: [],
 };
 
+function sanitizeStoredMessages(messages: ClaraMessage[]): ClaraMessage[] {
+	return messages
+		.filter((message) => {
+			if (message.role === "user" && message.content === "Oi! Pode começar.") {
+				return false;
+			}
+			if (message.role === "assistant" && !message.content && !message.errorText) {
+				return false;
+			}
+			return true;
+		})
+		.map((message) => ({ ...message, streaming: false }));
+}
+
 /**
  * useClaraChat returns a controller for one Clara session. The component
  * tree is responsible for owning the intakeId + resumeToken (typically via
@@ -145,7 +159,7 @@ export function useClaraChat({
 			const saved = localStorage.getItem(messagesStorageKey);
 			if (!saved) return [];
 			const parsed = JSON.parse(saved) as ClaraMessage[];
-			return Array.isArray(parsed) ? parsed : [];
+			return Array.isArray(parsed) ? sanitizeStoredMessages(parsed) : [];
 		} catch {
 			return [];
 		}
@@ -167,7 +181,10 @@ export function useClaraChat({
 	useEffect(() => {
 		if (!messagesStorageKey) return;
 		try {
-			localStorage.setItem(messagesStorageKey, JSON.stringify(messages.slice(-40)));
+			localStorage.setItem(
+				messagesStorageKey,
+				JSON.stringify(sanitizeStoredMessages(messages).slice(-40)),
+			);
 		} catch {
 			// localStorage may be full or disabled in private mode; ignore.
 		}
@@ -237,7 +254,7 @@ export function useClaraChat({
 
 			if (!response.ok || !response.body) {
 				const text = await response.text().catch(() => "");
-				finalizeWithError(text || `erro ${response.status}`);
+				finalizeWithError(humanizeError(text || `erro ${response.status}`));
 				return;
 			}
 

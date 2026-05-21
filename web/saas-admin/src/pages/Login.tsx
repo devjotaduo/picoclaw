@@ -146,7 +146,7 @@ export function Login() {
 
           <div className="flex flex-1 items-center justify-center py-5">
             <div className="w-full max-w-[27rem] rounded-[1.15rem] border border-white/12 bg-white/[0.045] p-4 shadow-[0_22px_68px_rgba(0,0,0,0.4)] backdrop-blur-2xl sm:p-5 lg:max-w-[29rem] lg:p-6 xl:p-7">
-              <div className="mx-auto mb-3 size-16 lg:hidden">
+              <div className="relative -top-7 mx-auto -mb-2 size-12 lg:hidden">
                 <LoginOrb variant="compact" />
               </div>
 
@@ -342,21 +342,21 @@ function LoginOrb({ variant }: LoginOrbProps) {
       <div
         className={cn(
           "absolute rounded-full border border-violet-300/18 admin-orb-ring-slow",
-          hero ? "size-[25rem]" : "size-[12rem]",
+          hero ? "size-[25rem]" : "size-[9rem]",
         )}
         style={{ opacity: hero ? 0.72 : 0.36 }}
       />
       <div
         className={cn(
           "absolute rounded-full border border-indigo-300/16 admin-orb-ring-fast",
-          hero ? "size-[19rem]" : "size-[9.5rem]",
+          hero ? "size-[19rem]" : "size-[7rem]",
         )}
         style={{ opacity: hero ? 0.86 : 0.42 }}
       />
       <div
         className={cn(
           "relative overflow-hidden rounded-full admin-orb-core",
-          hero ? "size-56" : "size-28",
+          hero ? "size-56" : "size-20",
         )}
         style={{
           background:

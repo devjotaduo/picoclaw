@@ -38,42 +38,25 @@ type View =
 	  }
 	| { kind: "done"; contactName?: string };
 
+type BootstrapResult =
+	| { kind: "chat"; intake: CompanyIntake; resumeToken: string }
+	| { kind: "done"; contactName?: string };
+
+let bootstrapInFlight: Promise<BootstrapResult> | null = null;
+
 export function ClaraBootstrap() {
 	const [view, setView] = useState<View>({ kind: "loading" });
 
 	useEffect(() => {
 		let cancelled = false;
 		(async () => {
-			const params = new URLSearchParams(window.location.search);
-			const urlId = params.get("id");
-			const urlToken = params.get("token");
-			const stored = readStorage();
-			const id = urlId ?? stored.id;
-			const token = urlToken ?? stored.token;
-
 			try {
-				if (id && token) {
-					const intake = await getPublicIntake(id, token);
-					if (cancelled) return;
-					persist(intake.id, token);
-					syncUrl(intake.id, token);
-					// Skip the chat if the intake was already submitted.
-					if (intake.status === "submitted" || intake.status === "reviewed" || intake.status === "linked") {
-						setView({ kind: "done", contactName: intake.contact_name || undefined });
-						return;
-					}
-					setView({ kind: "chat", intake, resumeToken: token });
-					return;
-				}
-				const created = await createPublicIntake();
-				const newToken = created.resume_token ?? "";
-				if (!newToken) {
-					throw new Error("intake criado sem resume_token");
-				}
+				bootstrapInFlight ??= bootstrapIntake().finally(() => {
+					bootstrapInFlight = null;
+				});
+				const nextView = await bootstrapInFlight;
 				if (cancelled) return;
-				persist(created.id, newToken);
-				syncUrl(created.id, newToken);
-				setView({ kind: "chat", intake: created, resumeToken: newToken });
+				setView(nextView);
 			} catch (err) {
 				localStorage.removeItem(STORAGE_KEY);
 				if (cancelled) return;
@@ -158,6 +141,35 @@ export function ClaraBootstrap() {
 			}}
 		/>
 	);
+}
+
+async function bootstrapIntake(): Promise<BootstrapResult> {
+	const params = new URLSearchParams(window.location.search);
+	const urlId = params.get("id");
+	const urlToken = params.get("token");
+	const stored = readStorage();
+	const id = urlId ?? stored.id;
+	const token = urlToken ?? stored.token;
+
+	if (id && token) {
+		const intake = await getPublicIntake(id, token);
+		persist(intake.id, token);
+		syncUrl(intake.id, token);
+		// Skip the chat if the intake was already submitted.
+		if (intake.status === "submitted" || intake.status === "reviewed" || intake.status === "linked") {
+			return { kind: "done", contactName: intake.contact_name || undefined };
+		}
+		return { kind: "chat", intake, resumeToken: token };
+	}
+
+	const created = await createPublicIntake();
+	const newToken = created.resume_token ?? "";
+	if (!newToken) {
+		throw new Error("intake criado sem resume_token");
+	}
+	persist(created.id, newToken);
+	syncUrl(created.id, newToken);
+	return { kind: "chat", intake: created, resumeToken: newToken };
 }
 
 // mergeWithHydrated brings in fields the agent didn't touch this turn (e.g.
