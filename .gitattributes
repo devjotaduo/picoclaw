@@ -1,3 +1,7 @@
 # Ensure shell scripts always use LF line endings regardless of OS.
 *.sh text eol=lf
 docker/entrypoint.sh text eol=lf
+
+# Systemd unit files are parsed by systemd on Linux — CRLF would break them.
+*.service text eol=lf
+*.timer text eol=lf
