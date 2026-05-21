@@ -121,15 +121,12 @@ import {
 } from "./agent-list-filter"
 import { AgentWizard, type WizardDraft } from "./agent-wizard"
 import { AvatarUpload } from "./avatar-upload"
-import { CardStatusBadge } from "./card-status"
 import { ChatTestDrawer } from "./chat-test-drawer"
 import {
   type ActiveConversation,
   DeactivateAgentDialog,
 } from "./deactivate-agent-dialog"
-import { GatewayStatusBadge } from "./gateway-status-badge"
 import { LabelWithTooltip } from "./label-with-tooltip"
-import { ProgressChecklist } from "./progress-checklist"
 import { PromptPreview } from "./prompt-preview"
 import { SaveBar } from "./save-bar"
 import { isReadyToActivate, validateChecklist } from "./schemas"
@@ -144,10 +141,6 @@ import { jidToPhone } from "./whatsapp-format"
 import { WhatsAppGroupList } from "./whatsapp-group-list"
 import { WhatsAppPhoneList } from "./whatsapp-phone-list"
 import { WorkspaceDisplay } from "./workspace-display"
-
-// ─── tab type ────────────────────────────────────────────────────────────────
-
-type ActiveTab = "config" | "profile" | "chat"
 
 // ─── orchestration-specific types ────────────────────────────────────────────
 
@@ -953,68 +946,6 @@ function StatusBadge({ active }: { active: boolean }) {
   )
 }
 
-function ConfigBadge({ configured }: { configured: boolean }) {
-  const { t } = useTranslation()
-  if (configured) {
-    return (
-      <span className="border-border bg-background text-foreground inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium">
-        {t("pages.agent.editor.configured", "Configurado")}
-      </span>
-    )
-  }
-  return (
-    <Badge variant="outline">
-      {t("pages.agent.editor.not_configured", "Rascunho")}
-    </Badge>
-  )
-}
-
-function ReadyStatusBadges({
-  agent,
-  compact = false,
-}: {
-  agent: AgentEditorAgent
-  compact?: boolean
-}) {
-  const profileReady = Boolean(agent.name?.trim() && agent.role_config?.kind)
-  const promptReady = agent.prompt?.configured ?? false
-  const routingReady = Boolean(agent.access || agent.subagents || agent.default)
-  const items = [
-    {
-      key: "profile",
-      label: compact ? "Perfil" : "Perfil pronto",
-      ready: profileReady,
-    },
-    {
-      key: "prompt",
-      label: compact ? "Prompt" : "Prompt pronto",
-      ready: promptReady,
-    },
-    {
-      key: "routing",
-      label: compact ? "Rotas" : "Roteamento pronto",
-      ready: routingReady,
-    },
-  ]
-  return (
-    <>
-      {items.map((item) => (
-        <span
-          key={item.key}
-          className={`border-border inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${
-            item.ready
-              ? "bg-background text-foreground"
-              : "bg-muted text-muted-foreground"
-          }`}
-          aria-label={`${item.label}: ${item.ready ? "pronto" : "pendente"}`}
-        >
-          {item.ready ? item.label : `${item.label} · pendente`}
-        </span>
-      ))}
-    </>
-  )
-}
-
 function DefaultBadge() {
   const { t } = useTranslation()
   return (
@@ -1061,40 +992,6 @@ function SectionHeader({
       <h3 className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
         {title}
       </h3>
-    </div>
-  )
-}
-
-function TabBar({
-  tabs,
-  active,
-  onChange,
-}: {
-  tabs: { id: ActiveTab; label: string; icon: React.ElementType }[]
-  active: ActiveTab
-  onChange: (tab: ActiveTab) => void
-}) {
-  return (
-    <div className="border-border/40 flex border-b">
-      {tabs.map((tab) => {
-        const Icon = tab.icon
-        const isActive = tab.id === active
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => onChange(tab.id)}
-            className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-              isActive
-                ? "border-primary text-foreground"
-                : "text-muted-foreground hover:text-foreground border-transparent"
-            }`}
-          >
-            <Icon className="size-3.5" />
-            {tab.label}
-          </button>
-        )
-      })}
     </div>
   )
 }
@@ -2186,9 +2083,6 @@ export function AgentEditorPage() {
                     }
                     onAssistantJIDsChange={setAssistantJIDs}
                     onAssistantChatsChange={setAssistantChats}
-                    onSaveOrchestration={() =>
-                      saveOrchestrationMutation.mutate()
-                    }
                     onRefreshOrchestration={() =>
                       void queryClient.invalidateQueries({
                         queryKey: ["agent-editor-state"],
@@ -2443,7 +2337,6 @@ function UnifiedAgentEditor({
   onToggleMainAllow,
   onAssistantJIDsChange,
   onAssistantChatsChange,
-  onSaveOrchestration,
   onRefreshOrchestration,
   onChatInputChange,
   onSendChat,
@@ -2502,7 +2395,6 @@ function UnifiedAgentEditor({
   onToggleMainAllow: (id: string) => void
   onAssistantJIDsChange: (v: string) => void
   onAssistantChatsChange: (v: string) => void
-  onSaveOrchestration: () => void
   onRefreshOrchestration: () => void
   onChatInputChange: (v: string) => void
   onSendChat: () => void
@@ -2604,7 +2496,6 @@ function UnifiedAgentEditor({
             onToggleMainAllow={onToggleMainAllow}
             onAssistantJIDsChange={onAssistantJIDsChange}
             onAssistantChatsChange={onAssistantChatsChange}
-            onSave={onSaveOrchestration}
             onRefresh={onRefreshOrchestration}
           />
         </TabsContent>
@@ -3041,7 +2932,6 @@ function AccessRoutingSection({
   onToggleMainAllow,
   onAssistantJIDsChange,
   onAssistantChatsChange,
-  onSave,
   onRefresh,
 }: {
   selectedAgentId: string
@@ -3057,7 +2947,6 @@ function AccessRoutingSection({
   onToggleMainAllow: (id: string) => void
   onAssistantJIDsChange: (v: string) => void
   onAssistantChatsChange: (v: string) => void
-  onSave: () => void
   onRefresh: () => void
 }) {
   const mainAgent = internalAgents.find((a) => a.id === mainAgentID)
@@ -3453,7 +3342,7 @@ function SkillConfigEditor({
 
 // ─── config tab: agent detail view ────────────────────────────────────────────
 
-function AgentDetailView({
+export function AgentDetailView({
   agent,
   configData,
   resolvedPayload,
@@ -3726,7 +3615,7 @@ function AgentDetailView({
 
 // ─── profile & routing tab ────────────────────────────────────────────────────
 
-function ProfileTab({
+export function ProfileTab({
   selectedAgentId,
   selectedProfile,
   selectedRoleConfigDraft,
@@ -4937,7 +4826,7 @@ function EmptyState({
   )
 }
 
-function UnconfiguredState({
+export function UnconfiguredState({
   agent,
   onCreate,
   onConfigure,

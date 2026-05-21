@@ -10,10 +10,7 @@ import { useTranslation } from "react-i18next"
 
 import type { AgentSummary } from "@/api/internal-agents"
 import type { LauncherQuickTask } from "@/api/launcher-policy"
-import {
-  AIOrbAvatar,
-  type AuraPalette,
-} from "@/components/chat/ai-orb-avatar"
+import { AIOrbAvatar, type AuraPalette } from "@/components/chat/ai-orb-avatar"
 import { Button } from "@/components/ui/button"
 
 interface ChatEmptyStateProps {

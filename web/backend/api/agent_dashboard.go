@@ -276,11 +276,19 @@ func buildAgentDashboardResponse(cfg *config.Config, now time.Time) agentDashboa
 		addAgentDashboardAgent(agentMap, id, firstNonEmpty(agent.Name, agent.ID), "Agente interno", agent.IsEnabled())
 	}
 
-	items := make([]agentDashboardItem, 0)
-	items = append(items, loadDashboardPublishedItems(workspace, &health)...)
-	items = append(items, loadDashboardMemoryItems(workspace, &health)...)
-	items = append(items, loadDashboardOutputReports(workspace, &health)...)
-	items = append(items, loadDashboardAgentProposals(cfg, &health)...)
+	publishedItems := loadDashboardPublishedItems(workspace, &health)
+	memoryItems := loadDashboardMemoryItems(workspace, &health)
+	reportItems := loadDashboardOutputReports(workspace, &health)
+	proposalItems := loadDashboardAgentProposals(cfg, &health)
+	items := make(
+		[]agentDashboardItem,
+		0,
+		len(publishedItems)+len(memoryItems)+len(reportItems)+len(proposalItems),
+	)
+	items = append(items, publishedItems...)
+	items = append(items, memoryItems...)
+	items = append(items, reportItems...)
+	items = append(items, proposalItems...)
 	normalizeDashboardItems(items)
 	artifacts := loadDashboardOutputArtifacts(workspace, &health)
 	for _, item := range items {
@@ -435,7 +443,6 @@ func loadDashboardPublishedItems(workspace string, health *agentDashboardHealth)
 }
 
 func loadDashboardMemoryItems(workspace string, health *agentDashboardHealth) []agentDashboardItem {
-	items := make([]agentDashboardItem, 0)
 	memoryDir := filepath.Join(workspace, "memory")
 	missingMemory := true
 	if _, err := os.Stat(memoryDir); err == nil {
@@ -445,9 +452,17 @@ func loadDashboardMemoryItems(workspace string, health *agentDashboardHealth) []
 		health.MissingSources = append(health.MissingSources, agentDashboardSourceMemory)
 		return nil
 	}
-	items = append(items, loadDashboardMelhorias(filepath.Join(memoryDir, "melhorias.md"), health)...)
-	items = append(items, loadDashboardRelatoriosIndex(filepath.Join(memoryDir, "relatorios.md"), health)...)
-	items = append(items, loadDashboardPadroes(filepath.Join(memoryDir, "padroes.md"), health)...)
+	melhorias := loadDashboardMelhorias(filepath.Join(memoryDir, "melhorias.md"), health)
+	relatorios := loadDashboardRelatoriosIndex(filepath.Join(memoryDir, "relatorios.md"), health)
+	padroes := loadDashboardPadroes(filepath.Join(memoryDir, "padroes.md"), health)
+	items := make(
+		[]agentDashboardItem,
+		0,
+		len(melhorias)+len(relatorios)+len(padroes),
+	)
+	items = append(items, melhorias...)
+	items = append(items, relatorios...)
+	items = append(items, padroes...)
 	return items
 }
 
@@ -613,8 +628,9 @@ func loadDashboardOutputArtifacts(workspace string, health *agentDashboardHealth
 		if entry.IsDir() {
 			return nil
 		}
-		info, err := entry.Info()
-		if err != nil {
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			health.Errors = append(health.Errors, fmt.Sprintf("workspace/output: %v", infoErr))
 			return nil
 		}
 		artifact, ok := dashboardArtifactFromWorkspaceFile(workspace, file, info)

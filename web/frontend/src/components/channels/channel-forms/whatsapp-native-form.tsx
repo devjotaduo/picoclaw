@@ -211,8 +211,8 @@ export function WhatsAppNativeForm({
   if (compact) {
     return (
       <Card className="border-border/70 bg-card relative mx-auto w-full max-w-md overflow-hidden p-0 shadow-sm">
-        <div className="bg-[radial-gradient(circle,color-mix(in_oklab,var(--wa-brand)_12%,transparent),transparent_66%)] pointer-events-none absolute inset-x-12 top-14 h-40 opacity-60 blur-2xl" />
-        <div className="via-[color-mix(in_oklab,var(--wa-brand)_14%,transparent)] pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent to-transparent" />
+        <div className="pointer-events-none absolute inset-x-12 top-14 h-40 bg-[radial-gradient(circle,color-mix(in_oklab,var(--wa-brand)_12%,transparent),transparent_66%)] opacity-60 blur-2xl" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[color-mix(in_oklab,var(--wa-brand)_14%,transparent)] to-transparent" />
         <CardContent className="relative flex flex-col items-center gap-3 p-4">
           <div className="flex w-full justify-end px-1">
             <StatusPill status={status} />

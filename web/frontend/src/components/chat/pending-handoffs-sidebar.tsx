@@ -218,7 +218,7 @@ export function PendingHandoffsSidebar({ className }: { className?: string }) {
       )}
       aria-label="Conversas importantes"
     >
-      <section className="bg-card text-card-foreground flex min-h-0 max-h-[50%] basis-1/2 flex-col overflow-hidden rounded-3xl border p-3 shadow-sm">
+      <section className="bg-card text-card-foreground flex max-h-[50%] min-h-0 basis-1/2 flex-col overflow-hidden rounded-3xl border p-3 shadow-sm">
         <div className="bg-muted/60 mb-3 flex items-center gap-2 rounded-full p-1">
           <span className="bg-background text-foreground inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold shadow-sm">
             <IconUsers className="size-3.5" />
@@ -291,7 +291,8 @@ function CompanyOnboardingCard({ className }: { className?: string }) {
   const items = data?.items ?? COMPANY_ONBOARDING_FALLBACK
   const visibleItems = items.filter((item) => !item.completed)
   const total = data?.total ?? items.length
-  const completed = data?.completed ?? items.filter((item) => item.completed).length
+  const completed =
+    data?.completed ?? items.filter((item) => item.completed).length
   const missing = data?.missing ?? visibleItems.length
   const [openItemID, setOpenItemID] = useState<string | null>(
     () => visibleItems[0]?.id ?? null,

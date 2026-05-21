@@ -71,35 +71,40 @@ func buildCompanyOnboardingResponse(workspace string, now time.Time) (companyOnb
 			Title:       "Nome da empresa",
 			Description: "Nome real usado nas apresentações e respostas dos agentes.",
 			Source:      "Dados da empresa",
-			Completed:   lineHasReadyValue(memoryEmpresa, "Nome") || lineHasReadyValue(companyProfile, "Nome da empresa"),
+			Completed: lineHasReadyValue(memoryEmpresa, "Nome") ||
+				lineHasReadyValue(companyProfile, "Nome da empresa"),
 		},
 		{
 			ID:          "segment",
 			Title:       "Tipo de negócio",
 			Description: "Ex.: loja, clínica ou restaurante.",
 			Source:      "Dados da empresa",
-			Completed:   lineHasReadyValue(memoryEmpresa, "Segmento") || lineHasReadyValue(companyProfile, "Segmento"),
+			Completed: lineHasReadyValue(memoryEmpresa, "Segmento") ||
+				lineHasReadyValue(companyProfile, "Segmento"),
 		},
 		{
 			ID:          "description",
 			Title:       "Resumo do que a empresa faz",
 			Description: "Explicação curta para os agentes responderem sem inventar.",
 			Source:      "Dados da empresa",
-			Completed:   lineHasReadyValue(memoryEmpresa, "Descrição") || lineHasReadyValue(companyProfile, "Descrição curta"),
+			Completed: lineHasReadyValue(memoryEmpresa, "Descrição") ||
+				lineHasReadyValue(companyProfile, "Descrição curta"),
 		},
 		{
 			ID:          "products",
 			Title:       "Produtos ou serviços",
 			Description: "Lista do que pode ser oferecido ou explicado ao cliente.",
 			Source:      "Dados da empresa",
-			Completed:   lineHasReadyValue(memoryEmpresa, "Produtos ou serviços") || sectionHasReadyValues(companyProfile, "Produtos ou serviços"),
+			Completed: lineHasReadyValue(memoryEmpresa, "Produtos ou serviços") ||
+				sectionHasReadyValues(companyProfile, "Produtos ou serviços"),
 		},
 		{
 			ID:          "hours",
 			Title:       "Horário de atendimento",
 			Description: "Quando os agentes podem orientar o cliente e quando devem pedir retorno.",
 			Source:      "Dados da empresa",
-			Completed:   lineHasReadyValue(memoryEmpresa, "Horário") || sectionHasReadyValues(companyProfile, "Horário de funcionamento"),
+			Completed: lineHasReadyValue(memoryEmpresa, "Horário") ||
+				sectionHasReadyValues(companyProfile, "Horário de funcionamento"),
 		},
 		{
 			ID:          "location",
@@ -136,7 +141,8 @@ func buildCompanyOnboardingResponse(workspace string, now time.Time) (companyOnb
 			Title:       "Quando chamar uma pessoa",
 			Description: "Situações em que o atendimento precisa ir para humano.",
 			Source:      "Regras dos agentes",
-			Completed:   lineHasReadyValue(memoryEmpresa, "Quando chamar humano") || sectionHasReadyValues(companyProfile, "Quando chamar humano"),
+			Completed: lineHasReadyValue(memoryEmpresa, "Quando chamar humano") ||
+				sectionHasReadyValues(companyProfile, "Quando chamar humano"),
 		},
 		{
 			ID:          "limits",

@@ -9,6 +9,27 @@ import type {
   AgentDashboardTask,
 } from "@/api/agent-dashboard"
 
+type AgentDashboardHealthInput = Partial<
+  Omit<AgentDashboardHealth, "missing_sources" | "errors">
+> & {
+  missing_sources?: string[] | null
+  errors?: string[] | null
+}
+
+type AgentDashboardResponseInput = Partial<
+  Omit<
+    AgentDashboardResponse,
+    "metrics" | "agents" | "items" | "tasks" | "artifacts" | "health"
+  >
+> & {
+  metrics?: Partial<AgentDashboardMetrics> | null
+  agents?: AgentDashboardAgent[] | null
+  items?: AgentDashboardItem[] | null
+  tasks?: AgentDashboardTask[] | null
+  artifacts?: AgentDashboardArtifact[] | null
+  health?: AgentDashboardHealthInput | null
+}
+
 export function isActionableDashboardStatus(status: AgentDashboardStatus) {
   return (
     status === "new" ||
@@ -117,7 +138,7 @@ export function compactDashboardCount(value: number) {
 }
 
 export function normalizeAgentDashboardResponse(
-  response: Partial<AgentDashboardResponse> | null | undefined,
+  response: AgentDashboardResponseInput | null | undefined,
 ): AgentDashboardResponse {
   const metrics = normalizeDashboardMetrics(response?.metrics)
   const health = normalizeDashboardHealth(response?.health, response)
@@ -148,8 +169,11 @@ function normalizeDashboardMetrics(
 }
 
 function normalizeDashboardHealth(
-  health: Partial<AgentDashboardHealth> | null | undefined,
-  response: Partial<AgentDashboardResponse> | null | undefined,
+  health: AgentDashboardHealthInput | null | undefined,
+  response:
+    | Pick<AgentDashboardResponseInput, "generated_at">
+    | null
+    | undefined,
 ): AgentDashboardHealth {
   return {
     missing_sources: asStringArray(health?.missing_sources),

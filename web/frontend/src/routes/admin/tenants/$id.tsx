@@ -510,12 +510,14 @@ function TenantDetail({ id }: { id: string }) {
 }
 
 export const Route = createFileRoute("/admin/tenants/$id")({
-  component: () => {
-    const { id } = Route.useParams()
-    return (
-      <AdminGuard>
-        <TenantDetail id={id} />
-      </AdminGuard>
-    )
-  },
+  component: TenantDetailRoute,
 })
+
+function TenantDetailRoute() {
+  const { id } = Route.useParams()
+  return (
+    <AdminGuard>
+      <TenantDetail id={id} />
+    </AdminGuard>
+  )
+}

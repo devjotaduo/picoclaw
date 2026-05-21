@@ -7,8 +7,8 @@ import { toast } from "sonner"
 
 import { type AgentSummary, getInternalAgents } from "@/api/internal-agents"
 import { getLauncherPolicy } from "@/api/launcher-policy"
-import { AssistantMessage } from "@/components/chat/assistant-message"
 import type { AuraPalette } from "@/components/chat/ai-orb-avatar"
+import { AssistantMessage } from "@/components/chat/assistant-message"
 import {
   ChatComposer,
   type ChatInputDisabledReason,
@@ -104,9 +104,7 @@ function agentSearchText(agent: AgentSummary): string {
   return `${agent.id} ${agent.name} ${roleConfig}`.toLowerCase()
 }
 
-function findPublicAttendantAgent(
-  agents: AgentSummary[],
-): AgentSummary | null {
+function findPublicAttendantAgent(agents: AgentSummary[]): AgentSummary | null {
   const allowedAgents = agents.filter((agent) => {
     const text = agentSearchText(agent)
     return agent.allowed && agent.id !== "main" && !text.includes("rafael")
@@ -114,7 +112,9 @@ function findPublicAttendantAgent(
   return (
     allowedAgents.find((agent) => agentSearchText(agent).includes("clara")) ||
     allowedAgents.find((agent) => agent.id === PUBLIC_ATTENDANT_FALLBACK_ID) ||
-    allowedAgents.find((agent) => agentSearchText(agent).includes("atendente")) ||
+    allowedAgents.find((agent) =>
+      agentSearchText(agent).includes("atendente"),
+    ) ||
     allowedAgents.find((agent) => agentSearchText(agent).includes("sofia")) ||
     null
   )
@@ -181,7 +181,10 @@ function resolveAttachmentContentType(file: File): string | undefined {
   return DOCUMENT_EXTENSION_CONTENT_TYPES[getFileExtension(file.name)]
 }
 
-function normalizeDataUrlContentType(url: string, contentType?: string): string {
+function normalizeDataUrlContentType(
+  url: string,
+  contentType?: string,
+): string {
   if (!contentType) {
     return url
   }
@@ -282,9 +285,7 @@ export function ChatPage() {
   const selectedAgentID = testingPublicAttendant
     ? publicAttendantAgentID
     : mainAgentID
-  const activeAgent = testingPublicAttendant
-    ? publicAttendantAgent
-    : mainAgent
+  const activeAgent = testingPublicAttendant ? publicAttendantAgent : mainAgent
   const assistantName = testingPublicAttendant
     ? publicAttendantLabel(publicAttendantAgent)
     : (mainAgent?.name || mainAgent?.id || "").trim()

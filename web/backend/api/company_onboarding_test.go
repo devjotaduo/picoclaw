@@ -26,7 +26,7 @@ Horário de funcionamento:
 - Segunda a sexta: 08h às 18h
 `)
 	mustWriteCompanyOnboardingFile(t, workspace, filepath.Join("config", "authorized-channels.md"), `# Canais autorizados
-- "Atendimento Clientes" [ATUALIZAR — nome exato do grupo]
+- "Grupo de atendimento" [ATUALIZAR — nome exato do grupo]
 `)
 
 	got, err := buildCompanyOnboardingResponse(workspace, time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC))

@@ -21,6 +21,15 @@ type seahorseContextManager struct {
 	sessions session.SessionStore // for startup bootstrap
 }
 
+func (m *seahorseContextManager) Close() error {
+	if m == nil || m.engine == nil {
+		return nil
+	}
+	err := m.engine.Close()
+	m.engine = nil
+	return err
+}
+
 // newSeahorseContextManager creates a seahorse-backed ContextManager.
 func newSeahorseContextManager(_ json.RawMessage, al *AgentLoop) (ContextManager, error) {
 	if al == nil {

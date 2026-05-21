@@ -1,7 +1,12 @@
+import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import * as React from "react"
 
-import { ControlplaneError, createTenant } from "@/api/controlplane"
+import {
+  ControlplaneError,
+  createTenant,
+  listLauncherProfiles,
+} from "@/api/controlplane"
 import { AdminGuard } from "@/components/admin/AdminGuard"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,10 +17,15 @@ function NewTenantForm() {
   const [displayName, setDisplayName] = React.useState("")
   const [ownerEmail, setOwnerEmail] = React.useState("")
   const [subdomain, setSubdomain] = React.useState("")
+  const [profileId, setProfileId] = React.useState("")
   const [budget, setBudget] = React.useState("")
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState<string | null>(null)
+  const profiles = useQuery({
+    queryKey: ["launcher-profiles"],
+    queryFn: listLauncherProfiles,
+  })
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -27,6 +37,7 @@ function NewTenantForm() {
         display_name: displayName.trim(),
         owner_email: ownerEmail.trim().toLowerCase(),
         subdomain: subdomain.trim().toLowerCase(),
+        launcher_profile_id: profileId || undefined,
         monthly_budget_usd: budget ? Number(budget) : undefined,
       })
       setSuccess(`Criado tenant ${res.tenant_id} em ${res.url}`)
