@@ -1,8 +1,11 @@
 import {
+  IconAlertTriangle,
   IconArrowUp,
   IconAtom,
+  IconBook,
   IconBrandWhatsapp,
   IconChartBar,
+  IconClockHour4,
   IconCopy,
   IconKey,
   IconListDetails,
@@ -85,6 +88,9 @@ const featureFallbacks: Record<string, string> = {
   template_editor: "agent_templates",
   skill_editor: "skills",
   whatsapp_reports: "whatsapp_inbox",
+  operacao_memory: "config",
+  operacao_pendencias: "config",
+  operacao_cron: "config",
 }
 
 // SaaS tenants only see the whatsapp_native channel in the sidebar; other
@@ -314,6 +320,33 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             feature: "skill_editor",
             translateTitle: true,
             adminOnly: true,
+          },
+        ],
+      },
+      {
+        label: "navigation.operation_group",
+        defaultOpen: true,
+        items: [
+          {
+            title: "navigation.memory",
+            url: "/memory",
+            icon: IconBook,
+            feature: "operacao_memory",
+            translateTitle: true,
+          },
+          {
+            title: "navigation.pendencias",
+            url: "/pendencias",
+            icon: IconAlertTriangle,
+            feature: "operacao_pendencias",
+            translateTitle: true,
+          },
+          {
+            title: "navigation.cron",
+            url: "/cron",
+            icon: IconClockHour4,
+            feature: "operacao_cron",
+            translateTitle: true,
           },
         ],
       },

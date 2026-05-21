@@ -103,6 +103,15 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Workspace-defined agents from workspace/agents/*.md.
 	h.registerWorkspaceAgentRoutes(mux)
 
+	// Workspace memory files (workspace/memory/*.md): list, read, write.
+	h.registerWorkspaceMemoryRoutes(mux)
+
+	// Pendencias extracted from memory files (PENDENCIAS: blocks).
+	h.registerPendenciasRoutes(mux)
+
+	// Cron jobs read-only view (reads workspace/cron/jobs.json).
+	h.registerCronRoutes(mux)
+
 	// Agent prompt version history (server-side replacement for the
 	// localStorage fallback the frontend uses when this endpoint is
 	// unavailable).
