@@ -192,8 +192,9 @@ func (p *Provisioner) runProvision(
 	// written into config.json on the volume. Plaintext key is never persisted
 	// in the database; only the sha256 hash for audit and the key_alias
 	// (= tenant id) for delete.
+	exactProfileConfig := profile != nil && HasExactSeedFile(profile.SeedPath, "config.json")
 	llmKey := ""
-	if p.LiteLLM != nil {
+	if p.LiteLLM != nil && !exactProfileConfig {
 		out, err := p.LiteLLM.GenerateKey(ctx, litellm.GenerateKeyInput{
 			TenantID:         t.ID,
 			MonthlyBudgetUSD: t.MonthlyBudgetUSD,
@@ -210,8 +211,10 @@ func (p *Provisioner) runProvision(
 		}
 	}
 
-	if err := SeedPicoConfig(ctx, t.VolumePath, p.Cfg.LiteLLMURL, llmKey); err != nil {
-		return fmt.Errorf("seed picoclaw config: %w", err)
+	if !exactProfileConfig {
+		if err := SeedPicoConfig(ctx, t.VolumePath, p.Cfg.LiteLLMURL, llmKey); err != nil {
+			return fmt.Errorf("seed picoclaw config: %w", err)
+		}
 	}
 	if err := EnsureTenantWhatsAppNativeConfig(t.VolumePath); err != nil {
 		return fmt.Errorf("ensure whatsapp native config: %w", err)
@@ -435,8 +438,10 @@ func (p *Provisioner) ApplyProfile(ctx context.Context, tenantID, profileID stri
 	if err := WriteLauncherPolicy(t.VolumePath, profile.RolePolicy()); err != nil {
 		return backupDir, fmt.Errorf("write launcher policy: %w", err)
 	}
-	if err := p.ensureTenantLiteLLMConfig(ctx, t); err != nil {
-		return backupDir, fmt.Errorf("ensure litellm config: %w", err)
+	if !HasExactSeedFile(profile.SeedPath, "config.json") {
+		if err := p.ensureTenantLiteLLMConfig(ctx, t); err != nil {
+			return backupDir, fmt.Errorf("ensure litellm config: %w", err)
+		}
 	}
 	if err := EnsureTenantWhatsAppNativeConfig(t.VolumePath); err != nil {
 		return backupDir, fmt.Errorf("ensure whatsapp native config: %w", err)
