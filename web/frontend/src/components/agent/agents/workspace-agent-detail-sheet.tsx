@@ -1,4 +1,9 @@
-import { IconFileCode, IconLoader2, IconRobot, IconX } from "@tabler/icons-react"
+import {
+  IconFileCode,
+  IconLoader2,
+  IconRobot,
+  IconX,
+} from "@tabler/icons-react"
 import { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import rehypeHighlight from "rehype-highlight"

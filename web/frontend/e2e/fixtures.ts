@@ -16,7 +16,7 @@ export function destructive(name: string, fn: (page: Page) => Promise<void>) {
 }
 
 export const test = base.extend<{ editor: Page }>({
-  editor: async ({ page }, use) => {
+  editor: async ({ page }, run) => {
     await page.goto("/agent/editor")
     // Wait for either the empty state or at least one agent card in the sidebar.
     await page.waitForLoadState("networkidle")
@@ -26,7 +26,7 @@ export const test = base.extend<{ editor: Page }>({
         .first()
         .or(page.getByText(/agente/i).first()),
     ).toBeVisible({ timeout: 15_000 })
-    await use(page)
+    await run(page)
   },
 })
 

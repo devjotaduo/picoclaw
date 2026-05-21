@@ -17,6 +17,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"sync"
@@ -221,7 +222,7 @@ func (a *AutoProvisioner) Run(
 		// via email + senha.
 		var magicLink string
 		if ml, mlerr := a.Supabase.GenerateMagicLink(email, subdomain); mlerr != nil {
-			fmt.Printf("autoprovisioner: magic link generation failed for tenant %s: %v\n", out.TenantID, mlerr)
+			log.Printf("autoprovisioner: magic link generation failed for tenant %s: %v", out.TenantID, mlerr)
 		} else {
 			magicLink = ml
 		}

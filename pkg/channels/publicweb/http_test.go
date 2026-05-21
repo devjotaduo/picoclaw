@@ -308,9 +308,26 @@ func TestClientIPFromRequest(t *testing.T) {
 			expect: "198.51.100.7",
 		},
 		{
-			name:   "RemoteAddr fallback",
+			// stripPort: r.RemoteAddr is always "ip:port" from net/http,
+			// and we want only the host for stable CanonicalSenderID.
+			name:   "RemoteAddr fallback strips port",
 			setup:  func(r *http.Request) { r.RemoteAddr = "192.0.2.1:54321" },
-			expect: "192.0.2.1:54321",
+			expect: "192.0.2.1",
+		},
+		{
+			// IPv6 RemoteAddr is "[addr]:port" — net.SplitHostPort handles it.
+			name:   "IPv6 RemoteAddr fallback strips port",
+			setup:  func(r *http.Request) { r.RemoteAddr = "[2001:db8::1]:54321" },
+			expect: "2001:db8::1",
+		},
+		{
+			// X-Forwarded-For may include a port (rare); strip it too so
+			// the rate-limit / identity keys remain stable.
+			name: "XForwardedFor with port strips port",
+			setup: func(r *http.Request) {
+				r.Header.Set("X-Forwarded-For", "203.0.113.5:8080")
+			},
+			expect: "203.0.113.5",
 		},
 	}
 	for _, tc := range cases {

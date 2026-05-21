@@ -46,8 +46,20 @@ escape_json() {
 ESC_EMAIL="$(escape_json "$CONTACT_EMAIL")"
 ESC_WA="$(escape_json "$CONTACT_WHATSAPP")"
 
-BODY="$(printf '{"intake_id":"%s","action":"submit_intake","contact_email":"%s","contact_whatsapp":"%s","ts":%s}' \
-  "$INTAKE_ID" "$ESC_EMAIL" "$ESC_WA" "$TS")"
+# Visitor IP — the public-web channel exports it as $PICOCLAW_VISITOR_IP
+# when dispatching the skill, so the controlplane can rate-limit the
+# AutoProvisioner per-visitor (instead of per-controlplane-loopback,
+# which would collapse every callback to a single rate-limit key).
+# Optional: omitted from the JSON body when empty.
+VISITOR_IP="${PICOCLAW_VISITOR_IP:-}"
+ESC_IP="$(escape_json "$VISITOR_IP")"
+if [[ -n "$VISITOR_IP" ]]; then
+  BODY="$(printf '{"intake_id":"%s","action":"submit_intake","contact_email":"%s","contact_whatsapp":"%s","visitor_ip":"%s","ts":%s}' \
+    "$INTAKE_ID" "$ESC_EMAIL" "$ESC_WA" "$ESC_IP" "$TS")"
+else
+  BODY="$(printf '{"intake_id":"%s","action":"submit_intake","contact_email":"%s","contact_whatsapp":"%s","ts":%s}' \
+    "$INTAKE_ID" "$ESC_EMAIL" "$ESC_WA" "$TS")"
+fi
 
 SIG="$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" -hex | awk '{print $NF}')"
 

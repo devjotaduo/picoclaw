@@ -26,6 +26,7 @@ import {
   sendInternalAgentTurn,
   updateInternalAgentOrchestration,
 } from "@/api/internal-agents"
+import { AIOrbAvatar } from "@/components/chat/ai-orb-avatar"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -1506,46 +1507,50 @@ function AgentAvatar({
         image_url: profile.imageURL,
       }
     : agent.avatar
-  const Icon = iconForAgentAvatar(avatar?.icon)
   const imageURL = avatar?.image_url?.trim()
   const initials =
     avatar?.initials?.trim() ||
     (agent.name || agent.id).slice(0, 2).toUpperCase()
+  const seed = `${agent.id}:${agent.name || initials}`
+  const icon = renderAgentAvatarIcon(avatar?.icon, "size-4")
 
   return (
     <span
-      className="ring-border/50 flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md text-[10px] font-semibold ring-1"
+      className="ring-border/50 relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-semibold ring-1"
       style={{
-        backgroundColor: avatar?.background || "#475569",
+        backgroundColor: imageURL ? avatar?.background || "#475569" : undefined,
         color: avatar?.foreground || "#ffffff",
       }}
     >
       {imageURL ? (
         <img src={imageURL} alt="" className="size-full object-cover" />
-      ) : Icon ? (
-        <Icon className="size-4" />
       ) : (
-        initials
+        <>
+          <AIOrbAvatar seed={seed} className="absolute inset-0" />
+          <span className="relative z-10 flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.45)]">
+            {icon ?? initials}
+          </span>
+        </>
       )}
     </span>
   )
 }
 
-function iconForAgentAvatar(icon?: string) {
+function renderAgentAvatarIcon(icon: string | undefined, className: string) {
   switch ((icon || "").trim().toLowerCase()) {
     case "headset":
-      return IconHeadset
+      return <IconHeadset className={className} />
     case "target":
     case "sales":
-      return IconTargetArrow
+      return <IconTargetArrow className={className} />
     case "sparkles":
     case "marketing":
-      return IconSparkles
+      return <IconSparkles className={className} />
     case "assistant":
     case "shield":
-      return IconUserShield
+      return <IconUserShield className={className} />
     case "robot":
-      return IconRobot
+      return <IconRobot className={className} />
     default:
       return null
   }

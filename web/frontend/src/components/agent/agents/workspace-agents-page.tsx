@@ -12,17 +12,17 @@ import {
 } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import {
-  type ComponentType,
   type CSSProperties,
+  type ComponentType,
   type FormEvent,
   useState,
 } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
-  getWorkspaceAgents,
   type WorkspaceAgent,
   type WorkspaceAgentDetail,
+  getWorkspaceAgents,
 } from "@/api/workspace-agents"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
@@ -191,7 +191,7 @@ function AgentMiniChatCard({
   return (
     <article
       style={paletteStyle}
-      className="border-border/70 bg-card text-card-foreground hover:border-[color-mix(in_oklab,var(--agent-accent)_28%,var(--border))] relative flex min-h-[252px] flex-col overflow-hidden rounded-lg border p-4 shadow-sm transition duration-200 hover:shadow-md"
+      className="border-border/70 bg-card text-card-foreground relative flex min-h-[252px] flex-col overflow-hidden rounded-lg border p-4 shadow-sm transition duration-200 hover:border-[color-mix(in_oklab,var(--agent-accent)_28%,var(--border))] hover:shadow-md"
     >
       <div className="absolute top-3 right-3 z-10">
         <Button
@@ -208,11 +208,11 @@ function AgentMiniChatCard({
 
       <div className="flex flex-1 flex-col gap-4 pr-9">
         <div className="flex items-center gap-3">
-          <div className="bg-[color-mix(in_oklab,var(--agent-soft)_84%,var(--card))] text-[var(--agent-strong)] ring-[color-mix(in_oklab,var(--agent-accent)_32%,var(--border))] flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold ring-1">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklab,var(--agent-soft)_84%,var(--card))] text-xs font-semibold text-[var(--agent-strong)] ring-1 ring-[color-mix(in_oklab,var(--agent-accent)_32%,var(--border))]">
             {agentInitials(agent.name)}
           </div>
           <div className="min-w-0 space-y-1">
-            <h3 className="text-foreground text-base font-semibold leading-tight">
+            <h3 className="text-foreground text-base leading-tight font-semibold">
               {agent.name}
             </h3>
             <p className="text-muted-foreground line-clamp-1 text-sm leading-5">
@@ -250,7 +250,7 @@ function AgentMiniChatCard({
           ) : null}
 
           <form
-            className="border-border/70 bg-muted/20 focus-within:border-[color-mix(in_oklab,var(--agent-accent)_34%,var(--border))] flex items-center gap-2 rounded-lg border px-2 py-1 transition"
+            className="border-border/70 bg-muted/20 flex items-center gap-2 rounded-lg border px-2 py-1 transition focus-within:border-[color-mix(in_oklab,var(--agent-accent)_34%,var(--border))]"
             onSubmit={submitDraft}
           >
             <Input

@@ -56,7 +56,7 @@ function SofiaOrb() {
       className="ring-border/40 size-11 overflow-hidden rounded-full shadow-sm ring-1"
       aria-hidden="true"
     >
-      <AIOrbAvatar />
+      <AIOrbAvatar seed="sofia" />
     </div>
   )
 }

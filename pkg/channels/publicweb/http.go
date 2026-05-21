@@ -2,6 +2,7 @@ package publicweb
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -167,13 +168,27 @@ func writeJSONError(w http.ResponseWriter, status int, msg string) {
 // visitor's true IP changes.
 func clientIPFromRequest(r *http.Request) string {
 	if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
+		first := xf
 		if i := strings.IndexByte(xf, ','); i >= 0 {
-			return strings.TrimSpace(xf[:i])
+			first = xf[:i]
 		}
-		return strings.TrimSpace(xf)
+		return stripPort(strings.TrimSpace(first))
 	}
 	if rip := r.Header.Get("X-Real-IP"); rip != "" {
-		return strings.TrimSpace(rip)
+		return stripPort(strings.TrimSpace(rip))
 	}
-	return r.RemoteAddr
+	return stripPort(r.RemoteAddr)
+}
+
+// stripPort returns the host portion of an "ip:port" or "[ipv6]:port"
+// address, or the input unchanged when no port is present. Keeps
+// CanonicalSenderID stable across reconnects that change source port.
+func stripPort(addr string) string {
+	if addr == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
+	}
+	return addr
 }

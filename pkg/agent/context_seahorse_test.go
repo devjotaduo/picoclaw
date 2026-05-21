@@ -535,6 +535,7 @@ func TestSeahorseRealLoopNoDuplicateMessages(t *testing.T) {
 	msgBus := bus.NewMessageBus()
 	mockProvider := &simpleMockProvider{response: "I received your message."}
 	al := NewAgentLoop(cfg, msgBus, mockProvider)
+	defer al.Close()
 	defaultAgent := al.registry.GetDefaultAgent()
 	if defaultAgent == nil {
 		t.Fatal("expected default agent")
@@ -886,6 +887,7 @@ func TestSeahorseSteeringMessageIngested(t *testing.T) {
 	msgBus := bus.NewMessageBus()
 	mockProvider := &simpleMockProvider{response: "I received your message."}
 	al := NewAgentLoop(cfg, msgBus, mockProvider)
+	defer al.Close()
 	defaultAgent := al.registry.GetDefaultAgent()
 	if defaultAgent == nil {
 		t.Fatal("expected default agent")
@@ -993,6 +995,7 @@ func TestSeahorseSummarizeSkipsCondensedWhenBelowThreshold(t *testing.T) {
 	msgBus := bus.NewMessageBus()
 	provider := &seahorseTestProvider{}
 	al := NewAgentLoop(cfg, msgBus, provider)
+	defer al.Close()
 	defaultAgent := al.registry.GetDefaultAgent()
 	if defaultAgent == nil {
 		t.Fatal("expected default agent")

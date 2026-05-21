@@ -44,6 +44,7 @@ export interface CreateTenantInput {
   display_name: string
   owner_email: string
   subdomain: string
+  launcher_profile_id?: string
   monthly_budget_usd?: number
   mem_limit_mb?: number
   cpu_quota?: number
