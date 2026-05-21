@@ -171,6 +171,7 @@ func (h *Handler) Routes() http.Handler {
 				r.Put("/launcher-profiles/{id}/seed", h.handlePutLauncherProfileSeed)
 				r.Post("/launcher-profiles/{id}/import-standalone", h.handleImportStandaloneLauncherProfile)
 				r.Post("/tenants/{id}/apply-profile", h.handleApplyLauncherProfile)
+				r.Post("/tenants/onboarding/bootstrap", h.handleBootstrapOnboardingTenant)
 				r.Post("/tenants/{id}/clone", h.handleCloneTenant)
 				r.Get("/tenants/{id}/sanity", h.handleTenantSanity)
 				r.Post("/tenants/{id}/suspend", h.handleSuspendTenant)
