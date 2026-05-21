@@ -94,7 +94,7 @@ Visitor browser
 | 7. Controlplane callback endpoint | ✅ | `603e436d` | HMAC verify + anti-replay ±5min |
 | 8. workspace-onboarding/ template | ✅ | `f78d7c34`+`21cc044c` | Clara ported as Picoclaw agent |
 | 9. Bootstrap script + endpoint | ✅ | `889dd4b7` | `POST /api/v1/tenants/onboarding/bootstrap` |
-| 10. Frontend cutover (feature flag) | 🚧 stub | `7829cfe7` | `VITE_USE_ONBOARDING_TENANT` env scaffold; real cutover needs SSE event-shape adapter |
+| 10. Frontend cutover (feature flag) | 🚧 adapter ready | `7829cfe7` + onboardingTenantChat.ts | SSE event-shape adapter shipped (POST + GET-stream + typed events + open-handshake gate). Wire-up still gated on agent-side `session_id`→skill-env propagation and `extracted`/`provisioned` bridging. |
 | 11. Delete `internal/saas/clara/` | ⏸ | — | wait 1-2 weeks of stable parallel operation |
 | 12. Docs + memory | ✅ | (this commit) | |
 
@@ -166,13 +166,26 @@ VITE_ONBOARDING_TENANT_URL=https://onboarding.jotaduo.com
 
 ## Known gaps (follow-ups)
 
-- **Phase 10 functional cutover.** `useClaraChat.ts` reads
-  `VITE_USE_ONBOARDING_TENANT` but still hits the legacy
-  `/api/v1/public/company-intakes/{id}/chat` endpoint. Real cutover
-  needs either (a) an event-shape adapter mapping the publicweb
-  `{text:"..."}` chunks onto the legacy `{type, delta, ...}` structure
-  + the secondary GET for the SSE stream, or (b) richer SSE events
-  emitted by `publicweb.Channel.Send` matching the legacy contract.
+- **Phase 10 functional cutover (partial).** The SSE adapter ships as
+  `web/saas-admin/src/pages/pre-cadastro/clara/onboardingTenantChat.ts`
+  with vitest coverage. `useClaraChat.ts` still keeps the flag gated
+  until two backend pieces land:
+  1. **`intake_id` ↔ `session_id` binding.** The tenant's
+     `onboarding-mark-qualified` / `onboarding-submit-intake` skills
+     HMAC-callback the controlplane with `intake_id`. The agent loop
+     doesn't currently propagate the publicweb `session_id` to skill
+     scripts, so the cleanest path is: have the agent export
+     `PICOCLAW_CHAT_SESSION_ID` to skill env, and have the browser use
+     `intake_id` as the `session_id` it sends to the tenant.
+  2. **`extracted` / `qualified` / `tenant_provisioned` bridging.**
+     Today those events come inline in the legacy chat SSE. The tenant
+     only emits raw text. Pick one: (a) poll
+     `GET /api/v1/public/company-intakes/{id}` while in
+     qualified-but-not-provisioned state and synthesize the events
+     from intake-row changes (cheap; requires item 1 so the row is
+     actually updated by the tenant's skills); or (b) enrich
+     `publicweb.Channel.Send` with typed `OutboundEvent` variants and
+     have skills publish them through the bus.
 - **IP-roaming visitors.** Identity is `sha256(session_id+ip)[:8]`, so a
   mobile→wifi switch mid-conversation creates a new identity and the
   agent loses context. Acceptable v1; revisit if real-world complaint.
