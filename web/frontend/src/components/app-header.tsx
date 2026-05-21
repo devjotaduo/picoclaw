@@ -242,7 +242,7 @@ export function AppHeader() {
                   data-tour="gateway-button"
                   className={`h-8 gap-2 px-3 transition-colors duration-200 ${
                     isStopped
-                      ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                      ? "bg-emerald-700 text-white hover:bg-emerald-800"
                       : ""
                   } ${!canStart ? "pointer-events-none" : ""}`}
                   onClick={handleGatewayToggle}

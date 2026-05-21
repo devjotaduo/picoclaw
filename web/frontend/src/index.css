@@ -60,6 +60,7 @@
 
 :root {
   --radius: 0.625rem;
+  --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
 
   /* ===== MARCA ===== */
   --brand-clay: #d97757;
@@ -305,8 +306,7 @@
 
   /* ===== TIPOGRAFIA ===== */
   --font-sans:
-    "Anthropic Sans", system-ui, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
+    "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Anthropic Serif", Georgia, "Times New Roman", serif;
   --font-mono:
     "Anthropic Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,

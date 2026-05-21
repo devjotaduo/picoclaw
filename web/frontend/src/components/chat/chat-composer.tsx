@@ -330,7 +330,7 @@ export function ChatComposer({
             title={disabledMessage || undefined}
             className={cn(
               "placeholder:text-muted-foreground/50 max-h-[200px] min-h-[64px] resize-none border-0 bg-transparent px-2 py-1 text-[15px] shadow-none transition-colors focus-visible:ring-0 focus-visible:outline-none dark:bg-transparent",
-              !canInput && "cursor-not-allowed",
+              !canInput && "cursor-not-allowed placeholder:text-muted-foreground",
             )}
             minRows={1}
             maxRows={8}
