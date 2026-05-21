@@ -137,6 +137,23 @@ func (s *UserStore) MarkLogin(ctx context.Context, id int64) error {
 	return err
 }
 
+// UpdatePassword replaces the bcrypt hash for an existing active user.
+// Returns ErrUserNotFound when the user row is missing or not active.
+func (s *UserStore) UpdatePassword(ctx context.Context, id int64, bcryptHash string) error {
+	const q = `
+		UPDATE users
+		SET bcrypt_hash = $2
+		WHERE id = $1 AND status = 'active'`
+	tag, err := s.DB.Pool.Exec(ctx, q, id, bcryptHash)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
 // ListAll returns all users ordered by creation date, for platform admin use.
 func (s *UserStore) ListAll(ctx context.Context) ([]*User, error) {
 	const q = `

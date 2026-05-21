@@ -90,7 +90,7 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		log.Printf("supabase client init failed: %v (falling back to legacy auth)", err)
 	}
 
-	h.AutoProvision = NewAutoProvisioner(cfg, prov, h.Supabase, db)
+	h.AutoProvision = NewAutoProvisioner(cfg, prov, h.Supabase, db, mlr)
 	h.Reminders = &store.IntakeReminderStore{DB: db}
 	h.ReminderWorker = NewReminderWorker(cfg, db, mlr)
 
@@ -151,8 +151,10 @@ func (h *Handler) Routes() http.Handler {
 
 			r.Post("/auth/logout", h.handleLogout)
 			r.Get("/auth/me", h.handleMe)
+			r.Post("/auth/change-password", h.handleChangePassword)
 			r.Post("/admin/logout", h.handleLogout)
 			r.Get("/admin/me", h.handleMe)
+			r.Post("/admin/change-password", h.handleChangePassword)
 
 			r.Get("/tenants", h.handleListTenants)
 

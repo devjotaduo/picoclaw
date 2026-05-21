@@ -90,6 +90,11 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		return nil, fmt.Errorf("password: %w", err)
 	}
 
+	profile, err := p.resolveProfile(ctx, in.LauncherProfileID)
+	if err != nil {
+		return nil, err
+	}
+
 	volumePath := filepath.Join(p.Cfg.TenantHostDataDir, id)
 
 	backend := in.AuthBackend
@@ -108,6 +113,10 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		MemLimitMB:       in.MemLimitMB,
 		CPUQuota:         in.CPUQuota,
 		AuthBackend:      backend,
+	}
+	if profile != nil {
+		t.LauncherProfileID = &profile.ID
+		t.LauncherProfileVersionApplied = &profile.Version
 	}
 	if err := p.Tenants.Insert(ctx, t); err != nil {
 		return nil, fmt.Errorf("insert tenant: %w", err)
@@ -139,7 +148,14 @@ func (p *Provisioner) runProvision(ctx context.Context, t *store.Tenant, passwor
 	if err := CopyVolumeRaw(p.Cfg.TenantTemplateDir, t.VolumePath); err != nil {
 		return fmt.Errorf("mirror picoclaw home: %w", err)
 	}
-	if err := WriteLauncherPolicy(t.VolumePath, nil); err != nil {
+	if profile != nil {
+		if _, err := ApplyProfileSeed(profile.SeedPath, t.VolumePath); err != nil {
+			return fmt.Errorf("apply profile seed: %w", err)
+		}
+		if err := WriteLauncherPolicy(t.VolumePath, profile.RolePolicy()); err != nil {
+			return fmt.Errorf("write launcher policy: %w", err)
+		}
+	} else if err := WriteLauncherPolicy(t.VolumePath, nil); err != nil {
 		return fmt.Errorf("write launcher policy: %w", err)
 	}
 	if !skipDashboardPassword {

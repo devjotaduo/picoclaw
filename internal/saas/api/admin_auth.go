@@ -23,6 +23,11 @@ type acceptInviteReq struct {
 	Password string `json:"password"`
 }
 
+type changePasswordReq struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
 type loginAttempts struct {
 	mu     sync.Mutex
 	byIP   map[string][]time.Time
@@ -163,6 +168,63 @@ func (h *Handler) handleAcceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setSessionCookie(w, token)
 	writeJSON(w, http.StatusOK, map[string]any{"email": user.Email, "tenant_id": inv.TenantID, "role": inv.Role})
+}
+
+func (h *Handler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	user, ok := userFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	ip := clientIP(r)
+	if !h.LoginAttempts.allow(ip) {
+		writeError(w, http.StatusTooManyRequests, "too many attempts; try again later")
+		return
+	}
+
+	var req changePasswordReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	req.CurrentPassword = strings.TrimSpace(req.CurrentPassword)
+	req.NewPassword = strings.TrimSpace(req.NewPassword)
+	if req.CurrentPassword == "" {
+		writeError(w, http.StatusBadRequest, "current_password is required")
+		return
+	}
+	if len([]rune(req.NewPassword)) < 8 {
+		writeError(w, http.StatusBadRequest, "new_password must be at least 8 characters")
+		return
+	}
+	if req.CurrentPassword == req.NewPassword {
+		writeError(w, http.StatusBadRequest, "new password must differ from current password")
+		return
+	}
+
+	fresh, err := h.Users.GetByID(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "user lookup failed")
+		return
+	}
+	if fresh.Status != store.UserStatusActive || fresh.BcryptHash == nil || !auth.VerifyPassword(*fresh.BcryptHash, req.CurrentPassword) {
+		writeError(w, http.StatusUnauthorized, "current password is incorrect")
+		return
+	}
+
+	hash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "password hash failed")
+		return
+	}
+	if err := h.Users.UpdatePassword(r.Context(), fresh.ID, hash); err != nil {
+		writeError(w, http.StatusInternalServerError, "password update failed")
+		return
+	}
+	_ = h.Audit.Insert(r.Context(), &fresh.ID, nil, "auth.password.change", "user", fresh.Email)
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) handleMe(w http.ResponseWriter, r *http.Request) {

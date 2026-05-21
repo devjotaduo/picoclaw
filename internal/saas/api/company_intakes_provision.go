@@ -24,6 +24,7 @@ import (
 
 	supaauth "github.com/sipeed/picoclaw/internal/saas/auth"
 	"github.com/sipeed/picoclaw/internal/saas/config"
+	"github.com/sipeed/picoclaw/internal/saas/mailer"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 	"github.com/sipeed/picoclaw/internal/saas/tenant"
 )
@@ -57,6 +58,10 @@ type AutoProvisioner struct {
 	Tenants        *store.TenantStore
 	CompanyIntakes *store.CompanyIntakeStore
 	Reminders      *store.IntakeReminderStore // optional; when nil, no nudge emails
+	// Mailer entrega o email "seu painel está pronto" com email + senha
+	// juntos quando LoginMode=password. Nil quando SMTP não está
+	// configurado — nesse caso a senha sai apenas no resultado SSE.
+	Mailer *mailer.Mailer
 
 	rateLimit *ipDailyLimiter
 }
@@ -68,6 +73,7 @@ func NewAutoProvisioner(
 	prov *tenant.Provisioner,
 	supa *supaauth.SupabaseClient,
 	db *store.DB,
+	mlr *mailer.Mailer,
 ) *AutoProvisioner {
 	if !cfg.AutoProvisionEnabled {
 		return nil
@@ -79,6 +85,7 @@ func NewAutoProvisioner(
 		Tenants:        &store.TenantStore{DB: db},
 		CompanyIntakes: &store.CompanyIntakeStore{DB: db},
 		Reminders:      &store.IntakeReminderStore{DB: db},
+		Mailer:         mlr,
 		rateLimit:      newIPDailyLimiter(cfg.AutoProvisionPerIPDay),
 	}
 }
@@ -128,10 +135,6 @@ func (a *AutoProvisioner) Run(ctx context.Context, intake *store.CompanyIntake, 
 		return nil, fmt.Errorf("subdomain: %w", err)
 	}
 
-	loginMode := a.Cfg.AutoProvisionLoginMode
-	if loginMode == "" {
-		loginMode = string(supaauth.LoginModeMagicLink)
-	}
 	useSupabase := a.Supabase != nil
 	authBackend := "local"
 	if useSupabase {
@@ -191,13 +194,17 @@ func (a *AutoProvisioner) Run(ctx context.Context, intake *store.CompanyIntake, 
 		Subdomain: subdomain,
 		URL:       out.URL,
 		Email:     email,
-		LoginMode: loginMode,
+		// LoginMode é populado abaixo: "password" no caminho Supabase
+		// (também sai magic_link no email), "password" no caminho legacy.
 	}
 
 	if useSupabase {
-		userID, magicLink, suerr := a.Supabase.CreateTenantOwner(
+		// Sempre cria o user com senha (EmailConfirm=true) — Supabase em
+		// mode 'password' não envia email automaticamente, então a entrega
+		// é nossa.
+		userID, _, suerr := a.Supabase.CreateTenantOwner(
 			email, out.TenantID, subdomain,
-			supaauth.LoginMode(loginMode), out.InitialPassword,
+			supaauth.LoginModePassword, out.InitialPassword,
 		)
 		if suerr != nil {
 			// Best-effort rollback. We don't want a tenant the visitor can never
@@ -208,11 +215,26 @@ func (a *AutoProvisioner) Run(ctx context.Context, intake *store.CompanyIntake, 
 		if err := a.Tenants.SetSupabaseUserID(ctx, out.TenantID, userID); err != nil {
 			return nil, fmt.Errorf("save supabase user id: %w", err)
 		}
-		res.SupabaseUserID = userID
-		if loginMode == string(supaauth.LoginModeMagicLink) {
-			res.MagicLink = magicLink
+		// Gera magic link extra — entregamos URL + login + senha + magic
+		// link juntos. Falha aqui não é fatal: o tenant continua acessível
+		// via email + senha.
+		var magicLink string
+		if ml, mlerr := a.Supabase.GenerateMagicLink(email, subdomain); mlerr != nil {
+			fmt.Printf("autoprovisioner: magic link generation failed for tenant %s: %v\n", out.TenantID, mlerr)
 		} else {
-			res.InitialPassword = out.InitialPassword
+			magicLink = ml
+		}
+
+		res.SupabaseUserID = userID
+		res.InitialPassword = out.InitialPassword
+		res.MagicLink = magicLink
+		// Sempre 'password' a partir daqui — também temos magic link, mas o
+		// SSE handler usa LoginMode pra decidir o que mostrar no chat. O
+		// email transacional carrega ambos.
+		res.LoginMode = string(supaauth.LoginModePassword)
+
+		if a.Mailer != nil && a.Mailer.Enabled() {
+			go a.Mailer.SendCredentialsEmail(email, company, out.URL, email, out.InitialPassword, magicLink)
 		}
 	} else {
 		// Legacy mode: visitor logs in with the bcrypt-seeded local password.

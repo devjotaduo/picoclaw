@@ -327,10 +327,16 @@ func (h *Handler) handleSubmitCompanyIntake(w http.ResponseWriter, r *http.Reque
 			resp["subdomain"] = res.Subdomain
 			resp["email"] = res.Email
 			resp["login_mode"] = res.LoginMode
-			if res.LoginMode == "magic_link" {
-				resp["check_email"] = true
-			} else if res.InitialPassword != "" {
+			// A partir da unificação, sempre que Supabase está ligado a gente
+			// gera senha + magic link e dispara email transacional com ambos.
+			// Emitir initial_password no SSE permite que o Clara mostre as
+			// credenciais na hora; check_email avisa o visitante que o email
+			// também foi enviado.
+			if res.InitialPassword != "" {
 				resp["initial_password"] = res.InitialPassword
+				resp["check_email"] = true
+			} else if res.LoginMode == "magic_link" {
+				resp["check_email"] = true
 			}
 		}
 	}
