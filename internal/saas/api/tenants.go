@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -308,6 +309,102 @@ func (h *Handler) handleRotatePassword(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"initial_password": password,
 		"warning":          "Save this password now — it will not be shown again.",
+	})
+}
+
+// bootstrapOnboardingReq is the body of POST /tenants/onboarding/bootstrap.
+// All fields default to sane onboarding-tenant values, so callers (typically
+// scripts/provision-onboarding-tenant.sh) can POST an empty body.
+type bootstrapOnboardingReq struct {
+	DisplayName         string `json:"display_name"`
+	Subdomain           string `json:"subdomain"`
+	WorkspaceOverlayDir string `json:"workspace_overlay_dir"`
+}
+
+// handleBootstrapOnboardingTenant provisions the singleton public onboarding
+// tenant (is_public=true) and overlays workspace-onboarding/ into its volume.
+// Idempotent: returns 409 with the existing tenant info if the subdomain is
+// already provisioned, so the bootstrap script can re-run safely.
+func (h *Handler) handleBootstrapOnboardingTenant(w http.ResponseWriter, r *http.Request) {
+	var req bootstrapOnboardingReq
+	// Decode is best-effort: an empty body is OK (script may not send any
+	// overrides). io.EOF is the canonical "empty body" signal from json.Decoder.
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	req.DisplayName = strings.TrimSpace(req.DisplayName)
+	req.Subdomain = strings.TrimSpace(strings.ToLower(req.Subdomain))
+	if req.DisplayName == "" {
+		req.DisplayName = "Onboarding"
+	}
+	if req.Subdomain == "" {
+		req.Subdomain = "onboarding"
+	}
+
+	// Dedup by subdomain — the onboarding tenant is a singleton. Surface a
+	// 409 so the script can short-circuit cleanly instead of hitting the
+	// downstream "subdomain already taken" path with an opaque body.
+	if existing, err := h.Tenants.GetBySubdomain(r.Context(), req.Subdomain); err == nil && existing != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":     "onboarding tenant already exists",
+			"tenant_id": existing.ID,
+			"subdomain": existing.Subdomain,
+			"url":       tenantURL(h.Cfg, existing.Subdomain),
+		})
+		return
+	} else if err != nil && !errors.Is(err, store.ErrTenantNotFound) {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+
+	if err := tenant.ValidateSubdomain(req.Subdomain); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// The onboarding tenant has no human owner — derive an ops mailbox from
+	// the configured TenantBaseDomain so the owner_email column has a stable
+	// non-empty value the controlplane can audit later.
+	ownerEmail := "ops@" + strings.Trim(h.Cfg.TenantBaseDomain, ".")
+
+	out, err := h.Provisioner.Create(r.Context(), tenant.CreateInput{
+		DisplayName: req.DisplayName,
+		OwnerEmail:  ownerEmail,
+		Subdomain:   req.Subdomain,
+		MemLimitMB:  512,
+		CPUQuota:    0.5,
+		IsPublic:    true,
+		AuthBackend: "local", // public tenant has no Supabase user
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Workspace overlay — same pattern as handleCreateTenant, but the overlay
+	// dir is request-scoped so the operator can point at any path on the host
+	// (defaults to /srv/picoclaw/workspace-onboarding). Best-effort: logged on
+	// failure, never rolls back tenant creation.
+	overlayDir := strings.TrimSpace(req.WorkspaceOverlayDir)
+	if overlayDir == "" {
+		overlayDir = "/srv/picoclaw/workspace-onboarding"
+	}
+	if t, gerr := h.Tenants.Get(r.Context(), out.TenantID); gerr == nil && t != nil && t.VolumePath != "" {
+		if oerr := tenant.OverlayWorkspace(overlayDir, t.VolumePath); oerr != nil {
+			log.Printf("workspace overlay failed for onboarding tenant %s: %v", out.TenantID, oerr)
+		} else if rerr := h.Provisioner.Restart(r.Context(), out.TenantID); rerr != nil {
+			log.Printf("restart after workspace overlay failed for onboarding tenant %s: %v", out.TenantID, rerr)
+		}
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"tenant_id":             out.TenantID,
+		"url":                   out.URL,
+		"subdomain":             req.Subdomain,
+		"is_public":             true,
+		"workspace_overlay_dir": overlayDir,
+		"info":                  "Onboarding tenant provisioned. Next: complete Phases 4-7 of the plan so the public-web channel + chat endpoints are functional.",
 	})
 }
 
