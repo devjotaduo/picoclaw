@@ -147,6 +147,9 @@ func TestSeedPicoConfigPreservesProfileDefaultModel(t *testing.T) {
 	if got := settings["bridge_url"]; got != "" {
 		t.Fatalf("whatsapp bridge_url = %#v, want empty", got)
 	}
+	if got := settings["session_store_path"]; got != "" {
+		t.Fatalf("whatsapp session_store_path = %#v, want empty", got)
+	}
 }
 
 func TestSeedPicoConfigFallsBackWhenProfileDefaultHasNoCredential(t *testing.T) {
@@ -236,6 +239,9 @@ func TestEnsureTenantWhatsAppNativeConfigRepairsCopiedProfile(t *testing.T) {
 	}
 	if got := settings["bridge_url"]; got != "" {
 		t.Fatalf("bridge_url = %v, want empty", got)
+	}
+	if got := settings["session_store_path"]; got != "" {
+		t.Fatalf("session_store_path = %v, want empty", got)
 	}
 }
 
