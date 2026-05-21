@@ -19,6 +19,16 @@ cmd/**/workspace
 .codex-dev-logs/
 pre-cadastro-e2e-*.png
 
+# agent-skills + ui-ux-pro-max-skill were accidentally added as gitlinks
+# (mode 160000) in earlier commits without a corresponding .gitmodules
+# entry. That broke CI's submodule checkout step. Removed from the index
+# in PR #39; ignored here so they don't sneak back in. If you want to
+# track them for real, either:
+#   - add as a regular directory: `git add -f <name>/`
+#   - add as a proper submodule:  `git submodule add <url> <name>`
+agent-skills/
+ui-ux-pro-max-skill/
+
 # Runtime state under workspace/ that should never be tracked
 workspace/state/
 workspace/whatsapp/
