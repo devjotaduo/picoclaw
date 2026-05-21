@@ -51,6 +51,10 @@ type Tenant struct {
 	// AuthBackend selects how the controlplane validates dashboard requests
 	// for this tenant: "local" (sessions table) or "supabase" (verify JWT).
 	AuthBackend string
+	// IsPublic: when true, tenant launcher accepts anonymous traffic on
+	// /api/public/* routes (no Supabase JWT). Used by the onboarding tenant
+	// serving /pre-cadastro visitors.
+	IsPublic bool
 }
 
 type TenantStore struct{ DB *DB }
@@ -61,7 +65,7 @@ const tenantCols = `tenants.id, tenants.display_name, tenants.owner_email, tenan
     tenants.created_at, tenants.suspended_at, tenants.deleted_at, tenants.cleanup_completed_at,
     tenants.crm_contact_id, tenants.crm_company_id, tenants.crm_deal_id,
     tenants.launcher_profile_id, tenants.launcher_profile_version_applied,
-    tenants.supabase_user_id::text, tenants.auth_backend`
+    tenants.supabase_user_id::text, tenants.auth_backend, tenants.is_public`
 
 func scanTenant(row pgx.Row) (*Tenant, error) {
 	var t Tenant
@@ -72,7 +76,7 @@ func scanTenant(row pgx.Row) (*Tenant, error) {
 		&t.CreatedAt, &t.SuspendedAt, &t.DeletedAt, &t.CleanupCompletedAt,
 		&t.CRMContactID, &t.CRMCompanyID, &t.CRMDealID,
 		&t.LauncherProfileID, &t.LauncherProfileVersionApplied,
-		&t.SupabaseUserID, &t.AuthBackend,
+		&t.SupabaseUserID, &t.AuthBackend, &t.IsPublic,
 	)
 	return &t, err
 }
@@ -86,13 +90,13 @@ func (s *TenantStore) Insert(ctx context.Context, t *Tenant) error {
 		INSERT INTO tenants (id, display_name, owner_email, subdomain, status,
 		                     container_image, volume_path, monthly_budget_usd,
 		                     mem_limit_mb, cpu_quota, launcher_profile_id,
-		                     launcher_profile_version_applied, auth_backend)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`
+		                     launcher_profile_version_applied, auth_backend, is_public)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`
 	_, err := s.DB.Pool.Exec(ctx, q,
 		t.ID, t.DisplayName, t.OwnerEmail, t.Subdomain, t.Status,
 		t.ContainerImage, t.VolumePath, t.MonthlyBudgetUSD,
 		t.MemLimitMB, t.CPUQuota, t.LauncherProfileID, t.LauncherProfileVersionApplied,
-		backend,
+		backend, t.IsPublic,
 	)
 	return err
 }
