@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -64,17 +65,37 @@ func (l *loginAttempts) allow(ip string) bool {
 	return true
 }
 
+// clientIP returns the visitor's bare IP (no port), preferring
+// X-Forwarded-For (first hop) then X-Real-IP then RemoteAddr. Used as the
+// rate-limiter key, so reconnect-with-new-source-port can't slip past the
+// limiter and legitimate users behind a single NAT/proxy aren't fragmented
+// across multiple keys.
 func clientIP(r *http.Request) string {
 	if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
+		first := xf
 		if i := strings.IndexByte(xf, ','); i >= 0 {
-			return strings.TrimSpace(xf[:i])
+			first = xf[:i]
 		}
-		return strings.TrimSpace(xf)
+		return stripPort(strings.TrimSpace(first))
 	}
 	if rip := r.Header.Get("X-Real-IP"); rip != "" {
-		return rip
+		return stripPort(strings.TrimSpace(rip))
 	}
-	return r.RemoteAddr
+	return stripPort(r.RemoteAddr)
+}
+
+// stripPort returns the host portion of an "ip:port" or "[ipv6]:port"
+// address, or the input unchanged when no port is present. We hit this on
+// r.RemoteAddr (always host:port from net/http) and on rare XFF/X-Real-IP
+// values that include a port — never strip from a bare IPv4/IPv6 literal.
+func stripPort(addr string) string {
+	if addr == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
+	}
+	return addr
 }
 
 func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {

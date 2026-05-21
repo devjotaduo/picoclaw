@@ -18,8 +18,7 @@ export function UserMessage({ content, attachments = [] }: UserMessageProps) {
     (attachment) => attachment.type === "audio",
   )
   const fileAttachments = attachments.filter(
-    (attachment) =>
-      attachment.type !== "image" && attachment.type !== "audio",
+    (attachment) => attachment.type !== "image" && attachment.type !== "audio",
   )
 
   const formatAttachmentType = (attachment: ChatAttachment) => {

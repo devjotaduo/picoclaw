@@ -275,7 +275,7 @@ const AGENT_LABELS: Record<NonNullable<ClaraExtracted["priorityAgent"]>, string>
 	marcos: "Marcos (vendas e orçamentos)",
 	camila: "Camila (suporte e pós-venda)",
 	lia: "Lia (marketing e Instagram)",
-	rafael: "Rafael (assistente interno do dono)",
+	rafael: "Rafael (Assistente interno)",
 };
 
 const PROBLEM_AREA_LABELS: Record<NonNullable<ClaraExtracted["problemArea"]>, string> = {

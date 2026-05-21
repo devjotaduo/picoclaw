@@ -35,6 +35,7 @@ import { Route as AgentSkillEditorRouteImport } from './routes/agent/skill-edito
 import { Route as AgentOrchestrationRouteImport } from './routes/agent/orchestration'
 import { Route as AgentHubRouteImport } from './routes/agent/hub'
 import { Route as AgentEditorRouteImport } from './routes/agent/editor'
+import { Route as AgentDashboardRouteImport } from './routes/agent/dashboard'
 import { Route as AgentAgentsRouteImport } from './routes/agent/agents'
 import { Route as AdminCloneRouteImport } from './routes/admin/clone'
 import { Route as AdminTenantsIndexRouteImport } from './routes/admin/tenants/index'
@@ -171,6 +172,11 @@ const AgentEditorRoute = AgentEditorRouteImport.update({
   path: '/editor',
   getParentRoute: () => AgentRoute,
 } as any)
+const AgentDashboardRoute = AgentDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AgentRoute,
+} as any)
 const AgentAgentsRoute = AgentAgentsRouteImport.update({
   id: '/agents',
   path: '/agents',
@@ -213,6 +219,7 @@ export interface FileRoutesByFullPath {
   '/sofia-onboarding': typeof SofiaOnboardingRoute
   '/admin/clone': typeof AdminCloneRoute
   '/agent/agents': typeof AgentAgentsRoute
+  '/agent/dashboard': typeof AgentDashboardRoute
   '/agent/editor': typeof AgentEditorRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/orchestration': typeof AgentOrchestrationRoute
@@ -246,6 +253,7 @@ export interface FileRoutesByTo {
   '/sofia-onboarding': typeof SofiaOnboardingRoute
   '/admin/clone': typeof AdminCloneRoute
   '/agent/agents': typeof AgentAgentsRoute
+  '/agent/dashboard': typeof AgentDashboardRoute
   '/agent/editor': typeof AgentEditorRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/orchestration': typeof AgentOrchestrationRoute
@@ -280,6 +288,7 @@ export interface FileRoutesById {
   '/sofia-onboarding': typeof SofiaOnboardingRoute
   '/admin/clone': typeof AdminCloneRoute
   '/agent/agents': typeof AgentAgentsRoute
+  '/agent/dashboard': typeof AgentDashboardRoute
   '/agent/editor': typeof AgentEditorRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/orchestration': typeof AgentOrchestrationRoute
@@ -315,6 +324,7 @@ export interface FileRouteTypes {
     | '/sofia-onboarding'
     | '/admin/clone'
     | '/agent/agents'
+    | '/agent/dashboard'
     | '/agent/editor'
     | '/agent/hub'
     | '/agent/orchestration'
@@ -348,6 +358,7 @@ export interface FileRouteTypes {
     | '/sofia-onboarding'
     | '/admin/clone'
     | '/agent/agents'
+    | '/agent/dashboard'
     | '/agent/editor'
     | '/agent/hub'
     | '/agent/orchestration'
@@ -381,6 +392,7 @@ export interface FileRouteTypes {
     | '/sofia-onboarding'
     | '/admin/clone'
     | '/agent/agents'
+    | '/agent/dashboard'
     | '/agent/editor'
     | '/agent/hub'
     | '/agent/orchestration'
@@ -604,6 +616,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentEditorRouteImport
       parentRoute: typeof AgentRoute
     }
+    '/agent/dashboard': {
+      id: '/agent/dashboard'
+      path: '/dashboard'
+      fullPath: '/agent/dashboard'
+      preLoaderRoute: typeof AgentDashboardRouteImport
+      parentRoute: typeof AgentRoute
+    }
     '/agent/agents': {
       id: '/agent/agents'
       path: '/agents'
@@ -656,6 +675,7 @@ const ChannelsRouteRouteWithChildren = ChannelsRouteRoute._addFileChildren(
 
 interface AgentRouteChildren {
   AgentAgentsRoute: typeof AgentAgentsRoute
+  AgentDashboardRoute: typeof AgentDashboardRoute
   AgentEditorRoute: typeof AgentEditorRoute
   AgentHubRoute: typeof AgentHubRoute
   AgentOrchestrationRoute: typeof AgentOrchestrationRoute
@@ -670,6 +690,7 @@ interface AgentRouteChildren {
 
 const AgentRouteChildren: AgentRouteChildren = {
   AgentAgentsRoute: AgentAgentsRoute,
+  AgentDashboardRoute: AgentDashboardRoute,
   AgentEditorRoute: AgentEditorRoute,
   AgentHubRoute: AgentHubRoute,
   AgentOrchestrationRoute: AgentOrchestrationRoute,

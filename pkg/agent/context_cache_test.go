@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
 
@@ -450,11 +451,13 @@ Updated content.`
 func TestGlobalSkillFileContentChange(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
+	picoclawHome := filepath.Join(tmpHome, ".picoclaw")
+	t.Setenv(config.EnvHome, picoclawHome)
 
 	tmpDir := setupWorkspace(t, nil)
 	defer os.RemoveAll(tmpDir)
 
-	globalSkillPath := filepath.Join(tmpHome, ".picoclaw", "skills", "global-skill", "SKILL.md")
+	globalSkillPath := filepath.Join(picoclawHome, "skills", "global-skill", "SKILL.md")
 	if err := os.MkdirAll(filepath.Dir(globalSkillPath), 0o755); err != nil {
 		t.Fatal(err)
 	}

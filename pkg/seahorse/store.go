@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -12,6 +13,8 @@ import (
 type Store struct {
 	db *sql.DB
 }
+
+var summaryIDCounter uint64
 
 // CreateSummaryInput holds parameters for creating a summary.
 type CreateSummaryInput struct {
@@ -1611,8 +1614,9 @@ func (s *Store) scanSummaries(rows *sql.Rows) ([]Summary, error) {
 	return summaries, nil
 }
 
-func generateSummaryID(content string, t time.Time) string {
-	return fmt.Sprintf("sum_%x", t.UnixNano())
+func generateSummaryID(_ string, t time.Time) string {
+	n := atomic.AddUint64(&summaryIDCounter, 1)
+	return fmt.Sprintf("sum_%x_%x", t.UnixNano(), n)
 }
 
 func isUniqueViolation(err error) bool {

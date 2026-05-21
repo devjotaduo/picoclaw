@@ -333,6 +333,15 @@ func (al *AgentLoop) Close() {
 		}
 	}
 
+	if closer, ok := al.contextManager.(interface{ Close() error }); ok {
+		if err := closer.Close(); err != nil {
+			logger.ErrorCF("agent", "Failed to close context manager",
+				map[string]any{
+					"error": err.Error(),
+				})
+		}
+	}
+
 	al.GetRegistry().Close()
 	if al.hooks != nil {
 		al.hooks.Close()

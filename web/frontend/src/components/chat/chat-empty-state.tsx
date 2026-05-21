@@ -1,5 +1,4 @@
 import {
-  IconPlugConnectedX,
   IconRobotOff,
   IconSparkles,
   IconStar,
@@ -10,8 +9,15 @@ import { useTranslation } from "react-i18next"
 
 import type { AgentSummary } from "@/api/internal-agents"
 import type { LauncherQuickTask } from "@/api/launcher-policy"
-import { AIOrbAvatar } from "@/components/chat/ai-orb-avatar"
+import { AIOrbAvatar, type AuraPalette } from "@/components/chat/ai-orb-avatar"
 import { Button } from "@/components/ui/button"
+
+const DISCONNECTED_GATEWAY_AURA: AuraPalette = [
+  "#EF4444",
+  "#FB7185",
+  "#B91C1C",
+  "#7F1D1D",
+]
 
 interface ChatEmptyStateProps {
   hasAvailableModels: boolean
@@ -19,6 +25,10 @@ interface ChatEmptyStateProps {
   isConnected: boolean
   agent?: AgentSummary | null
   chatIntro?: string
+  displayName?: string
+  displayDescription?: string
+  avatarSeed?: string
+  avatarColors?: AuraPalette
   quickTasks?: LauncherQuickTask[]
   disabled?: boolean
   onQuickTask?: (prompt: string) => void
@@ -54,11 +64,39 @@ export function ChatEmptyState({
   isConnected,
   agent,
   chatIntro,
+  displayName,
+  displayDescription,
+  avatarSeed,
+  avatarColors,
   quickTasks,
   disabled,
   onQuickTask,
 }: ChatEmptyStateProps) {
   const { t } = useTranslation()
+
+  if (!isConnected) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 opacity-80">
+        <div
+          className="mb-6 size-20 overflow-hidden rounded-full shadow-sm ring-1 ring-red-200/20"
+          aria-hidden="true"
+        >
+          <AIOrbAvatar
+            seed="gateway-disconnected"
+            colors={DISCONNECTED_GATEWAY_AURA}
+            ringClassName="ring-red-200/35"
+            tone="red"
+          />
+        </div>
+        <h3 className="mb-2 text-xl font-medium">
+          {t("chat.empty.notRunning")}
+        </h3>
+        <p className="text-muted-foreground mb-4 text-center text-sm">
+          {t("chat.empty.notRunningDescription")}
+        </p>
+      </div>
+    )
+  }
 
   if (!hasAvailableModels) {
     return (
@@ -95,27 +133,11 @@ export function ChatEmptyState({
     )
   }
 
-  if (!isConnected) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 opacity-70">
-        <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500">
-          <IconPlugConnectedX className="h-8 w-8" />
-        </div>
-        <h3 className="mb-2 text-xl font-medium">
-          {t("chat.empty.notRunning")}
-        </h3>
-        <p className="text-muted-foreground mb-4 text-center text-sm">
-          {t("chat.empty.notRunningDescription")}
-        </p>
-      </div>
-    )
-  }
-
-  const agentName = (agent?.name || agent?.id || "").trim()
+  const agentName = (displayName || agent?.name || agent?.id || "").trim()
   const heading = agentName
     ? t("chat.welcomeWithAgent", { name: agentName })
     : t("chat.welcome")
-  const agentDescription = agentIntro(agent, t)
+  const agentDescription = displayDescription?.trim() || agentIntro(agent, t)
   const description = (agentDescription ||
     (chatIntro && chatIntro.length > 0
       ? chatIntro
@@ -137,7 +159,10 @@ export function ChatEmptyState({
             className="size-full object-cover"
           />
         ) : (
-          <AIOrbAvatar />
+          <AIOrbAvatar
+            seed={avatarSeed || agentName || agent?.id || "chat"}
+            colors={avatarColors}
+          />
         )}
       </div>
       <h3 className="mb-2 text-center text-xl font-medium">{heading}</h3>

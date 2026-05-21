@@ -1,12 +1,13 @@
 import { IconPlus } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { useAtom } from "jotai"
-import { type ChangeEvent, useEffect, useRef, useState } from "react"
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
 import { type AgentSummary, getInternalAgents } from "@/api/internal-agents"
 import { getLauncherPolicy } from "@/api/launcher-policy"
+import type { AuraPalette } from "@/components/chat/ai-orb-avatar"
 import { AssistantMessage } from "@/components/chat/assistant-message"
 import {
   ChatComposer,
@@ -80,6 +81,59 @@ const DOCUMENT_EXTENSION_CONTENT_TYPES: Record<string, string> = {
 }
 const ATTACHMENT_ACCEPT =
   "image/jpeg,image/png,image/gif,image/webp,image/bmp,application/pdf,text/plain,text/markdown,text/csv,application/json,.pdf,.txt,.md,.csv,.json,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+const PUBLIC_ATTENDANT_FALLBACK_ID = "assistente"
+const PUBLIC_ATTENDANT_FALLBACK_NAME = "Atendente público"
+const PUBLIC_ATTENDANT_DESCRIPTION =
+  "Atendimento inicial da empresa para receber clientes, tirar dúvidas simples e encaminhar quando precisar."
+const PUBLIC_ATTENDANT_AURA: AuraPalette = [
+  "#22C55E",
+  "#0EA5E9",
+  "#F59E0B",
+  "#EC4899",
+]
+
+function agentSearchText(agent: AgentSummary): string {
+  const roleConfig = (() => {
+    try {
+      return JSON.stringify(agent.role_config ?? {})
+    } catch {
+      return ""
+    }
+  })()
+
+  return `${agent.id} ${agent.name} ${roleConfig}`.toLowerCase()
+}
+
+function findPublicAttendantAgent(agents: AgentSummary[]): AgentSummary | null {
+  const allowedAgents = agents.filter((agent) => {
+    const text = agentSearchText(agent)
+    return agent.allowed && agent.id !== "main" && !text.includes("rafael")
+  })
+  return (
+    allowedAgents.find((agent) => agentSearchText(agent).includes("clara")) ||
+    allowedAgents.find((agent) => agent.id === PUBLIC_ATTENDANT_FALLBACK_ID) ||
+    allowedAgents.find((agent) =>
+      agentSearchText(agent).includes("atendente"),
+    ) ||
+    allowedAgents.find((agent) => agentSearchText(agent).includes("sofia")) ||
+    null
+  )
+}
+
+function publicAttendantLabel(agent: AgentSummary | null): string {
+  if (!agent) {
+    return PUBLIC_ATTENDANT_FALLBACK_NAME
+  }
+  const text = agentSearchText(agent)
+  if (
+    agent.id === PUBLIC_ATTENDANT_FALLBACK_ID &&
+    !text.includes("atendente") &&
+    !text.includes("clara")
+  ) {
+    return PUBLIC_ATTENDANT_FALLBACK_NAME
+  }
+  return (agent?.name || "").trim() || PUBLIC_ATTENDANT_FALLBACK_NAME
+}
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -127,7 +181,10 @@ function resolveAttachmentContentType(file: File): string | undefined {
   return DOCUMENT_EXTENSION_CONTENT_TYPES[getFileExtension(file.name)]
 }
 
-function normalizeDataUrlContentType(url: string, contentType?: string): string {
+function normalizeDataUrlContentType(
+  url: string,
+  contentType?: string,
+): string {
   if (!contentType) {
     return url
   }
@@ -198,6 +255,8 @@ export function ChatPage() {
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [mainAgent, setMainAgent] = useState<AgentSummary | null>(null)
   const [mainAgentID, setMainAgentID] = useState("main")
+  const [agents, setAgents] = useState<AgentSummary[]>([])
+  const [testingPublicAttendant, setTestingPublicAttendant] = useState(false)
   const [showAssistantDetails, setShowAssistantDetails] = useAtom(
     showAssistantDetailsAtom,
   )
@@ -218,8 +277,21 @@ export function ChatPage() {
     newChat,
   } = usePicoChat()
 
-  const selectedAgentID = mainAgentID
-  const assistantName = (mainAgent?.name || mainAgent?.id || "").trim()
+  const publicAttendantAgent = useMemo(
+    () => findPublicAttendantAgent(agents),
+    [agents],
+  )
+  const publicAttendantAgentID = publicAttendantAgent?.id || mainAgentID
+  const selectedAgentID = testingPublicAttendant
+    ? publicAttendantAgentID
+    : mainAgentID
+  const activeAgent = testingPublicAttendant ? publicAttendantAgent : mainAgent
+  const assistantName = testingPublicAttendant
+    ? publicAttendantLabel(publicAttendantAgent)
+    : (mainAgent?.name || mainAgent?.id || "").trim()
+  const emptyStateDescription = testingPublicAttendant
+    ? PUBLIC_ATTENDANT_DESCRIPTION
+    : undefined
 
   const { state: gwState } = useGateway()
   const isGatewayRunning = gwState === "running"
@@ -302,6 +374,7 @@ export function ChatPage() {
           next.main_agent_id ||
           next.agents.find((agent) => agent.default)?.id ||
           "main"
+        setAgents(next.agents)
         setMainAgentID(nextMainAgentID)
         setMainAgent(
           next.agents.find((agent) => agent.id === nextMainAgentID) || null,
@@ -484,8 +557,18 @@ export function ChatPage() {
                 hasAvailableModels={hasAvailableModels}
                 defaultModelName={defaultModelName}
                 isConnected={isGatewayRunning}
-                agent={mainAgent}
+                agent={activeAgent}
                 chatIntro={chatIntro}
+                displayName={assistantName}
+                displayDescription={emptyStateDescription}
+                avatarSeed={
+                  testingPublicAttendant
+                    ? "atendente-publico"
+                    : assistantName || activeAgent?.id
+                }
+                avatarColors={
+                  testingPublicAttendant ? PUBLIC_ATTENDANT_AURA : undefined
+                }
                 quickTasks={quickTasks}
                 disabled={!canInput}
                 onQuickTask={(prompt) => {
@@ -573,6 +656,10 @@ export function ChatPage() {
           inputDisabledReason={inputDisabledReason}
           canSend={canSubmit}
           contextUsage={contextUsage}
+          attendantTestActive={testingPublicAttendant}
+          onToggleAttendantTest={() => {
+            setTestingPublicAttendant((prev) => !prev)
+          }}
         />
       </div>
       <PendingHandoffsSidebar className="hidden xl:flex" />

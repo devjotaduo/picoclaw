@@ -1,6 +1,5 @@
 import {
   IconAlertTriangle,
-  IconArrowUp,
   IconAtom,
   IconBook,
   IconBrandWhatsapp,
@@ -8,9 +7,9 @@ import {
   IconClockHour4,
   IconCopy,
   IconKey,
+  IconLayoutDashboard,
   IconListDetails,
   IconMessageCircle,
-  IconPaperclip,
   IconPlus,
   IconRobot,
   IconSearch,
@@ -25,13 +24,14 @@ import * as React from "react"
 import { useTranslation } from "react-i18next"
 
 import {
+  type AgentDashboardItem,
+  getAgentDashboard,
+} from "@/api/agent-dashboard"
+import {
   type LauncherFeatureAccess,
   getLauncherPolicy,
 } from "@/api/launcher-policy"
-import {
-  getWorkspaceAgents,
-  type WorkspaceAgent,
-} from "@/api/workspace-agents"
+import { type WorkspaceAgent, getWorkspaceAgents } from "@/api/workspace-agents"
 import {
   Sidebar,
   SidebarContent,
@@ -45,7 +45,16 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { useSidebarChannels } from "@/hooks/use-sidebar-channels"
+import {
+  actionableDashboardItems,
+  dashboardItemStamp,
+  formatDashboardDate,
+  friendlyAgentName,
+  friendlyDashboardText,
+} from "@/lib/agent-dashboard"
+
+const SIDEBAR_PENDING_HEARTBEAT_MS = 30_000
+const SIDEBAR_PENDING_LIMIT = 3
 
 interface NavItem {
   title: string
@@ -93,10 +102,6 @@ const featureFallbacks: Record<string, string> = {
   operacao_cron: "config",
 }
 
-// SaaS tenants only see the whatsapp_native channel in the sidebar; other
-// channel-prefixed feature flags exist in the policy but are hidden from
-// the default sidebar to reduce clutter.
-const visibleSidebarChannelKeys = new Set(["whatsapp_native"])
 // Features hidden from the sidebar across the board (still reachable via
 // direct URLs / commands if the user knows where to find them).
 const hiddenSidebarFeatures = new Set([
@@ -119,7 +124,7 @@ function fallbackFeature(feature: string): string | undefined {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const routerState = useRouterState()
-  const { i18n, t } = useTranslation()
+  const { t } = useTranslation()
   const { isMobile, setOpenMobile } = useSidebar()
   const currentPath = routerState.location.pathname
   const [features, setFeatures] = React.useState<Record<
@@ -130,13 +135,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [workspaceAgents, setWorkspaceAgents] = React.useState<
     WorkspaceAgent[]
   >([])
-  const [sidebarPrompt, setSidebarPrompt] = React.useState("")
-  const [sidebarLastPrompt, setSidebarLastPrompt] = React.useState("")
-  const { channelItems } = useSidebarChannels({
-    language: (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase(),
-    t,
-    isSaasAdmin,
-  })
+  const [sidebarDashboardItems, setSidebarDashboardItems] = React.useState<
+    AgentDashboardItem[]
+  >([])
 
   React.useEffect(() => {
     let active = true
@@ -176,6 +177,39 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }, [])
 
+  React.useEffect(() => {
+    let active = true
+
+    const loadDashboardItems = () => {
+      getAgentDashboard()
+        .then((response) => {
+          if (active) {
+            setSidebarDashboardItems(response.items)
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setSidebarDashboardItems([])
+          }
+        })
+    }
+
+    loadDashboardItems()
+    const heartbeat = window.setInterval(
+      loadDashboardItems,
+      SIDEBAR_PENDING_HEARTBEAT_MS,
+    )
+
+    return () => {
+      active = false
+      window.clearInterval(heartbeat)
+    }
+  }, [])
+
+  const sidebarPendingItems = React.useMemo(() => {
+    return actionableDashboardItems(sidebarDashboardItems)
+  }, [sidebarDashboardItems])
+
   const canRead = React.useCallback(
     (feature: string) => {
       if (!features) {
@@ -193,19 +227,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       setOpenMobile(false)
     }
   }, [isMobile, setOpenMobile])
-
-  const handleSidebarPromptSubmit = React.useCallback(
-    (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault()
-      const trimmed = sidebarPrompt.trim()
-      if (!trimmed) {
-        return
-      }
-      setSidebarLastPrompt(trimmed)
-      setSidebarPrompt("")
-    },
-    [sidebarPrompt],
-  )
 
   const navGroups: NavGroup[] = React.useMemo(() => {
     return [
@@ -243,23 +264,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ],
       },
       {
-        label: "navigation.channels_group",
-        defaultOpen: true,
-        items: channelItems
-          .filter((item) => visibleSidebarChannelKeys.has(item.key))
-          .map<NavItem>((item) => ({
-            title: item.title,
-            url: item.url,
-            icon: item.icon,
-            feature: `channel:${item.key}`,
-            translateTitle: false,
-          }))
-          .filter((item) => canRead(item.feature)),
-        isChannelsGroup: true,
-      },
-      {
         ...baseNavGroups[2],
         items: [
+          {
+            title: "navigation.agent_dashboard",
+            url: "/agent/dashboard",
+            icon: IconLayoutDashboard,
+            feature: "agent_editor",
+            translateTitle: true,
+          },
           {
             title: "navigation.agent_editor",
             url: "/agent/agents",
@@ -424,7 +437,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ),
       }))
       .filter((group) => group.items.length > 0)
-  }, [canRead, channelItems, isSaasAdmin])
+  }, [canRead, isSaasAdmin])
 
   return (
     <Sidebar
@@ -506,12 +519,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         })}
       </SidebarContent>
       <SidebarFooter className="bg-background px-2 pt-2 pb-3 group-data-[collapsible=icon]:hidden">
-        <SidebarAgentMiniChat
+        <SidebarAgentPendingList
           agents={workspaceAgents}
-          prompt={sidebarPrompt}
-          lastPrompt={sidebarLastPrompt}
-          onPromptChange={setSidebarPrompt}
-          onSubmit={handleSidebarPromptSubmit}
+          items={sidebarPendingItems}
         />
       </SidebarFooter>
       <SidebarRail />
@@ -519,79 +529,139 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   )
 }
 
-function SidebarAgentMiniChat({
+function SidebarAgentPendingList({
   agents,
-  prompt,
-  lastPrompt,
-  onPromptChange,
-  onSubmit,
+  items,
 }: {
   agents: WorkspaceAgent[]
-  prompt: string
-  lastPrompt: string
-  onPromptChange: (value: string) => void
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
+  items: AgentDashboardItem[]
 }) {
-  const agent =
-    agents.find((item) => item.name.toLowerCase() === "rafael") ??
-    agents.find((item) => item.visibility === "interno") ??
-    agents[0]
-  const name = agent?.name ?? "Rafael"
-  const initials = getSidebarAgentInitials(name)
-  const message = lastPrompt
-    ? "Recebido. Vou acompanhar e sinalizar se precisar."
-    : "Preciso de uma confirmação rápida."
+  const visibleItems = items.slice(0, SIDEBAR_PENDING_LIMIT)
 
   return (
-    <aside className="border-border/70 bg-card text-card-foreground flex min-h-[244px] flex-col overflow-hidden rounded-xl border p-3 shadow-sm">
-      <div className="flex flex-col items-center text-center">
-        <div className="bg-primary/10 text-primary ring-primary/25 mb-2 flex size-11 items-center justify-center rounded-full text-xs font-semibold ring-1">
-          {initials}
+    <aside className="border-border/70 bg-card text-card-foreground flex min-h-[190px] flex-col overflow-hidden rounded-xl border p-3 shadow-sm">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-muted-foreground text-[10px] font-semibold tracking-[0.14em] uppercase">
+            Pendências
+          </p>
         </div>
-        <p className="text-foreground text-sm font-medium leading-5">
-          {name} está ativo
-        </p>
-        <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-5">
-          {message}
-        </p>
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        {["Revisar", "Resumo"].map((label) => (
-          <button
-            key={label}
-            type="button"
-            className="border-border/70 bg-muted/35 text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg border px-2 py-2 text-left text-xs transition"
-            onClick={() => onPromptChange(label)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <form
-        className="border-border/70 bg-muted/20 focus-within:border-primary/35 mt-auto flex items-center gap-1.5 rounded-full border px-2 py-1.5"
-        onSubmit={onSubmit}
-      >
-        <IconPaperclip className="text-muted-foreground size-3.5 shrink-0" />
-        <input
-          value={prompt}
-          onChange={(event) => onPromptChange(event.target.value)}
-          placeholder="Responder..."
-          aria-label="Responder ao mini chat dos agentes"
-          className="text-foreground placeholder:text-muted-foreground/70 min-w-0 flex-1 bg-transparent text-xs outline-none"
-        />
-        <button
-          type="submit"
-          disabled={!prompt.trim()}
-          aria-label="Enviar resposta"
-          className="bg-primary text-primary-foreground hover:bg-primary/85 disabled:bg-muted disabled:text-muted-foreground flex size-6 items-center justify-center rounded-full transition"
+        <Link
+          to="/agent/dashboard"
+          className="text-muted-foreground hover:text-foreground mt-1 shrink-0 text-[11px] font-medium underline-offset-4 hover:underline"
         >
-          <IconArrowUp className="size-3.5" />
-        </button>
-      </form>
+          Ver painel
+        </Link>
+      </div>
+
+      {visibleItems.length > 0 ? (
+        <div className="space-y-2">
+          {visibleItems.map((item) => (
+            <SidebarAgentPendingItem
+              key={`${item.source}:${item.id}`}
+              agents={agents}
+              item={item}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="border-border/60 bg-muted/20 flex min-h-20 items-center justify-center rounded-lg border border-dashed px-3 text-center">
+          <p className="text-muted-foreground text-xs leading-5">
+            Nenhuma solicitação pendente agora.
+          </p>
+        </div>
+      )}
     </aside>
   )
+}
+
+function SidebarAgentPendingItem({
+  agents,
+  item,
+}: {
+  agents: WorkspaceAgent[]
+  item: AgentDashboardItem
+}) {
+  const itemAgentName = cleanSidebarAgentName(friendlyAgentName(item))
+  const agent =
+    agents.find((entry) => itemAgentName && entry.name === itemAgentName) ??
+    agents.find(
+      (entry) =>
+        item.agent_id && entry.id.toLowerCase() === item.agent_id.toLowerCase(),
+    )
+  const name = cleanSidebarAgentName(itemAgentName || agent?.name || "Agente")
+  const initials = getSidebarAgentInitials(name)
+  const stamp = formatDashboardDate(dashboardItemStamp(item))
+
+  return (
+    <Link
+      to="/agent/dashboard"
+      className="hover:bg-muted/35 focus-visible:ring-ring flex items-center gap-2 rounded-lg px-1.5 py-1.5 transition outline-none focus-visible:ring-2"
+    >
+      <span className="bg-primary/10 text-primary ring-primary/20 flex size-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ring-1">
+        {initials}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="text-foreground block truncate text-xs font-medium">
+          {name}
+        </span>
+        <span className="text-muted-foreground mt-0.5 block truncate text-[11px] leading-4">
+          {sidebarQuestionText(item)}
+        </span>
+      </span>
+      {stamp ? (
+        <span className="text-muted-foreground/80 shrink-0 text-[10px]">
+          {stamp}
+        </span>
+      ) : null}
+    </Link>
+  )
+}
+
+function cleanSidebarAgentName(value: string): string {
+  const text = value
+    .replace(/\s*\([^)]*\)/g, "")
+    .replace(/\s+(está|esta)\s+ativo.*$/i, "")
+    .split(/[,/]/)[0]
+    .trim()
+
+  return text || "Agente"
+}
+
+function sidebarQuestionText(item: AgentDashboardItem): string {
+  const raw = friendlyDashboardText(item.summary || item.title)
+    .replace(/\s+/g, " ")
+    .trim()
+  const lower = raw.toLowerCase()
+
+  if (lower.includes("formas de pagamento") || lower.includes("pagamento")) {
+    return "Confirmar formas de pagamento?"
+  }
+  if (lower.includes("dados da empresa")) {
+    return "Completar dados da empresa?"
+  }
+  if (lower.includes("canais autorizados")) {
+    return "Confirmar canais autorizados?"
+  }
+  if (lower.includes("cadastro principal")) {
+    return "Revisar cadastro principal?"
+  }
+
+  const compact = raw
+    .replace(/^campo\s+/i, "")
+    .replace(/\s+aparece\s+.*$/i, "")
+    .replace(/\s+ainda não foram preenchidos.*$/i, "")
+    .trim()
+
+  if (!compact) {
+    return "Precisa de confirmação?"
+  }
+
+  if (compact.endsWith("?")) {
+    return compact.length > 82 ? `${compact.slice(0, 79).trim()}...` : compact
+  }
+
+  return `${compact.slice(0, 70).trim()}?`
 }
 
 function getSidebarAgentInitials(name: string): string {

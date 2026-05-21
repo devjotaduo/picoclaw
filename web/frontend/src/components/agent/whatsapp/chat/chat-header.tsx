@@ -2,36 +2,27 @@ import {
   IconArrowLeft,
   IconCamera,
   IconLoader2,
+  IconPlayerPause,
+  IconPlayerPlay,
   IconSearch,
   IconUserEdit,
 } from "@tabler/icons-react"
 
-import type { InboxConnectionStatus, WhatsAppChat } from "@/api/whatsapp"
-import { Switch } from "@/components/ui/switch"
+import type { WhatsAppChat } from "@/api/whatsapp"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
-import { AgentStatusChip } from "./agent-status-chip"
-import { ConnectionStatus } from "./connection-status"
 import { ContactAvatar } from "./contact-avatar"
 import { TypingIndicator } from "./typing-indicator"
-
-function formatJID(jid: string): string {
-  const [user] = jid.split("@")
-  if (!user) return jid
-  return /^\d+$/.test(user) ? `+${user}` : user
-}
 
 export interface ChatHeaderProps {
   chat: WhatsAppChat
   displayName: string
   avatarUrl?: string
   avatarLoading?: boolean
-  autoPaused?: boolean
-  connectionStatus: InboxConnectionStatus
   togglingPause: boolean
   /** Whether the contact is typing right now (from gateway typing event). */
   isTyping?: boolean
@@ -50,8 +41,6 @@ export function ChatHeader({
   displayName,
   avatarUrl,
   avatarLoading,
-  autoPaused,
-  connectionStatus,
   togglingPause,
   isTyping = false,
   onTogglePause,
@@ -62,8 +51,10 @@ export function ChatHeader({
   onToggleSearch,
   searchOpen = false,
 }: ChatHeaderProps) {
+  const pauseButtonLabel = chat.paused ? "Retomar agente" : "Pausar agente"
+
   return (
-    <header className="border-border/40 bg-background flex items-center gap-3 border-b px-3 py-3">
+    <header className="border-border/40 bg-background flex items-center gap-3 border-b px-3 py-2.5">
       <button
         type="button"
         onClick={onBack}
@@ -96,21 +87,15 @@ export function ChatHeader({
         className="group min-w-0 flex-1 text-left"
         aria-label={`Abrir perfil de ${displayName}`}
       >
-        <h3 className="group-hover:text-primary truncate text-base leading-tight font-semibold transition-colors">
+        <h3 className="group-hover:text-primary truncate text-sm leading-tight font-semibold transition-colors sm:text-base">
           {displayName}
         </h3>
-        <p className="text-foreground/65 mt-0.5 truncate text-[13px]">
-          {isTyping ? (
+        {isTyping && (
+          <p className="text-foreground/65 mt-0.5 truncate text-[12px]">
             <TypingIndicator name={displayName.split(" ")[0]} />
-          ) : (
-            formatJID(chat.jid)
-          )}
-        </p>
+          </p>
+        )}
       </button>
-
-      <div className="hidden lg:flex">
-        <ConnectionStatus status={connectionStatus} />
-      </div>
 
       <div className="flex shrink-0 items-center gap-1">
         {onToggleSearch && (
@@ -132,7 +117,7 @@ export function ChatHeader({
           </Tooltip>
         )}
 
-        <Tooltip delayDuration={500}>
+        <Tooltip delayDuration={700}>
           <TooltipTrigger asChild>
             <button
               type="button"
@@ -146,39 +131,35 @@ export function ChatHeader({
           <TooltipContent>Editar perfil</TooltipContent>
         </Tooltip>
 
-        <div className="border-border/40 ml-1 flex items-center gap-2 border-l pl-2">
-          <AgentStatusChip
-            paused={chat.paused}
-            autoPaused={autoPaused}
-            onResume={onResume}
-            className="hidden sm:inline-flex"
-          />
-          <Tooltip delayDuration={500}>
-            <TooltipTrigger asChild>
-              <span>
-                <Switch
-                  checked={!chat.paused}
-                  disabled={togglingPause}
-                  onCheckedChange={(active) => onTogglePause(!active)}
-                  aria-label={
-                    chat.paused
-                      ? "Ativar respostas automáticas do agente"
-                      : "Pausar respostas automáticas do agente"
-                  }
-                />
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {chat.paused ? "Agente pausado" : "Agente ativo"}
-            </TooltipContent>
-          </Tooltip>
-          {togglingPause && (
-            <IconLoader2
-              className="text-muted-foreground size-3.5 animate-spin"
-              aria-hidden="true"
-            />
+        <button
+          type="button"
+          onClick={() => {
+            if (chat.paused) {
+              if (onResume) onResume()
+              else onTogglePause(false)
+              return
+            }
+            onTogglePause(true)
+          }}
+          disabled={togglingPause}
+          className={`focus-visible:ring-ring inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
+            chat.paused
+              ? "bg-amber-500/15 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}
+          aria-label={pauseButtonLabel}
+        >
+          {togglingPause ? (
+            <IconLoader2 className="size-3.5 animate-spin" aria-hidden="true" />
+          ) : chat.paused ? (
+            <IconPlayerPlay className="size-3.5" aria-hidden="true" />
+          ) : (
+            <IconPlayerPause className="size-3.5" aria-hidden="true" />
           )}
-        </div>
+          <span className="hidden sm:inline">
+            {chat.paused ? "Retomar" : "Pausar"}
+          </span>
+        </button>
       </div>
     </header>
   )

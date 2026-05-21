@@ -4,6 +4,7 @@ import {
   IconMicrophone,
   IconPaperclip,
   IconPlayerStopFilled,
+  IconUserCheck,
   IconX,
 } from "@tabler/icons-react"
 import type { KeyboardEvent } from "react"
@@ -47,6 +48,8 @@ interface ChatComposerProps {
   inputDisabledReason: ChatInputDisabledReason | null
   canSend: boolean
   contextUsage?: ContextUsage
+  attendantTestActive?: boolean
+  onToggleAttendantTest?: () => void
 }
 
 // Max audio recording length in seconds. Anything longer is auto-stopped to
@@ -91,6 +94,8 @@ export function ChatComposer({
   inputDisabledReason,
   canSend,
   contextUsage,
+  attendantTestActive,
+  onToggleAttendantTest,
 }: ChatComposerProps) {
   const { t } = useTranslation()
   const canInput = inputDisabledReason === null
@@ -325,7 +330,7 @@ export function ChatComposer({
             title={disabledMessage || undefined}
             className={cn(
               "placeholder:text-muted-foreground/50 max-h-[200px] min-h-[64px] resize-none border-0 bg-transparent px-2 py-1 text-[15px] shadow-none transition-colors focus-visible:ring-0 focus-visible:outline-none dark:bg-transparent",
-              !canInput && "cursor-not-allowed",
+              !canInput && "cursor-not-allowed placeholder:text-muted-foreground",
             )}
             minRows={1}
             maxRows={8}
@@ -374,6 +379,25 @@ export function ChatComposer({
           </div>
 
           <div className="flex items-center gap-1.5">
+            {onToggleAttendantTest && (
+              <Button
+                type="button"
+                variant={attendantTestActive ? "default" : "outline"}
+                size="sm"
+                className={cn(
+                  "h-8 rounded-full px-3 text-xs whitespace-nowrap",
+                  attendantTestActive
+                    ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                    : "border-border/70 bg-background/60 text-foreground hover:bg-muted",
+                )}
+                onClick={onToggleAttendantTest}
+                disabled={isRecording}
+                aria-pressed={attendantTestActive}
+              >
+                <IconUserCheck className="size-3.5" />
+                Testar atendente
+              </Button>
+            )}
             {contextUsage && (
               <ContextUsageRing
                 usage={contextUsage}

@@ -8,10 +8,15 @@ import { SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 
 export function AppLayout({ children }: { children: ReactNode }) {
+  const defaultSidebarOpen =
+    typeof globalThis.location === "undefined"
+      ? true
+      : globalThis.location.pathname !== "/agent/whatsapp"
+
   return (
     <TooltipProvider>
       <SidebarProvider
-        defaultOpen={true}
+        defaultOpen={defaultSidebarOpen}
         className="flex h-dvh flex-col overflow-hidden"
       >
         <AppHeader />

@@ -75,9 +75,7 @@ export function AssistantMessage({
   const [isExpanded, setIsExpanded] = useState(true)
   const formattedTimestamp =
     timestamp !== "" ? formatMessageTime(timestamp) : ""
-  const messageMeta = [assistantName.trim(), formattedTimestamp].filter(
-    Boolean,
-  )
+  const messageMeta = [assistantName.trim(), formattedTimestamp].filter(Boolean)
 
   const handleCopy = async () => {
     const markCopied = () => {

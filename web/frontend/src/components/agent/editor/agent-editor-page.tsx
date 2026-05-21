@@ -56,6 +56,7 @@ import {
 import { getLauncherPolicy } from "@/api/launcher-policy"
 import { type SkillSupportItem, getSkills } from "@/api/skills"
 import { listWhatsAppChats } from "@/api/whatsapp"
+import { AIOrbAvatar } from "@/components/chat/ai-orb-avatar"
 import { PendingHandoffsSidebar } from "@/components/chat/pending-handoffs-sidebar"
 import { CodeEditor } from "@/components/code-editor"
 import { PageHeader } from "@/components/page-header"
@@ -120,15 +121,12 @@ import {
 } from "./agent-list-filter"
 import { AgentWizard, type WizardDraft } from "./agent-wizard"
 import { AvatarUpload } from "./avatar-upload"
-import { CardStatusBadge } from "./card-status"
 import { ChatTestDrawer } from "./chat-test-drawer"
 import {
   type ActiveConversation,
   DeactivateAgentDialog,
 } from "./deactivate-agent-dialog"
-import { GatewayStatusBadge } from "./gateway-status-badge"
 import { LabelWithTooltip } from "./label-with-tooltip"
-import { ProgressChecklist } from "./progress-checklist"
 import { PromptPreview } from "./prompt-preview"
 import { SaveBar } from "./save-bar"
 import { isReadyToActivate, validateChecklist } from "./schemas"
@@ -143,10 +141,6 @@ import { jidToPhone } from "./whatsapp-format"
 import { WhatsAppGroupList } from "./whatsapp-group-list"
 import { WhatsAppPhoneList } from "./whatsapp-phone-list"
 import { WorkspaceDisplay } from "./workspace-display"
-
-// ─── tab type ────────────────────────────────────────────────────────────────
-
-type ActiveTab = "config" | "profile" | "chat"
 
 // ─── orchestration-specific types ────────────────────────────────────────────
 
@@ -290,24 +284,24 @@ function defaultAvatarForAgent(agent: AgentSummary) {
   }
 }
 
-function iconForAvatar(icon?: string) {
+function renderAvatarIcon(icon: string | undefined, className: string) {
   switch ((icon || "").trim().toLowerCase()) {
     case "headset":
-      return IconHeadset
+      return <IconHeadset className={className} />
     case "target":
     case "sales":
-      return IconTargetArrow
+      return <IconTargetArrow className={className} />
     case "sparkles":
     case "marketing":
-      return IconSparkles
+      return <IconSparkles className={className} />
     case "assistant":
     case "shield":
-      return IconUserShield
+      return <IconUserShield className={className} />
     case "robot":
-      return IconRobot
+      return <IconRobot className={className} />
     case "site":
     case "world":
-      return IconWorldWww
+      return <IconWorldWww className={className} />
     default:
       return null
   }
@@ -871,49 +865,64 @@ function AgentAvatar({
   }
   const fallback = defaultAvatarForAgent(agent)
   const avatar = agent.avatar ?? fallback
-  const Icon = iconForAvatar(avatar.icon || fallback.icon)
   const imageURL = avatar.image_url?.trim()
   const initials = avatar.initials?.trim() || fallback.initials
+  const seed = `${agent.id}:${agent.name || initials}`
+  const icon = renderAvatarIcon(
+    avatar.icon || fallback.icon,
+    size === "lg" ? "size-7" : "size-4",
+  )
+
   return (
     <div
-      className={`${sizeClasses[size]} ring-border/50 flex shrink-0 items-center justify-center overflow-hidden rounded-lg font-semibold ring-1`}
+      className={`${sizeClasses[size]} ring-border/50 relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold ring-1`}
       style={{
-        backgroundColor: avatar.background || fallback.background,
+        backgroundColor: imageURL
+          ? avatar.background || fallback.background
+          : undefined,
         color: avatar.foreground || fallback.foreground,
       }}
       aria-hidden="true"
     >
       {imageURL ? (
         <img src={imageURL} alt="" className="size-full object-cover" />
-      ) : Icon ? (
-        <Icon className={size === "lg" ? "size-7" : "size-4"} />
       ) : (
-        initials
+        <>
+          <AIOrbAvatar seed={seed} className="absolute inset-0" />
+          <span className="relative z-10 flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.45)]">
+            {icon ?? initials}
+          </span>
+        </>
       )}
     </div>
   )
 }
 
 function ProfileAvatar({ profile }: { profile: AgentProfileDraft }) {
-  const Icon = iconForAvatar(profile.icon)
   const imageURL = profile.imageURL.trim()
   const initials =
     profile.initials.trim() || profile.name.slice(0, 2).toUpperCase()
+  const seed = `${profile.name}:${profile.icon}:${initials}`
+  const icon = renderAvatarIcon(profile.icon, "size-4")
+
   return (
     <span
-      className="ring-border/50 flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg text-sm font-semibold ring-1"
+      className="ring-border/50 relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-semibold ring-1"
       style={{
-        backgroundColor: profile.background || "#475569",
+        backgroundColor: imageURL ? profile.background || "#475569" : undefined,
         color: profile.foreground || "#ffffff",
       }}
       aria-hidden="true"
     >
       {imageURL ? (
         <img src={imageURL} alt="" className="size-full object-cover" />
-      ) : Icon ? (
-        <Icon className="size-4" />
       ) : (
-        initials
+        <>
+          <AIOrbAvatar seed={seed} className="absolute inset-0" />
+          <span className="relative z-10 flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.45)]">
+            {icon ?? initials}
+          </span>
+        </>
       )}
     </span>
   )
@@ -934,68 +943,6 @@ function StatusBadge({ active }: { active: boolean }) {
         ? t("pages.agent.editor.active", "Ativo")
         : t("pages.agent.editor.inactive", "Inativo")}
     </span>
-  )
-}
-
-function ConfigBadge({ configured }: { configured: boolean }) {
-  const { t } = useTranslation()
-  if (configured) {
-    return (
-      <span className="border-border bg-background text-foreground inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium">
-        {t("pages.agent.editor.configured", "Configurado")}
-      </span>
-    )
-  }
-  return (
-    <Badge variant="outline">
-      {t("pages.agent.editor.not_configured", "Rascunho")}
-    </Badge>
-  )
-}
-
-function ReadyStatusBadges({
-  agent,
-  compact = false,
-}: {
-  agent: AgentEditorAgent
-  compact?: boolean
-}) {
-  const profileReady = Boolean(agent.name?.trim() && agent.role_config?.kind)
-  const promptReady = agent.prompt?.configured ?? false
-  const routingReady = Boolean(agent.access || agent.subagents || agent.default)
-  const items = [
-    {
-      key: "profile",
-      label: compact ? "Perfil" : "Perfil pronto",
-      ready: profileReady,
-    },
-    {
-      key: "prompt",
-      label: compact ? "Prompt" : "Prompt pronto",
-      ready: promptReady,
-    },
-    {
-      key: "routing",
-      label: compact ? "Rotas" : "Roteamento pronto",
-      ready: routingReady,
-    },
-  ]
-  return (
-    <>
-      {items.map((item) => (
-        <span
-          key={item.key}
-          className={`border-border inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${
-            item.ready
-              ? "bg-background text-foreground"
-              : "bg-muted text-muted-foreground"
-          }`}
-          aria-label={`${item.label}: ${item.ready ? "pronto" : "pendente"}`}
-        >
-          {item.ready ? item.label : `${item.label} · pendente`}
-        </span>
-      ))}
-    </>
   )
 }
 
@@ -1045,40 +992,6 @@ function SectionHeader({
       <h3 className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
         {title}
       </h3>
-    </div>
-  )
-}
-
-function TabBar({
-  tabs,
-  active,
-  onChange,
-}: {
-  tabs: { id: ActiveTab; label: string; icon: React.ElementType }[]
-  active: ActiveTab
-  onChange: (tab: ActiveTab) => void
-}) {
-  return (
-    <div className="border-border/40 flex border-b">
-      {tabs.map((tab) => {
-        const Icon = tab.icon
-        const isActive = tab.id === active
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => onChange(tab.id)}
-            className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-              isActive
-                ? "border-primary text-foreground"
-                : "text-muted-foreground hover:text-foreground border-transparent"
-            }`}
-          >
-            <Icon className="size-3.5" />
-            {tab.label}
-          </button>
-        )
-      })}
     </div>
   )
 }
@@ -2170,9 +2083,6 @@ export function AgentEditorPage() {
                     }
                     onAssistantJIDsChange={setAssistantJIDs}
                     onAssistantChatsChange={setAssistantChats}
-                    onSaveOrchestration={() =>
-                      saveOrchestrationMutation.mutate()
-                    }
                     onRefreshOrchestration={() =>
                       void queryClient.invalidateQueries({
                         queryKey: ["agent-editor-state"],
@@ -2427,7 +2337,6 @@ function UnifiedAgentEditor({
   onToggleMainAllow,
   onAssistantJIDsChange,
   onAssistantChatsChange,
-  onSaveOrchestration,
   onRefreshOrchestration,
   onChatInputChange,
   onSendChat,
@@ -2486,7 +2395,6 @@ function UnifiedAgentEditor({
   onToggleMainAllow: (id: string) => void
   onAssistantJIDsChange: (v: string) => void
   onAssistantChatsChange: (v: string) => void
-  onSaveOrchestration: () => void
   onRefreshOrchestration: () => void
   onChatInputChange: (v: string) => void
   onSendChat: () => void
@@ -2588,7 +2496,6 @@ function UnifiedAgentEditor({
             onToggleMainAllow={onToggleMainAllow}
             onAssistantJIDsChange={onAssistantJIDsChange}
             onAssistantChatsChange={onAssistantChatsChange}
-            onSave={onSaveOrchestration}
             onRefresh={onRefreshOrchestration}
           />
         </TabsContent>
@@ -3025,7 +2932,6 @@ function AccessRoutingSection({
   onToggleMainAllow,
   onAssistantJIDsChange,
   onAssistantChatsChange,
-  onSave,
   onRefresh,
 }: {
   selectedAgentId: string
@@ -3041,7 +2947,6 @@ function AccessRoutingSection({
   onToggleMainAllow: (id: string) => void
   onAssistantJIDsChange: (v: string) => void
   onAssistantChatsChange: (v: string) => void
-  onSave: () => void
   onRefresh: () => void
 }) {
   const mainAgent = internalAgents.find((a) => a.id === mainAgentID)
@@ -3437,7 +3342,7 @@ function SkillConfigEditor({
 
 // ─── config tab: agent detail view ────────────────────────────────────────────
 
-function AgentDetailView({
+export function AgentDetailView({
   agent,
   configData,
   resolvedPayload,
@@ -3710,7 +3615,7 @@ function AgentDetailView({
 
 // ─── profile & routing tab ────────────────────────────────────────────────────
 
-function ProfileTab({
+export function ProfileTab({
   selectedAgentId,
   selectedProfile,
   selectedRoleConfigDraft,
@@ -4921,7 +4826,7 @@ function EmptyState({
   )
 }
 
-function UnconfiguredState({
+export function UnconfiguredState({
   agent,
   onCreate,
   onConfigure,

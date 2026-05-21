@@ -87,7 +87,7 @@ describe("parseAllowFromInput", () => {
   })
 
   it("strips hidden zero-width chars from items when present", () => {
-    // ​ is zero-width space
+    // U+200B is zero-width space
     const input = "al​ice,bob"
     expect(parseAllowFromInput(input)).toEqual(["alice", "bob"])
   })
@@ -139,7 +139,7 @@ describe("parseConservativeStringListInput", () => {
   })
 
   it("does NOT strip hidden chars", () => {
-    // ​ is zero-width space — conservative split preserves it
+    // U+200B is zero-width space; conservative split preserves it
     const input = "al​ice,bob"
     const result = parseConservativeStringListInput(input)
     expect(result[0]).toContain("​")

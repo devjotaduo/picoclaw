@@ -1,3 +1,4 @@
+import { Thumbnail } from "@remotion/player"
 import {
   IconArrowRight,
   IconAt,
@@ -10,8 +11,8 @@ import {
   IconUsersGroup,
 } from "@tabler/icons-react"
 import { createFileRoute } from "@tanstack/react-router"
-import { Thumbnail } from "@remotion/player"
 import * as React from "react"
+import { useTranslation } from "react-i18next"
 import {
   AbsoluteFill,
   interpolate,
@@ -19,7 +20,6 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion"
-import { useTranslation } from "react-i18next"
 
 import {
   getLauncherAuthStatus,
@@ -231,7 +231,10 @@ function LauncherLoginPage() {
                 </p>
               </div>
 
-              <form className="mt-5 flex flex-col gap-3.5" onSubmit={handleSubmit}>
+              <form
+                className="mt-5 flex flex-col gap-3.5"
+                onSubmit={handleSubmit}
+              >
                 <div className="flex flex-col gap-2">
                   <Label
                     htmlFor="launcher-email"
@@ -277,7 +280,7 @@ function LauncherLoginPage() {
                     />
                     <button
                       type="button"
-                      className="absolute top-1/2 right-3.5 -translate-y-1/2 text-white/46 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"
+                      className="absolute top-1/2 right-3.5 -translate-y-1/2 text-white/46 transition-colors hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300/60 focus-visible:outline-none"
                       onClick={handleTogglePassword}
                       aria-label={
                         showPassword
@@ -406,10 +409,7 @@ interface LoginOrbPlayerProps {
 }
 
 function LoginOrbPlayer({ variant }: LoginOrbPlayerProps) {
-  const frameToDisplay = useRemotionLoopFrame(
-    ORB_DURATION_IN_FRAMES,
-    ORB_FPS,
-  )
+  const frameToDisplay = useRemotionLoopFrame(ORB_DURATION_IN_FRAMES, ORB_FPS)
 
   return (
     <div

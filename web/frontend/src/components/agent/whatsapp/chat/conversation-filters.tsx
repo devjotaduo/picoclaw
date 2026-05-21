@@ -13,7 +13,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -83,6 +82,11 @@ export function ConversationFilters({
   pausedCount,
   mineCount,
 }: ConversationFiltersProps) {
+  const showUnread = unreadCount > 0 || filter === "unread"
+  const showMine = mineCount > 0 || filter === "mine"
+  const showPaused = pausedCount > 0 || filter === "paused"
+  const showTags = tagOptions.length > 0 || (filter === "tag" && !!selectedTag)
+
   return (
     <div
       className="border-border/40 flex flex-wrap items-center gap-1.5 border-b px-3 py-2"
@@ -96,71 +100,82 @@ export function ConversationFilters({
       >
         Todas
       </Chip>
-      <Chip
-        active={filter === "unread"}
-        count={unreadCount}
-        onClick={() => onFilterChange("unread")}
-      >
-        Não lidas
-      </Chip>
-      <Chip
-        active={filter === "mine"}
-        count={mineCount}
-        onClick={() => onFilterChange("mine")}
-      >
-        Minhas
-      </Chip>
-      <Chip
-        active={filter === "paused"}
-        count={pausedCount}
-        onClick={() => onFilterChange("paused")}
-      >
-        Pausadas
-      </Chip>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant={filter === "tag" && selectedTag ? "default" : "ghost"}
-            size="sm"
-            className="h-7 gap-1 rounded-full px-2.5 text-[11px]"
-            aria-label="Filtrar por tag"
-          >
-            <IconTag className="size-3" aria-hidden="true" />
-            {filter === "tag" && selectedTag ? selectedTag : "Por tag"}
-            <IconChevronDown className="size-3 opacity-60" aria-hidden="true" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          className="max-h-72 w-52 overflow-y-auto"
+      {showUnread && (
+        <Chip
+          active={filter === "unread"}
+          count={unreadCount}
+          onClick={() => onFilterChange("unread")}
         >
-          <DropdownMenuLabel>Tags disponíveis</DropdownMenuLabel>
-          {tagOptions.length === 0 && (
-            <DropdownMenuLabel className="text-foreground/70 text-[11px] font-normal">
-              Nenhuma tag nos perfis carregados
-            </DropdownMenuLabel>
-          )}
-          {tagOptions.map((tag) => (
-            <DropdownMenuCheckboxItem
-              key={tag}
-              checked={filter === "tag" && selectedTag === tag}
-              onCheckedChange={(checked) => {
-                if (checked) {
-                  onSelectedTagChange(tag)
-                  onFilterChange("tag")
-                } else {
-                  onSelectedTagChange(null)
-                  onFilterChange("all")
-                }
-              }}
+          Não lidas
+        </Chip>
+      )}
+      {showMine && (
+        <Chip
+          active={filter === "mine"}
+          count={mineCount}
+          onClick={() => onFilterChange("mine")}
+        >
+          Minhas
+        </Chip>
+      )}
+      {showPaused && (
+        <Chip
+          active={filter === "paused"}
+          count={pausedCount}
+          onClick={() => onFilterChange("paused")}
+        >
+          Pausadas
+        </Chip>
+      )}
+
+      {showTags && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant={filter === "tag" && selectedTag ? "default" : "ghost"}
+              size="sm"
+              className="h-7 gap-1 rounded-full px-2.5 text-[11px]"
+              aria-label="Filtrar por tag"
             >
-              {tag}
-            </DropdownMenuCheckboxItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+              <IconTag className="size-3" aria-hidden="true" />
+              {filter === "tag" && selectedTag ? selectedTag : "Tag"}
+              <IconChevronDown
+                className="size-3 opacity-60"
+                aria-hidden="true"
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            className="max-h-72 w-52 overflow-y-auto"
+          >
+            <DropdownMenuLabel>Tags disponíveis</DropdownMenuLabel>
+            {tagOptions.length === 0 && (
+              <DropdownMenuLabel className="text-foreground/70 text-[11px] font-normal">
+                Nenhuma tag encontrada
+              </DropdownMenuLabel>
+            )}
+            {tagOptions.map((tag) => (
+              <DropdownMenuCheckboxItem
+                key={tag}
+                checked={filter === "tag" && selectedTag === tag}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    onSelectedTagChange(tag)
+                    onFilterChange("tag")
+                  } else {
+                    onSelectedTagChange(null)
+                    onFilterChange("all")
+                  }
+                }}
+              >
+                {tag}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       <div className="ml-auto">
         <DropdownMenu>
@@ -191,16 +206,12 @@ export function ConversationFilters({
               onValueChange={(v) => onSortChange(v as ConversationSort)}
             >
               <DropdownMenuRadioItem value="recent">
-                Última atividade
+                Mais recentes
               </DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="priority">
                 Prioridade
               </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-foreground/70 text-[10px] font-normal">
-              A ordenação por prioridade usa o campo do perfil do contato.
-            </DropdownMenuLabel>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

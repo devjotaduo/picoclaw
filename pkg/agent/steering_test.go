@@ -797,6 +797,20 @@ func TestAgentLoop_Run_AutoContinuesLateSteeringMessage(t *testing.T) {
 		t.Fatalf("publish late inbound: %v", err)
 	}
 
+	sessionKey, _, ok := al.resolveSteeringTarget(late)
+	if !ok {
+		t.Fatal("expected late inbound to resolve to a steering target")
+	}
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer waitCancel()
+	for al.pendingSteeringCountForScope(sessionKey) == 0 {
+		select {
+		case <-waitCtx.Done():
+			t.Fatal("timeout waiting for late inbound to enter steering queue")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
 	close(provider.releaseFirstCall)
 
 	subCtx, subCancel := context.WithTimeout(context.Background(), 5*time.Second)
