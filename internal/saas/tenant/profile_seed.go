@@ -124,7 +124,8 @@ func DeleteExactSeedFile(seedPath, relPath string) error {
 		return os.ErrNotExist
 	}
 	manifest.Files = next
-	if err := os.Remove(filepath.Join(seedPath, filepath.FromSlash(cleanPath))); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := os.Remove(filepath.Join(seedPath, filepath.FromSlash(cleanPath))); err != nil &&
+		!errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	return writeSeedManifest(seedPath, manifest)
@@ -360,7 +361,9 @@ func cleanSeedFilePath(relPath string) (string, error) {
 		return "", fmt.Errorf("path is required")
 	}
 	relPath = filepath.ToSlash(relPath)
-	if filepath.IsAbs(relPath) || strings.HasPrefix(relPath, "/") || hasWindowsDrivePrefix(relPath) {
+	if filepath.IsAbs(relPath) ||
+		strings.HasPrefix(relPath, "/") ||
+		hasWindowsDrivePrefix(relPath) {
 		return "", fmt.Errorf("path must be relative")
 	}
 	clean := filepath.Clean(filepath.FromSlash(relPath))
@@ -378,8 +381,8 @@ func hasWindowsDrivePrefix(path string) bool {
 	if len(path) < 2 || path[1] != ':' {
 		return false
 	}
-	ch := path[0]
-	return ('A' <= ch && ch <= 'Z') || ('a' <= ch && ch <= 'z')
+	drive := path[0]
+	return drive >= 'A' && drive <= 'Z' || drive >= 'a' && drive <= 'z'
 }
 
 func exactSeedFileSet(seedPath string) (map[string]bool, error) {

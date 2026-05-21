@@ -69,9 +69,9 @@ func NormalizeDefaultLauncherProfileSeed(seedPath string) (bool, error) {
 		return false, err
 	}
 	if HasExactSeedFile(seedPath, "config.json") {
-		removed, err := removeDefaultLauncherProfileOrphans(seedPath)
-		if err != nil {
-			return false, err
+		removed, removeErr := removeDefaultLauncherProfileOrphans(seedPath)
+		if removeErr != nil {
+			return false, removeErr
 		}
 		return removed, nil
 	}
