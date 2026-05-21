@@ -99,9 +99,13 @@ export function ClaraChat(props: ClaraChatProps) {
 			seededFirstTurn.current = true;
 			return;
 		}
-		seededFirstTurn.current = true;
-		void chat.send("Oi! Pode começar.");
-	}, [chat]);
+		const timer = window.setTimeout(() => {
+			if (seededFirstTurn.current) return;
+			seededFirstTurn.current = true;
+			void chat.send("Oi! Pode começar.");
+		}, 150);
+		return () => window.clearTimeout(timer);
+	}, [chat.messages.length, chat.send]);
 
 	const [summaryOpen, setSummaryOpen] = useState(false);
 	const mergedExtracted = mergedExtractedEarly;
@@ -127,7 +131,7 @@ export function ClaraChat(props: ClaraChatProps) {
 				error={chat.provisionError}
 			/>
 
-			<ErrorBanner error={chat.error} />
+			<ErrorBanner error={chat.error} messages={chat.messages} />
 
 			<QuickActions
 				disabled={busy || chat.qualified}
@@ -769,8 +773,10 @@ function CredentialRow({
 	);
 }
 
-function ErrorBanner({ error }: { error: string }) {
+function ErrorBanner({ error, messages }: { error: string; messages: ClaraMessage[] }) {
 	if (!error) return null;
+	const hasInlineError = messages.some((message) => message.role === "assistant" && Boolean(message.errorText));
+	if (hasInlineError) return null;
 	return (
 		<aside
 			className="border-t border-rose-200 bg-rose-50 px-4 py-3 sm:px-6"

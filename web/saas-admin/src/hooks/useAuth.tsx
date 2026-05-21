@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { getMe, login as apiLogin, logout as apiLogout, type Me } from "@/api/admin";
 
 type AuthState =
@@ -16,7 +17,10 @@ type AuthCtx = {
 const Ctx = createContext<AuthCtx | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const location = useLocation();
   const [status, setStatus] = useState<AuthState>({ state: "loading" });
+  const isPublicRoute =
+    location.pathname === "/pre-cadastro" || location.pathname === "/accept-invite";
 
   const refresh = async () => {
     try {
@@ -28,8 +32,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    if (isPublicRoute) {
+      setStatus({ state: "anonymous" });
+      return;
+    }
     refresh();
-  }, []);
+  }, [isPublicRoute]);
 
   const signIn = async (email: string, password: string) => {
     await apiLogin(email, password);
