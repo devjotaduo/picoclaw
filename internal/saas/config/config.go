@@ -75,9 +75,10 @@ type Config struct {
 	AutoProvisionPerIPDay int    // max auto-provisions per client IP per 24h
 	// AutoProvisionWorkspaceDir, when set, points to a local directory whose
 	// contents are overlaid into the new tenant's <volume>/workspace/ AFTER
-	// the profile seed runs. Lets the operator point auto-provision at e.g.
-	// workspace-assistente/ so new tenants get the Sofia agent files they
-	// have been editing locally instead of the profile's frozen copy.
+	// the profile seed runs. Lets the operator point auto-provision at a
+	// local workspace directory (typically /srv/picoclaw/workspace on the
+	// VPS) so new tenants get the agent files they have been editing locally
+	// instead of the profile's frozen copy.
 	// Per-tenant runtime state (sessions, memory, whatsapp/matrix state) is
 	// preserved by the overlay skip list — only agent definition files get
 	// overwritten.
@@ -88,6 +89,31 @@ type Config struct {
 	// Generate via `openssl rand -hex 32`. When empty, the callback endpoint
 	// returns 503 — the onboarding tenant has no way to mark intakes qualified.
 	OnboardingCallbackSecret string
+
+	// OnboardingCallbackURL is the base URL the onboarding-tenant skills
+	// POST to (`{URL}/api/v1/onboarding-callback`). Falls back to
+	// MailerAdminURL (https://adm.<base>) when not set explicitly. Threaded
+	// into the tenant container env at buildSpec time so the skills inside
+	// the tenant can sign + send the callback.
+	OnboardingCallbackURL string
+
+	// TurnstileSecretKey is the server-side secret for Cloudflare Turnstile.
+	// When set, the controlplane verifies the X-Captcha-Token header on
+	// POST /api/public/chat before reverse-proxying to a public tenant. When
+	// empty the check is skipped — the tenant's own RequireCaptchaHeader
+	// flag still enforces "non-empty token" as defense in depth, but the
+	// token itself is not validated against Cloudflare. Get the secret from
+	// the Turnstile dashboard; the corresponding site key is used by the
+	// frontend widget and is NOT secret.
+	TurnstileSecretKey string
+
+	// BrowserCDPURL is the Chrome DevTools Protocol endpoint of the shared
+	// browser-sidecar service, propagated to every tenant container so the
+	// `agent-browser` Node CLI inside the tenant can connect remotely instead
+	// of trying to launch its own Chromium. Defaults to the compose service
+	// name on saas_llm. Setting this to empty disables the env var entirely
+	// (skill will refuse to run with a clear error).
+	BrowserCDPURL string
 
 	// Supabase Auth — used as the source of truth for tenant dashboard logins
 	// when tenant.auth_backend = 'supabase'. The controlplane verifies the
@@ -130,8 +156,9 @@ func Load() (*Config, error) {
 			"/var/lib/picoclaw-saas/company-intakes/uploads",
 		),
 		CookieDomain: os.Getenv("COOKIE_DOMAIN"),
-		CookieSecure: envBool("COOKIE_SECURE", true),
-		OpenCRMURL:   envOr("OPENCRM_URL", "http://opencrm:8787"),
+		CookieSecure:  envBool("COOKIE_SECURE", true),
+		OpenCRMURL:    envOr("OPENCRM_URL", "http://opencrm:8787"),
+		BrowserCDPURL: envOr("BROWSER_CDP_URL", "http://browser-sidecar:9222"),
 	}
 
 	ttlHours := envInt("JWT_TTL_HOURS", 12)
@@ -161,6 +188,15 @@ func Load() (*Config, error) {
 	c.AutoProvisionWorkspaceDir = os.Getenv("PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR")
 
 	c.OnboardingCallbackSecret = os.Getenv("PICOCLAW_ONBOARDING_CALLBACK_SECRET")
+	c.OnboardingCallbackURL = os.Getenv("PICOCLAW_ONBOARDING_CALLBACK_URL")
+	if c.OnboardingCallbackURL == "" {
+		// MailerAdminURL was already derived above (defaults to
+		// `https://adm.<TenantBaseDomain>` when not set). Skills only need
+		// the base; mark-qualified.sh strips trailing slashes itself.
+		c.OnboardingCallbackURL = c.MailerAdminURL
+	}
+
+	c.TurnstileSecretKey = os.Getenv("TURNSTILE_SECRET_KEY")
 
 	c.SupabaseProjectRef = os.Getenv("SUPABASE_PROJECT_REF")
 	c.SupabaseAnonKey = os.Getenv("SUPABASE_ANON_KEY")

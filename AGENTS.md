@@ -72,8 +72,17 @@ The canonical internal agent is `workspace/agents/operador/` — copy/adapt its
 Clara, Marcos, Camila) should **not** list dev skills in their `skills:`
 frontmatter — limit them to atendimento/vendas/onboarding skills.
 
-Skills that need Chromium (`agent-browser`) or Playwright stay in
-`docker/Dockerfile.heavy` (image `picoclaw-heavy`); they are only available
-when the tenant is launched on the heavy image. If an internal agent needs
-browser automation, the operator must switch the tenant's image first.
+Skills that need Chromium (`agent-browser`) connect to a **shared
+`browser-sidecar` container** over CDP via `$BROWSER_CDP_URL`. The launcher
+image ships only the `agent-browser` Node CLI (~5MB) — Chromium lives in a
+single dedicated container on the `saas_llm` network. To enable browser
+automation in SaaS:
+
+1. `docker compose -f docker/saas/docker-compose.yml up -d browser-sidecar`
+2. Set `BROWSER_CDP_URL=http://browser-sidecar:9222` in the controlplane env (default already).
+3. Restart the tenant containers (or wait for the next provision).
+
+The skill auto-detects `$BROWSER_CDP_URL` and routes to remote when present.
+For pure local development without the sidecar, `docker/Dockerfile.heavy` still
+exists with bundled Chromium + Playwright (image `picoclaw-heavy`).
 
