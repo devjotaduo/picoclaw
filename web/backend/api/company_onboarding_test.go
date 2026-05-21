@@ -17,14 +17,19 @@ func TestBuildCompanyOnboardingResponseDetectsMissingSetupValues(t *testing.T) {
 Segmento:
 Status da informação: pendente de validação
 `)
-	mustWriteCompanyOnboardingFile(t, workspace, filepath.Join("config", "company-profile.md"), `# Perfil da empresa
+	mustWriteCompanyOnboardingFile(
+		t,
+		workspace,
+		filepath.Join("config", "company-profile.md"),
+		`# Perfil da empresa
 
 Nome da empresa: Empresa PME Brasil [ATUALIZAR]
 Segmento: Comércio [ATUALIZAR]
 
 Horário de funcionamento:
 - Segunda a sexta: 08h às 18h
-`)
+`,
+	)
 	mustWriteCompanyOnboardingFile(
 		t,
 		workspace,
@@ -34,7 +39,10 @@ Horário de funcionamento:
 `,
 	)
 
-	got, err := buildCompanyOnboardingResponse(workspace, time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC))
+	got, err := buildCompanyOnboardingResponse(
+		workspace,
+		time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
+	)
 	if err != nil {
 		t.Fatalf("buildCompanyOnboardingResponse() error = %v", err)
 	}
@@ -82,7 +90,11 @@ Segmento detectado: varejo
 Status da informação: validado
 `)
 	mustWriteCompanyOnboardingFile(t, workspace, filepath.Join("config", "company-profile.md"), "")
-	mustWriteCompanyOnboardingFile(t, workspace, filepath.Join("config", "authorized-channels.md"), `# Canais autorizados
+	mustWriteCompanyOnboardingFile(
+		t,
+		workspace,
+		filepath.Join("config", "authorized-channels.md"),
+		`# Canais autorizados
 - WhatsApp principal: +55 11 99999-9999
 `)
 
