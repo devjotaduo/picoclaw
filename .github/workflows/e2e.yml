@@ -22,6 +22,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   PLAYWRIGHT_BASE_URL: http://127.0.0.1:18800
   E2E_BASE_URL: http://127.0.0.1:18800
