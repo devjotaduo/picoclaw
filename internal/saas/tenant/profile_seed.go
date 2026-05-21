@@ -354,24 +354,13 @@ func SanitizeSeed(seedPath string) error {
 	})
 }
 
-// hasWindowsDriveLetter returns true for paths like "C:/foo" or "C:\foo".
-// filepath.IsAbs only flags these on Windows, so the seed-file validation
-// has to detect them explicitly to stay consistent across CI runners.
-func hasWindowsDriveLetter(p string) bool {
-	if len(p) < 2 || p[1] != ':' {
-		return false
-	}
-	c := p[0]
-	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
-}
-
 func cleanSeedFilePath(relPath string) (string, error) {
 	relPath = strings.TrimSpace(relPath)
 	if relPath == "" {
 		return "", fmt.Errorf("path is required")
 	}
 	relPath = filepath.ToSlash(relPath)
-	if filepath.IsAbs(relPath) || strings.HasPrefix(relPath, "/") || hasWindowsDriveLetter(relPath) {
+	if filepath.IsAbs(relPath) || strings.HasPrefix(relPath, "/") || hasWindowsDrivePrefix(relPath) {
 		return "", fmt.Errorf("path must be relative")
 	}
 	clean := filepath.Clean(filepath.FromSlash(relPath))
@@ -383,6 +372,14 @@ func cleanSeedFilePath(relPath string) (string, error) {
 		return "", fmt.Errorf("reserved seed manifest path")
 	}
 	return clean, nil
+}
+
+func hasWindowsDrivePrefix(path string) bool {
+	if len(path) < 2 || path[1] != ':' {
+		return false
+	}
+	ch := path[0]
+	return ('A' <= ch && ch <= 'Z') || ('a' <= ch && ch <= 'z')
 }
 
 func exactSeedFileSet(seedPath string) (map[string]bool, error) {
