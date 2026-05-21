@@ -11,7 +11,7 @@ table — both auth backends coexist indefinitely.
 |---|---|---|
 | Provisioning new tenants | Manual via admin UI | Automatic at end of Clara conversation, or still manual |
 | Dashboard login for legacy tenants | bcrypt in `launcher-auth.db` (SQLite per tenant) | unchanged |
-| Dashboard login for new tenants | bcrypt | Supabase Auth (magic link or password), JWT in `sb-*-auth-token` cookie on `.<base-domain>` |
+| Dashboard login for new tenants | bcrypt | Supabase Auth (email + senha **e** magic link, ambos entregues no mesmo email transacional), JWT in `sb-*-auth-token` cookie on `.<base-domain>` |
 | Trusted gateway HMAC between controlplane and launcher | Same | Same |
 | Tenant container, volume, Docker, LiteLLM key | Same | Same |
 | Subdomain routing | App-level reverse proxy in controlplane | Same |
@@ -48,13 +48,18 @@ Visitor ──▶ /pre-cadastro                    (saas-admin frontend, Clara d
    │        │   ├─ LiteLLM key          │
    │        │   └─ SKIP local bcrypt    │  (because Supabase owns auth)
    │        ├─ Supabase.CreateTenantOwner   │ internal/saas/auth/supabase.go
-   │        │   (Admin API, app_metadata.tenant_id)
+   │        │   (Admin API, password mode, EmailConfirm=true,
+   │        │    app_metadata.tenant_id)
+   │        ├─ Supabase.GenerateMagicLink   │ extra magic link for the same user
    │        ├─ OverlayWorkspace (optional)  │ internal/saas/tenant/template.go
    │        ├─ SetSupabaseUserID            │
+   │        ├─ Mailer.SendCredentialsEmail  │ URL + email + senha + magic link
+   │        │   (single transactional email)│ in one message
    │        └─ CompanyIntakes.LinkTenant    │
    │        ▼                           │
    │   /submit response carries the     │  → frontend ProvisionSuccessCard
-   │   URL + login_mode + magic-link    │     in ClaraFinalize/ClaraDone
+   │   URL + initial_password +         │     in ClaraFinalize/ClaraDone
+   │   check_email=true                 │
    └────────────────────────────────────┘
 
 Why /submit and not the chat SSE? Clara's `mark_qualified` fires BEFORE the
@@ -254,14 +259,20 @@ T+~N+Ms POST /api/v1/public/company-intakes/{id}/submit dispara.
              HEARTBEAT.md, etc. — memory/* é copy-if-missing,
              portanto a seed do passo 4 ganha
           6. Restart container
-        Supabase envia magic link pra Maria.
-        O /submit retorna { url, login_mode, check_email, ... }
-        e ClaraFinalize mostra o card de sucesso inline.
+        AutoProvisioner cria o user Supabase (password mode,
+        EmailConfirm=true), gera um magic link extra, e dispara
+        Mailer.SendCredentialsEmail com URL + email + senha + magic
+        link tudo num só email. O /submit retorna
+        { url, initial_password, check_email: true, ... } e
+        ClaraFinalize mostra a senha no card de sucesso + aviso de
+        que o email também foi enviado.
 
-T+~30s  Maria recebe email, clica no magic link. Supabase autentica,
-        cookie sb-<projectRef>-auth-token cai em .jotaduo.com, browser
-        redireciona pra acme.jotaduo.com. tenant_gateway verifica
-        JWT, assina trusted_gateway HMAC, repassa pro launcher.
+T+~30s  Maria recebe o email. Pode entrar de duas formas: clicar no
+        magic link (1 clique) OU digitar o email + senha no formulário
+        do painel. Em ambos os casos Supabase autentica, cookie
+        sb-<projectRef>-auth-token cai em .jotaduo.com, browser segue
+        pra acme.jotaduo.com. tenant_gateway verifica JWT, assina
+        trusted_gateway HMAC, repassa pro launcher.
         Maria vê o painel da empresa dela pela primeira vez.
 
 T+~31s  Maria abre o chat embutido do painel (canal pico). O agente
@@ -411,9 +422,11 @@ agendados com esse canal — sem mudar o schema.
 ```bash
 # Edit docker/saas/.env
 PICOCLAW_SAAS_AUTO_PROVISION=true
-PICOCLAW_SAAS_AUTO_PROVISION_LOGIN_MODE=magic_link    # or "password"
 PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY=3
 PICOCLAW_SAAS_AUTO_PROVISION_PROFILE=default-business
+# Note: login mode is no longer a toggle. When Supabase is configured the
+# new tenant owner always receives email + senha AND a magic link in the
+# same transactional email (rendered from credentials.{html,txt}.tmpl).
 # Optional: overlay the operator's local agent files on top of the profile
 # PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR=/srv/picoclaw/workspace-assistente
 
@@ -427,6 +440,91 @@ Clara conversation will trigger a real tenant creation. Watch the first one:
 docker logs -f controlplane | grep -E "(autoProvision|tenant_provisioned|provision_error)"
 docker ps --filter "label=picoclaw.saas.managed=true" --format "table {{.Names}}\t{{.Status}}\t{{.CreatedAt}}"
 ```
+
+## Custom SMTP for the credentials email (Brevo)
+
+Without this, `Mailer.Enabled()` returns `false` and `SendCredentialsEmail`
+just logs — the tenant owner never receives the email. The senha + magic link
+are then only visible in the admin dialog / Clara SSE response, which works
+for manual operator delivery but not for the SMB self-serve flow.
+
+Pick a provider with a free tier. We've validated **Brevo** (300 emails/day
+free, good Gmail/Outlook delivery in BR) — instructions assume it. Same shape
+works for SendGrid (`smtp.sendgrid.net:587`), Resend (`smtp.resend.com:465`),
+Mailgun, etc. — only `SMTP_HOST/PORT/USER/PASSWORD` change.
+
+### One-time setup (≈10 min)
+
+1. **Sign up** at https://app.brevo.com — free tier, no credit card required.
+
+2. **Verify the sending domain** (must match `MAILER_FROM`, e.g.
+   `jotaduo.com`). Senders & IP → Domains → "Add a domain" → publish the 3
+   DNS records Brevo gives you on your DNS provider:
+   - `brevo-code` TXT (verification)
+   - `dkim` TXT (long key, signs outgoing mail)
+   - SPF — add `include:spf.brevo.com` to your existing SPF record (or
+     create `v=spf1 include:spf.brevo.com -all` if you don't have one).
+
+   Click "Authenticate this domain" and wait until all three rows show a
+   green check (usually <5 min, can take up to a few hours).
+
+3. **Generate an SMTP key**. SMTP & API → SMTP tab → "Generate a new SMTP
+   key". Copy it (only shown once).
+
+4. **Note the SMTP login**. Same SMTP tab, top of the page. It's the
+   account login email (e.g. `dev@jotaduo.com`), **not**
+   `contato@jotaduo.com`. We use the login for SMTP_USER and the SMTP key
+   for SMTP_PASSWORD; the From header is independent (`MAILER_FROM`).
+
+5. **Add to `docker/saas/.env.deploy-vps.local`**:
+
+   ```bash
+   SMTP_HOST=smtp-relay.brevo.com
+   SMTP_PORT=587
+   SMTP_USER=<your brevo login email>
+   SMTP_PASSWORD=<the SMTP key from step 3>
+   MAILER_FROM=contato@jotaduo.com
+   MAILER_ADMIN_URL=https://adm.jotaduo.com
+   ```
+
+6. **Disable Supabase's outbound email** so the owner doesn't receive a
+   duplicate magic-link email from Supabase Auth on top of ours. Dashboard →
+   Auth → Email Templates → SMTP Settings — uncheck "Enable custom SMTP" if
+   you had set it; with the default Supabase SMTP, the `AdminGenerateLink`
+   call simply returns the link without sending an email when SMTP is not
+   custom-configured, which is what we want. Our own email already contains
+   the magic link.
+
+7. **Restart the controlplane**:
+
+   ```bash
+   make saas-dev-controlplane   # dev sync (preferred)
+   # or full restart:
+   docker compose -f docker/saas/docker-compose.yml up -d controlplane
+   ```
+
+8. **Smoke test**. Open `adm.<base>/tenants/new`, create a tenant with a
+   fresh email you can read. The owner should receive a single email titled
+   "Acesso ao painel <Tenant> — Jotaduo" with URL, login, senha, e magic
+   link. Watch logs:
+
+   ```bash
+   docker logs -f controlplane | grep -i mailer
+   ```
+
+   A successful send is silent (we only log on failure). Brevo's dashboard
+   shows delivery status in real time under "Statistics → Email".
+
+### Daily-limit gotchas
+
+- Brevo free tier resets at 00:00 UTC. Hitting the cap returns SMTP 550 —
+  surfaced in `controlplane` logs as `mailer: send credentials to … failed`.
+- If you ever exceed 300/day reliably, switch to Brevo's paid plan or move
+  to SES (sandbox approval + cheaper at scale).
+- Bounce/spam reports above ~1% will eventually pause the account. Reply
+  to the verification email in your DNS provider's contact field and keep
+  the bounce rate low by validating typos in `owner_email` at the form
+  level (already done in `NewTenant.tsx`).
 
 ## Operations
 
@@ -445,7 +543,7 @@ docker ps --filter "label=picoclaw.saas.managed=true" --format "table {{.Names}}
 
 ### Resend a magic link
 
-If a visitor lost the magic-link email:
+If a visitor lost the credentials email (or just the magic link inside it):
 
 ```
 POST /api/v1/public/company-intakes/{id}/resend-link

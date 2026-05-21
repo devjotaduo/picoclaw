@@ -116,8 +116,10 @@ SUPABASE_SITE_URL=https://jotaduo.com
 PICOCLAW_SAAS_AUTO_PROVISION=true
 PICOCLAW_SAAS_AUTO_PROVISION_PROFILE=default-business
 PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY=3
-PICOCLAW_SAAS_AUTO_PROVISION_LOGIN_MODE=magic_link
 PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR=/srv/picoclaw/workspace
+# Login mode is no longer a toggle: when Supabase is configured the new
+# tenant owner receives email + senha AND a magic link in the same
+# transactional email (credentials.{html,txt}.tmpl).
 
 TZ=America/Sao_Paulo
 ```
