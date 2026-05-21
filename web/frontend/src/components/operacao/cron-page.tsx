@@ -9,7 +9,7 @@ import {
 } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 
-import { listCronJobs, type CronJob } from "@/api/cron"
+import { type CronJob, listCronJobs } from "@/api/cron"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -28,7 +28,8 @@ function fmtSchedule(job: CronJob): string {
   if (s.expr) return s.expr + (s.tz ? ` (${s.tz})` : "")
   if (s.everyMs) {
     const m = Math.round(s.everyMs / 60000)
-    if (m % 1440 === 0) return `a cada ${m / 1440} dia${m / 1440 > 1 ? "s" : ""}`
+    if (m % 1440 === 0)
+      return `a cada ${m / 1440} dia${m / 1440 > 1 ? "s" : ""}`
     if (m % 60 === 0) return `a cada ${m / 60} h`
     return `a cada ${m} min`
   }
@@ -125,10 +126,7 @@ export function CronPage() {
               </thead>
               <tbody className="divide-border/20 divide-y">
                 {jobs.map((job) => (
-                  <tr
-                    key={job.id}
-                    className={cn(!job.enabled && "opacity-50")}
-                  >
+                  <tr key={job.id} className={cn(!job.enabled && "opacity-50")}>
                     <td className="px-3 py-2.5">
                       <div className="font-medium">{job.name || job.id}</div>
                       {job.payload.agent_id ? (
