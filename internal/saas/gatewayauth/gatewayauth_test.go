@@ -3,6 +3,7 @@ package gatewayauth
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -41,5 +42,39 @@ func TestVerifyRequestRejectsExpiredTimestamp(t *testing.T) {
 	AnnotateRequest(req, "secret", Claims{TenantID: "t", UserID: "u", Role: "viewer"}, time.Unix(1000, 0))
 	if _, err := VerifyRequest(req, "secret", time.Minute, time.Unix(1200, 0)); err == nil {
 		t.Fatal("VerifyRequest accepted an expired timestamp")
+	}
+}
+
+// TestVerifyRequest_AcceptsAnonymousSentinels proves the sentinel claims used
+// for public-onboarding tenant bypass survive Sign -> AnnotateRequest ->
+// VerifyRequest. The controlplane signs anonymous public-chat traffic with
+// UserID="anonymous" and Role="public" because the verifier rejects empty
+// UserID/Role; if these sentinels ever stopped round-tripping, every public
+// chat request would 401 at the launcher.
+func TestVerifyRequest_AcceptsAnonymousSentinels(t *testing.T) {
+	secret := "test-secret-1234567890"
+	now := time.Now()
+
+	req := httptest.NewRequest("POST", "https://onboarding.example.com/api/public/chat",
+		strings.NewReader(`{"message":"hi"}`))
+
+	AnnotateRequest(req, secret, Claims{
+		TenantID: "t-onboarding",
+		UserID:   "anonymous",
+		Role:     "public",
+	}, now)
+
+	got, err := VerifyRequest(req, secret, 5*time.Minute, now)
+	if err != nil {
+		t.Fatalf("VerifyRequest rejected anonymous sentinels: %v", err)
+	}
+	if got.TenantID != "t-onboarding" {
+		t.Errorf("TenantID: got %q want %q", got.TenantID, "t-onboarding")
+	}
+	if got.UserID != "anonymous" {
+		t.Errorf("UserID: got %q want anonymous", got.UserID)
+	}
+	if got.Role != "public" {
+		t.Errorf("Role: got %q want public", got.Role)
 	}
 }
