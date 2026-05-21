@@ -12,10 +12,10 @@ import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import {
+  type MemoryFile,
   getMemoryFile,
   listMemoryFiles,
   saveMemoryFile,
-  type MemoryFile,
 } from "@/api/workspace-memory"
 import { CodeEditor } from "@/components/code-editor"
 import { PageHeader } from "@/components/page-header"
@@ -130,7 +130,7 @@ export function MemoryPage() {
 
       <div className="flex min-h-0 flex-1 gap-3 px-6 pb-6">
         <aside className="border-border/40 bg-card flex w-72 flex-col overflow-hidden rounded-lg border">
-          <header className="border-border/30 border-b px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <header className="border-border/30 text-muted-foreground border-b px-3 py-2 text-xs font-medium tracking-wide uppercase">
             Arquivos de memória
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -203,7 +203,7 @@ export function MemoryPage() {
               {dirty ? (
                 <span className="text-warning">Alterações não salvas</span>
               ) : detailQuery.data ? (
-                <span className="flex items-center gap-1 text-success">
+                <span className="text-success flex items-center gap-1">
                   <IconCheck className="size-3" />
                   Sincronizado
                 </span>
