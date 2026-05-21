@@ -234,6 +234,22 @@ export function useClaraChat({
 			const abort = new AbortController();
 			abortRef.current = abort;
 
+			// TODO(Phase 10): when VITE_USE_ONBOARDING_TENANT === "true" and
+			// VITE_ONBOARDING_TENANT_URL is set, this should route to the new
+			// public onboarding tenant (Phases 4-7 of docs/superpowers/plans/
+			// 2026-05-20-public-onboarding-tenant.md):
+			//   POST  ${VITE_ONBOARDING_TENANT_URL}/api/public/chat  -- 202 ack
+			//   GET   ${VITE_ONBOARDING_TENANT_URL}/api/public/chat/stream?session_id=…
+			// The new endpoint emits {text: "..."} per chunk (simpler than the
+			// legacy {type, delta, ...} structure this hook switches on), so the
+			// cutover also needs an event-shape adapter or richer SSE events
+			// emitted by publicweb.Channel.Send. Until that's wired the flag
+			// stays a no-op — keep using the legacy in-controlplane Clara.
+			const _onboardingTenantFlagSet =
+				import.meta.env.VITE_USE_ONBOARDING_TENANT === "true" &&
+				Boolean(import.meta.env.VITE_ONBOARDING_TENANT_URL);
+			void _onboardingTenantFlagSet;
+
 			let response: Response;
 			try {
 				response = await fetch(
