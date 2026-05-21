@@ -24,10 +24,25 @@ IMAGE="${PICOCLAW_DEPLOY_IMAGE:-ghcr.io/devjotaduo/picoclaw-saas:main}"
 LOCAL_TAG="${PICOCLAW_DEPLOY_LOCAL_TAG:-picoclaw/saas:latest}"
 COMPOSE_FILE="${PICOCLAW_COMPOSE_FILE:-/srv/saas/picoclaw/docker/saas/docker-compose.yml}"
 COMPOSE_PROJECT="${PICOCLAW_COMPOSE_PROJECT:-picoclaw-saas}"
+# IMPORTANT: the live VPS keeps .env at the repo root, NOT next to the
+# compose file. Without --env-file the compose run substitutes every
+# ${JWT_SECRET}, ${POSTGRES_PASSWORD}, ${SAAS_BASE_DOMAIN}, etc. with
+# empty strings and the controlplane crashloops on "JWT_SECRET is required".
+# Learned the hard way on 2026-05-21 — kept here so it doesn't happen again.
+ENV_FILE="${PICOCLAW_ENV_FILE:-/srv/saas/picoclaw/.env}"
 CONTAINER="${PICOCLAW_CONTAINER:-controlplane}"
 LOCKFILE="${PICOCLAW_DEPLOY_LOCK:-/var/run/picoclaw-deploy.lock}"
 
 log() { echo "[picoclaw-deploy $(date -Iseconds)] $*"; }
+
+# Refuse to run if the env file is missing — recreating the controlplane
+# without it nukes JWT_SECRET / POSTGRES_PASSWORD / SAAS_BASE_DOMAIN and
+# crashloops the container. Fail loudly instead.
+if [ ! -f "$ENV_FILE" ]; then
+  log "ERROR: env file not found at $ENV_FILE — refusing to deploy"
+  log "       (override with PICOCLAW_ENV_FILE env var if it lives elsewhere)"
+  exit 1
+fi
 
 # Prevent overlapping runs (slow pull on a flaky network + 2-min timer).
 exec 9>"$LOCKFILE"
@@ -65,8 +80,14 @@ fi
 log "recreating $CONTAINER via docker compose"
 
 # --no-deps: don't touch other services (postgres, traefik, litellm, ...).
+# --env-file: see comment on ENV_FILE above. Without this, every
+# `${VAR}` in the compose file resolves to empty string at recreate time
+# and the controlplane crashloops on missing secrets.
 # Only the controlplane container is replaced.
-if ! docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" up -d --no-deps "$CONTAINER"; then
+if ! docker compose -p "$COMPOSE_PROJECT" \
+                    -f "$COMPOSE_FILE" \
+                    --env-file "$ENV_FILE" \
+                    up -d --no-deps "$CONTAINER"; then
   log "ERROR: docker compose up -d $CONTAINER failed"
   exit 1
 fi
