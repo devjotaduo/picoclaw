@@ -83,6 +83,12 @@ type Config struct {
 	// overwritten.
 	AutoProvisionWorkspaceDir string
 
+	// OnboardingCallbackSecret is the shared HMAC-SHA256 secret used by the
+	// onboarding tenant's skills to authenticate POST /api/v1/onboarding-callback.
+	// Generate via `openssl rand -hex 32`. When empty, the callback endpoint
+	// returns 503 — the onboarding tenant has no way to mark intakes qualified.
+	OnboardingCallbackSecret string
+
 	// Supabase Auth — used as the source of truth for tenant dashboard logins
 	// when tenant.auth_backend = 'supabase'. The controlplane verifies the
 	// JWT and continues signing trusted_gateway HMAC headers to the launcher.
@@ -153,6 +159,8 @@ func Load() (*Config, error) {
 	c.AutoProvisionProfile = envOr("PICOCLAW_SAAS_AUTO_PROVISION_PROFILE", "default-business")
 	c.AutoProvisionPerIPDay = envInt("PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY", 3)
 	c.AutoProvisionWorkspaceDir = os.Getenv("PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR")
+
+	c.OnboardingCallbackSecret = os.Getenv("PICOCLAW_ONBOARDING_CALLBACK_SECRET")
 
 	c.SupabaseProjectRef = os.Getenv("SUPABASE_PROJECT_REF")
 	c.SupabaseAnonKey = os.Getenv("SUPABASE_ANON_KEY")

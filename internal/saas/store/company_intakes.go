@@ -285,3 +285,41 @@ func (s *CompanyIntakeStore) MarkQualified(
 		RETURNING ` + companyIntakeReturning
 	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, resumeTokenHash))
 }
+
+// MarkQualifiedByID is the trusted-caller variant of MarkQualified that
+// skips the resume-token check. Used by the onboarding callback endpoint
+// when an HMAC-authenticated skill in the onboarding tenant reports that
+// the agent finished the discovery flow.
+func (s *CompanyIntakeStore) MarkQualifiedByID(ctx context.Context, id string) (*CompanyIntake, error) {
+	const q = `
+		UPDATE company_intakes
+		SET qualified_at = COALESCE(qualified_at, now()), updated_at = now()
+		WHERE id = $1 AND status IN ('draft', 'report_ready')
+		RETURNING ` + companyIntakeReturning
+	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id))
+}
+
+// SubmitByID is the trusted-caller variant of Submit (no resume-token check).
+// Same semantics as Submit otherwise.
+func (s *CompanyIntakeStore) SubmitByID(ctx context.Context, id string) (*CompanyIntake, error) {
+	const q = `
+		UPDATE company_intakes
+		SET status = 'submitted', submitted_at = COALESCE(submitted_at, now()), updated_at = now()
+		WHERE id = $1 AND status IN ('draft', 'report_ready')
+		RETURNING ` + companyIntakeReturning
+	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id))
+}
+
+// SetContactInfo stores contact_email + contact_whatsapp on an intake. Called
+// by the onboarding callback's submit_intake action when the agent collected
+// the visitor's email/whatsapp at the end of the chat.
+func (s *CompanyIntakeStore) SetContactInfo(ctx context.Context, id, email, whatsapp string) (*CompanyIntake, error) {
+	const q = `
+		UPDATE company_intakes
+		SET contact_email = COALESCE(NULLIF($2, ''), contact_email),
+			contact_whatsapp = COALESCE(NULLIF($3, ''), contact_whatsapp),
+			updated_at = now()
+		WHERE id = $1
+		RETURNING ` + companyIntakeReturning
+	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, email, whatsapp))
+}

@@ -1,0 +1,156 @@
+package api
+
+import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"log"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/sipeed/picoclaw/internal/saas/store"
+)
+
+const onboardingCallbackSigHeader = "X-Onboarding-Signature"
+const onboardingCallbackMaxBody = 1 << 20 // 1 MiB
+const onboardingCallbackMaxSkew = 5 * time.Minute
+
+type onboardingCallbackBody struct {
+	IntakeID        string `json:"intake_id"`
+	Action          string `json:"action"`
+	Timestamp       int64  `json:"ts"`
+	ContactEmail    string `json:"contact_email,omitempty"`
+	ContactWhatsApp string `json:"contact_whatsapp,omitempty"`
+}
+
+// handleOnboardingCallback receives HMAC-authenticated requests from the
+// onboarding tenant's skills (mark-qualified, submit-intake). Verified with
+// PICOCLAW_ONBOARDING_CALLBACK_SECRET; rejects stale timestamps (±5 min) to
+// prevent replay.
+func (h *Handler) handleOnboardingCallback(w http.ResponseWriter, r *http.Request) {
+	secret := strings.TrimSpace(h.Cfg.OnboardingCallbackSecret)
+	if secret == "" {
+		writeError(w, http.StatusServiceUnavailable, "onboarding callback not configured")
+		return
+	}
+
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, onboardingCallbackMaxBody))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "read body")
+		return
+	}
+	sig := strings.TrimSpace(r.Header.Get(onboardingCallbackSigHeader))
+	if !verifyOnboardingHMAC(body, sig, secret) {
+		writeError(w, http.StatusUnauthorized, "bad signature")
+		return
+	}
+	var req onboardingCallbackBody
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	req.IntakeID = strings.TrimSpace(req.IntakeID)
+	req.Action = strings.TrimSpace(req.Action)
+	if req.IntakeID == "" || req.Action == "" {
+		writeError(w, http.StatusBadRequest, "intake_id and action required")
+		return
+	}
+	if absInt64(time.Now().Unix()-req.Timestamp) > int64(onboardingCallbackMaxSkew.Seconds()) {
+		writeError(w, http.StatusUnauthorized, "stale timestamp")
+		return
+	}
+
+	switch req.Action {
+	case "mark_qualified":
+		if _, err := h.CompanyIntakes.MarkQualifiedByID(r.Context(), req.IntakeID); err != nil {
+			if errors.Is(err, store.ErrCompanyIntakeNotFound) {
+				writeError(w, http.StatusNotFound, "intake not found or not in qualifiable state")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+
+	case "submit_intake":
+		req.ContactEmail = strings.TrimSpace(strings.ToLower(req.ContactEmail))
+		req.ContactWhatsApp = strings.TrimSpace(req.ContactWhatsApp)
+		if req.ContactEmail == "" {
+			writeError(w, http.StatusBadRequest, "contact_email required for submit_intake")
+			return
+		}
+		if _, err := h.CompanyIntakes.SetContactInfo(r.Context(), req.IntakeID, req.ContactEmail, req.ContactWhatsApp); err != nil {
+			writeError(w, http.StatusInternalServerError, "set contact info: "+err.Error())
+			return
+		}
+		submitted, err := h.CompanyIntakes.SubmitByID(r.Context(), req.IntakeID)
+		if err != nil {
+			if errors.Is(err, store.ErrCompanyIntakeNotFound) {
+				writeError(w, http.StatusNotFound, "intake not found or already submitted")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		resp := map[string]any{"status": "submitted"}
+		// Same auto-provision shape as handleSubmitCompanyIntake — see
+		// company_intakes.go:310-341.
+		notLinked := submitted.LinkedTenantID == nil || *submitted.LinkedTenantID == ""
+		if h.AutoProvision != nil && notLinked && submitted.ContactEmail != "" && submitted.CompanyName != "" {
+			log.Printf("onboarding-callback: AutoProvision.Run starting intake=%s company=%q email=%q",
+				req.IntakeID, submitted.CompanyName, submitted.ContactEmail)
+			res, perr := h.AutoProvision.Run(r.Context(), submitted, clientIP(r))
+			switch {
+			case perr != nil:
+				log.Printf("onboarding-callback: AutoProvision.Run ERR intake=%s err=%v", req.IntakeID, perr)
+				resp["provision_error"] = perr.Error()
+			case res.AlreadyExists:
+				resp["tenant_already_exists"] = true
+				resp["url"] = res.URL
+				resp["subdomain"] = res.Subdomain
+			default:
+				resp["tenant_provisioned"] = true
+				resp["url"] = res.URL
+				resp["subdomain"] = res.Subdomain
+				resp["login_mode"] = res.LoginMode
+				if res.InitialPassword != "" {
+					resp["initial_password"] = res.InitialPassword
+					resp["check_email"] = true
+				} else if res.LoginMode == "magic_link" {
+					resp["check_email"] = true
+				}
+			}
+		}
+		writeJSON(w, http.StatusOK, resp)
+
+	default:
+		writeError(w, http.StatusBadRequest, "unknown action: "+req.Action)
+	}
+}
+
+// verifyOnboardingHMAC returns true iff sigHex is the hex-encoded HMAC-SHA256
+// of body using secret. Constant-time compare.
+func verifyOnboardingHMAC(body []byte, sigHex, secret string) bool {
+	if sigHex == "" {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write(body)
+	expected := mac.Sum(nil)
+	got, err := hex.DecodeString(sigHex)
+	if err != nil {
+		return false
+	}
+	return hmac.Equal(expected, got)
+}
+
+func absInt64(x int64) int64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}

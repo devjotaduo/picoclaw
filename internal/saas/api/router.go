@@ -146,6 +146,11 @@ func (h *Handler) Routes() http.Handler {
 		r.Post("/public/company-intakes/{id}/chat", h.handleCompanyIntakeChat)
 		r.Post("/public/company-intakes/{id}/resend-link", h.handleResendMagicLink)
 
+		// HMAC-authenticated callback from the onboarding tenant's skills
+		// (mark-qualified, submit-intake). Not behind requireAuth — the
+		// signature in X-Onboarding-Signature is the trust anchor.
+		r.Post("/onboarding-callback", h.handleOnboardingCallback)
+
 		r.Group(func(r chi.Router) {
 			r.Use(h.requireAuth)
 
