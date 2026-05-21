@@ -1,0 +1,20 @@
+[Unit]
+Description=Periodic Picoclaw auto-deploy check
+Documentation=https://github.com/devjotaduo/picoclaw/blob/main/docs/operations/auto-deploy.md
+Requires=picoclaw-deploy.service
+
+[Timer]
+# Wait 2 min after boot so the launcher itself comes up first.
+OnBootSec=2min
+# Then poll every 2 min thereafter. Most ticks no-op cheaply (just a
+# `git fetch` + rev-parse).
+OnUnitActiveSec=2min
+Unit=picoclaw-deploy.service
+# Loose accuracy lets systemd batch this with other timers and saves wakeups.
+AccuracySec=10s
+# Don't queue up a backlog of missed runs if the box was asleep — just
+# fire once.
+Persistent=false
+
+[Install]
+WantedBy=timers.target
