@@ -85,6 +85,7 @@ export function ChatEmptyState({
             seed="gateway-disconnected"
             colors={DISCONNECTED_GATEWAY_AURA}
             ringClassName="ring-red-200/35"
+            tone="red"
           />
         </div>
         <h3 className="mb-2 text-xl font-medium">

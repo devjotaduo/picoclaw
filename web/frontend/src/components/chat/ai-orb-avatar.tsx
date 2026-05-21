@@ -3,6 +3,9 @@ import { cn } from "@/lib/utils"
 
 export type AuraColor = `#${string}`
 export type AuraPalette = readonly [AuraColor, AuraColor, AuraColor, AuraColor]
+type OrbTone = "default" | "red"
+
+const AI_ORB_ASSET_SRC = "/ai-orb.gif"
 
 const agentAuraPalettes = [
   ["#14B8A6", "#38BDF8", "#8B5CF6", "#F97316"],
@@ -20,6 +23,7 @@ interface AIOrbAvatarProps {
   seed?: string
   colors?: AuraPalette
   ringClassName?: string
+  tone?: OrbTone
 }
 
 function hashSeed(seed: string) {
@@ -68,14 +72,16 @@ export function AIOrbAvatar({
   seed = "sofia",
   colors,
   ringClassName,
+  tone = "default",
 }: AIOrbAvatarProps) {
   const palette = colors ?? paletteForSeed(seed)
   const [primary, secondary, tertiary, quaternary] = palette
+  const redTone = tone === "red"
 
   return (
     <div
       className={cn(
-        "relative isolate size-full overflow-hidden rounded-full",
+        "relative isolate size-full overflow-hidden rounded-full bg-slate-950",
         className,
       )}
       aria-hidden="true"
@@ -95,7 +101,19 @@ export function AIOrbAvatar({
         quaternaryColor={quaternary}
         colorShift={0}
         themeMode="dark"
-        className="!size-full scale-[2.2] opacity-100"
+        className="!size-full scale-[2.2] opacity-60"
+      />
+      <img
+        src={AI_ORB_ASSET_SRC}
+        alt=""
+        draggable={false}
+        className={cn(
+          "pointer-events-none absolute inset-0 size-full scale-[2.55] object-cover mix-blend-screen select-none",
+          redTone && "hue-rotate-[140deg] saturate-[1.55] brightness-[1.08]",
+        )}
+        onError={(event) => {
+          event.currentTarget.style.display = "none"
+        }}
       />
       <div
         className={cn(
