@@ -5,7 +5,7 @@ export type AuraColor = `#${string}`
 export type AuraPalette = readonly [AuraColor, AuraColor, AuraColor, AuraColor]
 type OrbTone = "default" | "red"
 
-const AI_ORB_ASSET_SRC = "/ai-orb.gif"
+const AI_ORB_ASSET_SRC = "/ai-orb-loop.gif"
 
 const agentAuraPalettes = [
   ["#14B8A6", "#38BDF8", "#8B5CF6", "#F97316"],
