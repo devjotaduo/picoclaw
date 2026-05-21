@@ -88,6 +88,36 @@ func (m *Mailer) SendInviteEmail(to, tenantName, role, inviteURL string, expires
 	}
 }
 
+// SendCredentialsEmail delivers the "your dashboard is ready" message with
+// login email + password AND a magic link printed together. Used by both
+// manual /tenants/new and Sofia/Clara auto-provision. magicLink may be empty
+// when Supabase isn't configured — in that case the email shows only email +
+// senha.
+func (m *Mailer) SendCredentialsEmail(to, tenantName, dashboardURL, loginEmail, loginPassword, magicLink string) {
+	if m == nil || !m.cfg.Enabled() {
+		log.Printf("mailer (disabled): credentials for %s tenant=%q url=%s magic=%t", to, tenantName, dashboardURL, magicLink != "")
+		return
+	}
+	data := CredentialsData{
+		ToEmail:       to,
+		TenantName:    tenantName,
+		DashboardURL:  dashboardURL,
+		LoginEmail:    loginEmail,
+		LoginPassword: loginPassword,
+		MagicLink:     magicLink,
+		SupportEmail:  m.cfg.From,
+	}
+	html, text, err := RenderCredentials(data)
+	if err != nil {
+		log.Printf("mailer: render credentials for %s failed: %v", to, err)
+		return
+	}
+	subject := fmt.Sprintf("Acesso ao painel %s — Jotaduo", tenantName)
+	if err := m.Send(to, subject, html, text); err != nil {
+		log.Printf("mailer: send credentials to %s failed: %v", to, err)
+	}
+}
+
 func (m *Mailer) Send(to, subject, htmlBody, textBody string) error {
 	if !m.cfg.Enabled() {
 		return fmt.Errorf("mailer disabled")
