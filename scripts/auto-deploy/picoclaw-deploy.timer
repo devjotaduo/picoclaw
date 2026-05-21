@@ -1,0 +1,17 @@
+[Unit]
+Description=Periodic Picoclaw controlplane image-pull check
+Documentation=https://github.com/devjotaduo/picoclaw/blob/main/docs/operations/auto-deploy.md
+Requires=picoclaw-deploy.service
+
+[Timer]
+# 2 min after boot so Docker itself is fully up before we ask it to pull.
+OnBootSec=2min
+# Poll every 2 min thereafter. Most ticks no-op cheaply (manifest HEAD only).
+OnUnitActiveSec=2min
+Unit=picoclaw-deploy.service
+AccuracySec=10s
+# Don't queue up a backlog after the box was asleep — fire once.
+Persistent=false
+
+[Install]
+WantedBy=timers.target
