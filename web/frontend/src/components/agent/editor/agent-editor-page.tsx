@@ -56,6 +56,7 @@ import {
 import { getLauncherPolicy } from "@/api/launcher-policy"
 import { type SkillSupportItem, getSkills } from "@/api/skills"
 import { listWhatsAppChats } from "@/api/whatsapp"
+import { AIOrbAvatar } from "@/components/chat/ai-orb-avatar"
 import { PendingHandoffsSidebar } from "@/components/chat/pending-handoffs-sidebar"
 import { CodeEditor } from "@/components/code-editor"
 import { PageHeader } from "@/components/page-header"
@@ -290,24 +291,24 @@ function defaultAvatarForAgent(agent: AgentSummary) {
   }
 }
 
-function iconForAvatar(icon?: string) {
+function renderAvatarIcon(icon: string | undefined, className: string) {
   switch ((icon || "").trim().toLowerCase()) {
     case "headset":
-      return IconHeadset
+      return <IconHeadset className={className} />
     case "target":
     case "sales":
-      return IconTargetArrow
+      return <IconTargetArrow className={className} />
     case "sparkles":
     case "marketing":
-      return IconSparkles
+      return <IconSparkles className={className} />
     case "assistant":
     case "shield":
-      return IconUserShield
+      return <IconUserShield className={className} />
     case "robot":
-      return IconRobot
+      return <IconRobot className={className} />
     case "site":
     case "world":
-      return IconWorldWww
+      return <IconWorldWww className={className} />
     default:
       return null
   }
@@ -871,49 +872,64 @@ function AgentAvatar({
   }
   const fallback = defaultAvatarForAgent(agent)
   const avatar = agent.avatar ?? fallback
-  const Icon = iconForAvatar(avatar.icon || fallback.icon)
   const imageURL = avatar.image_url?.trim()
   const initials = avatar.initials?.trim() || fallback.initials
+  const seed = `${agent.id}:${agent.name || initials}`
+  const icon = renderAvatarIcon(
+    avatar.icon || fallback.icon,
+    size === "lg" ? "size-7" : "size-4",
+  )
+
   return (
     <div
-      className={`${sizeClasses[size]} ring-border/50 flex shrink-0 items-center justify-center overflow-hidden rounded-lg font-semibold ring-1`}
+      className={`${sizeClasses[size]} ring-border/50 relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold ring-1`}
       style={{
-        backgroundColor: avatar.background || fallback.background,
+        backgroundColor: imageURL
+          ? avatar.background || fallback.background
+          : undefined,
         color: avatar.foreground || fallback.foreground,
       }}
       aria-hidden="true"
     >
       {imageURL ? (
         <img src={imageURL} alt="" className="size-full object-cover" />
-      ) : Icon ? (
-        <Icon className={size === "lg" ? "size-7" : "size-4"} />
       ) : (
-        initials
+        <>
+          <AIOrbAvatar seed={seed} className="absolute inset-0" />
+          <span className="relative z-10 flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.45)]">
+            {icon ?? initials}
+          </span>
+        </>
       )}
     </div>
   )
 }
 
 function ProfileAvatar({ profile }: { profile: AgentProfileDraft }) {
-  const Icon = iconForAvatar(profile.icon)
   const imageURL = profile.imageURL.trim()
   const initials =
     profile.initials.trim() || profile.name.slice(0, 2).toUpperCase()
+  const seed = `${profile.name}:${profile.icon}:${initials}`
+  const icon = renderAvatarIcon(profile.icon, "size-4")
+
   return (
     <span
-      className="ring-border/50 flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg text-sm font-semibold ring-1"
+      className="ring-border/50 relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-semibold ring-1"
       style={{
-        backgroundColor: profile.background || "#475569",
+        backgroundColor: imageURL ? profile.background || "#475569" : undefined,
         color: profile.foreground || "#ffffff",
       }}
       aria-hidden="true"
     >
       {imageURL ? (
         <img src={imageURL} alt="" className="size-full object-cover" />
-      ) : Icon ? (
-        <Icon className="size-4" />
       ) : (
-        initials
+        <>
+          <AIOrbAvatar seed={seed} className="absolute inset-0" />
+          <span className="relative z-10 flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.45)]">
+            {icon ?? initials}
+          </span>
+        </>
       )}
     </span>
   )

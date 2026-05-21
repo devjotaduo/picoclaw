@@ -103,6 +103,13 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Workspace-defined agents from workspace/agents/*.md.
 	h.registerWorkspaceAgentRoutes(mux)
 
+	// Company data readiness checklist used by the launcher onboarding card.
+	h.registerCompanyOnboardingRoutes(mux)
+
+	// Aggregated operational dashboard for agent results, analyses, tasks,
+	// metrics, reports, and file-based dashboard publications.
+	h.registerAgentDashboardRoutes(mux)
+
 	// Agent prompt version history (server-side replacement for the
 	// localStorage fallback the frontend uses when this endpoint is
 	// unavailable).

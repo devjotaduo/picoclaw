@@ -57,7 +57,7 @@ export interface MessageInputProps {
  *  - emoji picker (and `:` shortcut)
  *  - attachment menu (paperclip → image / video / doc / camera / contact / location)
  *  - audio recorder (microphone → live waveform + send)
- *  - autopause hook + Ctrl/⌘+Enter to send
+ *  - autopause hook + Enter to send; Shift+Enter inserts a new line
  *
  * Until the backend grows multipart support, attachments and audio collapse
  * into textual placeholders via `attachmentPlaceholder()` / `audioPlaceholder()`.
@@ -73,7 +73,7 @@ export function MessageInput({
   onSaveNote,
   contactName,
   inputRef,
-  placeholder = "Escreva uma mensagem… (Ctrl+Enter para enviar)",
+  placeholder = "Escreva uma mensagem...",
   disabled = false,
 }: MessageInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -154,7 +154,12 @@ export function MessageInput({
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       // Quick-replies popover handles Enter/Tab/Arrow keys via capture-phase.
       if (slashOpen) return
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      if (
+        e.key === "Enter" &&
+        !e.shiftKey &&
+        !e.altKey &&
+        !e.nativeEvent.isComposing
+      ) {
         e.preventDefault()
         submit(value)
         return
@@ -289,7 +294,7 @@ export function MessageInput({
                   }
                   disabled={sending || disabled}
                   rows={1}
-                  className="max-h-32 min-h-10 flex-1 resize-none rounded-xl text-sm"
+                  className="border-border/60 bg-muted/20 focus-visible:border-border max-h-32 min-h-10 flex-1 resize-none rounded-xl text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
                   aria-label={
                     noteMode ? "Conteúdo da nota interna" : "Mensagem a enviar"
                   }

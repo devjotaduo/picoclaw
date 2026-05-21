@@ -4,7 +4,7 @@ Este workspace representa uma equipe de agentes para pequenas e médias empresas
 
 A equipe é formada por:
 
-- Rafael: assistente interno do dono.
+- Rafael: Assistente interno.
 - Clara: atendente principal.
 - Marcos: consultor de vendas.
 - Camila: suporte e pós-venda.

@@ -1,5 +1,7 @@
 import {
+  IconLinkOff,
   IconLoader2,
+  IconPlayerPause,
   IconPlayerStop,
   IconRefresh,
   IconSettings,
@@ -31,6 +33,12 @@ export interface InboxSettingsMenuProps {
   onRefresh?: () => void
   isRefreshing?: boolean
   canRefresh?: boolean
+  channelEnabled?: boolean
+  onPauseChannel?: () => void
+  onDisconnectChannel?: () => void
+  channelActionPending?: boolean
+  isPausingChannel?: boolean
+  isDisconnectingChannel?: boolean
 }
 
 /**
@@ -42,6 +50,12 @@ export function InboxSettingsMenu({
   onRefresh,
   isRefreshing,
   canRefresh = true,
+  channelEnabled = false,
+  onPauseChannel,
+  onDisconnectChannel,
+  channelActionPending = false,
+  isPausingChannel = false,
+  isDisconnectingChannel = false,
 }: InboxSettingsMenuProps) {
   const { stop, loading: gatewayLoading, state: gatewayState } = useGateway()
   const [stopOpen, setStopOpen] = useState(false)
@@ -78,6 +92,45 @@ export function InboxSettingsMenu({
               )}
               Atualizar conversas
             </DropdownMenuItem>
+          )}
+          {channelEnabled && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Canal WhatsApp</DropdownMenuLabel>
+              {onPauseChannel && (
+                <DropdownMenuItem
+                  disabled={channelActionPending}
+                  onSelect={(e) => {
+                    e.preventDefault()
+                    onPauseChannel()
+                  }}
+                >
+                  {isPausingChannel ? (
+                    <IconLoader2 className="mr-2 size-3.5 animate-spin" />
+                  ) : (
+                    <IconPlayerPause className="mr-2 size-3.5" />
+                  )}
+                  Pausar canal
+                </DropdownMenuItem>
+              )}
+              {onDisconnectChannel && (
+                <DropdownMenuItem
+                  disabled={channelActionPending}
+                  onSelect={(e) => {
+                    e.preventDefault()
+                    onDisconnectChannel()
+                  }}
+                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                >
+                  {isDisconnectingChannel ? (
+                    <IconLoader2 className="mr-2 size-3.5 animate-spin" />
+                  ) : (
+                    <IconLinkOff className="mr-2 size-3.5" />
+                  )}
+                  Desconectar número
+                </DropdownMenuItem>
+              )}
+            </>
           )}
           <DropdownMenuSeparator />
           <DropdownMenuLabel className="text-destructive">

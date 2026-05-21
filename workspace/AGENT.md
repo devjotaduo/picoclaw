@@ -22,7 +22,7 @@ Leia estes arquivos antes de atuar:
 - memory/MEMORY.md
 
 ## Agentes disponíveis
-- Rafael: assistente interno do dono.
+- Rafael: Assistente interno.
 - Clara: atendente principal.
 - Marcos: consultor de vendas.
 - Camila: suporte e pós-venda.

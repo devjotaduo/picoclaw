@@ -143,7 +143,11 @@ func parseWorkspaceAgentFile(filename string, content string) workspaceAgentItem
 	metadata, body := splitWorkspaceAgentFrontmatter(content)
 	titleName, titleRole := workspaceAgentTitle(body)
 
-	name := firstWorkspaceAgentNonEmpty(metadata["name"], titleName, strings.TrimSuffix(filename, filepath.Ext(filename)))
+	name := firstWorkspaceAgentNonEmpty(
+		metadata["name"],
+		titleName,
+		strings.TrimSuffix(filename, filepath.Ext(filename)),
+	)
 	role := firstWorkspaceAgentNonEmpty(metadata["role"], titleRole, "Agente do workspace")
 
 	return workspaceAgentItem{

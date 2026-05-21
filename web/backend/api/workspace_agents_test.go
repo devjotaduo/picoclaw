@@ -32,13 +32,13 @@ Voce e Clara, atendente principal da empresa.
 `)
 	writeWorkspaceAgentFile(t, workspace, "rafael-assistente.md", `---
 name: Rafael
-role: Assistente interno do dono
+role: Assistente interno
 visibility: interno
 ---
 
 # Rafael - Assistente Interno
 
-Voce e Rafael, o assistente interno do dono.
+Voce e Rafael, o Assistente interno.
 `)
 
 	rec := httptest.NewRecorder()

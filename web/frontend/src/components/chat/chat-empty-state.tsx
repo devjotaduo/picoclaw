@@ -10,7 +10,10 @@ import { useTranslation } from "react-i18next"
 
 import type { AgentSummary } from "@/api/internal-agents"
 import type { LauncherQuickTask } from "@/api/launcher-policy"
-import { AIOrbAvatar } from "@/components/chat/ai-orb-avatar"
+import {
+  AIOrbAvatar,
+  type AuraPalette,
+} from "@/components/chat/ai-orb-avatar"
 import { Button } from "@/components/ui/button"
 
 interface ChatEmptyStateProps {
@@ -19,6 +22,10 @@ interface ChatEmptyStateProps {
   isConnected: boolean
   agent?: AgentSummary | null
   chatIntro?: string
+  displayName?: string
+  displayDescription?: string
+  avatarSeed?: string
+  avatarColors?: AuraPalette
   quickTasks?: LauncherQuickTask[]
   disabled?: boolean
   onQuickTask?: (prompt: string) => void
@@ -54,6 +61,10 @@ export function ChatEmptyState({
   isConnected,
   agent,
   chatIntro,
+  displayName,
+  displayDescription,
+  avatarSeed,
+  avatarColors,
   quickTasks,
   disabled,
   onQuickTask,
@@ -111,11 +122,11 @@ export function ChatEmptyState({
     )
   }
 
-  const agentName = (agent?.name || agent?.id || "").trim()
+  const agentName = (displayName || agent?.name || agent?.id || "").trim()
   const heading = agentName
     ? t("chat.welcomeWithAgent", { name: agentName })
     : t("chat.welcome")
-  const agentDescription = agentIntro(agent, t)
+  const agentDescription = displayDescription?.trim() || agentIntro(agent, t)
   const description = (agentDescription ||
     (chatIntro && chatIntro.length > 0
       ? chatIntro
@@ -137,7 +148,10 @@ export function ChatEmptyState({
             className="size-full object-cover"
           />
         ) : (
-          <AIOrbAvatar />
+          <AIOrbAvatar
+            seed={avatarSeed || agentName || agent?.id || "chat"}
+            colors={avatarColors}
+          />
         )}
       </div>
       <h3 className="mb-2 text-center text-xl font-medium">{heading}</h3>
