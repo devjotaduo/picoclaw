@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# onboarding-submit-intake
+#
+# Submits the finalized intake (with contact_email + optional contact_whatsapp)
+# to the Picoclaw SaaS controlplane. This is what triggers AutoProvisioner.Run
+# on the controlplane side: a new tenant container is created for the visitor's
+# company, and the credentials email is delivered via Mailer.SendCredentialsEmail.
+#
+# Authentication: same HMAC scheme as mark-qualified.sh (see that file for the
+# protocol).
+#
+# Required env:
+#   PICOCLAW_ONBOARDING_CALLBACK_URL
+#   PICOCLAW_ONBOARDING_CALLBACK_SECRET
+#
+# Usage:
+#   submit-intake.sh <intake_id> <contact_email> [contact_whatsapp]
+#
+# Exit codes:
+#   0   success (controlplane returned 200, provisioning info in stdout)
+#   1   missing args or env
+#   2   network/controlplane error
+#   3   controlplane returned non-2xx
+
+set -euo pipefail
+
+if [[ $# -lt 2 ]]; then
+  echo "usage: submit-intake.sh <intake_id> <contact_email> [contact_whatsapp]" >&2
+  exit 1
+fi
+
+INTAKE_ID="$1"
+CONTACT_EMAIL="$2"
+CONTACT_WHATSAPP="${3:-}"
+URL="${PICOCLAW_ONBOARDING_CALLBACK_URL:?PICOCLAW_ONBOARDING_CALLBACK_URL required}"
+SECRET="${PICOCLAW_ONBOARDING_CALLBACK_SECRET:?PICOCLAW_ONBOARDING_CALLBACK_SECRET required}"
+
+URL="${URL%/}"
+TS="$(date +%s)"
+
+# Escape any double-quotes the agent might have collected in the contact info.
+# Email/whatsapp are short ASCII; nothing fancy needed beyond \" and \\.
+escape_json() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+ESC_EMAIL="$(escape_json "$CONTACT_EMAIL")"
+ESC_WA="$(escape_json "$CONTACT_WHATSAPP")"
+
+BODY="$(printf '{"intake_id":"%s","action":"submit_intake","contact_email":"%s","contact_whatsapp":"%s","ts":%s}' \
+  "$INTAKE_ID" "$ESC_EMAIL" "$ESC_WA" "$TS")"
+
+SIG="$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" -hex | awk '{print $NF}')"
+
+HTTP_STATUS="$(curl -sS -o /tmp/submit-intake-$$.out -w '%{http_code}' \
+  -X POST "${URL}/api/v1/onboarding-callback" \
+  -H 'Content-Type: application/json' \
+  -H "X-Onboarding-Signature: ${SIG}" \
+  -d "$BODY" 2>&1)" || {
+    rc=$?
+    echo "submit-intake: curl failed (rc=$rc)" >&2
+    rm -f "/tmp/submit-intake-$$.out"
+    exit 2
+  }
+
+if [[ "$HTTP_STATUS" =~ ^2[0-9][0-9]$ ]]; then
+  # 200 body is the AutoProvisioner result (tenant_provisioned, url,
+  # initial_password, etc.) — pass it through to the agent's stdout so the
+  # LLM can fold the details into its final message to the visitor.
+  cat "/tmp/submit-intake-$$.out"
+  rm -f "/tmp/submit-intake-$$.out"
+  exit 0
+fi
+
+echo "submit-intake: controlplane returned $HTTP_STATUS" >&2
+cat "/tmp/submit-intake-$$.out" >&2 || true
+rm -f "/tmp/submit-intake-$$.out"
+exit 3
