@@ -160,8 +160,9 @@ func defaultPicoConfig(litellmBase string) map[string]any {
 				"enabled": true,
 				"type":    "whatsapp_native",
 				"settings": map[string]any{
-					"use_native": true,
-					"bridge_url": "",
+					"use_native":         true,
+					"bridge_url":         "",
+					"session_store_path": "",
 				},
 			},
 		},
@@ -286,6 +287,7 @@ func ensureWhatsAppNativeOnlyChannels(cfg map[string]any) {
 	settings := ensureMap(whatsapp, "settings")
 	settings["use_native"] = true
 	settings["bridge_url"] = ""
+	settings["session_store_path"] = ""
 }
 
 func isLiteLLMModel(m map[string]any) bool {

@@ -16,6 +16,7 @@ import { DisplaySection } from "@/components/launcher-profile/sections/display-s
 import { ModelsSection } from "@/components/launcher-profile/sections/models-section";
 import { PermissionsSection } from "@/components/launcher-profile/sections/permissions-section";
 import { ProfileSection } from "@/components/launcher-profile/sections/profile-section";
+import { SeedFilesSection } from "@/components/launcher-profile/sections/seed-files-section";
 import { WorkspaceFilesSection } from "@/components/launcher-profile/sections/workspace-files-section";
 import { DirtyBar } from "@/components/launcher-profile/dirty-bar";
 
@@ -171,6 +172,7 @@ export function ProfileEditor({ profile, policyCatalog }: ProfileEditorProps) {
           <BehaviorSection value={form.behavior} onChange={(b) => update("behavior", b)} />
           <DisplaySection value={form.display} onChange={(d) => update("display", d)} />
           <ModelsSection models={form.models} onChange={(m) => update("models", m)} />
+          <SeedFilesSection profileId={profile.id} />
           <WorkspaceFilesSection
             agentMD={form.agentMD}
             soulMD={form.soulMD}

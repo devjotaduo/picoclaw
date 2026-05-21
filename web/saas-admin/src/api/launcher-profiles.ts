@@ -57,6 +57,14 @@ export type LauncherProfileSeed = {
   behavior_json?: unknown;
 };
 
+export type LauncherProfileSeedFile = {
+  path: string;
+  size: number;
+  sensitive: boolean;
+  exact: boolean;
+  updated_at: string;
+};
+
 type LauncherProfileInput = {
   name: string;
   slug?: string;
@@ -115,4 +123,40 @@ export async function updateLauncherProfileSeed(
     method: "PUT",
     body: JSON.stringify(seed),
   });
+}
+
+export async function listLauncherProfileSeedFiles(id: string) {
+  return api<{ files: LauncherProfileSeedFile[] }>(
+    `/api/v1/launcher-profiles/${id}/seed/files`,
+  );
+}
+
+export async function uploadLauncherProfileSeedFile(input: {
+  id: string;
+  path: string;
+  file: File;
+  confirmSensitive: boolean;
+}) {
+  const form = new FormData();
+  form.set("path", input.path);
+  form.set("confirm_sensitive", String(input.confirmSensitive));
+  form.set("file", input.file);
+  const resp = await fetch(`/api/v1/launcher-profiles/${input.id}/seed/files`, {
+    method: "POST",
+    credentials: "include",
+    cache: "no-store",
+    body: form,
+  });
+  const body = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw { error: body.error ?? `HTTP ${resp.status}`, status: resp.status, body };
+  }
+  return body as LauncherProfileSeedFile;
+}
+
+export async function deleteLauncherProfileSeedFile(id: string, path: string) {
+  return api<void>(
+    `/api/v1/launcher-profiles/${id}/seed/files?path=${encodeURIComponent(path)}`,
+    { method: "DELETE" },
+  );
 }
