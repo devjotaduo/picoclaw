@@ -1,6 +1,5 @@
 import {
   IconAlertTriangle,
-  IconArrowUp,
   IconAtom,
   IconBook,
   IconBrandWhatsapp,
