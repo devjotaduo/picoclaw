@@ -54,11 +54,18 @@ RUN CONFIG_PKG=github.com/sipeed/picoclaw/pkg/config && \
 # ============================================================
 FROM alpine:3.23
 
+# Runtime deps for picoclaw-launcher + dev/operator skills (github, tmux,
+# weather, summarize, skill-creator). The launcher is "light" — agent-browser
+# and Playwright stay in Dockerfile.heavy because they pull Chromium.
 RUN apk add --no-cache \
   ca-certificates \
   curl \
   github-cli \
   jq \
+  nodejs \
+  npm \
+  python3 \
+  py3-pip \
   tmux \
   tzdata
 

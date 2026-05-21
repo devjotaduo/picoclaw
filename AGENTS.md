@@ -52,3 +52,28 @@ work in dev mode, prefer `docker/saas/scripts/dev-sync.sh` and the
 Use a Docker image rebuild only when Dockerfiles, base image layers, OS
 packages, image-only assets, or durable production image validation are part of
 the task.
+
+## Internal agents & dev skills in Docker
+
+The launcher container (`docker/Dockerfile.launcher`, image
+`picoclaw-launcher:latest`) ships with the runtimes needed by the dev/operator
+skill set:
+
+- CLIs: `gh` (github-cli), `tmux`, `curl`, `jq`
+- Runtimes: `nodejs` + `npm`, `python3` + `pip`
+
+This means **internal agents inside any tenant container** can use the
+following skills out-of-the-box without a heavy rebuild: `github`, `tmux`,
+`weather`, `summarize`, `skill-creator`, plus anything that needs `node`/`pnpm`
+or `python3`/`pip` at runtime.
+
+The canonical internal agent is `workspace/agents/operador/` — copy/adapt its
+`AGENT.md` when adding new internal personas. Customer-facing personas (Sofia,
+Clara, Marcos, Camila) should **not** list dev skills in their `skills:`
+frontmatter — limit them to atendimento/vendas/onboarding skills.
+
+Skills that need Chromium (`agent-browser`) or Playwright stay in
+`docker/Dockerfile.heavy` (image `picoclaw-heavy`); they are only available
+when the tenant is launched on the heavy image. If an internal agent needs
+browser automation, the operator must switch the tenant's image first.
+

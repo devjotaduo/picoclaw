@@ -28,6 +28,7 @@ Leia estes arquivos antes de atuar:
 - Camila: suporte e pós-venda.
 - Lia: marketing, posts Instagram, sites HTML, campanhas.
 - Sofia: onboarding de novas empresas — identifica segmento e define bloqueios.
+- Operador: agente interno técnico (dev). Acesso a `github`, `tmux`, `summarize`, `skill-creator`. Não fala com cliente final. Disponível quando o container roda em imagem com runtimes dev (launcher default ou heavy).
 - Atendimento Humano: transferência para pessoa responsável.
 
 ## Regra principal
