@@ -318,7 +318,7 @@ func (h *Handler) handleWriteWorkspaceFile(w http.ResponseWriter, r *http.Reques
 // runtime state on the way. Useful for "create the first workspace mirroring
 // what's already in prod" right after the migration lands. The body picks
 // the source path; when omitted, the handler defaults to $PICOCLAW_HOME
-// (or ~/.picoclaw if that's unset) so the admin button labelled "Importar
+// (or ~/.picoclaw if that's unset) so the admin button labeled "Importar
 // do $PICOCLAW_HOME" doesn't need to know the path.
 type importFromHomeReq struct {
 	Name        string `json:"name"`

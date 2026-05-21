@@ -140,7 +140,10 @@ func (c readinessCheck) evaluate(memoryDir string) agentReadiness {
 	if c.SkillCheck != "" {
 		if _, err := os.Stat(c.SkillCheck); err != nil {
 			out.Status = "blocked"
-			out.Reasons = append(out.Reasons, fmt.Sprintf("Skill ausente: %s", filepath.Base(filepath.Dir(c.SkillCheck))))
+			out.Reasons = append(
+				out.Reasons,
+				fmt.Sprintf("Skill ausente: %s", filepath.Base(filepath.Dir(c.SkillCheck))),
+			)
 			return out
 		}
 	}
