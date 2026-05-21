@@ -96,7 +96,8 @@ Status da informação: validado
 		filepath.Join("config", "authorized-channels.md"),
 		`# Canais autorizados
 - WhatsApp principal: +55 11 99999-9999
-`)
+`,
+	)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace/company-onboarding", nil)
