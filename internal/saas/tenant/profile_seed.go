@@ -20,6 +20,20 @@ type SeedFiles struct {
 	BehaviorJSON json.RawMessage `json:"behavior_json,omitempty"`
 }
 
+const seedManifestFilename = ".saas-seed-files.json"
+
+type SeedFileEntry struct {
+	Path      string    `json:"path"`
+	Size      int64     `json:"size"`
+	Sensitive bool      `json:"sensitive"`
+	Exact     bool      `json:"exact"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type seedManifest struct {
+	Files []SeedFileEntry `json:"files"`
+}
+
 func ImportStandaloneProfile(templateDir, seedPath string) error {
 	if templateDir == "" {
 		return fmt.Errorf("TENANT_TEMPLATE_DIR is not configured")
@@ -34,6 +48,121 @@ func ImportStandaloneProfile(templateDir, seedPath string) error {
 		return err
 	}
 	return SanitizeSeed(seedPath)
+}
+
+func ListExactSeedFiles(seedPath string) ([]SeedFileEntry, error) {
+	manifest, err := readSeedManifest(seedPath)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SeedFileEntry, 0, len(manifest.Files))
+	for _, entry := range manifest.Files {
+		if !entry.Exact {
+			continue
+		}
+		info, err := os.Stat(filepath.Join(seedPath, filepath.FromSlash(entry.Path)))
+		if err == nil && !info.IsDir() {
+			entry.Size = info.Size()
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+func WriteExactSeedFile(seedPath, relPath string, data []byte, confirmSensitive bool) (SeedFileEntry, error) {
+	cleanPath, err := cleanSeedFilePath(relPath)
+	if err != nil {
+		return SeedFileEntry{}, err
+	}
+	sensitive := IsSensitiveSeedFile(cleanPath, data)
+	if sensitive && !confirmSensitive {
+		return SeedFileEntry{}, fmt.Errorf("sensitive seed file requires confirmation")
+	}
+	dst := filepath.Join(seedPath, filepath.FromSlash(cleanPath))
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return SeedFileEntry{}, err
+	}
+	mode := os.FileMode(0o644)
+	if sensitive {
+		mode = 0o600
+	}
+	if err := os.WriteFile(dst, data, mode); err != nil {
+		return SeedFileEntry{}, err
+	}
+	entry := SeedFileEntry{
+		Path:      cleanPath,
+		Size:      int64(len(data)),
+		Sensitive: sensitive,
+		Exact:     true,
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := upsertSeedManifestEntry(seedPath, entry); err != nil {
+		return SeedFileEntry{}, err
+	}
+	return entry, nil
+}
+
+func DeleteExactSeedFile(seedPath, relPath string) error {
+	cleanPath, err := cleanSeedFilePath(relPath)
+	if err != nil {
+		return err
+	}
+	manifest, err := readSeedManifest(seedPath)
+	if err != nil {
+		return err
+	}
+	next := manifest.Files[:0]
+	found := false
+	for _, entry := range manifest.Files {
+		if entry.Path == cleanPath {
+			found = true
+			continue
+		}
+		next = append(next, entry)
+	}
+	if !found {
+		return os.ErrNotExist
+	}
+	manifest.Files = next
+	if err := os.Remove(filepath.Join(seedPath, filepath.FromSlash(cleanPath))); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return writeSeedManifest(seedPath, manifest)
+}
+
+func HasExactSeedFile(seedPath, relPath string) bool {
+	cleanPath, err := cleanSeedFilePath(relPath)
+	if err != nil {
+		return false
+	}
+	manifest, err := readSeedManifest(seedPath)
+	if err != nil {
+		return false
+	}
+	for _, entry := range manifest.Files {
+		if entry.Exact && entry.Path == cleanPath {
+			return true
+		}
+	}
+	return false
+}
+
+func IsSensitiveSeedFile(relPath string, data []byte) bool {
+	relPath = filepath.ToSlash(strings.TrimSpace(relPath))
+	base := strings.ToLower(filepath.Base(relPath))
+	switch {
+	case base == "auth.json", base == ".security.yml", base == ".security.yaml":
+		return true
+	case strings.HasSuffix(base, ".key"), strings.HasSuffix(base, ".pem"), strings.HasSuffix(base, ".p12"):
+		return true
+	}
+	lower := strings.ToLower(string(data))
+	for _, needle := range []string{"api_key", "api_keys", "access_token", "refresh_token", "client_secret", "password", "secret"} {
+		if strings.Contains(lower, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func ReadSeedFiles(seedPath string) (SeedFiles, error) {
@@ -109,6 +238,10 @@ func ApplyProfileSeed(seedPath, tenantVolume string) (string, error) {
 	if !info.IsDir() {
 		return "", fmt.Errorf("profile seed %s is not a directory", seedPath)
 	}
+	exactFiles, err := exactSeedFileSet(seedPath)
+	if err != nil {
+		return "", err
+	}
 	backupDir := filepath.Join(tenantVolume, "backups", "profile-"+time.Now().UTC().Format("20060102T150405Z"))
 	if err := os.MkdirAll(backupDir, 0o755); err != nil {
 		return "", err
@@ -124,7 +257,12 @@ func ApplyProfileSeed(seedPath, tenantVolume string) (string, error) {
 		if rel == "." {
 			return nil
 		}
-		if shouldSkipTemplatePath(rel) {
+		rel = filepath.ToSlash(rel)
+		if rel == seedManifestFilename {
+			return nil
+		}
+		exact := exactFiles[rel]
+		if !exact && shouldSkipTemplatePath(rel) {
 			if fi.IsDir() {
 				return filepath.SkipDir
 			}
@@ -136,6 +274,15 @@ func ApplyProfileSeed(seedPath, tenantVolume string) (string, error) {
 		}
 		if fi.Mode()&os.ModeSymlink != 0 || !fi.Mode().IsRegular() {
 			return nil
+		}
+		if exact {
+			if err := backupExisting(dst, filepath.Join(backupDir, rel)); err != nil {
+				return err
+			}
+			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+				return err
+			}
+			return copyFile(path, dst, fi.Mode().Perm())
 		}
 		switch filepath.ToSlash(rel) {
 		case "config.json":
@@ -158,6 +305,10 @@ func ApplyProfileSeed(seedPath, tenantVolume string) (string, error) {
 }
 
 func SanitizeSeed(seedPath string) error {
+	exactFiles, err := exactSeedFileSet(seedPath)
+	if err != nil {
+		return err
+	}
 	return filepath.Walk(seedPath, func(path string, fi os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -167,6 +318,10 @@ func SanitizeSeed(seedPath string) error {
 			return err
 		}
 		if rel == "." {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		if rel == seedManifestFilename || exactFiles[rel] {
 			return nil
 		}
 		if shouldSkipTemplatePath(rel) {
@@ -197,6 +352,106 @@ func SanitizeSeed(seedPath string) error {
 		}
 		return nil
 	})
+}
+
+// hasWindowsDriveLetter returns true for paths like "C:/foo" or "C:\foo".
+// filepath.IsAbs only flags these on Windows, so the seed-file validation
+// has to detect them explicitly to stay consistent across CI runners.
+func hasWindowsDriveLetter(p string) bool {
+	if len(p) < 2 || p[1] != ':' {
+		return false
+	}
+	c := p[0]
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+}
+
+func cleanSeedFilePath(relPath string) (string, error) {
+	relPath = strings.TrimSpace(relPath)
+	if relPath == "" {
+		return "", fmt.Errorf("path is required")
+	}
+	relPath = filepath.ToSlash(relPath)
+	if filepath.IsAbs(relPath) || strings.HasPrefix(relPath, "/") || hasWindowsDriveLetter(relPath) {
+		return "", fmt.Errorf("path must be relative")
+	}
+	clean := filepath.Clean(filepath.FromSlash(relPath))
+	if clean == "." || strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) {
+		return "", fmt.Errorf("path must stay inside the seed directory")
+	}
+	clean = filepath.ToSlash(clean)
+	if clean == seedManifestFilename {
+		return "", fmt.Errorf("reserved seed manifest path")
+	}
+	return clean, nil
+}
+
+func exactSeedFileSet(seedPath string) (map[string]bool, error) {
+	manifest, err := readSeedManifest(seedPath)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, entry := range manifest.Files {
+		if entry.Exact {
+			out[entry.Path] = true
+		}
+	}
+	return out, nil
+}
+
+func upsertSeedManifestEntry(seedPath string, entry SeedFileEntry) error {
+	manifest, err := readSeedManifest(seedPath)
+	if err != nil {
+		return err
+	}
+	replaced := false
+	for i := range manifest.Files {
+		if manifest.Files[i].Path == entry.Path {
+			manifest.Files[i] = entry
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		manifest.Files = append(manifest.Files, entry)
+	}
+	return writeSeedManifest(seedPath, manifest)
+}
+
+func readSeedManifest(seedPath string) (seedManifest, error) {
+	var manifest seedManifest
+	data, err := os.ReadFile(filepath.Join(seedPath, seedManifestFilename))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return manifest, nil
+		}
+		return manifest, err
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return manifest, nil
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return manifest, fmt.Errorf("parse seed manifest: %w", err)
+	}
+	for i := range manifest.Files {
+		cleanPath, err := cleanSeedFilePath(manifest.Files[i].Path)
+		if err != nil {
+			return manifest, fmt.Errorf("seed manifest path: %w", err)
+		}
+		manifest.Files[i].Path = cleanPath
+	}
+	return manifest, nil
+}
+
+func writeSeedManifest(seedPath string, manifest seedManifest) error {
+	if err := os.MkdirAll(seedPath, 0o755); err != nil {
+		return err
+	}
+	out, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(seedPath, seedManifestFilename), append(out, '\n'), 0o600)
 }
 
 func applyProfileConfig(seedPath, dstPath, backupDir string) error {

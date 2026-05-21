@@ -68,6 +68,13 @@ func NormalizeDefaultLauncherProfileSeed(seedPath string) (bool, error) {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return false, err
 	}
+	if HasExactSeedFile(seedPath, "config.json") {
+		removed, err := removeDefaultLauncherProfileOrphans(seedPath)
+		if err != nil {
+			return false, err
+		}
+		return removed, nil
+	}
 
 	root := map[string]any{}
 	if len(strings.TrimSpace(string(before))) > 0 {

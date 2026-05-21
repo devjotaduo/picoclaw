@@ -5,7 +5,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -15,6 +17,8 @@ import (
 	"github.com/sipeed/picoclaw/internal/saas/store"
 	"github.com/sipeed/picoclaw/internal/saas/tenant"
 )
+
+const maxLauncherProfileSeedUploadBytes = 10 << 20
 
 type launcherProfileReq struct {
 	Name        string            `json:"name"`
@@ -177,6 +181,83 @@ func (h *Handler) handlePutLauncherProfileSeed(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeJSON(w, http.StatusOK, summarizeLauncherProfile(p))
+}
+
+func (h *Handler) handleListLauncherProfileSeedFiles(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.getLauncherProfile(w, r)
+	if !ok {
+		return
+	}
+	files, err := tenant.ListExactSeedFiles(p.SeedPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"files": files})
+}
+
+func (h *Handler) handleUploadLauncherProfileSeedFile(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.getLauncherProfile(w, r)
+	if !ok {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxLauncherProfileSeedUploadBytes+1024)
+	if err := r.ParseMultipartForm(maxLauncherProfileSeedUploadBytes); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid multipart upload")
+		return
+	}
+	relPath := strings.TrimSpace(r.FormValue("path"))
+	confirmSensitive := strings.EqualFold(strings.TrimSpace(r.FormValue("confirm_sensitive")), "true")
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "file is required")
+		return
+	}
+	defer file.Close()
+	if header.Size > maxLauncherProfileSeedUploadBytes {
+		writeError(w, http.StatusBadRequest, "file is too large")
+		return
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maxLauncherProfileSeedUploadBytes+1))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "read file failed")
+		return
+	}
+	if len(data) > maxLauncherProfileSeedUploadBytes {
+		writeError(w, http.StatusBadRequest, "file is too large")
+		return
+	}
+	entry, err := tenant.WriteExactSeedFile(p.SeedPath, relPath, data, confirmSensitive)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.Profiles.Update(r.Context(), p); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, entry)
+}
+
+func (h *Handler) handleDeleteLauncherProfileSeedFile(w http.ResponseWriter, r *http.Request) {
+	p, ok := h.getLauncherProfile(w, r)
+	if !ok {
+		return
+	}
+	relPath := strings.TrimSpace(r.URL.Query().Get("path"))
+	if err := tenant.DeleteExactSeedFile(p.SeedPath, relPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeError(w, http.StatusNotFound, "seed file not found")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.Profiles.Update(r.Context(), p); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) handleImportStandaloneLauncherProfile(w http.ResponseWriter, r *http.Request) {

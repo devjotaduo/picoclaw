@@ -184,6 +184,41 @@ model_list:
 `)
 }
 
+func TestExactSeedFilesBypassSanitizeAndApplyVerbatim(t *testing.T) {
+	seed := t.TempDir()
+	volume := t.TempDir()
+
+	if _, err := WriteExactSeedFile(seed, "auth.json", []byte(`{"access_token":"secret-token"}`), false); err == nil {
+		t.Fatal("expected sensitive auth.json upload to require confirmation")
+	}
+	if _, err := WriteExactSeedFile(seed, "auth.json", []byte(`{"access_token":"secret-token"}`), true); err != nil {
+		t.Fatalf("WriteExactSeedFile auth.json: %v", err)
+	}
+	if _, err := WriteExactSeedFile(seed, "agents/main/openrouter.key", []byte("sk-or-shared"), true); err != nil {
+		t.Fatalf("WriteExactSeedFile key: %v", err)
+	}
+	if err := SanitizeSeed(seed); err != nil {
+		t.Fatalf("SanitizeSeed: %v", err)
+	}
+	assertFile(t, filepath.Join(seed, "auth.json"), `{"access_token":"secret-token"}`)
+	assertFile(t, filepath.Join(seed, "agents", "main", "openrouter.key"), "sk-or-shared")
+
+	if _, err := ApplyProfileSeed(seed, volume); err != nil {
+		t.Fatalf("ApplyProfileSeed: %v", err)
+	}
+	assertFile(t, filepath.Join(volume, "auth.json"), `{"access_token":"secret-token"}`)
+	assertFile(t, filepath.Join(volume, "agents", "main", "openrouter.key"), "sk-or-shared")
+}
+
+func TestExactSeedFilePathValidation(t *testing.T) {
+	seed := t.TempDir()
+	for _, path := range []string{"../auth.json", "/auth.json", "C:/Users/me/auth.json", ".saas-seed-files.json"} {
+		if _, err := WriteExactSeedFile(seed, path, []byte("x"), true); err == nil {
+			t.Fatalf("WriteExactSeedFile(%q) succeeded, want error", path)
+		}
+	}
+}
+
 func mustWrite(t *testing.T, path string, b []byte, mode os.FileMode) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
