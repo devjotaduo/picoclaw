@@ -509,6 +509,34 @@ func (p *Provisioner) buildSpec(t *store.Tenant) ContainerSpec {
 		"PICOCLAW_ALLOWED_CHANNELS":       "whatsapp_native",
 	}
 
+	// Browser automation: every tenant gets the CDP endpoint of the shared
+	// browser-sidecar. The agent-browser CLI inside the tenant connects
+	// remotely instead of bundling Chromium per container. Skip when not
+	// configured so older deployments without the sidecar keep working.
+	if u := p.Cfg.BrowserCDPURL; u != "" {
+		env["BROWSER_CDP_URL"] = u
+	}
+
+	// Public-onboarding tenants run skills that call the controlplane via
+	// HMAC-signed callback (mark-qualified.sh, submit-intake.sh). Both vars
+	// are read by the scripts; skipping them means the skills exit with a
+	// `required` env error and Clara has to apologize in chat. We propagate
+	// them only for IsPublic tenants — regular tenants have no business
+	// signing onboarding callbacks.
+	if t.IsPublic {
+		if s := p.Cfg.OnboardingCallbackSecret; s != "" {
+			env["PICOCLAW_ONBOARDING_CALLBACK_SECRET"] = s
+		}
+		if u := p.Cfg.OnboardingCallbackURL; u != "" {
+			env["PICOCLAW_ONBOARDING_CALLBACK_URL"] = u
+		}
+		// publicweb is the entire reason this tenant exists — make sure
+		// the channel allowlist reflects that. Without this override the
+		// tenant container ignores public-web messages (default allowlist
+		// is whatsapp_native, kept intact above for non-public tenants).
+		env["PICOCLAW_ALLOWED_CHANNELS"] = "public-web"
+	}
+
 	return ContainerSpec{
 		Name:        "tenant-" + t.ID,
 		Image:       t.ContainerImage,

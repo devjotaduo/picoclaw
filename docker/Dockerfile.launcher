@@ -54,13 +54,26 @@ RUN CONFIG_PKG=github.com/sipeed/picoclaw/pkg/config && \
 # ============================================================
 FROM alpine:3.23
 
+# Runtime deps for picoclaw-launcher + dev/operator skills (github, tmux,
+# weather, summarize, skill-creator, agent-browser). The launcher is "light":
+# we ship the agent-browser Node CLI but NOT Chromium — browser automation
+# connects to the shared `browser-sidecar` container over CDP via
+# $BROWSER_CDP_URL (set by the controlplane provisioner). Without that env
+# var the skill exits with a clear message instead of trying to launch a
+# local browser that isn't there.
 RUN apk add --no-cache \
   ca-certificates \
   curl \
   github-cli \
   jq \
+  nodejs \
+  npm \
+  python3 \
+  py3-pip \
   tmux \
-  tzdata
+  tzdata \
+  && npm install -g --omit=optional agent-browser \
+  && npm cache clean --force
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -q --spider http://127.0.0.1:18800/ || exit 1

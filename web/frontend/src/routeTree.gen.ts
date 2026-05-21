@@ -10,10 +10,13 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SofiaOnboardingRouteImport } from './routes/sofia-onboarding'
+import { Route as PendenciasRouteImport } from './routes/pendencias'
 import { Route as ModelsRouteImport } from './routes/models'
+import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as LogsRouteImport } from './routes/logs'
 import { Route as LauncherSetupRouteImport } from './routes/launcher-setup'
 import { Route as LauncherLoginRouteImport } from './routes/launcher-login'
+import { Route as CronRouteImport } from './routes/cron'
 import { Route as CredentialsRouteImport } from './routes/credentials'
 import { Route as ConfigRouteImport } from './routes/config'
 import { Route as AgentRouteImport } from './routes/agent'
@@ -44,9 +47,19 @@ const SofiaOnboardingRoute = SofiaOnboardingRouteImport.update({
   path: '/sofia-onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PendenciasRoute = PendenciasRouteImport.update({
+  id: '/pendencias',
+  path: '/pendencias',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ModelsRoute = ModelsRouteImport.update({
   id: '/models',
   path: '/models',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MemoryRoute = MemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LogsRoute = LogsRouteImport.update({
@@ -62,6 +75,11 @@ const LauncherSetupRoute = LauncherSetupRouteImport.update({
 const LauncherLoginRoute = LauncherLoginRouteImport.update({
   id: '/launcher-login',
   path: '/launcher-login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CronRoute = CronRouteImport.update({
+  id: '/cron',
+  path: '/cron',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CredentialsRoute = CredentialsRouteImport.update({
@@ -191,10 +209,13 @@ export interface FileRoutesByFullPath {
   '/agent': typeof AgentRouteWithChildren
   '/config': typeof ConfigRouteWithChildren
   '/credentials': typeof CredentialsRoute
+  '/cron': typeof CronRoute
   '/launcher-login': typeof LauncherLoginRoute
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
+  '/memory': typeof MemoryRoute
   '/models': typeof ModelsRoute
+  '/pendencias': typeof PendenciasRoute
   '/sofia-onboarding': typeof SofiaOnboardingRoute
   '/admin/clone': typeof AdminCloneRoute
   '/agent/agents': typeof AgentAgentsRoute
@@ -222,10 +243,13 @@ export interface FileRoutesByTo {
   '/agent': typeof AgentRouteWithChildren
   '/config': typeof ConfigRouteWithChildren
   '/credentials': typeof CredentialsRoute
+  '/cron': typeof CronRoute
   '/launcher-login': typeof LauncherLoginRoute
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
+  '/memory': typeof MemoryRoute
   '/models': typeof ModelsRoute
+  '/pendencias': typeof PendenciasRoute
   '/sofia-onboarding': typeof SofiaOnboardingRoute
   '/admin/clone': typeof AdminCloneRoute
   '/agent/agents': typeof AgentAgentsRoute
@@ -254,10 +278,13 @@ export interface FileRoutesById {
   '/agent': typeof AgentRouteWithChildren
   '/config': typeof ConfigRouteWithChildren
   '/credentials': typeof CredentialsRoute
+  '/cron': typeof CronRoute
   '/launcher-login': typeof LauncherLoginRoute
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
+  '/memory': typeof MemoryRoute
   '/models': typeof ModelsRoute
+  '/pendencias': typeof PendenciasRoute
   '/sofia-onboarding': typeof SofiaOnboardingRoute
   '/admin/clone': typeof AdminCloneRoute
   '/agent/agents': typeof AgentAgentsRoute
@@ -287,10 +314,13 @@ export interface FileRouteTypes {
     | '/agent'
     | '/config'
     | '/credentials'
+    | '/cron'
     | '/launcher-login'
     | '/launcher-setup'
     | '/logs'
+    | '/memory'
     | '/models'
+    | '/pendencias'
     | '/sofia-onboarding'
     | '/admin/clone'
     | '/agent/agents'
@@ -318,10 +348,13 @@ export interface FileRouteTypes {
     | '/agent'
     | '/config'
     | '/credentials'
+    | '/cron'
     | '/launcher-login'
     | '/launcher-setup'
     | '/logs'
+    | '/memory'
     | '/models'
+    | '/pendencias'
     | '/sofia-onboarding'
     | '/admin/clone'
     | '/agent/agents'
@@ -349,10 +382,13 @@ export interface FileRouteTypes {
     | '/agent'
     | '/config'
     | '/credentials'
+    | '/cron'
     | '/launcher-login'
     | '/launcher-setup'
     | '/logs'
+    | '/memory'
     | '/models'
+    | '/pendencias'
     | '/sofia-onboarding'
     | '/admin/clone'
     | '/agent/agents'
@@ -381,10 +417,13 @@ export interface RootRouteChildren {
   AgentRoute: typeof AgentRouteWithChildren
   ConfigRoute: typeof ConfigRouteWithChildren
   CredentialsRoute: typeof CredentialsRoute
+  CronRoute: typeof CronRoute
   LauncherLoginRoute: typeof LauncherLoginRoute
   LauncherSetupRoute: typeof LauncherSetupRoute
   LogsRoute: typeof LogsRoute
+  MemoryRoute: typeof MemoryRoute
   ModelsRoute: typeof ModelsRoute
+  PendenciasRoute: typeof PendenciasRoute
   SofiaOnboardingRoute: typeof SofiaOnboardingRoute
   AdminCloneRoute: typeof AdminCloneRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -402,11 +441,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SofiaOnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pendencias': {
+      id: '/pendencias'
+      path: '/pendencias'
+      fullPath: '/pendencias'
+      preLoaderRoute: typeof PendenciasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/models': {
       id: '/models'
       path: '/models'
       fullPath: '/models'
       preLoaderRoute: typeof ModelsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/memory': {
+      id: '/memory'
+      path: '/memory'
+      fullPath: '/memory'
+      preLoaderRoute: typeof MemoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/logs': {
@@ -428,6 +481,13 @@ declare module '@tanstack/react-router' {
       path: '/launcher-login'
       fullPath: '/launcher-login'
       preLoaderRoute: typeof LauncherLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cron': {
+      id: '/cron'
+      path: '/cron'
+      fullPath: '/cron'
+      preLoaderRoute: typeof CronRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/credentials': {
@@ -662,10 +722,13 @@ const rootRouteChildren: RootRouteChildren = {
   AgentRoute: AgentRouteWithChildren,
   ConfigRoute: ConfigRouteWithChildren,
   CredentialsRoute: CredentialsRoute,
+  CronRoute: CronRoute,
   LauncherLoginRoute: LauncherLoginRoute,
   LauncherSetupRoute: LauncherSetupRoute,
   LogsRoute: LogsRoute,
+  MemoryRoute: MemoryRoute,
   ModelsRoute: ModelsRoute,
+  PendenciasRoute: PendenciasRoute,
   SofiaOnboardingRoute: SofiaOnboardingRoute,
   AdminCloneRoute: AdminCloneRoute,
   AdminIndexRoute: AdminIndexRoute,

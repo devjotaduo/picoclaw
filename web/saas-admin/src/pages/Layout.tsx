@@ -139,7 +139,7 @@ export function Layout() {
           </div>
         </div>
       </aside>
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-y-auto">
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>

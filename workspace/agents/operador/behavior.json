@@ -1,0 +1,25 @@
+{
+  "master_enabled": true,
+  "respond_in_dm": true,
+  "respond_in_groups": false,
+  "group_mention_only": true,
+  "ignore_bots": true,
+  "ignore_forwarded": false,
+  "ignore_self": true,
+  "max_messages_per_session": 200,
+  "throttle_ms": 0,
+  "cooldown_ms": 0,
+  "outbound_only": false,
+  "business_hours": {
+    "enabled": false
+  },
+  "pii_mask": false,
+  "handoff_keywords": [],
+  "media": {
+    "accept_image": true,
+    "accept_audio": true,
+    "accept_video": false,
+    "accept_document": true,
+    "max_bytes": 26214400
+  }
+}

@@ -1,0 +1,55 @@
+# syntax=docker/dockerfile:1.7
+
+# Headless Chromium sidecar that exposes the DevTools Protocol on :9222 over
+# the saas_llm network. One container serves every tenant — the tenants only
+# need the lightweight `agent-browser` Node CLI in their image, which connects
+# remotely via $BROWSER_CDP_URL. This is how the "light" launcher gets browser
+# automation without each tenant bundling Chromium (~200MB) of its own.
+#
+# Security boundary:
+# - CDP listens on 0.0.0.0:9222 but only inside the saas_llm internal network.
+# - The container runs as the unprivileged `chrome` user.
+# - `--no-sandbox` is required because the Chromium binary needs CAP_SYS_ADMIN
+#   for the namespace sandbox, which we don't grant. Mitigated by:
+#     * isolated network (no internet egress beyond what Traefik allows)
+#     * dedicated container, dropped capabilities
+#     * read-only filesystem except for /tmp and /home/chrome/.config
+# - Restart on crash via Docker; CDP sessions are stateless from the tenant
+#   side (agent-browser re-snapshots after every action).
+
+FROM alpine:3.23
+
+RUN apk add --no-cache \
+      chromium \
+      chromium-chromedriver \
+      ca-certificates \
+      ttf-freefont \
+      dumb-init \
+  && adduser -D -h /home/chrome chrome \
+  && mkdir -p /home/chrome/.config /home/chrome/Downloads \
+  && chown -R chrome:chrome /home/chrome
+
+USER chrome
+WORKDIR /home/chrome
+
+EXPOSE 9222
+
+# dumb-init makes Chromium reap zombie tabs cleanly when restarts happen.
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+
+# Flags explained:
+#   --headless=new                 : Chromium 112+ headless mode (the only one supported on alpine)
+#   --no-sandbox                   : required without CAP_SYS_ADMIN (see header)
+#   --disable-dev-shm-usage        : /dev/shm is tiny in containers; use /tmp
+#   --remote-debugging-port=9222   : CDP listen port
+#   --remote-debugging-address=0   : bind to all interfaces of the saas_llm network
+#   --user-data-dir=/tmp/chrome    : ephemeral profile; restart wipes cookies on purpose
+CMD ["chromium-browser", \
+     "--headless=new", \
+     "--no-sandbox", \
+     "--disable-gpu", \
+     "--disable-dev-shm-usage", \
+     "--disable-software-rasterizer", \
+     "--remote-debugging-port=9222", \
+     "--remote-debugging-address=0.0.0.0", \
+     "--user-data-dir=/tmp/chrome"]

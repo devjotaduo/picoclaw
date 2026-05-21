@@ -7,9 +7,29 @@ metadata: {"nanobot":{"emoji":"🌐","requires":{"bins":["agent-browser"]},"inst
 
 # Agent Browser
 
-CLI browser automation via Chrome/Chromium CDP. Install: `npm i -g agent-browser && agent-browser install`.
+CLI browser automation via Chrome/Chromium CDP.
 
-**Before using this skill**, verify the tool is available by running `which agent-browser`. If the command is not found, tell the user that browser automation requires the `agent-browser` CLI and Chromium, which are only available in the heavy container image. Do not attempt to install it at runtime.
+**Before using this skill**, check which mode is available:
+
+```bash
+# Preferred (SaaS / multi-tenant): shared headless Chromium over the network.
+echo $BROWSER_CDP_URL
+# Example output: http://browser-sidecar:9222
+```
+
+- If `$BROWSER_CDP_URL` is set → use `agent-browser --cdp-endpoint "$BROWSER_CDP_URL" <command>`. No local Chromium needed. This is the default for every tenant launcher container in SaaS mode.
+- If `$BROWSER_CDP_URL` is empty AND `which agent-browser` returns a path → you're running on the heavy local image; standard `agent-browser <command>` will launch its own Chromium.
+- If neither — tell the user that browser automation requires either the `browser-sidecar` service (SaaS) or the heavy image (local). Do not attempt to install Chromium at runtime; it won't work in an Alpine container without root.
+
+In examples below, `ab` is shorthand for `agent-browser` plus the CDP flag when needed:
+
+```bash
+if [ -n "$BROWSER_CDP_URL" ]; then
+  ab() { agent-browser --cdp-endpoint "$BROWSER_CDP_URL" "$@"; }
+else
+  ab() { agent-browser "$@"; }
+fi
+```
 
 ## Core Workflow
 

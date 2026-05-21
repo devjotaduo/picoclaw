@@ -1,0 +1,25 @@
+# scripts/agent-finish.ignore
+# Glob patterns (one per line, shell glob, not regex) excluded from auto-staging
+# by scripts/agent-finish.sh. Use for generated/runtime files that drift on
+# every run and should NEVER be committed by an automated agent.
+#
+# Comments start with '#'. Patterns are matched against `git status --porcelain`
+# paths (always forward slash, relative to repo root).
+
+# Generated frontend route tree (rebuilt by Vite).
+web/frontend/src/routeTree.gen.ts
+
+# Runtime heartbeat / log artifacts.
+workspace/heartbeat.log
+workspace/state/*
+workspace*/heartbeat.log
+*.log
+
+# Per-developer env files.
+.env
+.env.local
+*.env.local
+
+# IDE / OS junk.
+.DS_Store
+Thumbs.db

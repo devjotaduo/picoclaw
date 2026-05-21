@@ -139,6 +139,36 @@ services:
       - saas_llm
       - saas_db
 
+  # Headless Chromium with CDP exposed on saas_llm:9222. Every tenant
+  # launcher container ships the `agent-browser` Node CLI and connects
+  # here via $BROWSER_CDP_URL — no per-tenant Chromium. See
+  # docker/Dockerfile.browser-sidecar for the security envelope.
+  browser-sidecar:
+    image: picoclaw/browser-sidecar:latest
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.browser-sidecar
+    container_name: browser-sidecar
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/chrome/.config
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - saas_llm
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9222/json/version || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "traefik.enable=false"
+
   opencrm:
     image: picoclaw/opencrm:latest
     build:
