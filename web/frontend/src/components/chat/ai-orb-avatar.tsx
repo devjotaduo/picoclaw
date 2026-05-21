@@ -19,6 +19,7 @@ interface AIOrbAvatarProps {
   className?: string
   seed?: string
   colors?: AuraPalette
+  ringClassName?: string
 }
 
 function hashSeed(seed: string) {
@@ -66,6 +67,7 @@ export function AIOrbAvatar({
   className,
   seed = "sofia",
   colors,
+  ringClassName,
 }: AIOrbAvatarProps) {
   const palette = colors ?? paletteForSeed(seed)
   const [primary, secondary, tertiary, quaternary] = palette
@@ -95,7 +97,12 @@ export function AIOrbAvatar({
         themeMode="dark"
         className="!size-full scale-[2.2] opacity-100"
       />
-      <div className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-cyan-300/25 ring-inset" />
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-0 rounded-full ring-1 ring-cyan-300/25 ring-inset",
+          ringClassName,
+        )}
+      />
     </div>
   )
 }
