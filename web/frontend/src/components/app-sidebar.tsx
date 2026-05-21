@@ -545,14 +545,6 @@ function SidebarAgentPendingList({
           <p className="text-muted-foreground text-[10px] font-semibold tracking-[0.14em] uppercase">
             Pendências
           </p>
-          <div className="mt-0.5 flex items-baseline gap-2">
-            <p className="text-foreground text-lg leading-none font-semibold">
-              Top {SIDEBAR_PENDING_LIMIT}
-            </p>
-            <span className="text-muted-foreground text-[11px]">
-              {items.length} {items.length === 1 ? "aberta" : "abertas"}
-            </span>
-          </div>
         </div>
         <Link
           to="/agent/dashboard"
