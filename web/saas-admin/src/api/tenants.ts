@@ -34,6 +34,9 @@ export type CreateTenantInput = {
 export type CreateTenantResponse = {
   tenant_id: string;
   url: string;
+  magic_link?: string;
+  initial_password?: string;
+  supabase_user_id?: string;
   owner_invite_token?: string;
   warning?: string;
   info?: string;
