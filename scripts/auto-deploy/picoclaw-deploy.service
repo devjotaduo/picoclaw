@@ -1,0 +1,19 @@
+[Unit]
+Description=Picoclaw auto-deploy: pull controlplane image from GHCR
+Documentation=https://github.com/devjotaduo/picoclaw/blob/main/docs/operations/auto-deploy.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/picoclaw-deploy.sh
+User=root
+Group=root
+# A full controlplane recreate can take ~30s including healthcheck warm-up.
+# 10 min is a generous ceiling that still catches stuck deploys.
+TimeoutStartSec=10min
+# Run low-pri so a stuck `docker pull` doesn't starve the launcher.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=5
