@@ -159,7 +159,17 @@ func RewriteConfigLiteLLMKey(volumePath, newKey string) error {
 	if err != nil {
 		return fmt.Errorf("marshal config.json: %w", err)
 	}
-	return os.WriteFile(path, out, 0o644)
+	// Preserve the original file's mode and trailing newline so a rewrite
+	// can't silently widen permissions (e.g. 0600 -> 0644) or strip the
+	// trailing \n that text editors and JSON formatters keep by convention.
+	mode := os.FileMode(0o644)
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	if len(data) > 0 && data[len(data)-1] == '\n' && (len(out) == 0 || out[len(out)-1] != '\n') {
+		out = append(out, '\n')
+	}
+	return os.WriteFile(path, out, mode)
 }
 
 // SubstituteConfigPlaceholders walks a fixed set of config files in destDir

@@ -82,11 +82,17 @@ func (s *WorkspaceStore) Insert(ctx context.Context, w *Workspace) error {
 		}
 		w.RolePolicyJSON = b
 	}
-	// Clear any previous default-auto so the unique partial index doesn't
-	// reject the insert. The transaction wraps both statements implicitly via
-	// pgx's single-connection guarantee on Exec calls in sequence.
+	// Clear-default + insert must be atomic so the partial unique index on
+	// is_default_auto can't reject the insert (or briefly observe zero
+	// defaults) when concurrent writers race. pgxpool acquires a fresh
+	// connection per Exec, so we need an explicit transaction.
+	tx, err := s.DB.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	if w.IsDefaultAuto {
-		if _, err := s.DB.Pool.Exec(ctx, `UPDATE workspaces SET is_default_auto = false WHERE is_default_auto`); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE workspaces SET is_default_auto = false WHERE is_default_auto`); err != nil {
 			return err
 		}
 	}
@@ -95,16 +101,26 @@ func (s *WorkspaceStore) Insert(ctx context.Context, w *Workspace) error {
             (id, name, slug, description, host_path,
              is_default_auto, is_available_manual, role_policy_json, version)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`
-	_, err := s.DB.Pool.Exec(ctx, q,
+	if _, err := tx.Exec(ctx, q,
 		w.ID, w.Name, w.Slug, w.Description, w.HostPath,
 		w.IsDefaultAuto, w.IsAvailableManual, w.RolePolicyJSON, w.Version,
-	)
-	return err
+	); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *WorkspaceStore) Update(ctx context.Context, w *Workspace) error {
+	// Same atomicity reason as Insert: pgxpool Exec calls don't share a
+	// connection, so the clear-default + update pair must run inside an
+	// explicit transaction or the partial unique index can race.
+	tx, err := s.DB.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	if w.IsDefaultAuto {
-		if _, err := s.DB.Pool.Exec(ctx, `UPDATE workspaces SET is_default_auto = false WHERE id <> $1`, w.ID); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE workspaces SET is_default_auto = false WHERE id <> $1`, w.ID); err != nil {
 			return err
 		}
 	}
@@ -121,14 +137,16 @@ func (s *WorkspaceStore) Update(ctx context.Context, w *Workspace) error {
             updated_at = now()
         WHERE id = $1
         RETURNING version, updated_at`
-	err := s.DB.Pool.QueryRow(ctx, q,
+	if err := tx.QueryRow(ctx, q,
 		w.ID, w.Name, w.Slug, w.Description, w.HostPath,
 		w.IsDefaultAuto, w.IsAvailableManual, w.RolePolicyJSON,
-	).Scan(&w.Version, &w.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrWorkspaceNotFound
+	).Scan(&w.Version, &w.UpdatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrWorkspaceNotFound
+		}
+		return err
 	}
-	return err
+	return tx.Commit(ctx)
 }
 
 // SetFrontendBuilt records the timestamp and trimmed log of the most recent

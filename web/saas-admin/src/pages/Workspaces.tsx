@@ -70,11 +70,15 @@ export function Workspaces() {
   });
 
   const importM = useMutation({
+    // source_path is intentionally omitted: the backend defaults to
+    // $PICOCLAW_HOME (then ~/.picoclaw) so the admin button doesn't have
+    // to know the controlplane's filesystem layout. See
+    // internal/saas/api/workspaces.go::defaultImportSource.
     mutationFn: () =>
       importWorkspaceFromHome({
         name: "Importado do operador",
         slug: `home-${Date.now()}`,
-        description: "Snapshot do $PICOCLAW_HOME do operador (TenantTemplateDir).",
+        description: "Snapshot do $PICOCLAW_HOME do operador.",
       }),
     onSuccess: async (ws) => {
       await qc.invalidateQueries({ queryKey: ["workspaces"] });
@@ -121,7 +125,7 @@ export function Workspaces() {
                     <div className="text-[11px] text-zinc-500">
                       v{ws.version}
                       {ws.is_default_auto ? " · auto" : ""}
-                      {!ws.is_available_manual ? " · ocultoo" : ""}
+                      {!ws.is_available_manual ? " · oculto" : ""}
                     </div>
                   </button>
                 ))}
@@ -193,6 +197,9 @@ function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["workspaces"] });
     },
+    // The backend now returns 200 with {ok: false, log_tail, error} on
+    // build failure (instead of 502), so this branch only fires for
+    // network/auth/parse errors. We still surface the message below.
   });
 
   const lastBuildLabel = useMemo(() => {
@@ -322,6 +329,13 @@ function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
               <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-zinc-400">
                 {buildM.data.log_tail}
               </pre>
+            </div>
+          ) : buildM.error ? (
+            <div className="rounded-md border border-red-800 bg-red-950/30 p-3 text-xs">
+              <div className="mb-2 font-medium">
+                Build não pôde ser executado:{" "}
+                {String((buildM.error as Error).message ?? buildM.error)}
+              </div>
             </div>
           ) : null}
         </CardContent>

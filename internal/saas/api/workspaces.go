@@ -214,20 +214,19 @@ func (h *Handler) handleBuildWorkspaceFrontend(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusInternalServerError, "save build log: "+err.Error())
 		return
 	}
-	if buildErr != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]any{
-			"ok":       false,
-			"built_at": now,
-			"log_tail": logTail(log, 2048),
-			"error":    buildErr.Error(),
-		})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":       true,
+	// Always return 200 with a structured {ok, log_tail, error} body. The
+	// admin's fetch wrapper throws on non-2xx — surfacing the build log
+	// requires the response to be parseable, so failure is encoded as
+	// ok=false in the JSON rather than an HTTP error status.
+	resp := map[string]any{
+		"ok":       buildErr == nil,
 		"built_at": now,
 		"log_tail": logTail(log, 2048),
-	})
+	}
+	if buildErr != nil {
+		resp["error"] = buildErr.Error()
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // handleReadWorkspaceFile returns the text content of a file inside the
@@ -318,13 +317,34 @@ func (h *Handler) handleWriteWorkspaceFile(w http.ResponseWriter, r *http.Reques
 // operator's $PICOCLAW_HOME into <Cfg.WorkspaceDir>/<slug>/home/, sanitizing
 // runtime state on the way. Useful for "create the first workspace mirroring
 // what's already in prod" right after the migration lands. The body picks
-// the source path (defaults to TenantTemplateDir) and the new workspace's
-// slug/name.
+// the source path; when omitted, the handler defaults to $PICOCLAW_HOME
+// (or ~/.picoclaw if that's unset) so the admin button labelled "Importar
+// do $PICOCLAW_HOME" doesn't need to know the path.
 type importFromHomeReq struct {
 	Name        string `json:"name"`
 	Slug        string `json:"slug"`
 	Description string `json:"description"`
 	SourcePath  string `json:"source_path"`
+}
+
+// defaultImportSource returns the host path the import-from-home endpoint
+// should read when the request omits source_path. Order:
+//
+//  1. $PICOCLAW_HOME — set by the controlplane container env so operators
+//     can point at any mounted dir.
+//  2. ~/.picoclaw — the picoclaw library default for "current operator's
+//     home" (see pkg/config/envkeys.go).
+//
+// Returns "" when neither resolves, in which case the handler 400s with a
+// clear "set $PICOCLAW_HOME or pass source_path" message.
+func defaultImportSource() string {
+	if v := strings.TrimSpace(os.Getenv("PICOCLAW_HOME")); v != "" {
+		return v
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return filepath.Join(home, ".picoclaw")
+	}
+	return ""
 }
 
 func (h *Handler) handleImportWorkspaceFromHome(w http.ResponseWriter, r *http.Request) {
@@ -335,7 +355,10 @@ func (h *Handler) handleImportWorkspaceFromHome(w http.ResponseWriter, r *http.R
 	}
 	src := strings.TrimSpace(req.SourcePath)
 	if src == "" {
-		writeError(w, http.StatusBadRequest, "source_path is required (e.g. /srv/picoclaw)")
+		src = defaultImportSource()
+	}
+	if src == "" {
+		writeError(w, http.StatusBadRequest, "source_path missing and $PICOCLAW_HOME is not set on the controlplane")
 		return
 	}
 	if info, err := os.Stat(src); err != nil || !info.IsDir() {
@@ -363,13 +386,14 @@ func (h *Handler) handleImportWorkspaceFromHome(w http.ResponseWriter, r *http.R
 	}
 	// CopyVolumeRaw skips the operator's runtime state already (PID files,
 	// SQLite journals). We still strip the per-tenant secrets that may have
-	// leaked into the operator's home (dashboardauth.db, litellm.key) so the
-	// resulting workspace doesn't carry stale credentials.
+	// leaked into the operator's home (launcher-auth.db, litellm.key) so the
+	// resulting workspace doesn't carry stale credentials. The actual
+	// filename comes from web/backend/dashboardauth/sql.go (DBFilename).
 	if err := tenant.CopyVolumeRaw(src, homeDir); err != nil {
 		writeError(w, http.StatusInternalServerError, "copy source: "+err.Error())
 		return
 	}
-	for _, junk := range []string{"dashboardauth.db", "litellm.key", "state", "workspace/sessions", "workspace/whatsapp", "workspace/matrix", "runtime-user-env"} {
+	for _, junk := range []string{"launcher-auth.db", "litellm.key", "state", "workspace/sessions", "workspace/whatsapp", "workspace/matrix", "runtime-user-env"} {
 		_ = os.RemoveAll(filepath.Join(homeDir, junk))
 	}
 	// frontend-src/ stays empty — operator uploads code via the file PUT

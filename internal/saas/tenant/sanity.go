@@ -40,7 +40,7 @@ var requiredFiles = []string{
 var recommendedFiles = []string{
 	"workspace/behavior.json",
 	"launcher_policy.json",
-	"dashboardauth.db",
+	"launcher-auth.db",
 	"litellm.key",
 }
 
