@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
-import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, SlidersHorizontal, ClipboardList, UserCog, LayoutDashboard, FileText, Activity } from "lucide-react";
+import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, SlidersHorizontal, ClipboardList, UserCog, LayoutDashboard, FileText, Activity, KeyRound } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -123,12 +123,20 @@ export function Layout() {
               {status.me.platform_role || "tenant user"}
             </div>
           )}
-          <button
-            onClick={() => signOut()}
-            className="inline-flex items-center gap-1.5 text-zinc-400 hover:text-zinc-100"
-          >
-            <LogOut className="h-3.5 w-3.5" /> Sign out
-          </button>
+          <div className="flex flex-col gap-1.5">
+            <Link
+              to="/account/password"
+              className="inline-flex items-center gap-1.5 text-zinc-400 hover:text-zinc-100"
+            >
+              <KeyRound className="h-3.5 w-3.5" /> Change password
+            </Link>
+            <button
+              onClick={() => signOut()}
+              className="inline-flex items-center gap-1.5 text-zinc-400 hover:text-zinc-100"
+            >
+              <LogOut className="h-3.5 w-3.5" /> Sign out
+            </button>
+          </div>
         </div>
       </aside>
       <main className="flex-1 overflow-hidden">

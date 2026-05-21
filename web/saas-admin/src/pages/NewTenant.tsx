@@ -62,12 +62,23 @@ export function NewTenant() {
   const isProvisioning = !tenantStatus || tenantStatus === "provisioning";
   const hasError = tenantStatus === "error";
 
-  const errMsg = (() => {
+  const errPayload = (() => {
     const e = m.error as unknown;
-    if (!e) return null;
-    if (typeof e === "object" && e !== null && "error" in e) return String((e as { error: unknown }).error);
-    return "request failed";
+    if (!e || typeof e !== "object") return null;
+    return e as {
+      error?: string;
+      status?: number;
+      body?: { tenant_id?: string; url?: string };
+    };
   })();
+  const errMsg = errPayload?.error ?? (m.error ? "request failed" : null);
+  const duplicateTenant =
+    errPayload && errPayload.status === 409 && errPayload.body?.tenant_id
+      ? {
+          tenantId: errPayload.body.tenant_id,
+          url: errPayload.body.url,
+        }
+      : null;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,9 +91,9 @@ export function NewTenant() {
     m.mutate(form);
   };
 
-  const copyToken = async () => {
-    if (!result?.owner_invite_token) return;
-    await navigator.clipboard.writeText(result.owner_invite_token);
+  const copyValue = async (value: string | undefined) => {
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -153,6 +164,12 @@ export function NewTenant() {
             ))}
           </select>
         </div>
+        <div className="rounded border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400">
+          O owner recebe por email: <strong>URL</strong>,{" "}
+          <strong>login</strong>, <strong>senha inicial</strong> e{" "}
+          <strong>magic link</strong> — tudo junto. Sem Supabase configurado, o
+          controlplane emite um invite-token tradicional.
+        </div>
         <div className="grid grid-cols-3 gap-3">
           <div>
             <Label htmlFor="budget">Budget USD/mo</Label>
@@ -190,7 +207,36 @@ export function NewTenant() {
           </div>
         </div>
 
-        {errMsg && <div className="rounded bg-red-950/50 px-3 py-2 text-xs text-red-300">{errMsg}</div>}
+        {errMsg && (
+          <div className="rounded bg-red-950/50 px-3 py-2 text-xs text-red-300">
+            <div>{errMsg}</div>
+            {duplicateTenant && (
+              <div className="mt-1.5 text-red-200">
+                Existing tenant:{" "}
+                <button
+                  type="button"
+                  className="underline hover:text-red-100"
+                  onClick={() => nav(`/tenants/${duplicateTenant.tenantId}`)}
+                >
+                  {duplicateTenant.tenantId}
+                </button>
+                {duplicateTenant.url && (
+                  <>
+                    {" · "}
+                    <a
+                      href={duplicateTenant.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline hover:text-red-100"
+                    >
+                      {duplicateTenant.url}
+                    </a>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => nav("/tenants")}>Cancel</Button>
@@ -239,9 +285,60 @@ export function NewTenant() {
               </div>
             </div>
 
+            {result.supabase_user_id && (
+              <div className="text-[10px] uppercase tracking-wide text-zinc-500">
+                Login: email + senha · magic link
+              </div>
+            )}
+
             {result.info && (
               <div className="rounded bg-emerald-950/40 px-3 py-2 text-xs text-emerald-300">
                 {result.info}
+              </div>
+            )}
+
+            {result.magic_link && (
+              <div>
+                <Label>Magic link</Label>
+                <p className="mb-1 text-xs text-zinc-500">
+                  Single-use sign-in URL for {form.owner_email}. Share manually
+                  if Supabase email delivery fails.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
+                    {result.magic_link}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    onClick={() => copyValue(result.magic_link)}
+                  >
+                    {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {result.initial_password && (
+              <div>
+                <Label>Initial password</Label>
+                <p className="mb-1 text-xs text-amber-300">
+                  Save this now — it will not be shown again.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
+                    {result.initial_password}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    onClick={() => copyValue(result.initial_password)}
+                  >
+                    {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -255,7 +352,12 @@ export function NewTenant() {
                   <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
                     {result.owner_invite_token}
                   </code>
-                  <Button type="button" variant="secondary" size="icon" onClick={copyToken}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    onClick={() => copyValue(result.owner_invite_token)}
+                  >
                     {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
