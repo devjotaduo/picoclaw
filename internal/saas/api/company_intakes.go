@@ -49,6 +49,16 @@ type publicIntakeResponse struct {
 	CreatedAt       time.Time                 `json:"created_at"`
 	UpdatedAt       time.Time                 `json:"updated_at"`
 	SubmittedAt     *time.Time                `json:"submitted_at"`
+	// Phase 10 polling-bridge fields. These let the saas-admin frontend
+	// detect Clara's qualification / provisioning side-effects by polling
+	// the intake row, when the chat itself runs in the public onboarding
+	// tenant and no longer streams qualified/tenant_provisioned SSE
+	// events inline. See useOnboardingIntakePolling on the frontend.
+	QualifiedAt      *time.Time `json:"qualified_at,omitempty"`
+	LinkedTenantID   *string    `json:"linked_tenant_id,omitempty"`
+	TenantURL        string     `json:"tenant_url,omitempty"`
+	TenantSubdomain  string     `json:"tenant_subdomain,omitempty"`
+	TenantLoginMode  string     `json:"tenant_login_mode,omitempty"`
 }
 
 func (h *Handler) handleCreateCompanyIntake(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +102,10 @@ func (h *Handler) handleGetPublicCompanyIntake(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, toPublicIntakeResponse(intake))
+	// Use the tenant-resolving variant so the frontend's polling layer
+	// (useOnboardingIntakePolling) can synthesize a tenant_provisioned
+	// event with the dashboard URL the moment LinkedTenantID is set.
+	writeJSON(w, http.StatusOK, h.publicIntakeResponseWithTenant(r.Context(), intake))
 }
 
 func (h *Handler) handleSaveCompanyIntakeAnswers(w http.ResponseWriter, r *http.Request) {
@@ -495,7 +508,7 @@ func validateIntakeMinimum(intake *store.CompanyIntake) error {
 }
 
 func toPublicIntakeResponse(intake *store.CompanyIntake) publicIntakeResponse {
-	return publicIntakeResponse{
+	resp := publicIntakeResponse{
 		ID:              intake.ID,
 		Status:          intake.Status,
 		CompanyName:     intake.CompanyName,
@@ -509,7 +522,31 @@ func toPublicIntakeResponse(intake *store.CompanyIntake) publicIntakeResponse {
 		CreatedAt:       intake.CreatedAt,
 		UpdatedAt:       intake.UpdatedAt,
 		SubmittedAt:     intake.SubmittedAt,
+		QualifiedAt:     intake.QualifiedAt,
+		LinkedTenantID:  intake.LinkedTenantID,
 	}
+	return resp
+}
+
+// publicIntakeResponseWithTenant fills in TenantURL / TenantSubdomain /
+// TenantLoginMode by following the LinkedTenantID FK when set. Falls back
+// to the bare response when the FK lookup fails — never blocks the visitor
+// on a transient DB hiccup.
+func (h *Handler) publicIntakeResponseWithTenant(
+	ctx context.Context, intake *store.CompanyIntake,
+) publicIntakeResponse {
+	resp := toPublicIntakeResponse(intake)
+	if intake.LinkedTenantID == nil || *intake.LinkedTenantID == "" || h.Tenants == nil {
+		return resp
+	}
+	t, err := h.Tenants.Get(ctx, *intake.LinkedTenantID)
+	if err != nil || t == nil {
+		return resp
+	}
+	resp.TenantSubdomain = t.Subdomain
+	resp.TenantURL = tenantURL(h.Cfg, t.Subdomain)
+	resp.TenantLoginMode = t.AuthBackend
+	return resp
 }
 
 func stripAttachmentPaths(raw json.RawMessage) json.RawMessage {
