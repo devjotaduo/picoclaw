@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
 	supaauth "github.com/sipeed/picoclaw/internal/saas/auth"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 	"github.com/sipeed/picoclaw/internal/saas/tenant"
@@ -145,10 +146,18 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 			log.Printf("rollback orphan: SetSupabaseUserID failed for tenant=%s supabase_user=%s err=%v",
 				out.TenantID, userID, err)
 			if delErr := h.Supabase.DeleteTenantUser(userID); delErr != nil {
-				log.Printf("rollback orphan: DeleteTenantUser(%s) failed: %v — MANUAL CLEANUP NEEDED in Supabase Auth dashboard", userID, delErr)
+				log.Printf(
+					"rollback orphan: DeleteTenantUser(%s) failed: %v — MANUAL CLEANUP NEEDED in Supabase Auth dashboard",
+					userID,
+					delErr,
+				)
 			}
 			if delErr := h.Provisioner.Delete(r.Context(), out.TenantID); delErr != nil {
-				log.Printf("rollback orphan: Provisioner.Delete(%s) failed: %v — MANUAL CLEANUP NEEDED via docker rm + DB delete", out.TenantID, delErr)
+				log.Printf(
+					"rollback orphan: Provisioner.Delete(%s) failed: %v — MANUAL CLEANUP NEEDED via docker rm + DB delete",
+					out.TenantID,
+					delErr,
+				)
 			}
 			writeError(w, http.StatusInternalServerError, "save supabase user id: "+err.Error())
 			return
@@ -169,7 +178,14 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 			resp["magic_link"] = magicLink
 		}
 		if h.Mailer != nil && h.Mailer.Enabled() {
-			go h.Mailer.SendCredentialsEmail(req.OwnerEmail, req.DisplayName, out.URL, req.OwnerEmail, out.InitialPassword, magicLink)
+			go h.Mailer.SendCredentialsEmail(
+				req.OwnerEmail,
+				req.DisplayName,
+				out.URL,
+				req.OwnerEmail,
+				out.InitialPassword,
+				magicLink,
+			)
 			resp["info"] = "Email com URL, login, senha e magic link enviado para o owner."
 		} else {
 			resp["info"] = "Tenant created. Save the credentials now — they will not be shown again."
@@ -181,7 +197,14 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		var ownerInviteToken string
 		var ownerInviteExpiresAt time.Time
 		if actor, ok := userFromContext(r.Context()); ok {
-			if inv, token, err := h.Invites.Create(r.Context(), out.TenantID, req.OwnerEmail, store.RoleTenantOwner, actor.ID, 7*24*time.Hour); err == nil {
+			if inv, token, err := h.Invites.Create(
+				r.Context(),
+				out.TenantID,
+				req.OwnerEmail,
+				store.RoleTenantOwner,
+				actor.ID,
+				7*24*time.Hour,
+			); err == nil {
 				ownerInviteToken = token
 				ownerInviteExpiresAt = inv.ExpiresAt
 			} else {
@@ -190,7 +213,13 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		}
 		if ownerInviteToken != "" && h.Mailer != nil && h.Mailer.Enabled() {
 			inviteURL := h.Mailer.AdminBaseURL() + "/accept-invite?token=" + ownerInviteToken
-			go h.Mailer.SendInviteEmail(req.OwnerEmail, req.DisplayName, string(store.RoleTenantOwner), inviteURL, ownerInviteExpiresAt)
+			go h.Mailer.SendInviteEmail(
+				req.OwnerEmail,
+				req.DisplayName,
+				string(store.RoleTenantOwner),
+				inviteURL,
+				ownerInviteExpiresAt,
+			)
 		}
 		resp["owner_invite_token"] = ownerInviteToken
 		if h.Mailer == nil || !h.Mailer.Enabled() {

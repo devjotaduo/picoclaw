@@ -138,7 +138,12 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 	})
 }
 
-func (h *Handler) proxyTenantRequest(w http.ResponseWriter, r *http.Request, target *url.URL, annotate func(*http.Request)) {
+func (h *Handler) proxyTenantRequest(
+	w http.ResponseWriter,
+	r *http.Request,
+	target *url.URL,
+	annotate func(*http.Request),
+) {
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	origDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {
@@ -164,14 +169,22 @@ func (h *Handler) proxyTenantRequest(w http.ResponseWriter, r *http.Request, tar
 // sb-access-token cookie; the JWT's app_metadata.tenant_id must match the
 // tenant being accessed. Tenants with auth_backend='local' (the historical
 // path) keep using the controlplane's session cookie.
-func (h *Handler) authenticateTenantRequest(w http.ResponseWriter, r *http.Request, t *store.Tenant) (string, string, string, bool) {
+func (h *Handler) authenticateTenantRequest(
+	w http.ResponseWriter,
+	r *http.Request,
+	t *store.Tenant,
+) (string, string, string, bool) {
 	if t.AuthBackend == "supabase" && h.Supabase != nil {
 		return h.authenticateSupabaseTenant(w, r, t)
 	}
 	return h.authenticateLocalTenant(w, r, t.ID)
 }
 
-func (h *Handler) authenticateLocalTenant(w http.ResponseWriter, r *http.Request, tenantID string) (string, string, string, bool) {
+func (h *Handler) authenticateLocalTenant(
+	w http.ResponseWriter,
+	r *http.Request,
+	tenantID string,
+) (string, string, string, bool) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil || cookie.Value == "" {
 		rejectTenantGatewayAuth(w, r, h.Cfg.TenantBaseDomain)
@@ -193,7 +206,11 @@ func (h *Handler) authenticateLocalTenant(w http.ResponseWriter, r *http.Request
 	return strconv.FormatInt(user.ID, 10), user.Email, string(role), true
 }
 
-func (h *Handler) authenticateSupabaseTenant(w http.ResponseWriter, r *http.Request, t *store.Tenant) (string, string, string, bool) {
+func (h *Handler) authenticateSupabaseTenant(
+	w http.ResponseWriter,
+	r *http.Request,
+	t *store.Tenant,
+) (string, string, string, bool) {
 	token := readSupabaseAccessToken(r, h.Cfg.SupabaseProjectRef)
 	if token == "" {
 		rejectSupabaseTenantAuth(w, r, h.Supabase.SiteURL())

@@ -74,7 +74,11 @@ func CompanyIntakeTokenHash(raw string) string {
 	return hashToken(raw)
 }
 
-func (s *CompanyIntakeStore) Create(ctx context.Context, intake *CompanyIntake, resumeTokenHash, ipHash, userAgent string) error {
+func (s *CompanyIntakeStore) Create(
+	ctx context.Context,
+	intake *CompanyIntake,
+	resumeTokenHash, ipHash, userAgent string,
+) error {
 	const q = `
 		INSERT INTO company_intakes
 			(id, resume_token_hash, status, answers_json, attachments_json, report_json, public_summary_json, source, ip_hash, user_agent)
@@ -121,7 +125,12 @@ func (s *CompanyIntakeStore) GetByToken(ctx context.Context, id, resumeTokenHash
 	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, resumeTokenHash))
 }
 
-func (s *CompanyIntakeStore) SaveDraft(ctx context.Context, id, resumeTokenHash, companyName, contactName, contactEmail, contactWhatsApp string, answers json.RawMessage, audioTranscript string) (*CompanyIntake, error) {
+func (s *CompanyIntakeStore) SaveDraft(
+	ctx context.Context,
+	id, resumeTokenHash, companyName, contactName, contactEmail, contactWhatsApp string,
+	answers json.RawMessage,
+	audioTranscript string,
+) (*CompanyIntake, error) {
 	const q = `
 		UPDATE company_intakes
 		SET company_name = $3,
@@ -133,10 +142,27 @@ func (s *CompanyIntakeStore) SaveDraft(ctx context.Context, id, resumeTokenHash,
 			updated_at = now()
 		WHERE id = $1 AND resume_token_hash = $2 AND status IN ('draft', 'report_ready')
 		RETURNING ` + companyIntakeReturning
-	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, resumeTokenHash, companyName, contactName, contactEmail, contactWhatsApp, answers, audioTranscript))
+	return scanCompanyIntake(
+		s.DB.Pool.QueryRow(
+			ctx,
+			q,
+			id,
+			resumeTokenHash,
+			companyName,
+			contactName,
+			contactEmail,
+			contactWhatsApp,
+			answers,
+			audioTranscript,
+		),
+	)
 }
 
-func (s *CompanyIntakeStore) SaveAttachments(ctx context.Context, id, resumeTokenHash string, attachments json.RawMessage) (*CompanyIntake, error) {
+func (s *CompanyIntakeStore) SaveAttachments(
+	ctx context.Context,
+	id, resumeTokenHash string,
+	attachments json.RawMessage,
+) (*CompanyIntake, error) {
 	const q = `
 		UPDATE company_intakes
 		SET attachments_json = COALESCE($3, '[]'::jsonb), updated_at = now()
@@ -145,7 +171,11 @@ func (s *CompanyIntakeStore) SaveAttachments(ctx context.Context, id, resumeToke
 	return scanCompanyIntake(s.DB.Pool.QueryRow(ctx, q, id, resumeTokenHash, attachments))
 }
 
-func (s *CompanyIntakeStore) SaveReport(ctx context.Context, id, resumeTokenHash string, report, publicSummary json.RawMessage) (*CompanyIntake, error) {
+func (s *CompanyIntakeStore) SaveReport(
+	ctx context.Context,
+	id, resumeTokenHash string,
+	report, publicSummary json.RawMessage,
+) (*CompanyIntake, error) {
 	const q = `
 		UPDATE company_intakes
 		SET report_json = COALESCE($3, '{}'::jsonb),
@@ -196,7 +226,11 @@ func (s *CompanyIntakeStore) List(ctx context.Context, status string, limit int)
 	return out, rows.Err()
 }
 
-func (s *CompanyIntakeStore) SetStatus(ctx context.Context, id string, status CompanyIntakeStatus) (*CompanyIntake, error) {
+func (s *CompanyIntakeStore) SetStatus(
+	ctx context.Context,
+	id string,
+	status CompanyIntakeStatus,
+) (*CompanyIntake, error) {
 	const q = `
 		UPDATE company_intakes
 		SET status = $2,

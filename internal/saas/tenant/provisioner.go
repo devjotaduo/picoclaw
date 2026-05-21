@@ -153,7 +153,13 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 	}, nil
 }
 
-func (p *Provisioner) runProvision(ctx context.Context, t *store.Tenant, password string, profile *store.LauncherProfile, skipDashboardPassword bool) error {
+func (p *Provisioner) runProvision(
+	ctx context.Context,
+	t *store.Tenant,
+	password string,
+	profile *store.LauncherProfile,
+	skipDashboardPassword bool,
+) error {
 	if err := os.MkdirAll(t.VolumePath, 0o755); err != nil {
 		return fmt.Errorf("mkdir volume: %w", err)
 	}

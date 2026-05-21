@@ -54,22 +54,26 @@ func TestVerifyOnboardingHMAC(t *testing.T) {
 	good := signOnboardingBody(t, body, testSecret)
 
 	t.Run("empty sig", func(t *testing.T) {
+		t.Parallel()
 		if verifyOnboardingHMAC(body, "", testSecret) {
 			t.Fatal("empty signature should not verify")
 		}
 	})
 	t.Run("non-hex sig", func(t *testing.T) {
+		t.Parallel()
 		if verifyOnboardingHMAC(body, "not-hex-zz", testSecret) {
 			t.Fatal("non-hex signature should not verify")
 		}
 	})
 	t.Run("mismatch", func(t *testing.T) {
+		t.Parallel()
 		bad := signOnboardingBody(t, body, "wrong-secret")
 		if verifyOnboardingHMAC(body, bad, testSecret) {
 			t.Fatal("wrong-secret signature should not verify")
 		}
 	})
 	t.Run("match", func(t *testing.T) {
+		t.Parallel()
 		if !verifyOnboardingHMAC(body, good, testSecret) {
 			t.Fatal("correct signature should verify")
 		}
@@ -218,8 +222,8 @@ func TestOnboardingCallback_MarkQualifiedHappyPath(t *testing.T) {
 	raw, _ := store.NewCompanyIntakeResumeToken()
 	tokenHash := store.CompanyIntakeTokenHash(raw)
 	intake := &store.CompanyIntake{ID: id, Status: store.CompanyIntakeDraft}
-	if err := intakes.Create(ctx, intake, tokenHash, "ip-hash", "ua"); err != nil {
-		t.Fatalf("seed Create: %v", err)
+	if cerr := intakes.Create(ctx, intake, tokenHash, "ip-hash", "ua"); cerr != nil {
+		t.Fatalf("seed Create: %v", cerr)
 	}
 
 	body, _ := json.Marshal(onboardingCallbackBody{

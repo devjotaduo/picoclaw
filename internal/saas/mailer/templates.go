@@ -67,11 +67,13 @@ func init() {
 	if err != nil {
 		panic(fmt.Sprintf("mailer: parse invite.txt.tmpl: %v", err))
 	}
-	credentialsHTMLTpl, err = htemplate.New("credentials.html.tmpl").ParseFS(templateFS, "templates/credentials.html.tmpl")
+	credentialsHTMLTpl, err = htemplate.New("credentials.html.tmpl").
+		ParseFS(templateFS, "templates/credentials.html.tmpl")
 	if err != nil {
 		panic(fmt.Sprintf("mailer: parse credentials.html.tmpl: %v", err))
 	}
-	credentialsTextTpl, err = ttemplate.New("credentials.txt.tmpl").ParseFS(templateFS, "templates/credentials.txt.tmpl")
+	credentialsTextTpl, err = ttemplate.New("credentials.txt.tmpl").
+		ParseFS(templateFS, "templates/credentials.txt.tmpl")
 	if err != nil {
 		panic(fmt.Sprintf("mailer: parse credentials.txt.tmpl: %v", err))
 	}

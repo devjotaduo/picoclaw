@@ -147,7 +147,12 @@ func TestServeHTTP_Stream_OpensEvent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/public/chat/stream?session_id=sess-x", nil)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		srv.URL+"/api/public/chat/stream?session_id=sess-x",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
@@ -192,7 +197,12 @@ func TestServeHTTP_Stream_ForwardsMessage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/public/chat/stream?session_id=msg-sess", nil)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		srv.URL+"/api/public/chat/stream?session_id=msg-sess",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}

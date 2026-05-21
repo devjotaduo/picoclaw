@@ -17,10 +17,10 @@ func TestTenantSubdomainWithPort(t *testing.T) {
 	}{
 		{"carlao.jotaduo.com:443", "carlao", true},
 		{"carlao.jotaduo.com:80", "carlao", true},
-		{"sub.carlao.jotaduo.com", "", false},  // nested subdomain blocked
-		{"", "", false},                          // empty host
-		{"other.example.com", "", false},         // different domain
-		{"jotaduo.com.evil.com", "", false},      // suffix trap
+		{"sub.carlao.jotaduo.com", "", false}, // nested subdomain blocked
+		{"", "", false},                       // empty host
+		{"other.example.com", "", false},      // different domain
+		{"jotaduo.com.evil.com", "", false},   // suffix trap
 	}
 	for _, tc := range cases {
 		sub, ok := h.tenantSubdomain(tc.hostport)
@@ -175,9 +175,9 @@ func TestIsPublicChatRoute(t *testing.T) {
 		{"/api/public/other", false},
 		{"/api/public/admin", false},
 		// Sibling/superficially similar names must not match.
-		{"/api/public/chats", false},     // plural
-		{"/api/public/chatting", false},  // prefix-only
-		{"/api/publicchat", false},       // no slash separator
+		{"/api/public/chats", false},    // plural
+		{"/api/public/chatting", false}, // prefix-only
+		{"/api/publicchat", false},      // no slash separator
 		// Anything outside /api/public is private.
 		{"/api/agent/status", false},
 		{"/api/config", false},
