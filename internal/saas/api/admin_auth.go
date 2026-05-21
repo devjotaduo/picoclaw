@@ -104,7 +104,8 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "db error")
 		return
 	}
-	if user.Status != store.UserStatusActive || user.BcryptHash == nil || !auth.VerifyPassword(*user.BcryptHash, req.Password) {
+	if user.Status != store.UserStatusActive || user.BcryptHash == nil ||
+		!auth.VerifyPassword(*user.BcryptHash, req.Password) {
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
@@ -208,7 +209,8 @@ func (h *Handler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "user lookup failed")
 		return
 	}
-	if fresh.Status != store.UserStatusActive || fresh.BcryptHash == nil || !auth.VerifyPassword(*fresh.BcryptHash, req.CurrentPassword) {
+	if fresh.Status != store.UserStatusActive || fresh.BcryptHash == nil ||
+		!auth.VerifyPassword(*fresh.BcryptHash, req.CurrentPassword) {
 		writeError(w, http.StatusUnauthorized, "current password is incorrect")
 		return
 	}

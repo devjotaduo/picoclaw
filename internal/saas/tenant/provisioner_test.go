@@ -21,7 +21,11 @@ func TestCreateInput_Normalize(t *testing.T) {
 	}{
 		{"public tenant forces skip", CreateInput{IsPublic: true}, true},
 		{"private + caller skip=false stays false", CreateInput{IsPublic: false, SkipDashboardPassword: false}, false},
-		{"private + caller skip=true stays true (idempotent)", CreateInput{IsPublic: false, SkipDashboardPassword: true}, true},
+		{
+			"private + caller skip=true stays true (idempotent)",
+			CreateInput{IsPublic: false, SkipDashboardPassword: true},
+			true,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

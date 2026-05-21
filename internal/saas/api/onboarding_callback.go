@@ -15,9 +15,11 @@ import (
 	"github.com/sipeed/picoclaw/internal/saas/store"
 )
 
-const onboardingCallbackSigHeader = "X-Onboarding-Signature"
-const onboardingCallbackMaxBody = 1 << 20 // 1 MiB
-const onboardingCallbackMaxSkew = 5 * time.Minute
+const (
+	onboardingCallbackSigHeader = "X-Onboarding-Signature"
+	onboardingCallbackMaxBody   = 1 << 20 // 1 MiB
+	onboardingCallbackMaxSkew   = 5 * time.Minute
+)
 
 type onboardingCallbackBody struct {
 	IntakeID        string `json:"intake_id"`
@@ -83,7 +85,12 @@ func (h *Handler) handleOnboardingCallback(w http.ResponseWriter, r *http.Reques
 			writeError(w, http.StatusBadRequest, "contact_email required for submit_intake")
 			return
 		}
-		if _, err := h.CompanyIntakes.SetContactInfo(r.Context(), req.IntakeID, req.ContactEmail, req.ContactWhatsApp); err != nil {
+		if _, err := h.CompanyIntakes.SetContactInfo(
+			r.Context(),
+			req.IntakeID,
+			req.ContactEmail,
+			req.ContactWhatsApp,
+		); err != nil {
 			writeError(w, http.StatusInternalServerError, "set contact info: "+err.Error())
 			return
 		}

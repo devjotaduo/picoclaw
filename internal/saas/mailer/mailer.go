@@ -95,7 +95,13 @@ func (m *Mailer) SendInviteEmail(to, tenantName, role, inviteURL string, expires
 // senha.
 func (m *Mailer) SendCredentialsEmail(to, tenantName, dashboardURL, loginEmail, loginPassword, magicLink string) {
 	if m == nil || !m.cfg.Enabled() {
-		log.Printf("mailer (disabled): credentials for %s tenant=%q url=%s magic=%t", to, tenantName, dashboardURL, magicLink != "")
+		log.Printf(
+			"mailer (disabled): credentials for %s tenant=%q url=%s magic=%t",
+			to,
+			tenantName,
+			dashboardURL,
+			magicLink != "",
+		)
 		return
 	}
 	data := CredentialsData{

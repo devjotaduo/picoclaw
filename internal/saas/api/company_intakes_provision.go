@@ -105,7 +105,11 @@ var reminderSchedule = []struct {
 // Run is idempotent on dedup: if a tenant already exists with the same
 // owner_email, it returns AlreadyExists=true with the existing URL instead of
 // erroring or duplicating.
-func (a *AutoProvisioner) Run(ctx context.Context, intake *store.CompanyIntake, clientIP string) (*AutoProvisionResult, error) {
+func (a *AutoProvisioner) Run(
+	ctx context.Context,
+	intake *store.CompanyIntake,
+	clientIP string,
+) (*AutoProvisionResult, error) {
 	if a == nil {
 		return nil, ErrAutoProvisionDisabled
 	}
@@ -252,7 +256,13 @@ func (a *AutoProvisioner) Run(ctx context.Context, intake *store.CompanyIntake, 
 	if a.Reminders != nil {
 		now := time.Now().UTC()
 		for _, step := range reminderSchedule {
-			if _, rerr := a.Reminders.Schedule(ctx, intake.ID, now.Add(step.After), store.ReminderChannelEmail, step.Template); rerr != nil {
+			if _, rerr := a.Reminders.Schedule(
+				ctx,
+				intake.ID,
+				now.Add(step.After),
+				store.ReminderChannelEmail,
+				step.Template,
+			); rerr != nil {
 				// Don't block on a single insert failing; log and continue.
 				// The other two reminders may still go through.
 				continue

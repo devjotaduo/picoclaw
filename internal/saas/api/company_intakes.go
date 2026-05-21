@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/sipeed/picoclaw/internal/saas/store"
 )
 
@@ -71,7 +72,13 @@ func (h *Handler) handleCreateCompanyIntake(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	intake := &store.CompanyIntake{ID: id, Source: req.Source}
-	if err := h.CompanyIntakes.Create(r.Context(), intake, store.CompanyIntakeTokenHash(token), hashPublicValue(clientIP(r)), r.UserAgent()); err != nil {
+	if err := h.CompanyIntakes.Create(
+		r.Context(),
+		intake,
+		store.CompanyIntakeTokenHash(token),
+		hashPublicValue(clientIP(r)),
+		r.UserAgent(),
+	); err != nil {
 		writeError(w, http.StatusInternalServerError, "db error")
 		return
 	}
@@ -140,7 +147,8 @@ func (h *Handler) handleUploadCompanyIntakeAttachment(w http.ResponseWriter, r *
 	if !ok {
 		return
 	}
-	if intake.Status == store.CompanyIntakeSubmitted || intake.Status == store.CompanyIntakeReviewed || intake.Status == store.CompanyIntakeLinked {
+	if intake.Status == store.CompanyIntakeSubmitted || intake.Status == store.CompanyIntakeReviewed ||
+		intake.Status == store.CompanyIntakeLinked {
 		writeError(w, http.StatusConflict, "intake já enviado")
 		return
 	}
@@ -256,7 +264,13 @@ func (h *Handler) handleGenerateCompanyIntakeReport(w http.ResponseWriter, r *ht
 		return
 	}
 	report, summary := h.buildCompanyIntakeReport(r.Context(), intake)
-	updated, err := h.CompanyIntakes.SaveReport(r.Context(), id, store.CompanyIntakeTokenHash(req.ResumeToken), report, summary)
+	updated, err := h.CompanyIntakes.SaveReport(
+		r.Context(),
+		id,
+		store.CompanyIntakeTokenHash(req.ResumeToken),
+		report,
+		summary,
+	)
 	if err != nil {
 		handleIntakeErr(w, err)
 		return
@@ -283,7 +297,13 @@ func (h *Handler) handleSubmitCompanyIntake(w http.ResponseWriter, r *http.Reque
 	}
 	if len(intake.PublicSummaryJSON) == 0 || string(intake.PublicSummaryJSON) == "{}" {
 		report, summary := h.buildCompanyIntakeReport(r.Context(), intake)
-		if _, err := h.CompanyIntakes.SaveReport(r.Context(), id, store.CompanyIntakeTokenHash(req.ResumeToken), report, summary); err != nil {
+		if _, err := h.CompanyIntakes.SaveReport(
+			r.Context(),
+			id,
+			store.CompanyIntakeTokenHash(req.ResumeToken),
+			report,
+			summary,
+		); err != nil {
 			handleIntakeErr(w, err)
 			return
 		}
@@ -308,7 +328,12 @@ func (h *Handler) handleSubmitCompanyIntake(w http.ResponseWriter, r *http.Reque
 	}
 	notLinked := submitted.LinkedTenantID == nil || *submitted.LinkedTenantID == ""
 	if h.AutoProvision != nil && notLinked && submitted.ContactEmail != "" && submitted.CompanyName != "" {
-		log.Printf("submit: AutoProvision.Run starting intake=%s company=%q email=%q", id, submitted.CompanyName, submitted.ContactEmail)
+		log.Printf(
+			"submit: AutoProvision.Run starting intake=%s company=%q email=%q",
+			id,
+			submitted.CompanyName,
+			submitted.ContactEmail,
+		)
 		res, perr := h.AutoProvision.Run(r.Context(), submitted, clientIP(r))
 		switch {
 		case perr != nil:
@@ -433,7 +458,11 @@ func (h *Handler) publicIntakeByToken(w http.ResponseWriter, r *http.Request) (*
 	return h.publicIntakeByTokenValue(w, r, chi.URLParam(r, "id"), r.URL.Query().Get("resume_token"))
 }
 
-func (h *Handler) publicIntakeByTokenValue(w http.ResponseWriter, r *http.Request, id, token string) (*store.CompanyIntake, bool) {
+func (h *Handler) publicIntakeByTokenValue(
+	w http.ResponseWriter,
+	r *http.Request,
+	id, token string,
+) (*store.CompanyIntake, bool) {
 	if strings.TrimSpace(id) == "" || strings.TrimSpace(token) == "" {
 		writeError(w, http.StatusUnauthorized, "token de retomada obrigatório")
 		return nil, false
@@ -458,7 +487,8 @@ func validateIntakeMinimum(intake *store.CompanyIntake) error {
 	}
 	var answers map[string]any
 	_ = json.Unmarshal(intake.AnswersJSON, &answers)
-	if strings.TrimSpace(fmt.Sprint(answers["business_type"])) == "" || strings.TrimSpace(fmt.Sprint(answers["offer"])) == "" {
+	if strings.TrimSpace(fmt.Sprint(answers["business_type"])) == "" ||
+		strings.TrimSpace(fmt.Sprint(answers["offer"])) == "" {
 		return errors.New("complete tipo de empresa e oferta principal")
 	}
 	return nil
@@ -524,7 +554,10 @@ func hashPublicValue(v string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (h *Handler) buildCompanyIntakeReport(ctx context.Context, intake *store.CompanyIntake) (json.RawMessage, json.RawMessage) {
+func (h *Handler) buildCompanyIntakeReport(
+	ctx context.Context,
+	intake *store.CompanyIntake,
+) (json.RawMessage, json.RawMessage) {
 	if h.Cfg.LiteLLMURL != "" && h.Cfg.LiteLLMMasterKey != "" && h.Cfg.IntakeLLMModel != "" {
 		if report, summary, err := h.buildCompanyIntakeReportWithLLM(ctx, intake); err == nil {
 			return report, summary
@@ -533,7 +566,10 @@ func (h *Handler) buildCompanyIntakeReport(ctx context.Context, intake *store.Co
 	return buildFallbackCompanyIntakeReport(intake)
 }
 
-func (h *Handler) buildCompanyIntakeReportWithLLM(ctx context.Context, intake *store.CompanyIntake) (json.RawMessage, json.RawMessage, error) {
+func (h *Handler) buildCompanyIntakeReportWithLLM(
+	ctx context.Context,
+	intake *store.CompanyIntake,
+) (json.RawMessage, json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	payload := map[string]any{
@@ -557,7 +593,12 @@ func (h *Handler) buildCompanyIntakeReportWithLLM(ctx context.Context, intake *s
 		"temperature": 0.2,
 	}
 	body, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(h.Cfg.LiteLLMURL, "/")+"/chat/completions", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		strings.TrimRight(h.Cfg.LiteLLMURL, "/")+"/chat/completions",
+		bytes.NewReader(body),
+	)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -612,10 +653,15 @@ func buildFallbackCompanyIntakeReport(intake *store.CompanyIntake) (json.RawMess
 		brandSoul = "Ainda precisa ser refinada com exemplos de linguagem, diferenciais e limites de atendimento."
 	}
 	report := map[string]any{
-		"generated_by":    "Clara",
-		"mode":            "fallback",
-		"company_summary": fmt.Sprintf("%s é uma empresa do tipo %s. A oferta principal informada foi: %s.", intake.CompanyName, valueOr(businessType, "não informado"), valueOr(offer, "não informado")),
-		"brand_soul":      brandSoul,
+		"generated_by": "Clara",
+		"mode":         "fallback",
+		"company_summary": fmt.Sprintf(
+			"%s é uma empresa do tipo %s. A oferta principal informada foi: %s.",
+			intake.CompanyName,
+			valueOr(businessType, "não informado"),
+			valueOr(offer, "não informado"),
+		),
+		"brand_soul": brandSoul,
 		"products_services_and_materials": map[string]any{
 			"offer":       offer,
 			"materials":   json.RawMessage(attachments),
@@ -649,8 +695,11 @@ func buildFallbackCompanyIntakeReport(intake *store.CompanyIntake) (json.RawMess
 		},
 	}
 	summary := map[string]any{
-		"title":    "Resumo da Clara",
-		"headline": fmt.Sprintf("Entendi a base da %s e já existe material suficiente para uma primeira revisão.", intake.CompanyName),
+		"title": "Resumo da Clara",
+		"headline": fmt.Sprintf(
+			"Entendi a base da %s e já existe material suficiente para uma primeira revisão.",
+			intake.CompanyName,
+		),
 		"highlights": []string{
 			"Oferta principal: " + valueOr(offer, "a confirmar"),
 			"Canais atuais: " + strings.Join(channels, ", "),
