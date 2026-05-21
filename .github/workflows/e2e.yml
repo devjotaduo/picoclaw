@@ -135,7 +135,7 @@ jobs:
 
       - name: Upload launcher log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: launcher-log
           path: ${{ runner.temp }}/launcher.log
@@ -143,7 +143,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: web/frontend/e2e/.report
@@ -151,7 +151,7 @@ jobs:
 
       - name: Upload Playwright traces
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-traces
           path: web/frontend/e2e/.test-results
