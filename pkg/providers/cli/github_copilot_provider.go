@@ -116,14 +116,21 @@ func (p *GitHubCopilotProvider) Chat(
 	if resp == nil {
 		return nil, fmt.Errorf("empty response from copilot")
 	}
-	if resp.Data.Content == nil {
+	// copilot-sdk/go 0.3 turned SessionEventData into an interface; the
+	// assistant reply now arrives as *AssistantMessageData with a plain
+	// (non-pointer) Content string. Other event types reach this path
+	// only on protocol misuse — treat them as a clear error.
+	amd, ok := resp.Data.(*copilot.AssistantMessageData)
+	if !ok {
+		return nil, fmt.Errorf("unexpected copilot event type %T (want assistant message)", resp.Data)
+	}
+	if amd.Content == "" {
 		return nil, fmt.Errorf("no content in copilot response")
 	}
-	content := *resp.Data.Content
 
 	return &LLMResponse{
 		FinishReason: "stop",
-		Content:      content,
+		Content:      amd.Content,
 	}, nil
 }
 
