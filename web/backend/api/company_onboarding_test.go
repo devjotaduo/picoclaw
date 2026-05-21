@@ -82,9 +82,14 @@ Segmento detectado: varejo
 Status da informação: validado
 `)
 	mustWriteCompanyOnboardingFile(t, workspace, filepath.Join("config", "company-profile.md"), "")
-	mustWriteCompanyOnboardingFile(t, workspace, filepath.Join("config", "authorized-channels.md"), `# Canais autorizados
+	mustWriteCompanyOnboardingFile(
+		t,
+		workspace,
+		filepath.Join("config", "authorized-channels.md"),
+		`# Canais autorizados
 - WhatsApp principal: +55 11 99999-9999
-`)
+`,
+	)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace/company-onboarding", nil)
