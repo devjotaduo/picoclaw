@@ -4,6 +4,7 @@ import {
   IconBook,
   IconBrandWhatsapp,
   IconChartBar,
+  IconCircleCheck,
   IconClockHour4,
   IconCopy,
   IconKey,
@@ -100,6 +101,7 @@ const featureFallbacks: Record<string, string> = {
   operacao_memory: "config",
   operacao_pendencias: "config",
   operacao_cron: "config",
+  operacao_readiness: "config",
 }
 
 // Features hidden from the sidebar across the board (still reachable via
@@ -340,6 +342,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         label: "navigation.operation_group",
         defaultOpen: true,
         items: [
+          {
+            title: "navigation.readiness",
+            url: "/readiness",
+            icon: IconCircleCheck,
+            feature: "operacao_readiness",
+            translateTitle: true,
+          },
           {
             title: "navigation.memory",
             url: "/memory",

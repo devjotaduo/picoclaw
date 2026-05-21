@@ -32,3 +32,14 @@ Status: rascunho | validado pelo dono
 Última atualização:
 
 ## Observações
+
+## PENDENCIAS: identidade de marca
+
+Sem isso Lia não consegue gerar artes nem posts coerentes com a empresa.
+
+- Logo (caminho ou URL do arquivo)
+- Cores principais (hex)
+- Tom de voz: formal ou informal
+- Sobre o que a marca NÃO fala
+- Concorrentes que não devem ser mencionados
+- Validação do dono (mover status para "validado pelo dono")

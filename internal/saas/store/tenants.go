@@ -43,8 +43,9 @@ type Tenant struct {
 	CRMContactID                  *int64
 	CRMCompanyID                  *int64
 	CRMDealID                     *int64
-	LauncherProfileID             *string
-	LauncherProfileVersionApplied *int64
+	// WorkspaceID points at the Workspace this tenant was provisioned from.
+	WorkspaceID             *string
+	WorkspaceVersionApplied *int64
 	// SupabaseUserID is set when this tenant's dashboard auth is handled by
 	// Supabase (AuthBackend = "supabase"). Empty for legacy local-auth tenants.
 	SupabaseUserID *string
@@ -64,7 +65,7 @@ const tenantCols = `tenants.id, tenants.display_name, tenants.owner_email, tenan
     tenants.mem_limit_mb, tenants.cpu_quota, tenants.initial_password_delivered, tenants.last_error,
     tenants.created_at, tenants.suspended_at, tenants.deleted_at, tenants.cleanup_completed_at,
     tenants.crm_contact_id, tenants.crm_company_id, tenants.crm_deal_id,
-    tenants.launcher_profile_id, tenants.launcher_profile_version_applied,
+    tenants.workspace_id, tenants.workspace_version_applied,
     tenants.supabase_user_id::text, tenants.auth_backend, tenants.is_public`
 
 func scanTenant(row pgx.Row) (*Tenant, error) {
@@ -75,7 +76,7 @@ func scanTenant(row pgx.Row) (*Tenant, error) {
 		&t.MemLimitMB, &t.CPUQuota, &t.InitialPasswordDelivered, &t.LastError,
 		&t.CreatedAt, &t.SuspendedAt, &t.DeletedAt, &t.CleanupCompletedAt,
 		&t.CRMContactID, &t.CRMCompanyID, &t.CRMDealID,
-		&t.LauncherProfileID, &t.LauncherProfileVersionApplied,
+		&t.WorkspaceID, &t.WorkspaceVersionApplied,
 		&t.SupabaseUserID, &t.AuthBackend, &t.IsPublic,
 	)
 	return &t, err
@@ -89,13 +90,15 @@ func (s *TenantStore) Insert(ctx context.Context, t *Tenant) error {
 	const q = `
 		INSERT INTO tenants (id, display_name, owner_email, subdomain, status,
 		                     container_image, volume_path, monthly_budget_usd,
-		                     mem_limit_mb, cpu_quota, launcher_profile_id,
-		                     launcher_profile_version_applied, auth_backend, is_public)
+		                     mem_limit_mb, cpu_quota,
+		                     workspace_id, workspace_version_applied,
+		                     auth_backend, is_public)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`
 	_, err := s.DB.Pool.Exec(ctx, q,
 		t.ID, t.DisplayName, t.OwnerEmail, t.Subdomain, t.Status,
 		t.ContainerImage, t.VolumePath, t.MonthlyBudgetUSD,
-		t.MemLimitMB, t.CPUQuota, t.LauncherProfileID, t.LauncherProfileVersionApplied,
+		t.MemLimitMB, t.CPUQuota,
+		t.WorkspaceID, t.WorkspaceVersionApplied,
 		backend, t.IsPublic,
 	)
 	return err
@@ -261,9 +264,13 @@ func (s *TenantStore) SetLiteLLMKey(ctx context.Context, id, keyID, keyHash stri
 	return err
 }
 
-func (s *TenantStore) SetLauncherProfileApplied(ctx context.Context, id, profileID string, version int64) error {
-	const q = `UPDATE tenants SET launcher_profile_id = $2, launcher_profile_version_applied = $3 WHERE id = $1`
-	_, err := s.DB.Pool.Exec(ctx, q, id, profileID, version)
+// SetWorkspaceApplied records which workspace the tenant currently runs from.
+// Provisioner writes this at create time; the future "Re-apply workspace"
+// admin action will rewrite both columns when the operator pushes a new
+// version of the workspace onto an existing tenant.
+func (s *TenantStore) SetWorkspaceApplied(ctx context.Context, id, workspaceID string, version int64) error {
+	const q = `UPDATE tenants SET workspace_id = $2, workspace_version_applied = $3 WHERE id = $1`
+	_, err := s.DB.Pool.Exec(ctx, q, id, workspaceID, version)
 	return err
 }
 

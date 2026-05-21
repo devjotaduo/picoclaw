@@ -49,8 +49,39 @@ Migration `0005_identity_roles.sql` backfills existing `admins` into
 
 ## Provisioning
 
-Tenant creation copies the configured template directory, skips runtime state,
-creates a LiteLLM virtual key, writes the plaintext key only to the tenant
-volume, merges Picoclaw `config.json` so the default model uses LiteLLM, and
-starts an internal launcher container in trusted gateway mode.
+Every tenant is seeded from a **Workspace** — a single, admin-managed
+directory under `PICOCLAW_WORKSPACE_DIR` (default
+`/srv/picoclaw-workspaces/<slug>/`). The workspace's `home/` subtree
+becomes the tenant's `$PICOCLAW_HOME`; its `frontend-dist/` is
+bind-mounted read-only into the container so each workspace can ship a
+custom UI build.
+
+`Provisioner.Create(CreateInput{WorkspaceID, ...})` is the only entry
+point and runs five steps:
+
+1. `mkdir` the per-tenant volume at `<TenantHostDataDir>/<id>/`.
+2. `CopyWorkspaceHome` — drop the workspace's `home/` into the volume.
+3. `SeedDashboardPassword` (skipped for Supabase / public tenants).
+4. Generate a LiteLLM virtual key + `SubstituteConfigPlaceholders` —
+   the workspace's `config.json` carries `${LITELLM_KEY}`,
+   `${LITELLM_URL}`, `${TENANT_ID}` placeholders that get filled in.
+5. `WriteLauncherPolicy` from the workspace's `role_policy_json` DB
+   column.
+
+The Docker container starts with two bind-mounts:
+
+- `<volumePath>` → `/root/.picoclaw`
+- `<workspace>/frontend-dist` → `/var/lib/picoclaw-frontend` (read-only,
+  attached only when the operator has compiled the frontend at least
+  once)
+
+The container always runs `PICOCLAW_AUTH_MODE=trusted_gateway` so
+proxied requests carrying the controlplane's HMAC headers are honored
+and direct requests are rejected.
+
+`CreateInput.WorkspaceID` is **required** — no fallback. Auto-provision
+(Clara) calls `Workspaces.GetDefaultAuto(ctx)` and fails fast when no
+workspace is marked `is_default_auto`.
+
+Deep dive: [`workspaces.md`](workspaces.md).
 

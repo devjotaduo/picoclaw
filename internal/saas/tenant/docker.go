@@ -37,13 +37,26 @@ type ContainerSpec struct {
 	Name        string
 	Image       string
 	Env         map[string]string
-	HostVolume  string // bind source on host
+	HostVolume  string // bind source on host (primary mount → MountTarget)
 	MountTarget string // bind target in container
+	// ExtraMounts are appended after the primary HostVolume bind. Used to
+	// bind-mount the workspace's frontend-dist into the container so the
+	// launcher can serve a per-workspace custom build instead of its
+	// embedded one. Empty for tenants without a built workspace frontend.
+	ExtraMounts []ContainerMount
 	MemLimitMB  int
 	CPUQuota    float64 // e.g. 0.5
 	NetworkEdge string
 	NetworkLLM  string
 	Labels      map[string]string
+}
+
+// ContainerMount is a single bind-mount pair added to a ContainerSpec
+// alongside the primary HostVolume.
+type ContainerMount struct {
+	Source   string
+	Target   string
+	ReadOnly bool
 }
 
 func (d *DockerClient) CreateAndStart(ctx context.Context, spec ContainerSpec) (string, error) {
@@ -56,13 +69,26 @@ func (d *DockerClient) CreateAndStart(ctx context.Context, spec ContainerSpec) (
 		Env:    env,
 		Labels: spec.Labels,
 	}
+	mounts := make([]mount.Mount, 0, 1+len(spec.ExtraMounts))
+	mounts = append(mounts, mount.Mount{
+		Type:   mount.TypeBind,
+		Source: spec.HostVolume,
+		Target: spec.MountTarget,
+	})
+	for _, em := range spec.ExtraMounts {
+		if em.Source == "" || em.Target == "" {
+			continue
+		}
+		mounts = append(mounts, mount.Mount{
+			Type:     mount.TypeBind,
+			Source:   em.Source,
+			Target:   em.Target,
+			ReadOnly: em.ReadOnly,
+		})
+	}
 	hostCfg := &container.HostConfig{
 		RestartPolicy: container.RestartPolicy{Name: container.RestartPolicyUnlessStopped},
-		Mounts: []mount.Mount{{
-			Type:   mount.TypeBind,
-			Source: spec.HostVolume,
-			Target: spec.MountTarget,
-		}},
+		Mounts:        mounts,
 		Resources: container.Resources{
 			Memory:    int64(spec.MemLimitMB) * 1024 * 1024,
 			NanoCPUs:  int64(spec.CPUQuota * 1e9),

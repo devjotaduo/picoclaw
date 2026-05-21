@@ -43,8 +43,6 @@ type Config struct {
 	TenantImage        string
 	TenantBaseDomain   string
 	TenantHostDataDir  string
-	TenantTemplateDir  string // optional: copied into every new tenant volume before container start
-	TenantProfileDir   string // stores centrally managed launcher profile seed directories
 	TenantNetworkEdge  string
 	TenantNetworkLLM   string
 	TenantCertResolver string // empty = no resolver label (Traefik falls back to default cert)
@@ -71,18 +69,12 @@ type Config struct {
 	// tenant creation + Supabase user creation automatically. Default off so
 	// the existing manual flow stays unchanged.
 	AutoProvisionEnabled  bool
-	AutoProvisionProfile  string // launcher profile id seeded on new tenant
-	AutoProvisionPerIPDay int    // max auto-provisions per client IP per 24h
-	// AutoProvisionWorkspaceDir, when set, points to a local directory whose
-	// contents are overlaid into the new tenant's <volume>/workspace/ AFTER
-	// the profile seed runs. Lets the operator point auto-provision at a
-	// local workspace directory (typically /srv/picoclaw/workspace on the
-	// VPS) so new tenants get the agent files they have been editing locally
-	// instead of the profile's frozen copy.
-	// Per-tenant runtime state (sessions, memory, whatsapp/matrix state) is
-	// preserved by the overlay skip list — only agent definition files get
-	// overwritten.
-	AutoProvisionWorkspaceDir string
+	AutoProvisionPerIPDay int // max auto-provisions per client IP per 24h
+
+	// WorkspaceDir is the host root where selectable Workspaces live. Each
+	// subdir contains home/, frontend-src/, frontend-dist/ — the structure
+	// the provisioning flow expects. Default /srv/picoclaw-workspaces.
+	WorkspaceDir string
 
 	// OnboardingCallbackSecret is the shared HMAC-SHA256 secret used by the
 	// onboarding tenant's skills to authenticate POST /api/v1/onboarding-callback.
@@ -146,8 +138,6 @@ func Load() (*Config, error) {
 		TenantImage:         envOr("TENANT_IMAGE", "picoclaw-launcher:latest"),
 		TenantBaseDomain:    os.Getenv("TENANT_BASE_DOMAIN"),
 		TenantHostDataDir:   envOr("TENANT_HOST_DATA_DIR", "/srv/saas/tenants"),
-		TenantTemplateDir:   os.Getenv("TENANT_TEMPLATE_DIR"),
-		TenantProfileDir:    envOr("TENANT_PROFILE_DIR", "/var/lib/picoclaw-saas/launcher-profiles"),
 		TenantNetworkEdge:   envOr("TENANT_NETWORK_EDGE", "saas_edge"),
 		TenantNetworkLLM:    envOr("TENANT_NETWORK_LLM", "saas_llm"),
 		TenantCertResolver:  envOr("TENANT_CERT_RESOLVER", "letsencrypt"),
@@ -183,9 +173,8 @@ func Load() (*Config, error) {
 	}
 
 	c.AutoProvisionEnabled = envBool("PICOCLAW_SAAS_AUTO_PROVISION", false)
-	c.AutoProvisionProfile = envOr("PICOCLAW_SAAS_AUTO_PROVISION_PROFILE", "default-business")
 	c.AutoProvisionPerIPDay = envInt("PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY", 3)
-	c.AutoProvisionWorkspaceDir = os.Getenv("PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR")
+	c.WorkspaceDir = envOr("PICOCLAW_WORKSPACE_DIR", "/srv/picoclaw-workspaces")
 
 	c.OnboardingCallbackSecret = os.Getenv("PICOCLAW_ONBOARDING_CALLBACK_SECRET")
 	c.OnboardingCallbackURL = os.Getenv("PICOCLAW_ONBOARDING_CALLBACK_URL")

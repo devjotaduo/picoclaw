@@ -9,7 +9,7 @@ controlplane usando credenciais armazenadas em arquivo com permissão 600.
 
 `web/saas-admin` (em `adm.<dominio>`) segue atendendo audit log, users,
 intakes públicos, agent/skills editor por tenant, CRM, server health e
-launcher profiles.
+**workspaces** (CRUD + build do frontend customizado por workspace).
 
 ## Escopo
 
@@ -17,7 +17,7 @@ Dentro do launcher (web/frontend, rotas TanStack file-based):
 
 - `/admin/` — landing com atalhos.
 - `/admin/tenants` — lista, busca, suspend/resume/restart inline.
-- `/admin/tenants/new` — criação de tenant via profile selecionado.
+- `/admin/tenants/new` — criação de tenant via workspace selecionado.
 - `/admin/tenants/$id` — detalhe + ações (restart, recreate, rotate-password, clone, delete) + sanity checks ao vivo.
 - `/admin/clone` — wizard de clone tenant -> tenant com sanity report da resposta.
 
@@ -108,7 +108,7 @@ Todos exigem cookie de launcher autenticado (middleware
 | POST    | `/api/admin/saas/tenants/{id}/restart`        | …                                |
 | POST    | `/api/admin/saas/tenants/{id}/recreate`       | …                                |
 | POST    | `/api/admin/saas/tenants/{id}/rotate-password`| …                                |
-| GET     | `/api/admin/saas/launcher-profiles`           | `/api/v1/launcher-profiles`      |
+| GET     | `/api/admin/saas/workspaces`                  | `/api/v1/workspaces`             |
 
 Qualquer endpoint do controlplane (existente ou futuro) é acessível via
 `/api/admin/saas/<resto-da-url>` — o proxy é catch-all e não precisa de
@@ -160,8 +160,9 @@ Disponível em qualquer momento via
 ## Fora de escopo
 
 - Portar telas restantes do `web/saas-admin` (audit, users, intakes, CRM,
-  agent editor por tenant).
-- Snapshot tenant-as-profile.
+  agent editor por tenant, workspaces).
+- Snapshot tenant-as-workspace (criar workspace novo a partir de um tenant
+  existente).
 - Refresh automático da sessão controlplane antes de expirar (hoje é lazy +
   retry em 401).
 - Tipos compartilhados (OpenAPI/zod) entre `web/saas-admin` e `web/frontend`.

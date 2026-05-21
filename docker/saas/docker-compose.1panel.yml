@@ -23,14 +23,8 @@ services:
       COOKIE_DOMAIN: ${SAAS_BASE_DOMAIN}
       COOKIE_SECURE: "true"
       TENANT_CERT_RESOLVER: ""
-      # Every new tenant volume is seeded with a copy of this directory before
-      # the launcher container starts. Per-tenant state (launcher-auth.db, WA
-      # store.db, sessions, memory, …) is blocklisted in internal/tenant/template.go.
-      TENANT_TEMPLATE_DIR: /etc/picoclaw/tenant-template
-      TENANT_PROFILE_DIR: /var/lib/picoclaw-saas/launcher-profiles
+      # Workspaces directory — single source of truth for tenant content.
+      # See docs/architecture/workspaces.md for the on-disk layout.
+      PICOCLAW_WORKSPACE_DIR: /srv/picoclaw-workspaces
     volumes:
-      - /root/.picoclaw:/etc/picoclaw/tenant-template:ro
-      # 1panel overlay mirrors the base compose bind so auto-provision can
-      # find the operator workspace at the same path the env var points at.
-      # Read-only; OverlayWorkspace filters runtime state on read.
-      - /srv/picoclaw/workspace:/srv/picoclaw/workspace:ro
+      - /srv/picoclaw-workspaces:/srv/picoclaw-workspaces

@@ -11,7 +11,7 @@ import { AgentEdit } from "@/pages/AgentEdit";
 import { AgentSettings } from "@/pages/AgentSettings";
 import { CrmPage } from "@/pages/CrmPage";
 import { AcceptInvite } from "@/pages/AcceptInvite";
-import { LauncherProfiles } from "@/pages/LauncherProfiles";
+import { Workspaces } from "@/pages/Workspaces";
 import { AuditLog } from "@/pages/AuditLog";
 import { TenantLogs } from "@/pages/TenantLogs";
 import { UserManagement } from "@/pages/UserManagement";
@@ -65,7 +65,7 @@ export default function App() {
         <Route path="/tenants/:id/skills" element={<SkillsList />} />
         <Route path="/tenants/:id/skills/:name" element={<SkillEdit />} />
         <Route path="/tenants/:id/logs" element={<RequirePlatform><TenantLogs /></RequirePlatform>} />
-        <Route path="/launcher-profiles" element={<RequirePlatform><LauncherProfiles /></RequirePlatform>} />
+        <Route path="/workspaces" element={<RequirePlatform><Workspaces /></RequirePlatform>} />
         <Route path="/audit" element={<RequirePlatform><AuditLog /></RequirePlatform>} />
         <Route path="/users" element={<RequirePlatform><UserManagement /></RequirePlatform>} />
         <Route path="/dashboard" element={<RequirePlatform><PlatformDashboard /></RequirePlatform>} />

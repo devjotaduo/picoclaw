@@ -217,7 +217,7 @@ services:
       TENANT_IMAGE: ${TENANT_IMAGE}
       TENANT_BASE_DOMAIN: ${SAAS_BASE_DOMAIN}
       TENANT_HOST_DATA_DIR: ${TENANT_HOST_DATA_DIR}
-      TENANT_PROFILE_DIR: ${TENANT_PROFILE_DIR:-/var/lib/picoclaw-saas/launcher-profiles}
+      PICOCLAW_WORKSPACE_DIR: ${PICOCLAW_WORKSPACE_DIR:-/srv/picoclaw-workspaces}
       TENANT_NETWORK_EDGE: saas_edge
       TENANT_NETWORK_LLM: saas_llm
       COOKIE_DOMAIN: ${SAAS_BASE_DOMAIN}
@@ -235,9 +235,10 @@ services:
       # before the SSE stream closes. Keep false until Supabase is wired and
       # the per-IP rate-limit is tuned for production traffic.
       PICOCLAW_SAAS_AUTO_PROVISION: ${PICOCLAW_SAAS_AUTO_PROVISION:-false}
-      PICOCLAW_SAAS_AUTO_PROVISION_PROFILE: ${PICOCLAW_SAAS_AUTO_PROVISION_PROFILE:-default-business}
       PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY: ${PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY:-3}
-      PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR: ${PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR:-}
+      # Auto-provision picks the workspace whose row has is_default_auto=true.
+      # Mark one via the admin UI before turning auto-provision on, otherwise
+      # Clara's qualifier fails fast with a clear error.
       # Supabase: source of truth for tenant dashboard logins when set. Leave
       # blank to keep the legacy local sessions auth path (no behavior change
       # to existing tenants — auth_backend='local' rows ignore these vars).
@@ -249,14 +250,11 @@ services:
     volumes:
       - /srv/saas/tenants:/srv/saas/tenants
       - controlplane_data:/var/lib/picoclaw-saas
-      # Read-only bind for the canonical operator workspace that auto-provision
-      # copies into each new tenant volume. Same path inside/outside the
-      # container so PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR is portable.
-      # OverlayWorkspace skips operator runtime state (whatsapp/, sessions/,
-      # state/, *.log, *.db) and treats memory/* as non-clobbering so new
-      # tenants get the empty template files and existing tenants keep what
-      # they've accumulated.
-      - /srv/picoclaw/workspace:/srv/picoclaw/workspace:ro
+      # Workspaces directory — admin-managed tenant templates. Same path
+      # inside/outside the container so PICOCLAW_WORKSPACE_DIR is portable.
+      # Read-write so the admin file editor can persist edits and the
+      # docker-spawned vite build can write to frontend-dist/.
+      - /srv/picoclaw-workspaces:/srv/picoclaw-workspaces
     networks:
       - saas_edge
       - saas_llm

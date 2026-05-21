@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/sipeed/picoclaw/pkg/logger"
@@ -24,6 +25,14 @@ var frontendFS embed.FS
 // /src/*, and HTML SPA fallbacks are reverse-proxied to that URL — yielding
 // real HMR without rebuilding the Go binary on every frontend edit.
 const viteDevURLEnv = "PICOCLAW_VITE_DEV_URL"
+
+// frontendDistDirEnv points at a host directory containing a compiled vite
+// build (the same shape as the embedded `dist/`). When set, the launcher
+// serves the SPA from that directory instead of the embedded one — this is
+// how per-workspace custom frontends reach the browser. The controlplane's
+// Provisioner bind-mounts the workspace's frontend-dist/ into the tenant
+// container and sets this env var to the mount target.
+const frontendDistDirEnv = "PICOCLAW_FRONTEND_DIST_DIR"
 
 // registerEmbedRoutes sets up the HTTP handler to serve the embedded frontend files
 func registerEmbedRoutes(mux *http.ServeMux) {
@@ -47,6 +56,28 @@ func registerEmbedRoutes(mux *http.ServeMux) {
 		}
 	}
 
+	// Per-workspace frontend override: when the SaaS controlplane bind-mounts
+	// a workspace's compiled `frontend-dist/` into the container and sets
+	// PICOCLAW_FRONTEND_DIST_DIR, serve from that directory instead of the
+	// embedded dist. Falls back to embed if the directory exists but is empty
+	// (workspace created but operator hasn't clicked "Compilar" yet).
+	if dir := strings.TrimSpace(os.Getenv(frontendDistDirEnv)); dir != "" {
+		if info, err := os.Stat(filepath.Join(dir, "index.html")); err == nil && !info.IsDir() && info.Size() > 0 {
+			logger.InfoC("web", fmt.Sprintf("serving frontend from %s=%s", frontendDistDirEnv, dir))
+			mux.Handle("/", spaHandler(os.DirFS(dir)))
+			return
+		}
+		logger.WarnC(
+			"web",
+			fmt.Sprintf(
+				"%s=%s set but %s/index.html missing or empty — falling back to embedded dist",
+				frontendDistDirEnv,
+				dir,
+				dir,
+			),
+		)
+	}
+
 	// Attempt to get the subdirectory 'dist' where Vite usually builds
 	subFS, err := fs.Sub(frontendFS, "dist")
 	if err != nil {
@@ -59,46 +90,49 @@ func registerEmbedRoutes(mux *http.ServeMux) {
 		return
 	}
 
-	fileServer := http.FileServer(http.FS(subFS))
+	mux.Handle("/", spaHandler(subFS))
+}
 
-	// Serve static assets and fallback to index.html for SPA routes.
-	mux.Handle(
-		"/",
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet && r.Method != http.MethodHead {
-				http.NotFound(w, r)
+// spaHandler returns an http.Handler that serves static files from the given
+// fs.FS, falling back to /index.html for any unknown non-asset path so the
+// React Router can take over. Shared by the embedded-dist path and the
+// PICOCLAW_FRONTEND_DIST_DIR override so both behave identically.
+func spaHandler(root fs.FS) http.Handler {
+	fileServer := http.FileServer(http.FS(root))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Keep unknown API paths as 404 instead of falling back to SPA entry.
+		if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
+			http.NotFound(w, r)
+			return
+		}
+
+		cleanPath := path.Clean(strings.TrimPrefix(r.URL.Path, "/"))
+		if cleanPath == "." {
+			cleanPath = ""
+		}
+
+		// Existing static files/directories should be served directly.
+		if cleanPath != "" {
+			if _, statErr := fs.Stat(root, cleanPath); statErr == nil {
+				fileServer.ServeHTTP(w, r)
 				return
 			}
-
-			// Keep unknown API paths as 404 instead of falling back to SPA entry.
-			if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
-				http.NotFound(w, r)
+			// Missing asset-like paths should remain 404.
+			if strings.Contains(path.Base(cleanPath), ".") {
+				fileServer.ServeHTTP(w, r)
 				return
 			}
+		}
 
-			cleanPath := path.Clean(strings.TrimPrefix(r.URL.Path, "/"))
-			if cleanPath == "." {
-				cleanPath = ""
-			}
-
-			// Existing static files/directories should be served directly.
-			if cleanPath != "" {
-				if _, statErr := fs.Stat(subFS, cleanPath); statErr == nil {
-					fileServer.ServeHTTP(w, r)
-					return
-				}
-				// Missing asset-like paths should remain 404.
-				if strings.Contains(path.Base(cleanPath), ".") {
-					fileServer.ServeHTTP(w, r)
-					return
-				}
-			}
-
-			indexReq := r.Clone(r.Context())
-			indexReq.URL.Path = "/"
-			fileServer.ServeHTTP(w, indexReq)
-		}),
-	)
+		indexReq := r.Clone(r.Context())
+		indexReq.URL.Path = "/"
+		fileServer.ServeHTTP(w, indexReq)
+	})
 }
 
 // newViteProxyHandler returns an http.Handler that reverse-proxies every

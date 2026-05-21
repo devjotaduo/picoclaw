@@ -17,8 +17,8 @@ export type Tenant = {
   created_at: string;
   suspended_at: string | null;
   crm_contact_id?: number | null;
-  launcher_profile_id?: string | null;
-  launcher_profile_version_applied?: number | null;
+  workspace_id?: string | null;
+  workspace_version_applied?: number | null;
 };
 
 export type CreateTenantInput = {
@@ -28,7 +28,9 @@ export type CreateTenantInput = {
   monthly_budget_usd?: number;
   mem_limit_mb?: number;
   cpu_quota?: number;
-  launcher_profile_id?: string;
+  // workspace_id is required: it selects the Workspace whose home/ subtree
+  // seeds the tenant volume and whose frontend-dist/ is bind-mounted.
+  workspace_id: string;
 };
 
 export type CreateTenantResponse = {
@@ -93,13 +95,6 @@ export async function resumeTenant(id: string) {
 
 export async function restartTenant(id: string) {
   return api<void>(`/api/v1/tenants/${id}/restart`, { method: "POST" });
-}
-
-export async function applyLauncherProfile(id: string, launcherProfileId: string) {
-  return api<{ ok: boolean; backup_dir: string }>(`/api/v1/tenants/${id}/apply-profile`, {
-    method: "POST",
-    body: JSON.stringify({ launcher_profile_id: launcherProfileId }),
-  });
 }
 
 export async function deleteTenant(id: string) {

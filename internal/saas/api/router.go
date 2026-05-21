@@ -24,7 +24,7 @@ type Handler struct {
 	Invites        *store.InviteStore
 	Audit          *store.AuditStore
 	Tenants        *store.TenantStore
-	Profiles       *store.LauncherProfileStore
+	Workspaces     *store.WorkspaceStore
 	CompanyIntakes *store.CompanyIntakeStore
 	Usage          *store.UsageStore
 	Provisioner    *tenant.Provisioner
@@ -58,7 +58,7 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		Invites:        &store.InviteStore{DB: db},
 		Audit:          &store.AuditStore{DB: db},
 		Tenants:        &store.TenantStore{DB: db},
-		Profiles:       &store.LauncherProfileStore{DB: db},
+		Workspaces:     &store.WorkspaceStore{DB: db},
 		CompanyIntakes: &store.CompanyIntakeStore{DB: db},
 		Usage:          &store.UsageStore{DB: db},
 		Provisioner:    prov,
@@ -168,18 +168,17 @@ func (h *Handler) Routes() http.Handler {
 				r.Use(h.requirePlatformAdmin)
 				r.Post("/tenants", h.handleCreateTenant)
 				r.Get("/launcher-policy/catalog", h.handleGetLauncherPolicyCatalog)
-				r.Get("/launcher-profiles", h.handleListLauncherProfiles)
-				r.Post("/launcher-profiles", h.handleCreateLauncherProfile)
-				r.Get("/launcher-profiles/{id}", h.handleGetLauncherProfile)
-				r.Put("/launcher-profiles/{id}", h.handleUpdateLauncherProfile)
-				r.Delete("/launcher-profiles/{id}", h.handleDeleteLauncherProfile)
-				r.Get("/launcher-profiles/{id}/seed", h.handleGetLauncherProfileSeed)
-				r.Put("/launcher-profiles/{id}/seed", h.handlePutLauncherProfileSeed)
-				r.Get("/launcher-profiles/{id}/seed/files", h.handleListLauncherProfileSeedFiles)
-				r.Post("/launcher-profiles/{id}/seed/files", h.handleUploadLauncherProfileSeedFile)
-				r.Delete("/launcher-profiles/{id}/seed/files", h.handleDeleteLauncherProfileSeedFile)
-				r.Post("/launcher-profiles/{id}/import-standalone", h.handleImportStandaloneLauncherProfile)
-				r.Post("/tenants/{id}/apply-profile", h.handleApplyLauncherProfile)
+
+				// Workspaces — single source of truth for tenant content.
+				r.Get("/workspaces", h.handleListWorkspaces)
+				r.Post("/workspaces", h.handleCreateWorkspace)
+				r.Post("/workspaces/import-from-home", h.handleImportWorkspaceFromHome)
+				r.Get("/workspaces/{id}", h.handleGetWorkspace)
+				r.Put("/workspaces/{id}", h.handleUpdateWorkspace)
+				r.Delete("/workspaces/{id}", h.handleDeleteWorkspace)
+				r.Get("/workspaces/{id}/files", h.handleReadWorkspaceFile)
+				r.Put("/workspaces/{id}/files", h.handleWriteWorkspaceFile)
+				r.Post("/workspaces/{id}/frontend/build", h.handleBuildWorkspaceFrontend)
 				r.Post("/tenants/onboarding/bootstrap", h.handleBootstrapOnboardingTenant)
 				r.Post("/tenants/{id}/clone", h.handleCloneTenant)
 				r.Get("/tenants/{id}/sanity", h.handleTenantSanity)

@@ -18,11 +18,11 @@ import (
 )
 
 type Provisioner struct {
-	Cfg      *config.Config
-	Tenants  *store.TenantStore
-	Profiles *store.LauncherProfileStore
-	Docker   *DockerClient
-	LiteLLM  *litellm.Client // optional; when nil the tenant is provisioned without an LLM key
+	Cfg        *config.Config
+	Tenants    *store.TenantStore
+	Workspaces *store.WorkspaceStore
+	Docker     *DockerClient
+	LiteLLM    *litellm.Client // optional; when nil the tenant is provisioned without an LLM key
 	// Supabase is the (optional) handle used during Delete() to remove the
 	// Supabase Auth user for tenants with auth_backend='supabase'. Nil when
 	// Supabase isn't configured — cleanup of those tenants is a no-op.
@@ -31,22 +31,27 @@ type Provisioner struct {
 
 func NewProvisioner(cfg *config.Config, db *store.DB, dk *DockerClient, ll *litellm.Client) *Provisioner {
 	return &Provisioner{
-		Cfg:      cfg,
-		Tenants:  &store.TenantStore{DB: db},
-		Profiles: &store.LauncherProfileStore{DB: db},
-		Docker:   dk,
-		LiteLLM:  ll,
+		Cfg:        cfg,
+		Tenants:    &store.TenantStore{DB: db},
+		Workspaces: &store.WorkspaceStore{DB: db},
+		Docker:     dk,
+		LiteLLM:    ll,
 	}
 }
 
 type CreateInput struct {
-	DisplayName       string
-	OwnerEmail        string
-	Subdomain         string
-	MonthlyBudgetUSD  *float64
-	MemLimitMB        int
-	CPUQuota          float64
-	LauncherProfileID string
+	DisplayName      string
+	OwnerEmail       string
+	Subdomain        string
+	MonthlyBudgetUSD *float64
+	MemLimitMB       int
+	CPUQuota         float64
+	// WorkspaceID is required: it picks the Workspace whose home/ subtree
+	// seeds the tenant volume and whose frontend-dist/ gets bind-mounted
+	// into the container. The auto-provisioner resolves this from
+	// Workspaces.GetDefaultAuto(); the manual admin form passes whatever
+	// the operator picked from the dropdown.
+	WorkspaceID string
 	// SkipDashboardPassword tells the provisioner to NOT seed launcher-auth.db
 	// with the generated password. Auto-provision uses this when Supabase Auth
 	// is the source of truth for the tenant's dashboard login — seeding a
@@ -107,9 +112,15 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		return nil, fmt.Errorf("password: %w", err)
 	}
 
-	profile, err := p.resolveProfile(ctx, in.LauncherProfileID)
+	if in.WorkspaceID == "" {
+		return nil, errors.New("workspace_id is required (no auto-default and no manual selection provided)")
+	}
+	if p.Workspaces == nil {
+		return nil, errors.New("workspaces store is not configured")
+	}
+	ws, err := p.Workspaces.Get(ctx, in.WorkspaceID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("workspace: %w", err)
 	}
 
 	volumePath := filepath.Join(p.Cfg.TenantHostDataDir, id)
@@ -119,28 +130,26 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		backend = "local"
 	}
 	t := &store.Tenant{
-		ID:               id,
-		DisplayName:      in.DisplayName,
-		OwnerEmail:       in.OwnerEmail,
-		Subdomain:        in.Subdomain,
-		Status:           store.StatusProvisioning,
-		ContainerImage:   p.Cfg.TenantImage,
-		VolumePath:       volumePath,
-		MonthlyBudgetUSD: in.MonthlyBudgetUSD,
-		MemLimitMB:       in.MemLimitMB,
-		CPUQuota:         in.CPUQuota,
-		AuthBackend:      backend,
-		IsPublic:         in.IsPublic,
-	}
-	if profile != nil {
-		t.LauncherProfileID = &profile.ID
-		t.LauncherProfileVersionApplied = &profile.Version
+		ID:                      id,
+		DisplayName:             in.DisplayName,
+		OwnerEmail:              in.OwnerEmail,
+		Subdomain:               in.Subdomain,
+		Status:                  store.StatusProvisioning,
+		ContainerImage:          p.Cfg.TenantImage,
+		VolumePath:              volumePath,
+		MonthlyBudgetUSD:        in.MonthlyBudgetUSD,
+		MemLimitMB:              in.MemLimitMB,
+		CPUQuota:                in.CPUQuota,
+		AuthBackend:             backend,
+		IsPublic:                in.IsPublic,
+		WorkspaceID:             &ws.ID,
+		WorkspaceVersionApplied: &ws.Version,
 	}
 	if err := p.Tenants.Insert(ctx, t); err != nil {
 		return nil, fmt.Errorf("insert tenant: %w", err)
 	}
 
-	if err := p.runProvision(ctx, t, password, profile, in.SkipDashboardPassword); err != nil {
+	if err := p.runProvision(ctx, t, password, ws, in.SkipDashboardPassword); err != nil {
 		msg := err.Error()
 		_ = p.Tenants.SetStatus(ctx, id, store.StatusError, &msg)
 		return nil, err
@@ -153,48 +162,40 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 	}, nil
 }
 
+// runProvision is the only provisioning flow. Replaces the seven-step
+// pile of CopyVolumeRaw + ApplyProfileSeed + … with five steps:
+// mkdir → copy workspace home → optional dashboard password →
+// LiteLLM key + placeholder substitution → write launcher policy →
+// docker create+start. The container gets a second bind-mount when the
+// workspace has a compiled frontend (buildSpec attaches it).
 func (p *Provisioner) runProvision(
 	ctx context.Context,
 	t *store.Tenant,
 	password string,
-	profile *store.LauncherProfile,
+	ws *store.Workspace,
 	skipDashboardPassword bool,
 ) error {
 	if err := os.MkdirAll(t.VolumePath, 0o755); err != nil {
 		return fmt.Errorf("mkdir volume: %w", err)
 	}
-	if p.Cfg.TenantTemplateDir == "" {
-		return fmt.Errorf("TENANT_TEMPLATE_DIR is not configured: cannot mirror the main picoclaw home")
+
+	// 1. Workspace home → tenant volume. Single authoritative copy step.
+	if err := CopyWorkspaceHome(ws.HostPath, t.VolumePath); err != nil {
+		return fmt.Errorf("copy workspace home: %w", err)
 	}
-	// Raw cópia do picoclaw principal: credenciais, configs, env, workspace e
-	// agentes viajam todos para o tenant. Só sobrescrevemos abaixo o que é
-	// estritamente per-tenant (senha do dashboard e chave LiteLLM).
-	if err := CopyVolumeRaw(p.Cfg.TenantTemplateDir, t.VolumePath); err != nil {
-		return fmt.Errorf("mirror picoclaw home: %w", err)
-	}
-	if profile != nil {
-		if _, err := ApplyProfileSeed(profile.SeedPath, t.VolumePath); err != nil {
-			return fmt.Errorf("apply profile seed: %w", err)
-		}
-		if err := WriteLauncherPolicy(t.VolumePath, profile.RolePolicy()); err != nil {
-			return fmt.Errorf("write launcher policy: %w", err)
-		}
-	} else if err := WriteLauncherPolicy(t.VolumePath, nil); err != nil {
-		return fmt.Errorf("write launcher policy: %w", err)
-	}
+
+	// 2. Dashboard password (skipped for Supabase / public tenants).
 	if !skipDashboardPassword {
 		if err := SeedDashboardPassword(ctx, t.VolumePath, password); err != nil {
 			return fmt.Errorf("seed password: %w", err)
 		}
 	}
 
-	// LiteLLM virtual key — generated BEFORE container start so it can be
-	// written into config.json on the volume. Plaintext key is never persisted
-	// in the database; only the sha256 hash for audit and the key_alias
-	// (= tenant id) for delete.
-	exactProfileConfig := profile != nil && HasExactSeedFile(profile.SeedPath, "config.json")
-	llmKey := ""
-	if p.LiteLLM != nil && !exactProfileConfig {
+	// 3. Per-tenant LiteLLM virtual key + placeholder substitution. The
+	// workspace's config.json carries "${LITELLM_KEY}" / "${LITELLM_URL}" /
+	// "${TENANT_ID}" placeholders that get filled in here. We never write
+	// config.json from scratch — operator owns the schema.
+	if p.LiteLLM != nil {
 		out, err := p.LiteLLM.GenerateKey(ctx, litellm.GenerateKeyInput{
 			TenantID:         t.ID,
 			MonthlyBudgetUSD: t.MonthlyBudgetUSD,
@@ -202,25 +203,31 @@ func (p *Provisioner) runProvision(
 		if err != nil {
 			return fmt.Errorf("litellm key: %w", err)
 		}
-		llmKey = out.Key
 		h := sha256.Sum256([]byte(out.Key))
 		if err := p.Tenants.SetLiteLLMKey(ctx, t.ID, out.KeyName, hex.EncodeToString(h[:])); err != nil {
-			// best-effort rollback of the orphaned LiteLLM key
 			_ = p.LiteLLM.DeleteKey(ctx, t.ID)
 			return fmt.Errorf("save litellm key: %w", err)
 		}
-	}
-
-	if !exactProfileConfig {
-		if err := SeedPicoConfig(ctx, t.VolumePath, p.Cfg.LiteLLMURL, llmKey); err != nil {
-			return fmt.Errorf("seed picoclaw config: %w", err)
+		if err := SubstituteConfigPlaceholders(t.VolumePath, map[string]string{
+			"${LITELLM_KEY}": out.Key,
+			"${LITELLM_URL}": p.Cfg.LiteLLMURL,
+			"${TENANT_ID}":   t.ID,
+		}); err != nil {
+			return fmt.Errorf("substitute placeholders: %w", err)
 		}
 	}
-	if err := EnsureTenantWhatsAppNativeConfig(t.VolumePath); err != nil {
-		return fmt.Errorf("ensure whatsapp native config: %w", err)
+
+	// 4. RBAC from the workspace's role_policy_json DB column.
+	if err := WriteLauncherPolicy(t.VolumePath, ws.RolePolicy()); err != nil {
+		return fmt.Errorf("write launcher policy: %w", err)
 	}
 
+	// 5. Container with two binds (home + optional frontend-dist). The
+	// frontend-dist bind is attached by buildSpec when t.WorkspaceID is set
+	// and the workspace has a compiled build — so Recreate/lifecycle.Restart
+	// inherit the same mount automatically without re-running this path.
 	spec := p.buildSpec(t)
+
 	containerID, err := p.Docker.CreateAndStart(ctx, spec)
 	if err != nil {
 		return fmt.Errorf("docker create: %w", err)
@@ -305,15 +312,15 @@ func (p *Provisioner) CloneFromTenant(ctx context.Context, in CloneInput) (*Crea
 		MemLimitMB:       in.MemLimitMB,
 		CPUQuota:         in.CPUQuota,
 	}
-	// Preserve the source's launcher_profile_id so the new tenant inherits the
-	// same RBAC matrix and shows up grouped with its sibling in admin UIs.
-	if src.LauncherProfileID != nil {
-		pid := *src.LauncherProfileID
-		t.LauncherProfileID = &pid
+	// Inherit the source's workspace so the clone shows up in admin grouped
+	// with its sibling and the bind-mount of frontend-dist follows.
+	if src.WorkspaceID != nil {
+		wid := *src.WorkspaceID
+		t.WorkspaceID = &wid
 	}
-	if src.LauncherProfileVersionApplied != nil {
-		v := *src.LauncherProfileVersionApplied
-		t.LauncherProfileVersionApplied = &v
+	if src.WorkspaceVersionApplied != nil {
+		v := *src.WorkspaceVersionApplied
+		t.WorkspaceVersionApplied = &v
 	}
 
 	if err := p.Tenants.Insert(ctx, t); err != nil {
@@ -343,21 +350,19 @@ func (p *Provisioner) runProvisionClone(ctx context.Context, t *store.Tenant, sr
 		return fmt.Errorf("copy volume raw: %w", err)
 	}
 
-	// Re-derive launcher_policy.json from the source tenant's applied profile
-	// (if any). The raw copy already pulled it across; this just refreshes it
-	// in case the source had local edits we don't want to inherit.
-	if src.LauncherProfileID != nil && p.Profiles != nil {
-		if profile, err := p.Profiles.Get(ctx, *src.LauncherProfileID); err == nil && profile != nil {
-			if err := WriteLauncherPolicy(t.VolumePath, profile.RolePolicy()); err != nil {
+	// Refresh launcher_policy.json from the source's workspace (when one is
+	// linked). The raw copy already pulled the file across; this rewrites it
+	// so any local edits to the source's policy file don't leak.
+	if src.WorkspaceID != nil && p.Workspaces != nil {
+		if ws, err := p.Workspaces.Get(ctx, *src.WorkspaceID); err == nil && ws != nil {
+			if err := WriteLauncherPolicy(t.VolumePath, ws.RolePolicy()); err != nil {
 				return fmt.Errorf("write launcher policy: %w", err)
 			}
 		}
 	}
 
-	// Generate a fresh LiteLLM key for the new tenant. The source's
-	// litellm.key is for src.ID, so writing it into this volume would let the
-	// new tenant burn the source's budget. Overwrite it with the new key.
-	llmKey := ""
+	// Generate a fresh LiteLLM key for the cloned tenant and rewrite the
+	// copied config.json so it stops billing the source tenant's budget.
 	if p.LiteLLM != nil {
 		out, err := p.LiteLLM.GenerateKey(ctx, litellm.GenerateKeyInput{
 			TenantID:         t.ID,
@@ -366,19 +371,14 @@ func (p *Provisioner) runProvisionClone(ctx context.Context, t *store.Tenant, sr
 		if err != nil {
 			return fmt.Errorf("litellm key: %w", err)
 		}
-		llmKey = out.Key
 		h := sha256.Sum256([]byte(out.Key))
 		if err := p.Tenants.SetLiteLLMKey(ctx, t.ID, out.KeyName, hex.EncodeToString(h[:])); err != nil {
 			_ = p.LiteLLM.DeleteKey(ctx, t.ID)
 			return fmt.Errorf("save litellm key: %w", err)
 		}
-	}
-
-	if err := SeedPicoConfig(ctx, t.VolumePath, p.Cfg.LiteLLMURL, llmKey); err != nil {
-		return fmt.Errorf("seed picoclaw config: %w", err)
-	}
-	if err := EnsureTenantWhatsAppNativeConfig(t.VolumePath); err != nil {
-		return fmt.Errorf("ensure whatsapp native config: %w", err)
+		if err := RewriteConfigLiteLLMKey(t.VolumePath, out.Key); err != nil {
+			return fmt.Errorf("rewrite config litellm key: %w", err)
+		}
 	}
 
 	spec := p.buildSpec(t)
@@ -396,100 +396,6 @@ func (p *Provisioner) runProvisionClone(ctx context.Context, t *store.Tenant, sr
 		return fmt.Errorf("set active: %w", err)
 	}
 	return nil
-}
-
-func (p *Provisioner) resolveProfile(ctx context.Context, profileID string) (*store.LauncherProfile, error) {
-	if p.Profiles == nil {
-		return nil, nil
-	}
-	if profileID != "" {
-		profile, err := p.Profiles.Get(ctx, profileID)
-		if err != nil {
-			return nil, fmt.Errorf("launcher profile: %w", err)
-		}
-		return profile, nil
-	}
-	profile, err := p.Profiles.GetDefault(ctx)
-	if err != nil {
-		if errors.Is(err, store.ErrLauncherProfileNotFound) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("launcher default profile: %w", err)
-	}
-	return profile, nil
-}
-
-func (p *Provisioner) ApplyProfile(ctx context.Context, tenantID, profileID string) (string, error) {
-	if p.Profiles == nil {
-		return "", fmt.Errorf("launcher profiles are not configured")
-	}
-	t, err := p.Tenants.Get(ctx, tenantID)
-	if err != nil {
-		return "", err
-	}
-	profile, err := p.Profiles.Get(ctx, profileID)
-	if err != nil {
-		return "", err
-	}
-	backupDir, err := ApplyProfileSeed(profile.SeedPath, t.VolumePath)
-	if err != nil {
-		return backupDir, fmt.Errorf("apply profile seed: %w", err)
-	}
-	if err := WriteLauncherPolicy(t.VolumePath, profile.RolePolicy()); err != nil {
-		return backupDir, fmt.Errorf("write launcher policy: %w", err)
-	}
-	if !HasExactSeedFile(profile.SeedPath, "config.json") {
-		if err := p.ensureTenantLiteLLMConfig(ctx, t); err != nil {
-			return backupDir, fmt.Errorf("ensure litellm config: %w", err)
-		}
-	}
-	if err := EnsureTenantWhatsAppNativeConfig(t.VolumePath); err != nil {
-		return backupDir, fmt.Errorf("ensure whatsapp native config: %w", err)
-	}
-	if err := p.Tenants.SetLauncherProfileApplied(ctx, t.ID, profile.ID, profile.Version); err != nil {
-		return backupDir, err
-	}
-	if p.Docker != nil && t.ContainerID != nil && *t.ContainerID != "" && t.Status == store.StatusActive {
-		if err := p.Restart(ctx, t.ID); err != nil {
-			return backupDir, err
-		}
-	}
-	return backupDir, nil
-}
-
-func (p *Provisioner) ensureTenantLiteLLMConfig(ctx context.Context, t *store.Tenant) error {
-	if p.Cfg == nil || strings.TrimSpace(p.Cfg.LiteLLMURL) == "" {
-		return nil
-	}
-	keyPath := filepath.Join(t.VolumePath, "litellm.key")
-	if b, err := os.ReadFile(keyPath); err == nil {
-		if key := strings.TrimSpace(string(b)); key != "" {
-			return SeedPicoConfig(ctx, t.VolumePath, p.Cfg.LiteLLMURL, key)
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("read litellm.key: %w", err)
-	}
-
-	if p.LiteLLM == nil {
-		return nil
-	}
-	// If the plaintext file was lost but the LiteLLM alias may still exist,
-	// remove the stale alias first. The plaintext key is only returned at
-	// generation time, so rotating is the only way to restore the tenant volume.
-	_ = p.LiteLLM.DeleteKey(ctx, t.ID)
-	out, err := p.LiteLLM.GenerateKey(ctx, litellm.GenerateKeyInput{
-		TenantID:         t.ID,
-		MonthlyBudgetUSD: t.MonthlyBudgetUSD,
-	})
-	if err != nil {
-		return fmt.Errorf("litellm key: %w", err)
-	}
-	h := sha256.Sum256([]byte(out.Key))
-	if err := p.Tenants.SetLiteLLMKey(ctx, t.ID, out.KeyName, hex.EncodeToString(h[:])); err != nil {
-		_ = p.LiteLLM.DeleteKey(ctx, t.ID)
-		return fmt.Errorf("save litellm key: %w", err)
-	}
-	return SeedPicoConfig(ctx, t.VolumePath, p.Cfg.LiteLLMURL, out.Key)
 }
 
 func (p *Provisioner) buildSpec(t *store.Tenant) ContainerSpec {
@@ -537,7 +443,7 @@ func (p *Provisioner) buildSpec(t *store.Tenant) ContainerSpec {
 		env["PICOCLAW_ALLOWED_CHANNELS"] = "public-web"
 	}
 
-	return ContainerSpec{
+	spec := ContainerSpec{
 		Name:        "tenant-" + t.ID,
 		Image:       t.ContainerImage,
 		Env:         env,
@@ -549,4 +455,25 @@ func (p *Provisioner) buildSpec(t *store.Tenant) ContainerSpec {
 		NetworkLLM:  p.Cfg.TenantNetworkLLM,
 		Labels:      labels,
 	}
+
+	// Workspace-backed tenants get a second bind-mount for the compiled
+	// frontend so Recreate / lifecycle.Restart inherit the visual variant
+	// automatically (instead of falling back to the embedded dist whenever
+	// the container is recreated outside the initial provision flow).
+	if t.WorkspaceID != nil && *t.WorkspaceID != "" && p.Workspaces != nil {
+		// Best-effort lookup — if the workspace was deleted out-of-band the
+		// container still boots, just without the custom frontend.
+		if ws, err := p.Workspaces.Get(context.Background(), *t.WorkspaceID); err == nil {
+			if HasBuiltFrontend(ws.HostPath) {
+				spec.ExtraMounts = append(spec.ExtraMounts, ContainerMount{
+					Source:   WorkspaceFrontendDistPath(ws.HostPath),
+					Target:   WorkspaceFrontendMountTarget,
+					ReadOnly: true,
+				})
+				spec.Env["PICOCLAW_FRONTEND_DIST_DIR"] = WorkspaceFrontendMountTarget
+			}
+		}
+	}
+
+	return spec
 }

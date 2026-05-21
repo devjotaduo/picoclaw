@@ -26,3 +26,15 @@ Pode ser chamada por:
 - Clara
 - Atendimento Humano
 
+## PENDENCIAS: contatos e grupos autorizados
+
+Rafael não pode atuar (avisos, relatórios, cobranças) enquanto não houver
+pelo menos um número/grupo cadastrado abaixo. Clara/Luna não pode receber
+cliente real sem ter o WhatsApp comercial confirmado.
+
+- Número do dono (formato 5511999999999, sem +)
+- Número do gerente (opcional, mas recomendado)
+- Grupo interno da empresa (jid do grupo do WhatsApp)
+- WhatsApp comercial (atendente principal)
+- Grupo de atendimento (se houver triagem em grupo)
+
