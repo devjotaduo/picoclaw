@@ -57,6 +57,21 @@ type CreateInput struct {
 	// AuthBackend records how the controlplane will authenticate this
 	// tenant's dashboard requests: "local" (default) or "supabase".
 	AuthBackend string
+	// IsPublic marks the tenant as a public-facing service. When true,
+	// SkipDashboardPassword is forced on (no human owner password) and the
+	// resulting Tenant row has is_public=true so the gateway can later
+	// dispense with Supabase JWT verification on /api/public/* routes.
+	IsPublic bool
+}
+
+// normalize applies CreateInput defaults and consistency rules. Currently
+// it only enforces that public tenants skip the dashboard-password seed
+// (public tenants have no human owner), but it's the place to add future
+// coupled-field rules without growing Create with one-off if blocks.
+func (in *CreateInput) normalize() {
+	if in.IsPublic {
+		in.SkipDashboardPassword = true
+	}
 }
 
 type CreateOutput struct {
@@ -79,6 +94,8 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 	if in.CPUQuota <= 0 {
 		in.CPUQuota = 0.5
 	}
+	// Public tenants have no human owner; normalize() forces the bcrypt seed off.
+	in.normalize()
 
 	id, err := GenerateID(in.Subdomain)
 	if err != nil {
@@ -113,6 +130,7 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		MemLimitMB:       in.MemLimitMB,
 		CPUQuota:         in.CPUQuota,
 		AuthBackend:      backend,
+		IsPublic:         in.IsPublic,
 	}
 	if profile != nil {
 		t.LauncherProfileID = &profile.ID
