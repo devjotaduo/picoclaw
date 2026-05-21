@@ -27,6 +27,14 @@ type onboardingCallbackBody struct {
 	Timestamp       int64  `json:"ts"`
 	ContactEmail    string `json:"contact_email,omitempty"`
 	ContactWhatsApp string `json:"contact_whatsapp,omitempty"`
+	// VisitorIP carries the visitor's real IP (the one the public-web
+	// channel hashed into CanonicalSenderID). The skill picks it up from
+	// $PICOCLAW_VISITOR_IP set by the channel at message dispatch time.
+	// Used to key AutoProvisioner.Run's per-IP rate limiter — without it
+	// the limiter would see only the controlplane's loopback RemoteAddr
+	// for every callback and become useless. Optional: when empty the
+	// controlplane falls back to clientIP(r) (= request RemoteAddr).
+	VisitorIP string `json:"visitor_ip,omitempty"`
 }
 
 // handleOnboardingCallback receives HMAC-authenticated requests from the
@@ -108,9 +116,17 @@ func (h *Handler) handleOnboardingCallback(w http.ResponseWriter, r *http.Reques
 		// company_intakes.go:310-341.
 		notLinked := submitted.LinkedTenantID == nil || *submitted.LinkedTenantID == ""
 		if h.AutoProvision != nil && notLinked && submitted.ContactEmail != "" && submitted.CompanyName != "" {
-			log.Printf("onboarding-callback: AutoProvision.Run starting intake=%s company=%q email=%q",
-				req.IntakeID, submitted.CompanyName, submitted.ContactEmail)
-			res, perr := h.AutoProvision.Run(r.Context(), submitted, clientIP(r))
+			// Prefer the visitor IP the skill captured (req.VisitorIP) over
+			// the loopback the controlplane sees on the server-to-server
+			// callback — the per-IP rate limiter is meaningless if every
+			// callback collapses to one key. stripPort normalizes both.
+			rateLimitIP := stripPort(strings.TrimSpace(req.VisitorIP))
+			if rateLimitIP == "" {
+				rateLimitIP = clientIP(r)
+			}
+			log.Printf("onboarding-callback: AutoProvision.Run starting intake=%s company=%q email=%q ip=%s",
+				req.IntakeID, submitted.CompanyName, submitted.ContactEmail, rateLimitIP)
+			res, perr := h.AutoProvision.Run(r.Context(), submitted, rateLimitIP)
 			switch {
 			case perr != nil:
 				log.Printf("onboarding-callback: AutoProvision.Run ERR intake=%s err=%v", req.IntakeID, perr)
