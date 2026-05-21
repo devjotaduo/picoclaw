@@ -1,20 +1,34 @@
 ---
 name: onboarding-mark-qualified
 description: Marca este intake como "qualificado" no controlplane Picoclaw SaaS. Use SOMENTE depois que coletou identidade, negócio, dor, e canais — não use no meio da conversa.
-version: 0.1.0
+version: 1.0.0
 language: pt-br
 ---
 
 # onboarding-mark-qualified
 
-**STATUS: stub.** O script de implementação (`scripts/mark-qualified.sh`) será adicionado na Phase 6 do plano (callback HTTP HMAC pro controlplane).
+Sinaliza ao controlplane que o visitante completou o roteiro de descoberta.
+O controlplane registra `qualified_at` e dispara os nudge emails se a sessão
+ficar ociosa.
 
-## Arguments (futuro)
+Idempotente: chamar duas vezes é seguro — o primeiro `qualified_at` é
+preservado para fins de analytics.
 
-- `intake_id` (string, required) — id do intake (passa `$INTAKE_ID` do contexto inicial).
+## Arguments
 
-## Side effects (futuro)
+- `intake_id` (string, required) — id do intake; passe SEMPRE o
+  `$INTAKE_ID` que o agente recebeu no contexto inicial da sessão.
+
+## Side effects
 
 POST autenticado pra `${PICOCLAW_ONBOARDING_CALLBACK_URL}/api/v1/onboarding-callback`
-com payload `{"intake_id":"…","action":"mark_qualified","ts":…}` assinado via HMAC-SHA256
-usando `PICOCLAW_ONBOARDING_CALLBACK_SECRET`.
+com payload `{"intake_id":"…","action":"mark_qualified","ts":…}` assinado via
+HMAC-SHA256 usando `PICOCLAW_ONBOARDING_CALLBACK_SECRET`.
+
+## Script
+
+```
+scripts/mark-qualified.sh "$INTAKE_ID"
+```
+
+Exit 0 = sucesso. Não-zero = falha (ver stderr).
