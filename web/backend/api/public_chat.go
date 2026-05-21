@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net"
 	"net/http"
 	"net/http/httputil"
 
@@ -44,11 +45,22 @@ func (h *Handler) createPublicChatProxy() *httputil.ReverseProxy {
 			// canonical sender identity. The standard library's reverse proxy
 			// rewriter already appends RemoteAddr to X-Forwarded-For; we set
 			// the header explicitly only when it would otherwise be empty.
+			//
+			// Note: r.In.RemoteAddr is typically "host:port" — strip the port
+			// so the value matches what clientIPFromRequest in the gateway
+			// expects (bare IP). Hashing the port into the identity would
+			// make the canonical sender id unstable across reconnects.
 			if r.Out.Header.Get("X-Forwarded-For") == "" {
 				if xf := r.In.Header.Get("X-Forwarded-For"); xf != "" {
 					r.Out.Header.Set("X-Forwarded-For", xf)
 				} else if ra := r.In.RemoteAddr; ra != "" {
-					r.Out.Header.Set("X-Forwarded-For", ra)
+					if host, _, err := net.SplitHostPort(ra); err == nil {
+						r.Out.Header.Set("X-Forwarded-For", host)
+					} else {
+						// Fallback: RemoteAddr didn't have a port (rare —
+						// happens behind some HTTP listeners) — use as-is.
+						r.Out.Header.Set("X-Forwarded-For", ra)
+					}
 				}
 			}
 

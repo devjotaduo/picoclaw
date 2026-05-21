@@ -28,8 +28,27 @@ if [[ -z "${ADM_SESSION_COOKIE:-}" ]]; then
   exit 1
 fi
 
-PAYLOAD=$(printf '{"display_name":"%s","subdomain":"%s","workspace_overlay_dir":"%s"}' \
-  "$DISPLAY_NAME" "$SUBDOMAIN" "$WORKSPACE_DIR")
+# Build the JSON payload with proper escaping. Prefer jq when available so
+# special characters in the env-provided values (quotes, backslashes,
+# newlines) don't break the request. Fall back to a sed-based escaper for
+# environments without jq.
+if command -v jq >/dev/null 2>&1; then
+  PAYLOAD="$(jq -n \
+    --arg display_name "$DISPLAY_NAME" \
+    --arg subdomain "$SUBDOMAIN" \
+    --arg workspace_overlay_dir "$WORKSPACE_DIR" \
+    '{display_name: $display_name, subdomain: $subdomain, workspace_overlay_dir: $workspace_overlay_dir}')"
+else
+  json_escape() {
+    # Escape backslash → \\, then double-quote → \", then collapse CR/LF.
+    # Good enough for ASCII tenant names; jq is preferred when available.
+    printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e ':a;N;$!ba;s/\n/\\n/g'
+  }
+  PAYLOAD=$(printf '{"display_name":"%s","subdomain":"%s","workspace_overlay_dir":"%s"}' \
+    "$(json_escape "$DISPLAY_NAME")" \
+    "$(json_escape "$SUBDOMAIN")" \
+    "$(json_escape "$WORKSPACE_DIR")")
+fi
 
 RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST \
   "${CONTROLPLANE_URL}/api/v1/tenants/onboarding/bootstrap" \

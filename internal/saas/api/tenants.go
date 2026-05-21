@@ -137,6 +137,19 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := h.Tenants.SetSupabaseUserID(r.Context(), out.TenantID, userID); err != nil {
+			// We've already created the tenant + Supabase user; failing to
+			// persist the linkage leaves an orphan that nobody can clean up
+			// from the admin UI later. Best-effort rollback of both sides,
+			// then surface the error with enough identifiers for manual
+			// recovery if the rollback itself fails.
+			log.Printf("rollback orphan: SetSupabaseUserID failed for tenant=%s supabase_user=%s err=%v",
+				out.TenantID, userID, err)
+			if delErr := h.Supabase.DeleteTenantUser(userID); delErr != nil {
+				log.Printf("rollback orphan: DeleteTenantUser(%s) failed: %v — MANUAL CLEANUP NEEDED in Supabase Auth dashboard", userID, delErr)
+			}
+			if delErr := h.Provisioner.Delete(r.Context(), out.TenantID); delErr != nil {
+				log.Printf("rollback orphan: Provisioner.Delete(%s) failed: %v — MANUAL CLEANUP NEEDED via docker rm + DB delete", out.TenantID, delErr)
+			}
 			writeError(w, http.StatusInternalServerError, "save supabase user id: "+err.Error())
 			return
 		}
