@@ -201,6 +201,7 @@ func (h *Handler) Routes() http.Handler {
 				r.Get("/workspaces/{id}", h.handleGetWorkspace)
 				r.Put("/workspaces/{id}", h.handleUpdateWorkspace)
 				r.Delete("/workspaces/{id}", h.handleDeleteWorkspace)
+				r.Get("/mcp/catalog", h.handleGetMCPCatalog)
 				r.Get("/workspaces/{id}/files", h.handleReadWorkspaceFile)
 				r.Get("/workspaces/{id}/files/tree", h.handleWorkspaceFilesTree)
 				r.Get("/workspaces/{id}/validate", h.handleValidateWorkspace)
