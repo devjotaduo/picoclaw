@@ -1,0 +1,901 @@
+{
+  "session": {
+    "dimensions": [
+      "chat"
+    ]
+  },
+  "version": 3,
+  "isolation": {},
+  "ui": {
+    "show_reasoning": true,
+    "show_tool_calls": true,
+    "show_model_selector": true
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/root/.picoclaw/workspace",
+      "restrict_to_workspace": true,
+      "allow_read_outside_workspace": false,
+      "provider": "litellm",
+      "model_name": "default",
+      "max_tokens": 8192,
+      "context_window": 131072,
+      "max_tool_iterations": 50,
+      "summarize_message_threshold": 20,
+      "summarize_token_percent": 75,
+      "steering_mode": "one-at-a-time",
+      "subturn": {
+        "max_depth": 0,
+        "max_concurrent": 0,
+        "default_timeout_minutes": 0,
+        "default_token_budget": 0,
+        "concurrency_timeout_sec": 0
+      },
+      "tool_feedback": {
+        "enabled": false,
+        "max_args_length": 300,
+        "separate_messages": false
+      },
+      "split_on_marker": false,
+      "max_llm_retries": 2,
+      "llm_retry_backoff_secs": 2
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "name": "Ana",
+        "avatar": {
+          "type": "preset",
+          "icon": "headset",
+          "initials": "AN",
+          "background": "#2563eb",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace",
+        "subagents": {
+          "allow_agents": [
+            "vendas"
+          ]
+        },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "tenant_owner",
+            "tenant_admin",
+            "platform_admin"
+          ],
+          "whatsapp_direct_enabled": true
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "attendant",
+          "description": "Atendente principal para informacoes, triagem, duvidas, encaminhamento e agendamento.",
+          "attendant": {
+            "departments": [
+              "vendas",
+              "suporte",
+              "financeiro",
+              "agendamento",
+              "humano"
+            ],
+            "triage_fields": [
+              "nome",
+              "contato",
+              "assunto",
+              "urgencia",
+              "melhor_canal"
+            ],
+            "escalation_rules": [
+              "reclamacao grave",
+              "risco juridico",
+              "cancelamento sensivel",
+              "desconto ou excecao",
+              "informacao nao confirmada"
+            ],
+            "scheduling_enabled": true,
+            "faq_source": "company_context"
+          }
+        }
+      },
+      {
+        "id": "vendas",
+        "name": "Leo",
+        "avatar": {
+          "type": "preset",
+          "icon": "target",
+          "initials": "LE",
+          "background": "#16a34a",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace-vendas",
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "tenant_owner",
+            "tenant_admin",
+            "platform_admin"
+          ]
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "sales",
+          "description": "Consultor comercial para qualificar leads, vender, registrar oportunidades e fazer follow-up.",
+          "sales": {
+            "funnel_stages": [
+              "novo",
+              "qualificacao",
+              "proposta",
+              "follow_up",
+              "ganho",
+              "perdido"
+            ],
+            "qualification_fields": [
+              "problema",
+              "fit",
+              "autoridade",
+              "prazo",
+              "orcamento",
+              "proximo_passo"
+            ],
+            "followup_cadence": [
+              "D+1",
+              "D+3",
+              "D+7"
+            ],
+            "crm_integration": "future",
+            "price_policy_source": "memory/pricing.md",
+            "handoff_rules": [
+              "lead qualificado com prazo",
+              "pedido de contrato",
+              "excecao comercial",
+              "duvida tecnica fora do escopo"
+            ]
+          }
+        }
+      },
+      {
+        "id": "marketing",
+        "name": "Maya",
+        "avatar": {
+          "type": "preset",
+          "icon": "sparkles",
+          "initials": "MA",
+          "background": "#f43f5e",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace-marketing",
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "tenant_owner",
+            "tenant_admin",
+            "platform_admin"
+          ]
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "marketing",
+          "description": "Especialista de marketing para posts, campanhas, catalogos, sites simples, tendencias e materiais visuais.",
+          "marketing": {
+            "platforms": [
+              "instagram",
+              "site",
+              "catalog_html"
+            ],
+            "deliverables": [
+              "post",
+              "reel_cover",
+              "carousel",
+              "stories",
+              "campaign",
+              "calendar",
+              "catalog_html",
+              "simple_site"
+            ],
+            "approval_mode": "owner_required",
+            "public_publish_dir": "public/marketing",
+            "brand_kit": {},
+            "cadence": {
+              "posts_per_week": 3,
+              "campaigns_per_month": 1,
+              "planning_horizon": "1-4 weeks"
+            },
+            "trend_sources": [
+              "instagram",
+              "google_trends",
+              "competitors"
+            ],
+            "default_image_sizes": {
+              "instagram_feed": "1080x1350",
+              "instagram_square": "1080x1080",
+              "stories_reels": "1080x1920"
+            },
+            "requires_human_review": true
+          }
+        }
+      },
+      {
+        "id": "assistente",
+        "name": "Sofia",
+        "avatar": {
+          "type": "preset",
+          "icon": "assistant",
+          "initials": "SO",
+          "background": "#7c3aed",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace-assistente",
+        "subagents": {
+          "allow_agents": [
+            "main",
+            "vendas",
+            "marketing"
+          ]
+        },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "tenant_owner",
+            "tenant_admin",
+            "platform_admin"
+          ],
+          "whatsapp_direct_enabled": true
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "assistant",
+          "description": "Assistente do dono para agenda, relatorios, documentos, workspace e coordenacao dos agentes.",
+          "assistant": {
+            "authorized_scopes": [
+              "workspace",
+              "agents",
+              "reports",
+              "documents",
+              "agenda",
+              "orchestration"
+            ],
+            "report_cadence": [
+              "daily",
+              "weekly",
+              "monthly"
+            ],
+            "can_edit_agents": true,
+            "can_call_agents": [
+              "main",
+              "vendas",
+              "marketing"
+            ],
+            "requires_confirmation": [
+              "editar agentes",
+              "alterar permissoes",
+              "publicar materiais",
+              "apagar arquivos",
+              "enviar relatorios externos"
+            ],
+            "audit_level": "high"
+          }
+        }
+      }
+    ],
+    "dispatch": {
+      "rules": [
+        {
+          "name": "orchestrator:whatsapp:main",
+          "agent": "main",
+          "when": {
+            "channel": "whatsapp"
+          },
+          "session_dimensions": [
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:panel:main",
+          "agent": "main",
+          "when": {
+            "channel": "panel",
+            "space": "agent:main"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:pico:main",
+          "agent": "main",
+          "when": {
+            "channel": "pico",
+            "space": "agent:main"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:panel:vendas",
+          "agent": "vendas",
+          "when": {
+            "channel": "panel",
+            "space": "agent:vendas"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:pico:vendas",
+          "agent": "vendas",
+          "when": {
+            "channel": "pico",
+            "space": "agent:vendas"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:panel:marketing",
+          "agent": "marketing",
+          "when": {
+            "channel": "panel",
+            "space": "agent:marketing"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:pico:marketing",
+          "agent": "marketing",
+          "when": {
+            "channel": "pico",
+            "space": "agent:marketing"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:panel:assistente",
+          "agent": "assistente",
+          "when": {
+            "channel": "panel",
+            "space": "agent:assistente"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:panel:gerente",
+          "agent": "assistente",
+          "when": {
+            "channel": "panel",
+            "space": "agent:gerente"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:pico:assistente",
+          "agent": "assistente",
+          "when": {
+            "channel": "pico",
+            "space": "agent:assistente"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:pico:gerente",
+          "agent": "assistente",
+          "when": {
+            "channel": "pico",
+            "space": "agent:gerente"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        }
+      ]
+    }
+  },
+  "evolution": {
+    "min_task_count": 2,
+    "min_success_ratio": 0.7
+  },
+  "channel_list": {
+    "dingtalk": {
+      "enabled": false,
+      "type": "dingtalk",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "client_id": ""
+      }
+    },
+    "discord": {
+      "enabled": false,
+      "type": "discord",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "proxy": "",
+        "mention_only": false
+      }
+    },
+    "feishu": {
+      "enabled": false,
+      "type": "feishu",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "app_id": "",
+        "random_reaction_emoji": null,
+        "is_lark": false
+      }
+    },
+    "irc": {
+      "enabled": false,
+      "type": "irc",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "server": "",
+        "tls": true,
+        "nick": "picoclaw",
+        "sasl_user": "",
+        "channels": []
+      }
+    },
+    "line": {
+      "enabled": false,
+      "type": "line",
+      "reasoning_channel_id": "",
+      "group_trigger": {
+        "mention_only": true
+      },
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "webhook_host": "0.0.0.0",
+        "webhook_port": 18791,
+        "webhook_path": "/webhook/line"
+      }
+    },
+    "maixcam": {
+      "enabled": false,
+      "type": "maixcam",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "host": "0.0.0.0",
+        "port": 18790
+      }
+    },
+    "matrix": {
+      "enabled": false,
+      "type": "matrix",
+      "reasoning_channel_id": "",
+      "group_trigger": {
+        "mention_only": true
+      },
+      "typing": {},
+      "placeholder": {
+        "enabled": true,
+        "text": [
+          "Thinking... 💭"
+        ]
+      },
+      "settings": {
+        "homeserver": "https://matrix.org",
+        "user_id": "",
+        "join_on_invite": true
+      }
+    },
+    "onebot": {
+      "enabled": false,
+      "type": "onebot",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "ws_url": "ws://127.0.0.1:3001",
+        "reconnect_interval": 5,
+        "group_trigger_prefix": null
+      }
+    },
+    "pico": {
+      "enabled": false,
+      "type": "pico",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "ping_interval": 30,
+        "read_timeout": 60,
+        "write_timeout": 10,
+        "max_connections": 100
+      }
+    },
+    "public-web": {
+      "enabled": false,
+      "type": "public-web",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "rate_limit_per_ip": 30,
+        "session_ttl_seconds": 1800
+      }
+    },
+    "qq": {
+      "enabled": false,
+      "type": "qq",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "app_id": "",
+        "max_message_length": 2000,
+        "max_base64_file_size_mib": 0,
+        "send_markdown": false
+      }
+    },
+    "slack": {
+      "enabled": false,
+      "type": "slack",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {}
+    },
+    "telegram": {
+      "enabled": false,
+      "type": "telegram",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {
+        "enabled": true
+      },
+      "placeholder": {
+        "enabled": true,
+        "text": [
+          "Thinking... 💭"
+        ]
+      },
+      "settings": {
+        "base_url": "",
+        "proxy": "",
+        "streaming": {
+          "enabled": true,
+          "throttle_seconds": 3,
+          "min_growth_chars": 200
+        },
+        "use_markdown_v2": false,
+        "media_group_delay_ms": 500
+      }
+    },
+    "wecom": {
+      "enabled": false,
+      "type": "wecom",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "bot_id": "",
+        "websocket_url": "wss://openws.work.weixin.qq.com",
+        "send_thinking_message": true
+      }
+    },
+    "weixin": {
+      "enabled": false,
+      "type": "weixin",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "base_url": "https://ilinkai.weixin.qq.com/",
+        "cdn_base_url": "https://novac2c.cdn.weixin.qq.com/c2c",
+        "proxy": ""
+      }
+    },
+    "whatsapp": {
+      "enabled": false,
+      "type": "whatsapp_native",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "bridge_url": "",
+        "use_native": true,
+        "session_store_path": ""
+      }
+    }
+  },
+  "model_list": [
+    {
+      "model_name": "default",
+      "provider": "litellm",
+      "model": "gpt-4o-mini",
+      "api_base": "${LITELLM_URL}",
+      "enabled": true
+    }
+  ],
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 18790,
+    "hot_reload": false,
+    "log_level": "error"
+  },
+  "events": {
+    "logging": {
+      "enabled": true,
+      "include": [
+        "agent.*"
+      ],
+      "min_severity": "info"
+    }
+  },
+  "hooks": {
+    "enabled": true,
+    "defaults": {
+      "observer_timeout_ms": 500,
+      "interceptor_timeout_ms": 5000,
+      "approval_timeout_ms": 60000
+    }
+  },
+  "tools": {
+    "allow_read_paths": null,
+    "allow_write_paths": null,
+    "filter_sensitive_data": true,
+    "filter_min_length": 8,
+    "web": {
+      "enabled": true,
+      "brave": {
+        "enabled": false,
+        "max_results": 5
+      },
+      "tavily": {
+        "enabled": false,
+        "base_url": "",
+        "max_results": 5
+      },
+      "sogou": {
+        "enabled": true,
+        "max_results": 5
+      },
+      "duckduckgo": {
+        "enabled": false,
+        "max_results": 5
+      },
+      "gemini": {
+        "enabled": false,
+        "model": "gemini-2.5-flash",
+        "max_results": 5
+      },
+      "perplexity": {
+        "enabled": false,
+        "max_results": 5
+      },
+      "searxng": {
+        "enabled": false,
+        "base_url": "",
+        "max_results": 5
+      },
+      "glm_search": {
+        "enabled": false,
+        "base_url": "https://open.bigmodel.cn/api/paas/v4/web_search",
+        "search_engine": "search_std",
+        "max_results": 5
+      },
+      "baidu_search": {
+        "enabled": false,
+        "base_url": "https://qianfan.baidubce.com/v2/ai_search/web_search",
+        "max_results": 10
+      },
+      "provider": "auto",
+      "prefer_native": true,
+      "fetch_limit_bytes": 10485760,
+      "format": "plaintext"
+    },
+    "cron": {
+      "enabled": true,
+      "exec_timeout_minutes": 5,
+      "allow_command": true
+    },
+    "exec": {
+      "enabled": true,
+      "enable_deny_patterns": true,
+      "allow_remote": true,
+      "custom_deny_patterns": null,
+      "custom_allow_patterns": null,
+      "timeout_seconds": 60
+    },
+    "skills": {
+      "enabled": true,
+      "registries": {
+        "clawhub": {
+          "base_url": "https://clawhub.ai",
+          "enabled": true
+        },
+        "github": {
+          "base_url": "https://github.com",
+          "enabled": true
+        }
+      },
+      "github": {},
+      "max_concurrent_searches": 2,
+      "search_cache": {
+        "max_size": 50,
+        "ttl_seconds": 300
+      }
+    },
+    "media_cleanup": {
+      "enabled": true,
+      "max_age_minutes": 30,
+      "interval_minutes": 5
+    },
+    "mcp": {
+      "enabled": false,
+      "discovery": {
+        "enabled": false,
+        "ttl": 5,
+        "max_search_results": 5,
+        "use_bm25": true,
+        "use_regex": false
+      },
+      "max_inline_text_chars": 16384
+    },
+    "image_generation": {
+      "enabled": false,
+      "api_base": "https://api.openai.com/v1",
+      "model": "gpt-image-1",
+      "size": "1024x1024"
+    },
+    "append_file": {
+      "enabled": true
+    },
+    "edit_file": {
+      "enabled": true
+    },
+    "find_skills": {
+      "enabled": true
+    },
+    "i2c": {
+      "enabled": false
+    },
+    "install_skill": {
+      "enabled": true
+    },
+    "list_dir": {
+      "enabled": true
+    },
+    "message": {
+      "enabled": true
+    },
+    "read_file": {
+      "enabled": true,
+      "mode": "bytes",
+      "max_read_file_size": 65536
+    },
+    "serial": {
+      "enabled": false
+    },
+    "send_file": {
+      "enabled": true
+    },
+    "send_tts": {
+      "enabled": false
+    },
+    "spawn": {
+      "enabled": true
+    },
+    "spawn_status": {
+      "enabled": false
+    },
+    "spi": {
+      "enabled": false
+    },
+    "subagent": {
+      "enabled": true
+    },
+    "save_marketing_proposal": {
+      "enabled": true
+    },
+    "tenant_manager": {
+      "enabled": true
+    },
+    "whatsapp_report_query": {
+      "enabled": true
+    },
+    "customer_lookup": {
+      "enabled": true
+    },
+    "product_lookup": {
+      "enabled": true
+    },
+    "web_fetch": {
+      "enabled": true
+    },
+    "write_file": {
+      "enabled": true
+    }
+  },
+  "heartbeat": {
+    "enabled": true,
+    "interval": 30
+  },
+  "devices": {
+    "enabled": false,
+    "monitor_usb": true
+  },
+  "voice": {
+    "echo_transcription": false
+  },
+  "build_info": {
+    "version": "dev",
+    "git_commit": "dev",
+    "build_time": "2026-05-20T17:41:21+0000",
+    "go_version": "go1.25.10"
+  }
+}

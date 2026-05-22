@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -92,15 +91,12 @@ func (h *Handler) EnsureDefaultWorkspace(ctx context.Context) error {
 		log.Printf("WARN: bootstrap workspace: embed extract failed: %v", err)
 	}
 
-	// Step 3: write a minimal home/config.json with the placeholders the
-	// provisioner substitutes (LITELLM_KEY, LITELLM_URL, TENANT_ID). Only
-	// write if absent so an operator who pre-populated home/ keeps theirs.
-	configPath := filepath.Join(homeDir, "config.json")
-	if _, err := os.Stat(configPath); errors.Is(err, os.ErrNotExist) {
-		if err := writeBaselineConfig(configPath); err != nil {
-			return fmt.Errorf("write baseline config: %w", err)
-		}
-	}
+	// Note: home/config.json comes from the embedded baseline (extracted in
+	// step 2 above when missing). That config is a sanitized snapshot of the
+	// canonical production tenant config — it carries the full agents.list
+	// + dispatch.rules + channel_list + model_list with ${LITELLM_KEY} /
+	// ${LITELLM_URL} placeholders the provisioner substitutes per tenant.
+	// No Go-side baseline generation needed.
 
 	ws := &store.Workspace{
 		ID:                slug + "-" + randomHex(3),
@@ -117,39 +113,6 @@ func (h *Handler) EnsureDefaultWorkspace(ctx context.Context) error {
 
 	log.Printf("bootstrap: created default workspace id=%s slug=%s host=%s", ws.ID, ws.Slug, ws.HostPath)
 	return nil
-}
-
-// writeBaselineConfig drops a minimal tenant config.json at path. The
-// provisioner's SubstituteConfigPlaceholders pass replaces ${LITELLM_KEY},
-// ${LITELLM_URL}, ${TENANT_ID} on first start.
-func writeBaselineConfig(path string) error {
-	baseline := map[string]any{
-		"version":   3,
-		"isolation": map[string]any{"enabled": false},
-		"agents": map[string]any{
-			"defaults": map[string]any{
-				"workspace":  "/root/.picoclaw/workspace",
-				"provider":   "litellm",
-				"model_name": "default",
-			},
-		},
-		"model_list": []map[string]any{
-			{
-				"model_name": "default",
-				"provider":   "litellm",
-				"model":      "gpt-4o-mini",
-				"api_base":   "${LITELLM_URL}",
-				"api_key":    "${LITELLM_KEY}",
-				"enabled":    true,
-			},
-		},
-		"channel_list": map[string]any{},
-	}
-	b, err := json.MarshalIndent(baseline, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, b, 0o600)
 }
 
 // isUsableDir returns true when path exists and is a directory the caller
@@ -216,8 +179,13 @@ func extractEmbeddedBaseline(dst string) error {
 			return fmt.Errorf("mkdir %s: %w", filepath.Dir(target), err)
 		}
 		mode := os.FileMode(0o644)
-		if filepath.Base(rel) == "auth.json" {
-			mode = 0o600 // contains OAuth tokens once an operator authenticates
+		base := filepath.Base(rel)
+		if base == "auth.json" || base == "config.json" {
+			// 0o600: auth.json carries OAuth tokens after `picoclaw auth
+			// login`; config.json holds the per-tenant LiteLLM key (and
+			// possibly third-party tokens like Telegram, Discord, Matrix)
+			// once the provisioner runs SubstituteConfigPlaceholders.
+			mode = 0o600
 		}
 		if err := os.WriteFile(target, data, mode); err != nil {
 			return fmt.Errorf("write %s: %w", target, err)
