@@ -182,9 +182,10 @@ func extractEmbeddedBaseline(dst string) error {
 		base := filepath.Base(rel)
 		if base == "auth.json" || base == "config.json" {
 			// 0o600: auth.json carries OAuth tokens after `picoclaw auth
-			// login`; config.json holds the per-tenant LiteLLM key (and
-			// possibly third-party tokens like Telegram, Discord, Matrix)
-			// once the provisioner runs SubstituteConfigPlaceholders.
+			// login`; config.json may carry third-party tokens (Telegram,
+			// Discord, Matrix, …) once the operator wires channels up.
+			// The per-tenant LiteLLM key lives in its own file
+			// (/root/.picoclaw/litellm.key) loaded by the launcher.
 			mode = 0o600
 		}
 		if err := os.WriteFile(target, data, mode); err != nil {
