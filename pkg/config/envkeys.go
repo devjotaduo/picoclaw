@@ -48,6 +48,15 @@ const (
 	// controlplane provisioner, e.g. "https://minhaclinica.jotaduo.com".
 	// When unset the launcher falls back to relative paths ("/public/marketing/…").
 	EnvPublicBaseURL = "PICOCLAW_PUBLIC_BASE_URL"
+
+	// EnvBufferAccessToken is the Buffer OAuth access token for the tenant's
+	// Buffer account. Used by POST /api/marketing/buffer-publish to schedule
+	// Instagram posts via the Buffer API.
+	EnvBufferAccessToken = "BUFFER_ACCESS_TOKEN"
+
+	// EnvBufferInstagramProfileID is the Buffer profile ID corresponding to
+	// the tenant's connected Instagram Business account.
+	EnvBufferInstagramProfileID = "BUFFER_INSTAGRAM_PROFILE_ID"
 )
 
 func GetHome() string {

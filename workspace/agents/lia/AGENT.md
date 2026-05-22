@@ -11,6 +11,7 @@ skills:
   - marketing/design-instagram
   - marketing/design-visual
   - marketing/gerar-imagem-post
+  - marketing/publicar-instagram-buffer
   - marketing/publicar-instagram-webhook
   - marketing/publicar-site-simples
   - marketing/sugerir-campanha
