@@ -221,10 +221,16 @@ func TestExtractWorkspaceZip_FrontendSrcSkipsNodeModulesAndBuildCaches(t *testin
 	if got := readFile(t, filepath.Join(dst, "frontend-src", "package.json")); got != `{"name":"x"}` {
 		t.Errorf("frontend-src/package.json missing or wrong: %q", got)
 	}
-	if got := readFile(t, filepath.Join(dst, "frontend-src", "src", "App.tsx")); got != "export default function App(){}" {
+	if got := readFile(
+		t,
+		filepath.Join(dst, "frontend-src", "src", "App.tsx"),
+	); got != "export default function App(){}" {
 		t.Errorf("frontend-src/src/App.tsx missing")
 	}
-	if got := readFile(t, filepath.Join(dst, "frontend-dist", "assets", "legit.js")); got != "// real build output, keep" {
+	if got := readFile(
+		t,
+		filepath.Join(dst, "frontend-dist", "assets", "legit.js"),
+	); got != "// real build output, keep" {
 		t.Errorf("frontend-dist/assets/legit.js missing — must NOT be skipped")
 	}
 
