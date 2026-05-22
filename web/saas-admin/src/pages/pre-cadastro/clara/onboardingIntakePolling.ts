@@ -28,6 +28,15 @@ export type IntakePollEvent =
 		type: "tenant_provisioned";
 		url: string;
 		subdomain: string;
+		/**
+		 * Visitor contact email — taken from intake.contact_email since the
+		 * AutoProvisioner result (which has its own `email` field) isn't
+		 * surfaced through this polling path. Empty string if the intake
+		 * row hasn't captured it yet (shouldn't happen at this point: the
+		 * controlplane's submit_intake callback requires email before
+		 * setting linked_tenant_id).
+		 */
+		email: string;
 		loginMode: "password" | "magic_link";
 	};
 
@@ -161,6 +170,7 @@ export function openOnboardingIntakePolling(
 				type: "tenant_provisioned",
 				url: after.tenant_url,
 				subdomain: after.tenant_subdomain ?? "",
+				email: after.contact_email ?? "",
 				loginMode,
 			});
 		}

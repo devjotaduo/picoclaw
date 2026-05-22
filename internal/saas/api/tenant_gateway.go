@@ -80,6 +80,15 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 	// are used for UserID/Role because the launcher's VerifyRequest rejects
 	// empty claims; the agent identifies the visitor via session id.
 	if t.IsPublic && isPublicChatRoute(r.URL.Path) {
+		// Anonymous + open-internet route — apply the per-IP cap before we
+		// burn LiteLLM budget on a flood. Health checks pass through
+		// uncounted so probes / load balancers stay cheap.
+		if h.PublicChatRateLimit != nil && !isPublicChatHealthRoute(r.URL.Path) {
+			if !h.PublicChatRateLimit.Allow(clientIP(r)) {
+				writeError(w, http.StatusTooManyRequests, "muitas mensagens, tenta de novo em um minuto")
+				return
+			}
+		}
 		h.proxyTenantRequest(w, r, target, func(req *http.Request) {
 			gatewayauth.AnnotateRequest(req, h.Cfg.GatewaySharedSecret, gatewayauth.Claims{
 				TenantID: t.ID,
@@ -348,6 +357,14 @@ func isPublicChatRoute(rawPath string) bool {
 		return true
 	}
 	return strings.HasPrefix(p, "/api/public/chat/")
+}
+
+// isPublicChatHealthRoute returns true for the health-probe endpoint that
+// load balancers / uptime monitors hit every few seconds. Excluded from
+// the per-IP cap so a single watchdog doesn't exhaust the budget; the cap
+// targets actual chat traffic (POST + SSE GET).
+func isPublicChatHealthRoute(rawPath string) bool {
+	return path.Clean("/"+strings.TrimPrefix(rawPath, "/")) == "/api/public/chat/health"
 }
 
 func rejectTenantGatewayAuth(w http.ResponseWriter, r *http.Request, baseDomain string) {

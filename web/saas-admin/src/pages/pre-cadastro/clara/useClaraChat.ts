@@ -309,10 +309,12 @@ export function useClaraChat({
 					setProvisioned({
 						url: e.url,
 						subdomain: e.subdomain,
-						// email/initial_password aren't in the polling payload;
-						// Clara already mentioned them in chat, and the visitor
-						// gets the magic link by email regardless.
-						email: "",
+						email: e.email,
+						// initial_password isn't recoverable from the intake row
+						// — it lived only in the AutoProvisioner result that
+						// submit-intake.sh returned as stdout, which Clara
+						// already echoed in chat plus the transactional email
+						// went out.
 						loginMode: e.loginMode,
 					});
 					setProvisioning("provisioned");
