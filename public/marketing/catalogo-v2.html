@@ -846,7 +846,10 @@
 
 <!-- ADMIN BAR (shown in admin mode) -->
 <div class="admin-bar hidden" id="admin-bar">
-  <span class="admin-bar__label">Modo admin</span>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="admin-bar__label">Modo admin</span>
+    <span id="sync-status" style="font-size:.72rem;transition:color .3s"></span>
+  </div>
   <div class="admin-bar__actions">
     <button class="admin-btn" onclick="adminDrawerOpen()">Gerenciar produtos</button>
     <button class="admin-btn" onclick="exportJSON()">Exportar JSON</button>
@@ -1088,10 +1091,12 @@
 
 <script>
 /* ═══════════════════════════════════════════
-   DATA LAYER — localStorage backed
+   DATA LAYER — server-first, localStorage fallback
 ═══════════════════════════════════════════ */
 const STORE_KEY = 'picoclaw_catalogo';
 const PIN_KEY   = 'picoclaw_pin';
+const CATALOG_API = '/api/marketing/catalog-data';
+const CATALOG_JSON = '/public/marketing/catalog-data.json';
 
 const DEFAULT_DATA = {
   empresa: {
@@ -1123,6 +1128,43 @@ function loadData(){
 
 function saveData(data){
   localStorage.setItem(STORE_KEY, JSON.stringify(data));
+  syncToServer(data);
+}
+
+async function syncToServer(data){
+  try {
+    const resp = await fetch(CATALOG_API, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    });
+    showSyncStatus(resp.ok ? 'Sincronizado com servidor' : 'Salvo localmente', resp.ok);
+  } catch(e) {
+    showSyncStatus('Salvo localmente (offline)', false);
+  }
+}
+
+async function loadDataFromServer(){
+  try {
+    const resp = await fetch(CATALOG_JSON+'?_='+Date.now());
+    if(resp.ok){
+      const data = await resp.json();
+      if(data && data.empresa && data.produtos){
+        localStorage.setItem(STORE_KEY, JSON.stringify(data));
+        return data;
+      }
+    }
+  } catch(e){}
+  return null;
+}
+
+function showSyncStatus(msg, ok){
+  const el = document.getElementById('sync-status');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.color = ok ? '#4ade80' : '#fbbf24';
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>{ el.textContent=''; }, 4000);
 }
 
 function getPin(){
@@ -1545,9 +1587,17 @@ window.addEventListener('hashchange', checkAdminMode);
 /* ═══════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded', async ()=>{
+  // Render immediately from localStorage/defaults for fast paint
   renderPage();
   checkAdminMode();
+
+  // Then fetch authoritative data from server (persisted across devices)
+  const serverData = await loadDataFromServer();
+  if(serverData){
+    renderPage();
+    if(adminAuthed) loadAdminEditor();
+  }
 
   // Close modal on overlay click
   document.getElementById('modal-overlay').addEventListener('click',e=>{

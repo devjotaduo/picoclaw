@@ -1,7 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"os"
@@ -19,6 +22,7 @@ func (h *Handler) registerPublicMarketingRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /public/marketing/{asset...}", h.handlePublicMarketingAsset)
 	mux.HandleFunc("HEAD /public/marketing/{asset...}", h.handlePublicMarketingAsset)
 	mux.HandleFunc("GET /api/marketing/public-base-url", h.handleMarketingPublicBaseURL)
+	mux.HandleFunc("PUT /api/marketing/catalog-data", h.handlePutCatalogData)
 }
 
 // handleMarketingPublicBaseURL returns the resolved public base URL and the
@@ -169,6 +173,81 @@ func publicMarketingURLForAsset(agent config.AgentConfig, assetPath string) stri
 		return base + relPath
 	}
 	return relPath
+}
+
+// maxCatalogDataBytes limits catalog JSON to 512 KiB.
+const maxCatalogDataBytes = 512 * 1024
+
+// handlePutCatalogData writes the interactive catalog JSON to the marketing
+// publish directory so it persists server-side across devices and browsers.
+// The file is served as a static asset at GET /public/marketing/catalog-data.json
+// and consumed by catalogo-v2.html on load.
+//
+//	PUT /api/marketing/catalog-data
+//	Body: {"empresa":{…},"produtos":[…]}   (application/json)
+//	→ {"ok":true,"path":"…","public_url":"…"}
+func (h *Handler) handlePutCatalogData(w http.ResponseWriter, r *http.Request) {
+	cfg, err := h.loadOrchestrationConfig()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to load config: %v", err), http.StatusInternalServerError)
+		return
+	}
+	agentCfg, ok := findAgentConfig(cfg, orchestrator.AgentMarketing)
+	if !ok || strings.TrimSpace(agentCfg.Workspace) == "" {
+		http.Error(w, "marketing agent not configured", http.StatusNotFound)
+		return
+	}
+	root, ok := marketingPublicDir(agentCfg)
+	if !ok {
+		http.Error(w, "marketing publish dir not configured", http.StatusInternalServerError)
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, int64(maxCatalogDataBytes+1)))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to read body: %v", err), http.StatusBadRequest)
+		return
+	}
+	if len(body) > maxCatalogDataBytes {
+		http.Error(w, fmt.Sprintf("catalog data exceeds %d bytes", maxCatalogDataBytes), http.StatusRequestEntityTooLarge)
+		return
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(body, &payload); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if _, hasEmpresa := payload["empresa"]; !hasEmpresa {
+		http.Error(w, "missing required key: empresa", http.StatusBadRequest)
+		return
+	}
+	if _, hasProdutos := payload["produtos"]; !hasProdutos {
+		http.Error(w, "missing required key: produtos", http.StatusBadRequest)
+		return
+	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		http.Error(w, fmt.Sprintf("failed to create publish dir: %v", err), http.StatusInternalServerError)
+		return
+	}
+	destPath := filepath.Join(root, "catalog-data.json")
+	if !isPathWithinDir(destPath, root) {
+		http.Error(w, "invalid destination path", http.StatusBadRequest)
+		return
+	}
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, body, "", "  "); err != nil {
+		pretty.Write(body)
+	}
+	if err := os.WriteFile(destPath, pretty.Bytes(), 0o644); err != nil {
+		http.Error(w, fmt.Sprintf("failed to write catalog data: %v", err), http.StatusInternalServerError)
+		return
+	}
+	publicURL := publicMarketingURLForAsset(agentCfg, destPath)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"ok":         true,
+		"path":       filepath.ToSlash(destPath),
+		"public_url": publicURL,
+	})
 }
 
 func enrichMarketingProposal(agent config.AgentConfig, raw []byte) json.RawMessage {

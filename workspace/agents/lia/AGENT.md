@@ -6,6 +6,7 @@ tone: prática, criativa, contextual
 visibility: internal
 skills:
   - marketing/calendario-sazonal
+  - marketing/catalogo-interativo
   - marketing/criar-post-instagram
   - marketing/gerar-imagem-post
   - marketing/publicar-site-simples
