@@ -14,8 +14,15 @@
 #   PICOCLAW_ONBOARDING_CALLBACK_URL   e.g. https://adm.jotaduo.com
 #   PICOCLAW_ONBOARDING_CALLBACK_SECRET (hex string, ≥32 chars)
 #
+# Auto-detected env (injected by pkg/tools.ExecTool from the active chat
+# context — see buildToolEnv in pkg/tools/shell.go):
+#   PICOCLAW_CHAT_SESSION_ID   the publicweb session_id, which the browser
+#                              sets to the intake_id. Used as default for
+#                              <intake_id> when no positional arg is passed.
+#
 # Usage:
-#   mark-qualified.sh <intake_id>
+#   mark-qualified.sh                  # uses $PICOCLAW_CHAT_SESSION_ID
+#   mark-qualified.sh <intake_id>      # explicit override (manual/dev runs)
 #
 # Exit codes:
 #   0   success (controlplane returned 204)
@@ -25,12 +32,11 @@
 
 set -euo pipefail
 
-if [[ $# -lt 1 ]]; then
-  echo "usage: mark-qualified.sh <intake_id>" >&2
+INTAKE_ID="${1:-${PICOCLAW_CHAT_SESSION_ID:-}}"
+if [[ -z "$INTAKE_ID" ]]; then
+  echo "mark-qualified: intake_id missing — pass as \$1 or set PICOCLAW_CHAT_SESSION_ID" >&2
   exit 1
 fi
-
-INTAKE_ID="$1"
 URL="${PICOCLAW_ONBOARDING_CALLBACK_URL:?PICOCLAW_ONBOARDING_CALLBACK_URL required}"
 SECRET="${PICOCLAW_ONBOARDING_CALLBACK_SECRET:?PICOCLAW_ONBOARDING_CALLBACK_SECRET required}"
 

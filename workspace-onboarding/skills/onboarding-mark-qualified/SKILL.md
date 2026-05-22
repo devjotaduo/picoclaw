@@ -16,8 +16,16 @@ preservado para fins de analytics.
 
 ## Arguments
 
-- `intake_id` (string, required) — id do intake; passe SEMPRE o
-  `$INTAKE_ID` que o agente recebeu no contexto inicial da sessão.
+Nenhum argumento obrigatório. O `intake_id` é resolvido a partir de
+`$PICOCLAW_CHAT_SESSION_ID`, que o `ExecTool` injeta no ambiente com o
+`session_id` da sessão atual do canal publicweb (que o browser configura
+igual ao `intake_id` ao abrir o stream).
+
+Para rodar manualmente fora do agente (debug), passe o id explícito:
+
+```
+scripts/mark-qualified.sh <intake_id>
+```
 
 ## Side effects
 
@@ -28,7 +36,7 @@ HMAC-SHA256 usando `PICOCLAW_ONBOARDING_CALLBACK_SECRET`.
 ## Script
 
 ```
-scripts/mark-qualified.sh "$INTAKE_ID"
+scripts/mark-qualified.sh
 ```
 
 Exit 0 = sucesso. Não-zero = falha (ver stderr).

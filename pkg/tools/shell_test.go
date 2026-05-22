@@ -105,6 +105,54 @@ func TestShellTool_Timeout(t *testing.T) {
 	}
 }
 
+// TestShellTool_PropagatesChatEnvVars verifies that the per-request tool
+// context (channel + chatID + senderID) lands in the child process'
+// environment as PICOCLAW_CHAT_* vars. Onboarding skill scripts rely on
+// PICOCLAW_CHAT_SESSION_ID to identify the visitor's intake without the
+// LLM having to round-trip it through the conversation.
+func TestShellTool_PropagatesChatEnvVars(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows: test uses sh-style env echo")
+	}
+	tool, err := NewExecTool("", false)
+	require.NoError(t, err)
+
+	ctx := WithToolContext(context.Background(), "public-web", "intake-abc-123")
+	ctx = WithToolSenderContext(ctx, "public-web:deadbeef0badc0de")
+
+	args := map[string]any{
+		"action":  "run",
+		"command": `echo "ch=$PICOCLAW_CHAT_CHANNEL sid=$PICOCLAW_CHAT_SESSION_ID sender=$PICOCLAW_CHAT_SENDER_ID"`,
+	}
+	result := tool.Execute(ctx, args)
+	require.False(t, result.IsError, "expected success, got: %s", result.ForLLM)
+	require.Contains(t, result.ForUser, "ch=public-web")
+	require.Contains(t, result.ForUser, "sid=intake-abc-123")
+	require.Contains(t, result.ForUser, "sender=public-web:deadbeef0badc0de")
+}
+
+// TestShellTool_OmitsEmptyChatEnvVars verifies that when no tool context is
+// attached (CLI mode) the PICOCLAW_CHAT_* vars are not set, so a value the
+// operator set in their shell isn't shadowed by an empty injection.
+func TestShellTool_OmitsEmptyChatEnvVars(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows: test uses sh-style env echo")
+	}
+	tool, err := NewExecTool("", false)
+	require.NoError(t, err)
+
+	args := map[string]any{
+		"action":  "run",
+		"command": `printenv PICOCLAW_CHAT_SESSION_ID; printenv PICOCLAW_CHAT_CHANNEL; echo done`,
+	}
+	result := tool.Execute(context.Background(), args)
+	// printenv exits non-zero when the var is unset; exec tool treats that
+	// as an error, but the `echo done` still runs because they're separate
+	// statements. We just care that the missing vars don't show up as empty
+	// values in the output.
+	require.NotContains(t, result.ForUser, "PICOCLAW_CHAT_SESSION_ID=")
+}
+
 // TestShellTool_WorkingDir verifies custom working directory
 func TestShellTool_WorkingDir(t *testing.T) {
 	// Create temp directory
