@@ -163,14 +163,19 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusCreated, summarizeWorkspace(ws))
 }
 
-// validateWorkspaceZip walks the archive and rejects:
+// validateWorkspaceZip walks the archive and rejects MALICIOUS inputs only:
 //   - paths with .. or absolute paths (path traversal)
 //   - paths outside the expected "home/" prefix when used
 //   - symlinks / device files (non-regular)
 //   - more than maxWorkspaceExtractedFiles entries
 //   - more than maxWorkspaceExtractedBytes total uncompressed
-//   - hidden runtime files (sessions/, whatsapp/, *.pid, dashboardauth.db,
-//     etc.) — defence in depth, same list shouldHideTenantPath blocks
+//
+// Runtime-only entries (sessions/, whatsapp/, state/, *.pid, dashboardauth.db,
+// etc.) are NOT rejected — they're silently skipped at extraction time. This
+// lets operators zip an entire running tenant's volume without curating it
+// first; the validator only complains about things that look like an attack.
+// The skip list mirrors shouldHideTenantPath so what gets dropped here is
+// exactly what would be hidden from the tenant file editor anyway.
 func validateWorkspaceZip(zr *zip.Reader) error {
 	if len(zr.File) > maxWorkspaceExtractedFiles {
 		return fmt.Errorf("archive has %d files; cap is %d", len(zr.File), maxWorkspaceExtractedFiles)
@@ -196,8 +201,10 @@ func validateWorkspaceZip(zr *zip.Reader) error {
 		if !f.FileInfo().Mode().IsRegular() && !f.FileInfo().IsDir() {
 			return fmt.Errorf("entry %q is not a regular file or directory (no symlinks / device files)", f.Name)
 		}
+		// Runtime files don't count toward the byte cap — they'll be skipped
+		// on extract. Only "real" workspace content contributes to total.
 		if shouldHideTenantPath(cleaned, f.FileInfo().IsDir()) {
-			return fmt.Errorf("entry %q is a managed runtime file and not allowed in a workspace upload", f.Name)
+			continue
 		}
 		total += int64(f.UncompressedSize64)
 		if total > maxWorkspaceExtractedBytes {
@@ -236,6 +243,11 @@ func allEntriesShareHomePrefix(zr *zip.Reader) bool {
 // extractWorkspaceZip writes the archive contents into dst. Assumes
 // validateWorkspaceZip already passed (this function does NOT re-check
 // for malicious paths beyond a final containment assert).
+//
+// Runtime-only entries (sessions/, whatsapp/, state/, *.pid, etc.) are
+// silently skipped — they're either re-created by the launcher on first
+// boot or owned exclusively by the provisioner. Lets operators upload a
+// zip of a live tenant volume without curating it.
 func extractWorkspaceZip(zr *zip.Reader, dst string) error {
 	stripHome := allEntriesShareHomePrefix(zr)
 	dstAbs, err := filepath.Abs(dst)
@@ -248,6 +260,13 @@ func extractWorkspaceZip(zr *zip.Reader, dst string) error {
 			rel = strings.TrimPrefix(rel, "home/")
 		}
 		if rel == "" {
+			continue
+		}
+		cleaned := filepath.ToSlash(filepath.Clean(filepath.FromSlash(rel)))
+		// Skip runtime-only entries silently. shouldHideTenantPath is the
+		// same predicate the file editor uses to hide these from the admin,
+		// so what gets dropped here is consistent with the rest of the UI.
+		if shouldHideTenantPath(cleaned, f.FileInfo().IsDir()) {
 			continue
 		}
 		target := filepath.Join(dst, filepath.FromSlash(rel))
