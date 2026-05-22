@@ -39,14 +39,17 @@ function StatusBadge({ configured }: { configured: boolean }) {
     return (
       <Badge
         variant="default"
-        className="bg-emerald-600/15 text-emerald-600 hover:bg-emerald-600/20 border border-emerald-600/30"
+        className="border border-emerald-600/30 bg-emerald-600/15 text-emerald-600 hover:bg-emerald-600/20"
       >
         Configurado
       </Badge>
     )
   }
   return (
-    <Badge variant="destructive" className="border border-red-600/30 opacity-90">
+    <Badge
+      variant="destructive"
+      className="border border-red-600/30 opacity-90"
+    >
       Não configurado
     </Badge>
   )
@@ -95,7 +98,7 @@ function BufferCard({ configured }: { configured: boolean }) {
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="bg-gradient-to-br from-purple-500 to-pink-500 flex size-9 items-center justify-center rounded-lg shrink-0">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
               <IconBrandInstagram className="size-5 text-white" />
             </span>
             <div className="min-w-0">
@@ -130,7 +133,7 @@ function BufferCard({ configured }: { configured: boolean }) {
 
         {open && (
           <div
-            className="mt-4 space-y-4 border-border/40 border-t pt-4"
+            className="border-border/40 mt-4 space-y-4 border-t pt-4"
             role="region"
             aria-label="Formulário Buffer"
           >
@@ -219,7 +222,7 @@ function MakeCard({ configured }: { configured: boolean }) {
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="bg-gradient-to-br from-violet-500 to-indigo-600 flex size-9 items-center justify-center rounded-lg shrink-0">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600">
               <IconWebhook className="size-5 text-white" />
             </span>
             <div className="min-w-0">
@@ -254,7 +257,7 @@ function MakeCard({ configured }: { configured: boolean }) {
 
         {open && (
           <div
-            className="mt-4 space-y-4 border-border/40 border-t pt-4"
+            className="border-border/40 mt-4 space-y-4 border-t pt-4"
             role="region"
             aria-label="Formulário Make.com"
           >
@@ -302,7 +305,7 @@ function WhatsAppCard() {
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="bg-gradient-to-br from-green-500 to-emerald-600 flex size-9 items-center justify-center rounded-lg shrink-0">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-green-500 to-emerald-600">
               <IconBrandWhatsapp className="size-5 text-white" />
             </span>
             <div className="min-w-0">
@@ -350,13 +353,13 @@ export function IntegrationsPage() {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader title="Integrações" />
 
-      <div className="flex-1 overflow-y-auto px-6 pb-8 pt-4">
+      <div className="flex-1 overflow-y-auto px-6 pt-4 pb-8">
         <p className="text-muted-foreground mb-6 max-w-2xl text-sm leading-relaxed">
           Conecte serviços externos para ampliar as capacidades dos seus
           agentes.
         </p>
 
-        <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 max-w-4xl">
+        <div className="grid max-w-4xl gap-4 sm:grid-cols-1 lg:grid-cols-2">
           <BufferCard configured={status?.bufferConfigured ?? false} />
           <MakeCard configured={status?.makeConfigured ?? false} />
           <WhatsAppCard />

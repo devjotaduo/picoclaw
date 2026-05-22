@@ -1,60 +1,57 @@
-# workspace/tests — README
+# workspace/tests/
 
-Pasta de testes e auditoria dos agentes e skills do workspace Picoclaw.
+Pasta de teste e validação de skills/agentes deste workspace. Gerada e mantida pelo agente `qa-tester` (`workspace/agents/qa-tester/AGENT.md`).
+
+**Nada aqui afeta canal real.** Toda execução fica isolada nesta pasta.
 
 ## Estrutura
 
 ```
-tests/
-├── README.md           ← este arquivo
-├── scenarios/          ← cenários de teste (21 arquivos)
-├── fixtures/           ← dados de entrada para os testes
-└── results/            ← resultados e relatórios gerados
+workspace/tests/
+├── README.md                      # este arquivo
+├── simulacoes/                    # transcrições de diálogos fictícios
+│   └── YYYY-MM-DD-<slug>.md
+└── relatorios/                    # avaliações com nota
+    ├── INDEX.md                   # índice cronológico de todos os testes
+    └── YYYY-MM-DD-<slug>.md
 ```
 
-## Como rodar
+## Como rodar um teste
 
-Use o agente `@agente-picoclaw-test` com o argumento `todos` ou o nome de um agente específico.
+Pelo dono ou pelo Operador, em qualquer canal autorizado:
 
-Exemplo no chat:
 ```
-@agente-picoclaw-test todos
-@agente-picoclaw-test Clara
-@agente-picoclaw-test triagem-inicial
+@qa-tester testar skill skills/atendimento/triagem-inicial/SKILL.md
+@qa-tester testar agente clara
+@qa-tester orquestrar lead-novo
+@qa-tester auditar workspace
 ```
 
-## Cenários disponíveis
+Cada execução gera:
 
-| # | Arquivo | Agente(s) | Tipo |
-|---|---|---|---|
-| 01 | triagem-cliente-novo | Clara | Unitário |
-| 02 | triagem-para-vendas | Clara → Marcos | Handoff |
-| 03 | triagem-para-suporte | Clara → Camila | Handoff |
-| 04 | triagem-urgencia-humano | Clara → Humano | Handoff |
-| 05 | vendas-qualificacao-bant | Marcos | Unitário |
-| 06 | vendas-objecao-preco | Marcos | Unitário |
-| 07 | vendas-follow-up | Marcos | Unitário |
-| 08 | suporte-duvida-tecnica | Camila | Unitário |
-| 09 | suporte-devolucao | Camila | Unitário |
-| 10 | suporte-status-pedido | Camila | Unitário |
-| 11 | onboarding-nova-empresa | Sofia | Unitário |
-| 12 | marketing-instagram | Lia | Unitário |
-| 13 | marketing-criacao-site | Lia | Unitário |
-| 14 | operador-health-check | Operador | Unitário |
-| 15 | operador-issues-github | Operador | Unitário |
-| 16 | operador-criar-skill | Operador | Unitário |
-| 17 | rafael-consultar-memoria | Rafael | Unitário |
-| 18 | lgpd-consentimento | Clara + skills/lgpd | Compliance |
-| 19 | fluxo-completo-atendimento-vendas | Clara → Marcos → Rafael | Integração |
-| 20 | fluxo-completo-suporte-resolucao | Clara → Camila → Rafael | Integração |
-| 21 | transferencia-humana-sensivel | Clara → Humano → Rafael | Integração |
+1. Uma transcrição em `simulacoes/` (mínimo 20 turnos cliente↔agente).
+2. Um relatório em `relatorios/` com **nota 0–10**, falhas classificadas (bloqueante / melhoria / info) e patch sugerido.
+3. Resumo executivo na própria mensagem (nota + top 3 falhas + top 3 melhorias).
 
-## Formato de cada cenário
+## Critérios de nota
 
-Cada arquivo `.md` contém:
-- **Objetivo**: o que está sendo testado
-- **Agente(s)**: quem deve responder
-- **Skills esperadas**: quais skills devem ser invocadas
-- **Diálogo**: sequência de turnos (🧑 Cliente / 🤖 Agente)
-- **Critérios de aprovação**: condições para PASS/FAIL
-- **Resultado**: preenchido pelo auditor após execução
+Definidos em `workspace/agents/qa-tester/AGENT.md` — rubrica ponderada:
+
+| Critério | Peso |
+|---|---|
+| Aderência a `SOUL.md` (tom, idioma, jargão) | 2 |
+| Não inventar informação (base em `memory/`) | 3 |
+| Roteamento correto entre agentes | 2 |
+| Skills referenciadas existem | 1 |
+| Memory referenciada existe | 1 |
+| Encerramento adequado da conversa | 1 |
+
+- **< 6**: bloqueante, não aplicar em produção.
+- **6–8**: aprovada com melhorias pendentes.
+- **> 8**: aprovada para uso.
+
+## O que NÃO fica aqui
+
+- Logs de runtime real (vão para `workspace/sessions/`).
+- Configuração de teste de CI (a infra de teste do código Go fica em `pkg/**/_test.go`).
+- Dados reais de clientes — **proibido**. Personas inventadas apenas.
