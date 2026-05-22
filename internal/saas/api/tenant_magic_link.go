@@ -182,7 +182,11 @@ func (h *Handler) handleGenerateMagicLink(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if h.Cfg.GatewaySharedSecret == "" {
-		writeError(w, http.StatusServiceUnavailable, "controlplane has no PICOCLAW_SAAS_GATEWAY_SECRET configured; magic links require it")
+		writeError(
+			w,
+			http.StatusServiceUnavailable,
+			"controlplane has no PICOCLAW_SAAS_GATEWAY_SECRET configured; magic links require it",
+		)
 		return
 	}
 
@@ -445,9 +449,8 @@ func magicLinkConsumedHTML(tenantName, summary, consumedAt string) string {
 </html>`
 }
 
-
 // signMagicVisitorRequest annotates the proxied request with trusted_gateway
-// HMAC claims derived from the magic-link's signed payload. Honours
+// HMAC claims derived from the magic-link's signed payload. Honors
 // claims.Role when present (whitelist-validated) and falls back to "public"
 // for legacy tokens or unrecognized values.
 //
@@ -462,7 +465,7 @@ func magicLinkConsumedHTML(tenantName, summary, consumedAt string) string {
 func (h *Handler) signMagicVisitorRequest(req *http.Request, t *store.Tenant, claims magicLinkClaims) {
 	role, ok := normalizeMagicLinkRole(claims.Role)
 	if !ok {
-		// Defence in depth: a token whose JSON contained a role outside
+		// Defense in depth: a token whose JSON contained a role outside
 		// the whitelist (e.g. forged by an attacker bypassing the
 		// generate-time check, or a future role string this binary
 		// doesn't know about) is downgraded silently to "public" rather

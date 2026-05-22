@@ -14,7 +14,7 @@ import (
 	"github.com/sipeed/picoclaw/internal/saas/store"
 )
 
-const testMagicLinkSecret = "test-shared-secret-for-magic-link-tests" //nolint:unused // also referenced via the testMagicLinkSecret name below
+const testMagicLinkSecret = "test-shared-secret-for-magic-link-tests"
 
 func TestNormalizeMagicLinkRole(t *testing.T) {
 	cases := []struct {
@@ -22,17 +22,17 @@ func TestNormalizeMagicLinkRole(t *testing.T) {
 		wantRole string
 		wantOK   bool
 	}{
-		{"", "", true},                                // empty == public alias, returned as-is
+		{"", "", true}, // empty == public alias, returned as-is
 		{"public", "public", true},
 		{"tenant_owner", "tenant_owner", true},
 		{"tenant_admin", "tenant_admin", true},
-		{"TENANT_OWNER", "tenant_owner", true},        // case-normalized accepts canonical name in any case
-		{"  Tenant_Owner  ", "tenant_owner", true},    // trims whitespace
-		{"platform_admin", "", false},                 // controlplane-only, never via magic link
-		{"operator", "", false},                       // not in whitelist
+		{"TENANT_OWNER", "tenant_owner", true},     // case-normalized accepts canonical name in any case
+		{"  Tenant_Owner  ", "tenant_owner", true}, // trims whitespace
+		{"platform_admin", "", false},              // controlplane-only, never via magic link
+		{"operator", "", false},                    // not in whitelist
 		{"viewer", "", false},
-		{"owner", "", false},                          // synonym rejected — must use canonical "tenant_owner"
-		{"admin", "", false},                          // same — must use canonical "tenant_admin"
+		{"owner", "", false}, // synonym rejected — must use canonical "tenant_owner"
+		{"admin", "", false}, // same — must use canonical "tenant_admin"
 		{"anything-else", "", false},
 	}
 	for _, c := range cases {
