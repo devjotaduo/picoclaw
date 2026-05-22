@@ -247,6 +247,14 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
       SUPABASE_SITE_URL: ${SUPABASE_SITE_URL:-https://${SAAS_BASE_DOMAIN}}
+      # Phase 10 — public onboarding tenant. The controlplane signs callbacks
+      # coming back from the in-tenant `onboarding-mark-qualified` /
+      # `onboarding-submit-intake` skills with this HMAC secret. URL points
+      # to the controlplane's own host (Traefik routes both adm.* and the
+      # apex to it), so the tenant can reach it over the saas_edge network.
+      # Empty default keeps existing deployments working pre-Phase 10.
+      PICOCLAW_ONBOARDING_CALLBACK_SECRET: ${PICOCLAW_ONBOARDING_CALLBACK_SECRET:-}
+      PICOCLAW_ONBOARDING_CALLBACK_URL: ${PICOCLAW_ONBOARDING_CALLBACK_URL:-}
     volumes:
       - /srv/saas/tenants:/srv/saas/tenants
       - controlplane_data:/var/lib/picoclaw-saas
