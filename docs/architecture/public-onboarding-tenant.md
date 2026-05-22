@@ -94,7 +94,7 @@ Visitor browser
 | 7. Controlplane callback endpoint | ✅ | `603e436d` | HMAC verify + anti-replay ±5min |
 | 8. workspace-onboarding/ template | ✅ | `f78d7c34`+`21cc044c` | Clara ported as Picoclaw agent |
 | 9. Bootstrap script + endpoint | ✅ | `889dd4b7` | `POST /api/v1/tenants/onboarding/bootstrap` |
-| 10. Frontend cutover (feature flag) | 🚧 adapter ready | `7829cfe7` + onboardingTenantChat.ts | SSE event-shape adapter shipped (POST + GET-stream + typed events + open-handshake gate). Wire-up still gated on agent-side `session_id`→skill-env propagation and `extracted`/`provisioned` bridging. |
+| 10. Frontend cutover (feature flag) | ✅ | adapter + env-prop + polling-bridge + useClaraChat wire-up | Three building blocks (`onboardingTenantChat.ts`, `pkg/tools.ExecTool` env injection + skill-script env fallback, `onboardingIntakePolling.ts`) plus the `useClaraChat` cutover gated by `VITE_USE_ONBOARDING_TENANT`. |
 | 11. Delete `internal/saas/clara/` | ⏸ | — | wait 1-2 weeks of stable parallel operation |
 | 12. Docs + memory | ✅ | (this commit) | |
 
@@ -166,8 +166,8 @@ VITE_ONBOARDING_TENANT_URL=https://onboarding.jotaduo.com
 
 ## Known gaps (follow-ups)
 
-- **Phase 10 functional cutover (foundation complete, wire-up pending).**
-  All three building blocks ship as isolated, vitest-covered modules:
+- **Phase 10 functional cutover.** All four building blocks ship as
+  isolated, vitest-covered modules:
   1. ✅ **SSE adapter** — `web/saas-admin/src/pages/pre-cadastro/clara/onboardingTenantChat.ts`.
      POST + GET-stream against the public-onboarding tenant, typed
      `{open|message|close}` events, open-handshake gate so the first
@@ -187,13 +187,21 @@ VITE_ONBOARDING_TENANT_URL=https://onboarding.jotaduo.com
      `tenant_url` / `tenant_subdomain` / `tenant_login_mode` via
      `Handler.publicIntakeResponseWithTenant`. Terminal on
      `tenant_provisioned`.
+  4. ✅ **`useClaraChat` wire-up** — when
+     `VITE_USE_ONBOARDING_TENANT=true` and `VITE_ONBOARDING_TENANT_URL`
+     is set, the hook opens a persistent tenant chat stream + intake
+     polling for the session lifetime. `send()` pushes through the
+     stream's `send()`; reply chunks land on the shared `onEvent`
+     handler. publicweb has no "turn complete" event in its contract,
+     so the hook treats 1.5s of silence after the last chunk as turn
+     end (debounced reset on each chunk). The legacy POST-and-stream
+     path stays intact when the flag is off — flip it back to
+     instantly revert.
 
-  What's left is the actual wire-up inside `useClaraChat`: replace the
-  legacy POST with `openOnboardingTenantChat(...)` and run
-  `openOnboardingIntakePolling(...)` alongside it, gated by
-  `VITE_USE_ONBOARDING_TENANT`. That's a small change (~30 LOC) but it
-  flips production behavior so it ships behind the flag with an
-  explicit staging rollout.
+  **Rollout:** the flag is opt-in and unset in `.env.example` /
+  production env, so deploys are no-ops until the operator sets
+  `VITE_USE_ONBOARDING_TENANT=true` + `VITE_ONBOARDING_TENANT_URL=…`
+  and triggers a frontend rebuild.
 - **IP-roaming visitors.** Identity is `sha256(session_id+ip)[:8]`, so a
   mobile→wifi switch mid-conversation creates a new identity and the
   agent loses context. Acceptable v1; revisit if real-world complaint.
