@@ -2,17 +2,28 @@ package api
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/sipeed/picoclaw/internal/saas/store"
 	"github.com/sipeed/picoclaw/internal/saas/tenant"
 )
+
+// baselineWorkspaceFS embeds the minimal generic workspace template shipped
+// with the binary. The bootstrap extracts it into the default workspace's
+// home/workspace/ when the legacy /srv/picoclaw/workspace/ host path is not
+// available. See baseline-workspace/README.md for content rules.
+//
+//go:embed all:baseline-workspace
+var baselineWorkspaceFS embed.FS
 
 // defaultWorkspaceSlug is the slug used for the bootstrap-created workspace.
 // Matches the historical PICOCLAW_SAAS_AUTO_PROVISION_PROFILE default so any
@@ -64,21 +75,27 @@ func (h *Handler) EnsureDefaultWorkspace(ctx context.Context) error {
 
 	homeDir := filepath.Join(hostPath, tenant.WorkspaceHomeSubdir)
 
-	// Seed home/workspace/ from the canonical source if it exists. The
-	// controlplane container has /srv/picoclaw mounted read-only, so this
-	// works in the live deployment but stays best-effort for local/test
-	// environments where the path is absent.
-	if info, err := os.Stat(canonicalWorkspaceSource); err == nil && info.IsDir() {
-		dest := filepath.Join(homeDir, "workspace")
-		if _, err := os.Stat(dest); errors.Is(err, os.ErrNotExist) {
-			if err := copyDir(canonicalWorkspaceSource, dest); err != nil {
-				log.Printf("WARN: bootstrap workspace: copy %s -> %s: %v", canonicalWorkspaceSource, dest, err)
-				// Continue; an empty home/workspace/ is still better than no
-				// workspace row at all.
+	// Seed home/workspace/ from the canonical host source if it's mounted,
+	// else fall back to extracting the embedded baseline (always present in
+	// the binary). This keeps legacy installs that still bind-mount
+	// /srv/picoclaw:ro working unchanged, and gives fresh installs without
+	// that mount a real (if generic) baseline instead of an empty workspace
+	// that would fail to boot a tenant.
+	workspaceDest := filepath.Join(homeDir, "workspace")
+	if _, err := os.Stat(workspaceDest); errors.Is(err, os.ErrNotExist) {
+		switch {
+		case isUsableDir(canonicalWorkspaceSource):
+			if err := copyDir(canonicalWorkspaceSource, workspaceDest); err != nil {
+				log.Printf("WARN: bootstrap workspace: copy host %s -> %s failed (%v); falling back to embedded baseline", canonicalWorkspaceSource, workspaceDest, err)
+				if extractErr := extractEmbeddedBaseline(workspaceDest); extractErr != nil {
+					log.Printf("WARN: bootstrap workspace: embed extract also failed: %v", extractErr)
+				}
+			}
+		default:
+			if err := extractEmbeddedBaseline(workspaceDest); err != nil {
+				log.Printf("WARN: bootstrap workspace: embed extract failed: %v", err)
 			}
 		}
-	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		log.Printf("WARN: bootstrap workspace: stat %s: %v", canonicalWorkspaceSource, err)
 	}
 
 	// Write a minimal home/config.json with the placeholders the provisioner
@@ -139,6 +156,62 @@ func writeBaselineConfig(path string) error {
 		return err
 	}
 	return os.WriteFile(path, b, 0o600)
+}
+
+// isUsableDir returns true when path exists and is a directory the caller
+// can walk into. Errors other than "missing" are logged at WARN and the
+// caller decides whether to fall back.
+func isUsableDir(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			log.Printf("WARN: bootstrap workspace: stat %s: %v", path, err)
+		}
+		return false
+	}
+	return info.IsDir()
+}
+
+// extractEmbeddedBaseline writes the embedded baseline-workspace contents
+// into dst, stripping the "baseline-workspace/" prefix and skipping the
+// .gitkeep placeholders we only use to force go:embed to include empty
+// directories. Idempotent over dst — destination is created if missing,
+// existing files at the same path are overwritten.
+func extractEmbeddedBaseline(dst string) error {
+	const embedRoot = "baseline-workspace"
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", dst, err)
+	}
+	return fs.WalkDir(baselineWorkspaceFS, embedRoot, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == embedRoot {
+			return nil
+		}
+		rel := strings.TrimPrefix(path, embedRoot+"/")
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		if filepath.Base(rel) == ".gitkeep" {
+			// Make sure the parent dir exists, but skip the placeholder file
+			// itself — it's only needed to coax go:embed into shipping the
+			// empty directory.
+			return os.MkdirAll(filepath.Dir(target), 0o755)
+		}
+		data, err := baselineWorkspaceFS.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read embed %s: %w", path, err)
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return fmt.Errorf("mkdir %s: %w", filepath.Dir(target), err)
+		}
+		if err := os.WriteFile(target, data, 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", target, err)
+		}
+		return nil
+	})
 }
 
 // copyDir recursively copies src into dst, preserving file modes. Used only
