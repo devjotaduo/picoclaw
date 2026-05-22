@@ -148,6 +148,33 @@ var tenantLoginTpl = template.Must(template.New("tenantLogin").Parse(`<!DOCTYPE 
     document.cookie = "picoclaw_magic=; Max-Age=0; Path=/; SameSite=Lax";
   }
 
+  // Supabase magic-link callback. The OTP verify endpoint redirects to
+  // <our redirect_to>#access_token=...&refresh_token=...&expires_in=...&type=magiclink
+  // (implicit flow). The hash isn't sent to the server, so we have to
+  // process it client-side: parse the access_token, write the cookie,
+  // clean the URL, then redirect to NEXT. If something looks off (wrong
+  // type, missing token), we just fall through to the regular login form.
+  (function handleMagicCallback(){
+    var hash = window.location.hash;
+    if (!hash || hash.length < 2) return;
+    var params = new URLSearchParams(hash.substring(1));
+    // Supabase puts errors in the hash too (e.g. expired link → otp_expired).
+    if (params.get("error")){
+      showMsg("err", "Link mágico: " + (params.get("error_description") || params.get("error")));
+      try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch (_e) {}
+      return;
+    }
+    var token = params.get("access_token");
+    if (!token) return;
+    var ttl = parseInt(params.get("expires_in"), 10) || 3600;
+    clearMagicCookie();
+    setAuthCookie(token, ttl);
+    // Clean the hash so a back/forward navigation doesn't leak the token
+    // into history. Then go to the intended destination.
+    try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch (_e) {}
+    window.location.assign(NEXT);
+  })();
+
   document.getElementById("loginForm").addEventListener("submit", async function(ev){
     ev.preventDefault();
     var email = document.getElementById("email").value.trim();
@@ -180,13 +207,19 @@ var tenantLoginTpl = template.Must(template.New("tenantLogin").Parse(`<!DOCTYPE 
     if (!email){ showMsg("err", "Digite seu e-mail primeiro."); return; }
     setBusy(true);
     try {
+      // Send the user BACK to this same /login page after they click the
+      // email link. That way the hash-callback handler above can finish
+      // the auth dance (write the cookie, then navigate to NEXT). Sending
+      // them to "/" directly would lose the access_token because the
+      // root has no handler for the implicit-flow hash params.
+      var callbackURL = window.location.origin + "/login?next=" + encodeURIComponent(NEXT);
       var resp = await fetch(AUTH_URL + "/otp", {
         method: "POST",
         headers: { "apikey": ANON, "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email,
           create_user: false,
-          options: { email_redirect_to: window.location.origin + NEXT },
+          options: { email_redirect_to: callbackURL },
         }),
       });
       if (resp.ok){

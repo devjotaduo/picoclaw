@@ -159,11 +159,21 @@ func (s *SupabaseClient) CreateTenantOwner(
 
 // GenerateMagicLink re-issues a magic link for an existing tenant owner.
 // Used by the resend-link endpoint.
+//
+// Redirect target is the tenant's /login page (NOT /), because Supabase
+// uses the implicit flow: after verifying the OTP it appends the token
+// to the URL as a hash fragment (`#access_token=...&refresh_token=...&type=magiclink`).
+// The hash is client-side only — the controlplane never sees it on the
+// initial GET. The /login page has JS that detects this hash, stuffs the
+// access_token into the sb-<projectRef>-auth-token cookie, then redirects
+// to /. Without that adapter, the user lands on / with no cookie and
+// gets bounced back to /login, losing the token to the controlplane that
+// never reads URL hashes.
 func (s *SupabaseClient) GenerateMagicLink(email, subdomain string) (string, error) {
 	if s == nil {
 		return "", ErrSupabaseNotConfigured
 	}
-	redirect := fmt.Sprintf("https://%s.%s/", subdomain, baseHostFromSiteURL(s.siteURL))
+	redirect := fmt.Sprintf("https://%s.%s/login?next=/", subdomain, baseHostFromSiteURL(s.siteURL))
 	link, err := s.admin.AdminGenerateLink(types.AdminGenerateLinkRequest{
 		Type:       types.LinkTypeMagicLink,
 		Email:      email,
