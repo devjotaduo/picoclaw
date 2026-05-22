@@ -34,8 +34,8 @@ type Handler struct {
 	// MCPEncKey is the decoded AES-256-GCM key (32 bytes) used to seal
 	// per-workspace MCP credentials. Nil when PICOCLAW_SAAS_MCP_ENCRYPTION_KEY
 	// is unset or invalid; PUT /api/v1/workspaces/{id}/mcp/* then returns 503.
-	MCPEncKey   []byte
-	Provisioner *tenant.Provisioner
+	MCPEncKey      []byte
+	Provisioner    *tenant.Provisioner
 	LoginAttempts  *loginAttempts
 	ClaraRateLimit *rateLimiter
 	// PublicChatRateLimit caps anonymous traffic to the public-onboarding
@@ -46,7 +46,7 @@ type Handler struct {
 	// more headroom than the 5-min login limiter).
 	PublicChatRateLimit *rateLimiter
 	CRM                 *crmClient
-	Mailer         *mailer.Mailer
+	Mailer              *mailer.Mailer
 	// Supabase is the optional Auth client for tenants whose dashboard logins
 	// are gated by Supabase JWT instead of the legacy local sessions table.
 	// Nil when SUPABASE_* env vars are unset — controlplane stays fully

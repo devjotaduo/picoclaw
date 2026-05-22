@@ -2,13 +2,20 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/sipeed/picoclaw/internal/saas/mcp"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 )
+
+// mcpPutMaxBody caps the request body size for MCP activation PUTs. 1 MiB
+// is generous for a flat credential map and prevents trivial DoS via giant
+// JSON payloads.
+const mcpPutMaxBody = 1 << 20 // 1 MiB
 
 // handleGetMCPCatalog returns the curated list of MCP servers admins can
 // activate per workspace. Hardcoded in internal/saas/mcp — adding an MCP is
@@ -68,7 +75,10 @@ type mcpActivationOut struct {
 // values are dropped and replaced with `true` in credentials_masked so the
 // admin UI can render "configured" badges without exposing secrets. When the
 // encryption key is unconfigured the decrypt is silently skipped and the
-// masked map is empty (the row is still surfaced).
+// masked map is empty (the row is still surfaced). When decryption fails
+// (e.g. mid-rotation with a wrong key) we log a warning server-side and
+// still surface the row with an empty masked map — better to show a partial
+// state than 500 the whole list.
 func (h *Handler) handleListWorkspaceMCP(w http.ResponseWriter, r *http.Request) {
 	ws, ok := h.getWorkspace(w, r)
 	if !ok {
@@ -76,14 +86,18 @@ func (h *Handler) handleListWorkspaceMCP(w http.ResponseWriter, r *http.Request)
 	}
 	rows, err := h.MCP.ListForWorkspace(r.Context(), ws.ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "db error: "+err.Error())
+		log.Printf("ERROR workspaces_mcp: list for ws=%s: %v", ws.ID, err)
+		writeError(w, http.StatusInternalServerError, "db error")
 		return
 	}
 	out := make([]mcpActivationOut, 0, len(rows))
 	for _, row := range rows {
 		masked := map[string]bool{}
 		if row.CredentialsEncrypted != "" && h.MCPEncKey != nil {
-			if creds, derr := mcp.DecryptCredentials(row.CredentialsEncrypted, h.MCPEncKey); derr == nil {
+			creds, derr := mcp.DecryptCredentials(row.CredentialsEncrypted, h.MCPEncKey)
+			if derr != nil {
+				log.Printf("WARN workspaces_mcp: decrypt failed for ws=%s catalog=%s: %v", ws.ID, row.CatalogID, derr)
+			} else {
 				for k := range creds {
 					masked[k] = true
 				}
@@ -93,7 +107,7 @@ func (h *Handler) handleListWorkspaceMCP(w http.ResponseWriter, r *http.Request)
 			CatalogID:         row.CatalogID,
 			Enabled:           row.Enabled,
 			CredentialsMasked: masked,
-			UpdatedAt:         row.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+			UpdatedAt:         row.UpdatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"servers": out})
@@ -120,8 +134,12 @@ func (h *Handler) handlePutWorkspaceMCP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Cap body size and reject unknown fields so the public surface stays tight.
+	r.Body = http.MaxBytesReader(w, r.Body, mcpPutMaxBody)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
 	var req mcpActivationReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := dec.Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
@@ -141,7 +159,8 @@ func (h *Handler) handlePutWorkspaceMCP(w http.ResponseWriter, r *http.Request) 
 
 	cipher, err := mcp.EncryptCredentials(req.Credentials, h.MCPEncKey)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "encrypt: "+err.Error())
+		log.Printf("ERROR workspaces_mcp: encrypt for ws=%s catalog=%s: %v", ws.ID, catalogID, err)
+		writeError(w, http.StatusInternalServerError, "encrypt error")
 		return
 	}
 
@@ -152,7 +171,8 @@ func (h *Handler) handlePutWorkspaceMCP(w http.ResponseWriter, r *http.Request) 
 		CredentialsEncrypted: cipher,
 	}
 	if err := h.MCP.Upsert(r.Context(), row); err != nil {
-		writeError(w, http.StatusInternalServerError, "db: "+err.Error())
+		log.Printf("ERROR workspaces_mcp: upsert for ws=%s catalog=%s: %v", ws.ID, catalogID, err)
+		writeError(w, http.StatusInternalServerError, "db error")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -168,7 +188,8 @@ func (h *Handler) handleDeleteWorkspaceMCP(w http.ResponseWriter, r *http.Reques
 	}
 	catalogID := chi.URLParam(r, "catalog_id")
 	if err := h.MCP.Delete(r.Context(), ws.ID, catalogID); err != nil {
-		writeError(w, http.StatusInternalServerError, "db: "+err.Error())
+		log.Printf("ERROR workspaces_mcp: delete for ws=%s catalog=%s: %v", ws.ID, catalogID, err)
+		writeError(w, http.StatusInternalServerError, "db error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

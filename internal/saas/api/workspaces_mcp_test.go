@@ -3,11 +3,13 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -96,11 +98,13 @@ func newTestHandlerWithMCPKey(t *testing.T) *Handler {
 }
 
 // seedWorkspace inserts a minimal workspace row and returns its id. The slug
-// is also used as the id so URL construction in tests stays readable.
+// is suffixed with a unique token (UnixNano) so re-running the test suite on
+// a shared schema doesn't trip the slug/name unique constraints.
 func seedWorkspace(t *testing.T, h *Handler, slug string) string {
 	t.Helper()
+	unique := fmt.Sprintf("%s-%d", slug, time.Now().UnixNano())
 	ws := &store.Workspace{
-		ID: slug, Name: slug, Slug: slug, HostPath: t.TempDir(),
+		ID: unique, Name: unique, Slug: unique, HostPath: t.TempDir(),
 		RolePolicyJSON: []byte("{}"),
 	}
 	if err := h.Workspaces.Insert(context.Background(), ws); err != nil {
