@@ -27,6 +27,7 @@ type Handler struct {
 	Tenants        *store.TenantStore
 	Workspaces     *store.WorkspaceStore
 	CompanyIntakes *store.CompanyIntakeStore
+	MagicLinks     *store.MagicLinkStore
 	Usage          *store.UsageStore
 	Provisioner    *tenant.Provisioner
 	LoginAttempts  *loginAttempts
@@ -68,6 +69,7 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		Tenants:        &store.TenantStore{DB: db},
 		Workspaces:     &store.WorkspaceStore{DB: db},
 		CompanyIntakes: &store.CompanyIntakeStore{DB: db},
+		MagicLinks:     &store.MagicLinkStore{DB: db},
 		Usage:          &store.UsageStore{DB: db},
 		Provisioner:    prov,
 		LoginAttempts:  newLoginAttempts(),
@@ -215,6 +217,7 @@ func (h *Handler) Routes() http.Handler {
 				r.Post("/tenants/{id}/recreate", h.handleRecreateTenant)
 				r.Post("/tenants/{id}/rotate-password", h.handleRotatePassword)
 				r.Post("/tenants/{id}/magic-link", h.handleGenerateMagicLink)
+				r.Post("/magic-links/{nonce}/consume", h.handleConsumeMagicLink)
 				r.Delete("/tenants/{id}", h.handleDeleteTenant)
 				r.Post("/tenants/{id}/mark-delivered", h.handleMarkPasswordDelivered)
 				r.Put("/tenants/{id}/crm", h.handleSetCRMLinks)

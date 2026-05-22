@@ -90,12 +90,17 @@ func verifyMagicLinkToken(secret, token string) (magicLinkClaims, bool) {
 }
 
 // magicLinkGenerateRequest is the optional body for the admin generate
-// endpoint. Both fields are optional — operator can POST {} and get
+// endpoint. All fields are optional — operator can POST {} and get
 // defaults.
 type magicLinkGenerateRequest struct {
 	// TTLSeconds is the link's lifetime. Defaults to defaultMagicLinkTTL,
 	// clamped to maxMagicLinkTTL.
 	TTLSeconds int64 `json:"ttl_seconds,omitempty"`
+	// IntakeID optionally ties the link to a specific company_intakes row.
+	// When set, the onboarding-callback submit-intake handler auto-marks
+	// every active link tied to this intake as consumed (the visitor will
+	// see the thank-you page on any subsequent click).
+	IntakeID string `json:"intake_id,omitempty"`
 }
 
 // magicLinkGenerateResponse is what the admin UI gets back.
@@ -153,6 +158,26 @@ func (h *Handler) handleGenerateMagicLink(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "sign: "+err.Error())
 		return
+	}
+
+	// Persist a tracking row so we can flip the link to "consumed" on
+	// intake submit (and revoke individually later). The HMAC signature
+	// still gates access — this row is a side-channel for state changes
+	// the client can't be trusted to obey.
+	storeRow := &store.MagicLink{
+		Nonce:     claims.Nonce,
+		TenantID:  t.ID,
+		ExpiresAt: time.Unix(claims.Exp, 0).UTC(),
+	}
+	if req.IntakeID != "" {
+		intakeID := req.IntakeID
+		storeRow.IntakeID = &intakeID
+	}
+	if h.MagicLinks != nil {
+		if err := h.MagicLinks.Insert(r.Context(), storeRow); err != nil {
+			writeError(w, http.StatusInternalServerError, "track link: "+err.Error())
+			return
+		}
 	}
 
 	subdomain := t.Subdomain
@@ -213,6 +238,18 @@ func (h *Handler) consumeMagicLink(w http.ResponseWriter, r *http.Request, t *st
 		return true
 	}
 
+	// Check the DB tracking row — if the link was consumed (intake submitted
+	// or operator manually revoked), render a friendly thank-you page
+	// instead of authenticating. Visitor sees the summary saved at consume
+	// time. If MagicLinks isn't wired (e.g. test harness) we skip this
+	// check and fall through to normal auth.
+	if h.MagicLinks != nil {
+		if row, err := h.MagicLinks.Get(r.Context(), claims.Nonce); err == nil && row.ConsumedAt != nil {
+			renderMagicLinkConsumed(w, t, row)
+			return true
+		}
+	}
+
 	maxAge := claims.Exp - time.Now().Unix()
 	if maxAge < 0 {
 		maxAge = 0
@@ -235,8 +272,10 @@ func (h *Handler) consumeMagicLink(w http.ResponseWriter, r *http.Request, t *st
 }
 
 // magicLinkClaimsFromCookie reads + validates the per-tenant magic cookie
-// off the request and returns the claims when present and valid. Returns
-// (zero, false) when no cookie, bad signature, or expired.
+// off the request and returns the claims when present, valid, AND not
+// marked consumed in the DB tracking row. The consumed check means a
+// visitor who already has the cookie set loses access the moment Clara
+// submits the intake (without waiting for cookie expiry).
 func (h *Handler) magicLinkClaimsFromCookie(r *http.Request, t *store.Tenant) (magicLinkClaims, bool) {
 	c, err := r.Cookie(magicLinkCookieName)
 	if err != nil {
@@ -252,8 +291,81 @@ func (h *Handler) magicLinkClaimsFromCookie(r *http.Request, t *store.Tenant) (m
 	if claims.TenantID != t.ID {
 		return magicLinkClaims{}, false
 	}
+	if h.MagicLinks != nil {
+		if row, err := h.MagicLinks.Get(r.Context(), claims.Nonce); err == nil && row.ConsumedAt != nil {
+			return magicLinkClaims{}, false
+		}
+	}
 	return claims, true
 }
+
+// renderMagicLinkConsumed writes the friendly thank-you page that replaces
+// the dashboard when a visitor clicks an already-consumed link. Self-
+// contained HTML — no SPA, no JS, works even when the launcher is down.
+func renderMagicLinkConsumed(w http.ResponseWriter, t *store.Tenant, row *store.MagicLink) {
+	summary := "Recebemos suas informações. Em breve um especialista vai entrar em contato."
+	if row.Summary != nil && *row.Summary != "" {
+		summary = *row.Summary
+	}
+	consumedAt := ""
+	if row.ConsumedAt != nil {
+		consumedAt = row.ConsumedAt.Format("02/01/2006 15:04")
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(magicLinkConsumedHTML(t.DisplayName, summary, consumedAt)))
+}
+
+func magicLinkConsumedHTML(tenantName, summary, consumedAt string) string {
+	if tenantName == "" {
+		tenantName = "Atendimento"
+	}
+	// Inline string concat keeps the page dependency-free (no template package
+	// import, no embed). Style + structure intentionally minimal — this page
+	// is rarely seen and shouldn't load anything from the launcher.
+	return `<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Obrigado — ` + htmlEscape(tenantName) + `</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+         max-width: 560px; margin: 64px auto; padding: 0 24px; line-height: 1.55;
+         color: #1a1a1a; background: #fafafa; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e8e8e8; background: #161616; }
+    .card { background: #1f1f1f; border-color: #2a2a2a; }
+    .summary { background: #242424; border-color: #333; }
+  }
+  .card { border: 1px solid #e0e0e0; border-radius: 12px; padding: 32px; background: white; }
+  h1 { margin: 0 0 8px; font-size: 1.4rem; }
+  .lead { margin: 0 0 24px; color: #666; }
+  .summary { background: #f6f6f6; border: 1px solid #eaeaea; border-radius: 8px;
+             padding: 16px; margin: 16px 0; white-space: pre-wrap; font-size: 0.95rem; }
+  .meta { font-size: 0.8rem; color: #999; margin-top: 24px; border-top: 1px solid #eaeaea; padding-top: 16px; }
+  .check { display: inline-flex; align-items: center; justify-content: center;
+           width: 48px; height: 48px; border-radius: 50%; background: #22c55e;
+           color: white; font-size: 1.5rem; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="check">✓</div>
+    <h1>Obrigado pelo seu contato!</h1>
+    <p class="lead">` + htmlEscape(tenantName) + ` recebeu suas informações com sucesso.</p>
+    <div class="summary">` + htmlEscape(summary) + `</div>
+    <p>Em breve um especialista entrará em contato com você.
+       Se precisar falar com a gente antes, é só responder à mensagem
+       que você recebeu por WhatsApp ou e-mail.</p>
+    <div class="meta">Conversa finalizada em ` + htmlEscape(consumedAt) + `</div>
+  </div>
+</body>
+</html>`
+}
+
 
 // signMagicVisitorRequest annotates the proxied request with trusted_gateway
 // HMAC + visitor-role claims so the launcher accepts the request as if a
@@ -266,4 +378,41 @@ func (h *Handler) signMagicVisitorRequest(req *http.Request, t *store.Tenant, cl
 		UserID: "visitor:" + claims.Nonce,
 		Role:   "public",
 	}, time.Now())
+}
+
+// ── Manual consume endpoint ──────────────────────────────────────────
+
+// magicLinkConsumeRequest is the admin body for marking a link consumed
+// outside of the intake-submit auto-trigger. Both fields optional —
+// summary defaults to a generic "we received your info" message.
+type magicLinkConsumeRequest struct {
+	Summary string `json:"summary,omitempty"`
+}
+
+// handleConsumeMagicLink lets the operator mark a magic link consumed
+// without waiting for the intake-submit callback. Useful for ad-hoc links
+// not tied to an intake, or to short-circuit a stuck conversation.
+//
+// Admin-only (router enforces requirePlatformAdmin).
+func (h *Handler) handleConsumeMagicLink(w http.ResponseWriter, r *http.Request) {
+	nonce := chi.URLParam(r, "nonce")
+	if nonce == "" {
+		writeError(w, http.StatusBadRequest, "nonce required")
+		return
+	}
+	if h.MagicLinks == nil {
+		writeError(w, http.StatusServiceUnavailable, "magic links store not configured")
+		return
+	}
+	var req magicLinkConsumeRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := h.MagicLinks.MarkConsumed(r.Context(), nonce, req.Summary); err != nil {
+		if err == store.ErrMagicLinkNotFound {
+			writeError(w, http.StatusNotFound, "magic link not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "mark consumed: "+err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

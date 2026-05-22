@@ -13,6 +13,7 @@ import {
   listMembers,
   createInvite,
   generateTenantMagicLink,
+  consumeMagicLink,
 } from "@/api/tenants";
 import {
   getCRMContact,
@@ -23,6 +24,7 @@ import {
   STAGE_COLOR,
 } from "@/api/crm";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
@@ -63,8 +65,10 @@ export function TenantDetail() {
   const [rotatedPwd, setRotatedPwd] = useState<string | null>(null);
   const [pwdCopied, setPwdCopied] = useState(false);
   const [magicLinkOpen, setMagicLinkOpen] = useState(false);
-  const [magicLinkData, setMagicLinkData] = useState<{ url: string; expires_at: string } | null>(null);
+  const [magicLinkData, setMagicLinkData] = useState<{ url: string; expires_at: string; token: string } | null>(null);
   const [magicLinkCopied, setMagicLinkCopied] = useState(false);
+  const [magicLinkSummary, setMagicLinkSummary] = useState("");
+  const [magicLinkConsumed, setMagicLinkConsumed] = useState(false);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["tenant", id] });
 
@@ -95,8 +99,26 @@ export function TenantDetail() {
   });
   const magicLinkM = useMutation({
     mutationFn: () => generateTenantMagicLink(id),
-    onSuccess: (r) => setMagicLinkData({ url: r.url, expires_at: r.expires_at }),
+    onSuccess: (r) => {
+      setMagicLinkData({ url: r.url, expires_at: r.expires_at, token: r.token });
+      setMagicLinkConsumed(false);
+      setMagicLinkSummary("");
+    },
     onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Falha ao gerar link." }),
+  });
+  const consumeMagicM = useMutation({
+    mutationFn: () => {
+      // Extract nonce from the token's payload (token format: "<base64Payload>.<sig>")
+      if (!magicLinkData?.token) throw new Error("no token");
+      const payload = magicLinkData.token.split(".")[0];
+      const claims = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+      return consumeMagicLink(claims.n, magicLinkSummary);
+    },
+    onSuccess: () => {
+      setMagicLinkConsumed(true);
+      toast({ type: "success", message: "Link invalidado. Próximos cliques verão a página de obrigado." });
+    },
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Falha ao concluir link." }),
   });
   const copyMagicLink = async () => {
     if (!magicLinkData) return;
@@ -482,6 +504,40 @@ export function TenantDetail() {
                 ⚠️ Trate como token de acesso — não publique em canal público
                 nem cole em screenshots. Qualquer browser com o link entra como
                 visitor anônimo.
+              </div>
+
+              <div className="space-y-2 rounded-md border border-zinc-700 bg-zinc-900/50 p-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-zinc-200">Invalidar quando a conversa terminar</div>
+                  {magicLinkConsumed && <span className="text-[10px] text-emerald-400">✓ link invalidado</span>}
+                </div>
+                <p className="text-zinc-400">
+                  <b>Automático:</b> quando Clara fizer <code>submit_intake</code>, todos os links
+                  amarrados àquele intake são invalidados sozinhos (aparece a tela de "obrigado, em
+                  breve entramos em contato"). <b>Manual:</b> use o botão abaixo se quiser fechar
+                  esse link agora — opcionalmente personalize o resumo que o visitante vê.
+                </p>
+                <Textarea
+                  value={magicLinkSummary}
+                  onChange={(e) => setMagicLinkSummary(e.target.value)}
+                  placeholder="Resumo exibido ao visitante (opcional). Ex: Recebemos suas informações sobre a empresa X. Em até 24h um especialista vai te contatar pelo email Y."
+                  rows={3}
+                  disabled={magicLinkConsumed}
+                />
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => consumeMagicM.mutate()}
+                    disabled={consumeMagicM.isPending || magicLinkConsumed}
+                  >
+                    {consumeMagicM.isPending
+                      ? "Invalidando..."
+                      : magicLinkConsumed
+                      ? "Link invalidado ✓"
+                      : "Concluir agora (invalidar link)"}
+                  </Button>
+                </div>
               </div>
             </>
           )}
