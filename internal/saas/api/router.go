@@ -13,6 +13,7 @@ import (
 	"github.com/sipeed/picoclaw/internal/saas/auth"
 	"github.com/sipeed/picoclaw/internal/saas/config"
 	"github.com/sipeed/picoclaw/internal/saas/mailer"
+	"github.com/sipeed/picoclaw/internal/saas/mcp"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 	"github.com/sipeed/picoclaw/internal/saas/tenant"
 )
@@ -29,6 +30,11 @@ type Handler struct {
 	CompanyIntakes *store.CompanyIntakeStore
 	MagicLinks     *store.MagicLinkStore
 	Usage          *store.UsageStore
+	MCP            *store.WorkspaceMCPStore
+	// MCPEncKey is the decoded AES-256-GCM key (32 bytes) used to seal
+	// per-workspace MCP credentials. Nil when PICOCLAW_SAAS_MCP_ENCRYPTION_KEY
+	// is unset or invalid; PUT /api/v1/workspaces/{id}/mcp/* then returns 503.
+	MCPEncKey      []byte
 	Provisioner    *tenant.Provisioner
 	LoginAttempts  *loginAttempts
 	ClaraRateLimit *rateLimiter
@@ -40,7 +46,7 @@ type Handler struct {
 	// more headroom than the 5-min login limiter).
 	PublicChatRateLimit *rateLimiter
 	CRM                 *crmClient
-	Mailer         *mailer.Mailer
+	Mailer              *mailer.Mailer
 	// Supabase is the optional Auth client for tenants whose dashboard logins
 	// are gated by Supabase JWT instead of the legacy local sessions table.
 	// Nil when SUPABASE_* env vars are unset — controlplane stays fully
@@ -71,6 +77,7 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		CompanyIntakes: &store.CompanyIntakeStore{DB: db},
 		MagicLinks:     &store.MagicLinkStore{DB: db},
 		Usage:          &store.UsageStore{DB: db},
+		MCP:            &store.WorkspaceMCPStore{DB: db},
 		Provisioner:    prov,
 		LoginAttempts:  newLoginAttempts(),
 		ClaraRateLimit: newRateLimiter(cfg.ClaraRateLimitPerIP, cfg.ClaraRateWindow),
@@ -110,6 +117,15 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 	h.AutoProvision = NewAutoProvisioner(cfg, prov, h.Supabase, db, mlr)
 	h.Reminders = &store.IntakeReminderStore{DB: db}
 	h.ReminderWorker = NewReminderWorker(cfg, db, mlr)
+
+	if cfg.MCPEncryptionKey != "" {
+		key, err := mcp.LoadEncryptionKey(cfg.MCPEncryptionKey)
+		if err != nil {
+			log.Printf("WARN: MCP encryption key invalid (%v); MCP activation will be disabled", err)
+		} else {
+			h.MCPEncKey = key
+		}
+	}
 
 	return h
 }
@@ -201,6 +217,10 @@ func (h *Handler) Routes() http.Handler {
 				r.Get("/workspaces/{id}", h.handleGetWorkspace)
 				r.Put("/workspaces/{id}", h.handleUpdateWorkspace)
 				r.Delete("/workspaces/{id}", h.handleDeleteWorkspace)
+				r.Get("/mcp/catalog", h.handleGetMCPCatalog)
+				r.Get("/workspaces/{id}/mcp", h.handleListWorkspaceMCP)
+				r.Put("/workspaces/{id}/mcp/{catalog_id}", h.handlePutWorkspaceMCP)
+				r.Delete("/workspaces/{id}/mcp/{catalog_id}", h.handleDeleteWorkspaceMCP)
 				r.Get("/workspaces/{id}/files", h.handleReadWorkspaceFile)
 				r.Get("/workspaces/{id}/files/tree", h.handleWorkspaceFilesTree)
 				r.Get("/workspaces/{id}/validate", h.handleValidateWorkspace)

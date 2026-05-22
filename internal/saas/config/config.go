@@ -115,6 +115,14 @@ type Config struct {
 	SupabaseServiceRoleKey string
 	SupabaseJWTSecret      string
 	SupabaseSiteURL        string
+
+	// MCPEncryptionKey is the base64-encoded 32-byte AES-256-GCM key used to
+	// seal per-workspace MCP server credentials at-rest in
+	// workspace_mcp_servers.credentials_encrypted. Generate via
+	// `openssl rand -base64 32`. When empty, PUT /api/v1/workspaces/{id}/mcp/*
+	// returns 503 — the admin cannot activate any MCPs that require creds
+	// until this is configured. See internal/saas/mcp/credentials.go.
+	MCPEncryptionKey string
 }
 
 func Load() (*Config, error) {
@@ -192,6 +200,8 @@ func Load() (*Config, error) {
 	c.SupabaseServiceRoleKey = os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
 	c.SupabaseJWTSecret = os.Getenv("SUPABASE_JWT_SECRET")
 	c.SupabaseSiteURL = envOr("SUPABASE_SITE_URL", "https://"+c.TenantBaseDomain)
+
+	c.MCPEncryptionKey = os.Getenv("PICOCLAW_SAAS_MCP_ENCRYPTION_KEY")
 
 	if c.PGDSN == "" {
 		return nil, fmt.Errorf("PG_DSN is required")
