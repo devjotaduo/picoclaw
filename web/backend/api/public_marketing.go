@@ -18,6 +18,32 @@ const publicMarketingPrefix = "/public/marketing/"
 func (h *Handler) registerPublicMarketingRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /public/marketing/{asset...}", h.handlePublicMarketingAsset)
 	mux.HandleFunc("HEAD /public/marketing/{asset...}", h.handlePublicMarketingAsset)
+	mux.HandleFunc("GET /api/marketing/public-base-url", h.handleMarketingPublicBaseURL)
+}
+
+// handleMarketingPublicBaseURL returns the resolved public base URL and the
+// workspace-relative publish directory so that Lia (or any caller) can build
+// absolute asset links without hardcoding host names.
+//
+//	GET /api/marketing/public-base-url
+//	→ {"base_url":"https://minhaclinica.jotaduo.com","publish_dir":"workspace/public/marketing","example":"https://minhaclinica.jotaduo.com/public/marketing/promo.html"}
+func (h *Handler) handleMarketingPublicBaseURL(w http.ResponseWriter, r *http.Request) {
+	base := resolvedPublicBaseURL()
+	cfg, err := h.loadOrchestrationConfig()
+	publishDir := "workspace/public/marketing"
+	if err == nil {
+		if agentCfg, ok := findAgentConfig(cfg, orchestrator.AgentMarketing); ok {
+			if root, ok := marketingPublicDir(agentCfg); ok {
+				publishDir = root
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"base_url":    base,
+		"publish_dir": publishDir,
+		"example":     strings.TrimRight(base, "/") + publicMarketingPrefix + "promo.html",
+	})
 }
 
 func (h *Handler) handlePublicMarketingAsset(w http.ResponseWriter, r *http.Request) {
@@ -109,6 +135,19 @@ func allowedPublicMarketingExt(ext string) bool {
 	}
 }
 
+// resolvedPublicBaseURL returns the base URL to use for absolute public asset
+// links. It reads PICOCLAW_PUBLIC_BASE_URL (set by the SaaS controlplane to the
+// tenant subdomain, e.g. "https://minhaclinica.jotaduo.com"). When the env var
+// is absent it returns an empty string and callers should fall back to relative
+// paths.
+func resolvedPublicBaseURL() string {
+	return strings.TrimRight(strings.TrimSpace(os.Getenv(config.EnvPublicBaseURL)), "/")
+}
+
+// publicMarketingURLForAsset returns the public URL for a given asset path.
+// When PICOCLAW_PUBLIC_BASE_URL is set the URL is absolute (includes the tenant
+// subdomain). Otherwise it falls back to the launcher-relative path
+// "/public/marketing/…" which is valid within the same origin.
 func publicMarketingURLForAsset(agent config.AgentConfig, assetPath string) string {
 	root, ok := marketingPublicDir(agent)
 	if !ok {
@@ -125,7 +164,11 @@ func publicMarketingURLForAsset(agent config.AgentConfig, assetPath string) stri
 	if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." {
 		return ""
 	}
-	return publicMarketingPrefix + path.Clean(filepath.ToSlash(rel))
+	relPath := publicMarketingPrefix + path.Clean(filepath.ToSlash(rel))
+	if base := resolvedPublicBaseURL(); base != "" {
+		return base + relPath
+	}
+	return relPath
 }
 
 func enrichMarketingProposal(agent config.AgentConfig, raw []byte) json.RawMessage {

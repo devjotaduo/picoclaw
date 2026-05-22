@@ -26,14 +26,15 @@ visibility: global
 ## Processo
 1. Montar prompt visual com: assunto + estilo + paleta + elementos obrigatórios (logo, CTA, data) + elementos proibidos (concorrente, pessoas reais sem autorização, claims não validados).
 2. Gerar a imagem usando a ferramenta de geração disponível.
-3. Salvar em `workspace/output/marketing/YYYY-MM-DD/post-<slug>-<formato>.png`.
+3. Salvar em `workspace/public/marketing/YYYY-MM-DD/post-<slug>-<formato>.png`.
 4. Registrar em `memory/marketing.md`: data, campanha, formato, prompt, status=rascunho.
 
 ## Saída obrigatória
 ```
 [IMAGEM GERADA]
-Arquivo: workspace/output/marketing/YYYY-MM-DD/post-<slug>-<formato>.png
-Link público: https://... (se publicado via publicar-site-simples)
+Arquivo: workspace/public/marketing/YYYY-MM-DD/post-<slug>-<formato>.png
+Link público: <base_url>/public/marketing/YYYY-MM-DD/post-<slug>-<formato>.png
+(base_url de GET /api/marketing/public-base-url; relativo se env não setado)
 [STATUS] rascunho — aguardando aprovação humana
 [PRÓXIMO PASSO] Lia gera legenda via criar-post-instagram
 ```

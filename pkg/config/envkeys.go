@@ -41,6 +41,13 @@ const (
 	// EnvGatewayHost overrides the host address for the gateway server.
 	// Default: "localhost"
 	EnvGatewayHost = "PICOCLAW_GATEWAY_HOST"
+
+	// EnvPublicBaseURL sets the publicly reachable base URL for this launcher
+	// instance, used to build absolute links for generated marketing assets.
+	// In SaaS deployments this is set to the tenant subdomain by the
+	// controlplane provisioner, e.g. "https://minhaclinica.jotaduo.com".
+	// When unset the launcher falls back to relative paths ("/public/marketing/…").
+	EnvPublicBaseURL = "PICOCLAW_PUBLIC_BASE_URL"
 )
 
 func GetHome() string {

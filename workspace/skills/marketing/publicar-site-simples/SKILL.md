@@ -17,7 +17,28 @@ visibility: global
 - Mobile-first (80%+ tráfego Instagram é mobile).
 - Fonte mínima 16px, contraste WCAG AA.
 - Sem rastreamento de terceiros.
-- HTTPS obrigatório (configurado em `config/hosting.md`).
+- HTTPS obrigatório em produção (configurado via `PICOCLAW_PUBLIC_BASE_URL`).
+
+## Onde salvar os arquivos
+
+Salvar **sempre** dentro da pasta pública do próprio workspace:
+
+```
+workspace/public/marketing/<slug>.html
+workspace/public/marketing/<slug>/index.html   (quando há múltiplos assets)
+workspace/public/marketing/<slug>.png          (imagens standalone)
+```
+
+O launcher serve essa pasta em `/public/marketing/{asset}` com segurança (path traversal bloqueado, extensões permitidas: .html .htm .css .js .json .png .jpg .jpeg .webp .gif .svg .pdf).
+
+## URL pública
+
+O link público é montado pelo backend automaticamente. Consulte `GET /api/marketing/public-base-url` antes de gerar a entrega:
+
+- Se `PICOCLAW_PUBLIC_BASE_URL` estiver setado (SaaS/produção), a resposta terá `base_url=https://<tenant>.jotaduo.com` e os links serão **absolutos**: `https://<tenant>.jotaduo.com/public/marketing/<slug>.html`
+- Se não estiver setado (standalone/dev), os links serão **relativos**: `/public/marketing/<slug>.html`
+
+Nunca hardcode host ou porta. Use sempre o `base_url` retornado por `/api/marketing/public-base-url`.
 
 ## Seções obrigatórias
 1. **Hero** — imagem OG (1200×630) + título + subtítulo + botão CTA.
@@ -30,21 +51,21 @@ visibility: global
 1. Consultar `memory/empresa.md` + `memory/marketing.md` (identidade visual).
 2. Receber briefing: objetivo, CTA, texto, imagens.
 3. Gerar imagens necessárias com `gerar-imagem-post` (formato OG 1200×630).
-4. Gerar `workspace/output/sites/<slug>/index.html`.
-5. Publicar no servidor configurado em `config/hosting.md`.
-6. Gerar QR code → `workspace/output/sites/<slug>/qr.png`.
+4. Gerar `workspace/public/marketing/<slug>/index.html`.
+5. Consultar `GET /api/marketing/public-base-url` para montar o link correto.
+6. Gerar QR code → `workspace/public/marketing/<slug>/qr.png`.
 7. Validar: status 200 ✓ | mobile ✓ | carregamento < 2s ✓.
 
 ## Saída obrigatória
 ```
 [SITE PUBLICADO]
-URL: https://<dominio>/<slug>/
-QR Code: workspace/output/sites/<slug>/qr.png
+URL: <base_url>/public/marketing/<slug>/
+QR Code: workspace/public/marketing/<slug>/qr.png
 Tamanho: X KB | Mobile: OK | HTTPS: OK
 expira_em: YYYY-MM-DD
 
 [PRÓXIMOS PASSOS]
-1. Trocar link da bio do Instagram por: https://...
+1. Trocar link da bio do Instagram por: <url>
 2. Anexar URL no post da campanha.
 3. Aprovação humana se houver formulário com dados pessoais.
 
@@ -55,7 +76,7 @@ Registrar em `memory/marketing.md`: `id`, `url`, `data_publicacao`, `campanha_as
 
 ## Despublicação automática
 - D-3 do `expira_em`: Lia avisa Rafael.
-- Após confirmação: mover para `workspace/output/sites/_arquivados/<slug>-YYYYMMDD/`.
+- Após confirmação: mover para `workspace/public/marketing/_arquivados/<slug>-YYYYMMDD/`.
 
 ## Não pode
 - Publicar formulário coletando dados pessoais sem aprovação humana.

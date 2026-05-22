@@ -1,34 +1,64 @@
 # Configuração de Hosting
 
-## Servidor de publicação estática
+## Variável de ambiente principal
 
-provider: local
-base_url: http://localhost:18800
-public_path: public/marketing
-output_path: workspace/output/marketing
+```
+PICOCLAW_PUBLIC_BASE_URL=https://<tenant>.jotaduo.com
+```
 
-## Mapeamento de URL público
+Setada pelo controlplane SaaS ao provisionar o tenant. Quando presente, o
+launcher usa esse valor para montar URLs absolutas em todos os assets
+de marketing gerados pela Lia.
 
-Arquivos salvos em `public/marketing/<slug>/index.html` ficam acessíveis em:
-`http://localhost:18800/public/marketing/<slug>/`
+Sem a variável (dev standalone), os links são relativos ao próprio launcher:
+`/public/marketing/<slug>.html`
 
-Arquivos salvos em `public/marketing/<slug>.html` ficam acessíveis em:
-`http://localhost:18800/public/marketing/<slug>.html`
+## Pasta de publicação dentro do workspace
 
-Imagens em `public/marketing/<slug>.png` ficam acessíveis em:
-`http://localhost:18800/public/marketing/<slug>.png`
+```
+$PICOCLAW_HOME/workspace/public/marketing/
+```
 
-## HTTPS em produção
+O launcher serve essa pasta em `GET /public/marketing/{asset}` com:
+- Path traversal bloqueado
+- Extensões permitidas: .html .htm .css .js .json .png .jpg .jpeg .webp .gif .svg .pdf
+- Cache-Control: public, max-age=300
 
-Em produção (picoclaw-launcher via Traefik), substituir base_url por:
-`https://<tenant>.jotaduo.com`
+## API para montar links
 
-## QR code
+```
+GET /api/marketing/public-base-url
+→ {
+    "base_url":    "https://minhaclinica.jotaduo.com",
+    "publish_dir": "/root/.picoclaw/workspace/public/marketing",
+    "example":     "https://minhaclinica.jotaduo.com/public/marketing/promo.html"
+  }
+```
 
-Gerar QR a partir da URL pública com a ferramenta disponível.
-Salvar em `workspace/output/sites/<slug>/qr.png`.
+Quando `PICOCLAW_PUBLIC_BASE_URL` não está setado, `base_url` retorna vazio e
+a Lia deve usar o caminho relativo como fallback.
 
-## Expiração
+## Estrutura de pastas esperada
 
-Sites de campanha: 30 dias por padrão.
-Definir `expira_em: YYYY-MM-DD` no registro de `memory/marketing.md`.
+```
+workspace/
+  public/
+    marketing/
+      bella-vida-catalogo.html
+      bella-vida-promo-maio.html
+      2026-05-22/
+        post-bella-vida-promo-og.png
+      _arquivados/              ← sites expirados movidos aqui
+        bella-vida-promo-abril-20260430/
+```
+
+## SaaS (produção)
+
+- Traefik roteia `https://<slug>.jotaduo.com` → container `picoclaw-launcher`
+- Container tem `PICOCLAW_PUBLIC_BASE_URL=https://<slug>.jotaduo.com` no env
+- `workspace/public/marketing/` é um volume bind-mounted do host
+
+## Dev / standalone
+
+- Deixar `PICOCLAW_PUBLIC_BASE_URL` vazio
+- Acesso via `http://localhost:18800/public/marketing/<asset>`
