@@ -12,6 +12,7 @@ import { AgentSettings } from "@/pages/AgentSettings";
 import { CrmPage } from "@/pages/CrmPage";
 import { AcceptInvite } from "@/pages/AcceptInvite";
 import { Workspaces } from "@/pages/Workspaces";
+import { WorkspaceFiles } from "@/pages/WorkspaceFiles";
 import { AuditLog } from "@/pages/AuditLog";
 import { TenantLogs } from "@/pages/TenantLogs";
 import { UserManagement } from "@/pages/UserManagement";
@@ -66,6 +67,7 @@ export default function App() {
         <Route path="/tenants/:id/skills/:name" element={<SkillEdit />} />
         <Route path="/tenants/:id/logs" element={<RequirePlatform><TenantLogs /></RequirePlatform>} />
         <Route path="/workspaces" element={<RequirePlatform><Workspaces /></RequirePlatform>} />
+        <Route path="/workspaces/:id/files" element={<RequirePlatform><WorkspaceFiles /></RequirePlatform>} />
         <Route path="/audit" element={<RequirePlatform><AuditLog /></RequirePlatform>} />
         <Route path="/users" element={<RequirePlatform><UserManagement /></RequirePlatform>} />
         <Route path="/dashboard" element={<RequirePlatform><PlatformDashboard /></RequirePlatform>} />

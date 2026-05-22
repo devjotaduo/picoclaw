@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Download, Hammer, Save, Trash2, FileText } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Plus, Download, Hammer, Save, Trash2, FileText, FolderTree } from "lucide-react";
 
 import {
   buildWorkspaceFrontend,
@@ -338,6 +339,26 @@ function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
               </div>
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Editor completo de arquivos</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm">
+          <p className="mb-3 text-xs text-zinc-400">
+            Edite qualquer arquivo do workspace (home/, frontend-src/) com árvore de navegação e
+            syntax highlight. Para os arquivos comuns (AGENT.md, SOUL.md, config.json, etc.) você
+            pode continuar usando o editor rápido abaixo.
+          </p>
+          <Link
+            to={`/workspaces/${encodeURIComponent(workspace.id)}/files`}
+            className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
+          >
+            <FolderTree className="mr-1 size-4" />
+            Abrir editor de arquivos
+          </Link>
         </CardContent>
       </Card>
 

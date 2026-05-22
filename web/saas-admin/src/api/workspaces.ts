@@ -80,6 +80,24 @@ export async function deleteWorkspace(id: string) {
   });
 }
 
+export type WorkspaceTreeEntry = {
+  path: string;
+  is_dir: boolean;
+  size: number;
+  is_text: boolean;
+};
+
+export type WorkspaceTree = {
+  workspace_id: string;
+  subtrees: string[];
+  entries: WorkspaceTreeEntry[];
+  truncated?: boolean;
+};
+
+export async function listWorkspaceFiles(id: string) {
+  return api<WorkspaceTree>(`/api/v1/workspaces/${encodeURIComponent(id)}/files/tree`);
+}
+
 export async function readWorkspaceFile(id: string, path: string) {
   return api<WorkspaceFile>(
     `/api/v1/workspaces/${encodeURIComponent(id)}/files?path=${encodeURIComponent(path)}`,
