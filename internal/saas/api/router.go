@@ -200,6 +200,7 @@ func (h *Handler) Routes() http.Handler {
 				r.Delete("/workspaces/{id}", h.handleDeleteWorkspace)
 				r.Get("/workspaces/{id}/files", h.handleReadWorkspaceFile)
 				r.Get("/workspaces/{id}/files/tree", h.handleWorkspaceFilesTree)
+				r.Get("/workspaces/{id}/validate", h.handleValidateWorkspace)
 				r.Put("/workspaces/{id}/files", h.handleWriteWorkspaceFile)
 				r.Post("/workspaces/{id}/frontend/build", h.handleBuildWorkspaceFrontend)
 				r.Post("/tenants/onboarding/bootstrap", h.handleBootstrapOnboardingTenant)

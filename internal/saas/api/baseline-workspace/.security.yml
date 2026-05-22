@@ -1,0 +1,49 @@
+# Picoclaw security policy — baseline for auto-provisioned tenants.
+#
+# This file gates what the launcher's tools and channel handlers are
+# allowed to do. The defaults below are CONSERVATIVE — a new tenant
+# can answer messages and browse memory, but cannot exec arbitrary
+# shell, write outside the workspace, or call external HTTP without
+# the operator widening the allowlist via the admin UI.
+#
+# Edit via the workspace files editor at adm.<base>/workspaces/<id>/files
+# or by SSH-editing the file directly inside the workspace home/.
+
+# Subprocess isolation for the `exec` tool, MCP stdio servers, and any
+# CLI providers (claude-cli, codex-cli). When `enabled: false` the
+# launcher runs subprocesses unsandboxed — fine for trusted operator
+# environments, dangerous for tenants serving public traffic.
+isolation:
+  enabled: false  # flip to true once you've validated bubblewrap is installed on the host
+
+# Tool allowlist. Channels that try to call a tool not listed here get
+# a clear "tool not permitted" error instead of silently failing.
+tools:
+  read_file:
+    enabled: true
+  write_file:
+    enabled: true
+    # Workspace-only by default. Provider-managed paths (sessions,
+    # whatsapp store, dashboardauth) are blocked even when this is true.
+    workspace_only: true
+  list_files:
+    enabled: true
+  exec:
+    enabled: false  # operator opts in via admin UI after auditing scripts/
+    allowed_commands: []
+  http_get:
+    enabled: false  # opt-in per tenant
+    allowed_hosts: []
+
+# Channel allowlist. The provisioner already sets
+# PICOCLAW_ALLOWED_CHANNELS based on tenant flags (e.g. public-web for
+# is_public=true), but this is the static fallback.
+channels:
+  allowed: []  # empty = inherit from PICOCLAW_ALLOWED_CHANNELS env
+
+# OAuth/credential resolution order. The launcher checks these paths in
+# order when a tool/skill needs auth (Codex, Claude CLI, GitHub, etc.).
+auth:
+  resolution_order:
+    - /root/.picoclaw/auth.json          # tenant-local auth (default)
+    - /run/secrets/shared-auth.json      # shared operator auth (read-only bind, future)

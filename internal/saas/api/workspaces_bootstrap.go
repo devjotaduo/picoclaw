@@ -75,32 +75,26 @@ func (h *Handler) EnsureDefaultWorkspace(ctx context.Context) error {
 
 	homeDir := filepath.Join(hostPath, tenant.WorkspaceHomeSubdir)
 
-	// Seed home/workspace/ from the canonical host source if it's mounted,
-	// else fall back to extracting the embedded baseline (always present in
-	// the binary). This keeps legacy installs that still bind-mount
-	// /srv/picoclaw:ro working unchanged, and gives fresh installs without
-	// that mount a real (if generic) baseline instead of an empty workspace
-	// that would fail to boot a tenant.
+	// Step 1: seed home/workspace/ from the canonical host source if mounted.
+	// Keeps legacy installs that bind /srv/picoclaw:ro working unchanged.
 	workspaceDest := filepath.Join(homeDir, "workspace")
-	if _, err := os.Stat(workspaceDest); errors.Is(err, os.ErrNotExist) {
-		switch {
-		case isUsableDir(canonicalWorkspaceSource):
-			if err := copyDir(canonicalWorkspaceSource, workspaceDest); err != nil {
-				log.Printf("WARN: bootstrap workspace: copy host %s -> %s failed (%v); falling back to embedded baseline", canonicalWorkspaceSource, workspaceDest, err)
-				if extractErr := extractEmbeddedBaseline(workspaceDest); extractErr != nil {
-					log.Printf("WARN: bootstrap workspace: embed extract also failed: %v", extractErr)
-				}
-			}
-		default:
-			if err := extractEmbeddedBaseline(workspaceDest); err != nil {
-				log.Printf("WARN: bootstrap workspace: embed extract failed: %v", err)
-			}
+	if _, err := os.Stat(workspaceDest); errors.Is(err, os.ErrNotExist) && isUsableDir(canonicalWorkspaceSource) {
+		if err := copyDir(canonicalWorkspaceSource, workspaceDest); err != nil {
+			log.Printf("WARN: bootstrap workspace: copy host %s -> %s failed (%v); will fall through to embed", canonicalWorkspaceSource, workspaceDest, err)
 		}
 	}
 
-	// Write a minimal home/config.json with the placeholders the provisioner
-	// substitutes (LITELLM_KEY, LITELLM_URL, TENANT_ID). Only write if absent
-	// so an operator who pre-populated home/ keeps their version.
+	// Step 2: extract the embedded baseline into homeDir, skip-if-exists per
+	// file. This fills in anything the host source missed: .security.yml +
+	// auth.json at the home/ root (always missing from the legacy host
+	// workspace), and workspace/* files if the host source wasn't usable.
+	if err := extractEmbeddedBaseline(homeDir); err != nil {
+		log.Printf("WARN: bootstrap workspace: embed extract failed: %v", err)
+	}
+
+	// Step 3: write a minimal home/config.json with the placeholders the
+	// provisioner substitutes (LITELLM_KEY, LITELLM_URL, TENANT_ID). Only
+	// write if absent so an operator who pre-populated home/ keeps theirs.
 	configPath := filepath.Join(homeDir, "config.json")
 	if _, err := os.Stat(configPath); errors.Is(err, os.ErrNotExist) {
 		if err := writeBaselineConfig(configPath); err != nil {
@@ -175,8 +169,13 @@ func isUsableDir(path string) bool {
 // extractEmbeddedBaseline writes the embedded baseline-workspace contents
 // into dst, stripping the "baseline-workspace/" prefix and skipping the
 // .gitkeep placeholders we only use to force go:embed to include empty
-// directories. Idempotent over dst — destination is created if missing,
-// existing files at the same path are overwritten.
+// directories. SKIPS files that already exist at the destination so the
+// operator's hand-edited content is never overwritten — only missing
+// files get filled in.
+//
+// auth.json gets stricter permissions (0o600) than the rest because it
+// may end up holding OAuth tokens after the operator runs `picoclaw auth
+// login <provider>` inside the container.
 func extractEmbeddedBaseline(dst string) error {
 	const embedRoot = "baseline-workspace"
 	if err := os.MkdirAll(dst, 0o755); err != nil {
@@ -200,6 +199,15 @@ func extractEmbeddedBaseline(dst string) error {
 			// empty directory.
 			return os.MkdirAll(filepath.Dir(target), 0o755)
 		}
+		// Skip README.md — it's repo documentation, not content tenants need.
+		if filepath.Base(rel) == "README.md" {
+			return nil
+		}
+		// Skip-if-exists: never overwrite operator content. The bootstrap is
+		// purely additive.
+		if _, err := os.Stat(target); err == nil {
+			return nil
+		}
 		data, err := baselineWorkspaceFS.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("read embed %s: %w", path, err)
@@ -207,7 +215,11 @@ func extractEmbeddedBaseline(dst string) error {
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return fmt.Errorf("mkdir %s: %w", filepath.Dir(target), err)
 		}
-		if err := os.WriteFile(target, data, 0o644); err != nil {
+		mode := os.FileMode(0o644)
+		if filepath.Base(rel) == "auth.json" {
+			mode = 0o600 // contains OAuth tokens once an operator authenticates
+		}
+		if err := os.WriteFile(target, data, mode); err != nil {
 			return fmt.Errorf("write %s: %w", target, err)
 		}
 		return nil

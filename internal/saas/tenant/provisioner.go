@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +18,47 @@ import (
 	"github.com/sipeed/picoclaw/internal/saas/litellm"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 )
+
+// sharedAuthHostPath is where the operator places auth.json with OAuth
+// credentials shared across all auto-provisioned tenants (Codex, Claude
+// CLI, GitHub, etc.). Override via PICOCLAW_SHARED_AUTH_PATH env if the
+// operator prefers a different location.
+const sharedAuthHostPath = "/etc/picoclaw/shared-auth.json"
+
+// copySharedAuthIfPresent reads sharedAuthHostPath (or the
+// PICOCLAW_SHARED_AUTH_PATH override) and copies it into the tenant
+// volume at /root/.picoclaw/auth.json (overwriting whatever the
+// workspace baseline put there). No-op when the source file is missing
+// — that's the documented "per-tenant auth" path.
+func copySharedAuthIfPresent(volumePath string) error {
+	src := strings.TrimSpace(os.Getenv("PICOCLAW_SHARED_AUTH_PATH"))
+	if src == "" {
+		src = sharedAuthHostPath
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil // no shared auth configured → fine
+		}
+		return fmt.Errorf("open %s: %w", src, err)
+	}
+	defer in.Close()
+
+	dst := filepath.Join(volumePath, "auth.json")
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", dst, err)
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return fmt.Errorf("copy: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", dst, err)
+	}
+	log.Printf("provisioner: seeded tenant auth.json from %s -> %s", src, dst)
+	return nil
+}
 
 type Provisioner struct {
 	Cfg        *config.Config
@@ -182,6 +225,23 @@ func (p *Provisioner) runProvision(
 	// 1. Workspace home → tenant volume. Single authoritative copy step.
 	if err := CopyWorkspaceHome(ws.HostPath, t.VolumePath); err != nil {
 		return fmt.Errorf("copy workspace home: %w", err)
+	}
+
+	// 1b. Shared OAuth credentials. If the operator has authenticated against
+	// Codex / Claude CLI / GitHub / etc. at the controlplane level by
+	// dropping the resulting auth.json at /etc/picoclaw/shared-auth.json,
+	// copy it into the new tenant so the agent and any provider-CLI skills
+	// have working credentials from the first message. Operators that want
+	// per-tenant auth simply skip this step (file absent → no copy, the
+	// embedded baseline auth.json from the workspace bootstrap stays).
+	//
+	// IMPORTANT: this is a SNAPSHOT — subsequent edits to shared-auth.json
+	// don't propagate to already-provisioned tenants. Recreate the tenant
+	// (picoclaw-tenantctl recreate) to pick up fresh tokens.
+	if err := copySharedAuthIfPresent(t.VolumePath); err != nil {
+		// Non-fatal: tenants without shared auth still boot, just without
+		// pre-configured OAuth tokens.
+		log.Printf("WARN: provisioner: copy shared auth.json: %v", err)
 	}
 
 	// 2. Dashboard password (skipped for Supabase / public tenants).

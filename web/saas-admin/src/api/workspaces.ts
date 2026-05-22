@@ -124,3 +124,24 @@ export async function importWorkspaceFromHome(input: WorkspaceImportFromHomeInpu
     body: JSON.stringify(input),
   });
 }
+
+// ── Validate workspace ──────────────────────────────────────────────
+// Checks every required + recommended file exists in home/. Backend
+// returns ok=true only when EVERY required file is present.
+
+export type WorkspaceValidationRow = {
+  path: string;
+  required: boolean;
+  present: boolean;
+  description: string;
+};
+
+export type WorkspaceValidation = {
+  workspace_id: string;
+  ok: boolean;
+  rows: WorkspaceValidationRow[];
+};
+
+export async function validateWorkspace(id: string) {
+  return api<WorkspaceValidation>(`/api/v1/workspaces/${encodeURIComponent(id)}/validate`);
+}

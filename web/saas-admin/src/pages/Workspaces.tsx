@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Plus, Download, Hammer, Save, Trash2, FileText, FolderTree } from "lucide-react";
+import { Plus, Download, Hammer, Save, Trash2, FileText, FolderTree, CheckCircle2, XCircle, ShieldCheck } from "lucide-react";
 
 import {
   buildWorkspaceFrontend,
@@ -11,8 +11,10 @@ import {
   listWorkspaces,
   readWorkspaceFile,
   updateWorkspace,
+  validateWorkspace,
   writeWorkspaceFile,
   type Workspace,
+  type WorkspaceValidationRow,
 } from "@/api/workspaces";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -362,6 +364,8 @@ function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
         </CardContent>
       </Card>
 
+      <ValidationPanel workspaceId={workspace.id} />
+
       <FileEditor workspaceId={workspace.id} />
     </>
   );
@@ -450,6 +454,82 @@ function FileEditor({ workspaceId }: { workspaceId: string }) {
           className="font-mono text-xs"
           spellCheck={false}
         />
+      </CardContent>
+    </Card>
+  );
+}
+
+function ValidationPanel({ workspaceId }: { workspaceId: string }) {
+  const v = useQuery({
+    queryKey: ["workspace-validate", workspaceId],
+    queryFn: () => validateWorkspace(workspaceId),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ShieldCheck className="size-4" />
+          Validação do workspace
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="text-xs text-zinc-400">
+          Checa se este workspace tem os arquivos necessários pra provisionar tenants. Arquivos obrigatórios
+          quebram o boot do tenant se faltarem; recomendados melhoram segurança e UX.
+        </p>
+
+        {v.isLoading ? (
+          <div className="text-xs text-zinc-500">Carregando…</div>
+        ) : v.error ? (
+          <div className="text-xs text-red-400">
+            {v.error instanceof Error ? v.error.message : "erro ao validar"}
+          </div>
+        ) : v.data ? (
+          <>
+            <div
+              className={[
+                "flex items-center gap-2 rounded-md border px-3 py-2 text-xs",
+                v.data.ok
+                  ? "border-emerald-700 bg-emerald-950/30 text-emerald-300"
+                  : "border-amber-700 bg-amber-950/30 text-amber-300",
+              ].join(" ")}
+            >
+              {v.data.ok ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
+              {v.data.ok
+                ? "Workspace pronto pra provisionar tenants."
+                : "Falta pelo menos um arquivo obrigatório — auto-provision vai falhar."}
+            </div>
+            <ul className="space-y-1 text-xs">
+              {v.data.rows.map((row: WorkspaceValidationRow) => (
+                <li key={row.path} className="flex items-start gap-2">
+                  {row.present ? (
+                    <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-400" />
+                  ) : row.required ? (
+                    <XCircle className="mt-0.5 size-3.5 shrink-0 text-red-400" />
+                  ) : (
+                    <XCircle className="mt-0.5 size-3.5 shrink-0 text-zinc-500" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <code className="font-mono text-[11px] text-zinc-200">{row.path}</code>
+                      {row.required ? (
+                        <span className="rounded bg-zinc-800 px-1 py-0.5 text-[9px] uppercase tracking-wider text-zinc-400">
+                          obrigatório
+                        </span>
+                      ) : (
+                        <span className="rounded bg-zinc-800 px-1 py-0.5 text-[9px] uppercase tracking-wider text-zinc-500">
+                          recomendado
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-zinc-500">{row.description}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </CardContent>
     </Card>
   );
