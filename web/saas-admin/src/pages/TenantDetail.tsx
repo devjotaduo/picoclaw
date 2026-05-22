@@ -31,6 +31,8 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
 import { CopyText } from "@/components/ui/copy-text";
 import { SkeletonCard } from "@/components/ui/skeleton";
+import { ResendCredentialsDialog } from "@/components/tenant/resend-credentials-dialog";
+import { RotatedPasswordDialog } from "@/components/tenant/rotated-password-dialog";
 import { formatDate, formatInt, formatUSD, relativeTime } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/toast";
@@ -64,7 +66,7 @@ export function TenantDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [rotatedPwd, setRotatedPwd] = useState<string | null>(null);
-  const [pwdCopied, setPwdCopied] = useState(false);
+  // copy-feedback state for RotatedPasswordDialog lives inside the component now.
   const [magicLinkOpen, setMagicLinkOpen] = useState(false);
   const [magicLinkData, setMagicLinkData] = useState<{ url: string; expires_at: string; token: string } | null>(null);
   const [magicLinkCopied, setMagicLinkCopied] = useState(false);
@@ -121,9 +123,8 @@ export function TenantDetail() {
     short_magic_link: string;
     magic_link_in_email: boolean;
   } | null>(null);
-  const [resendPwdCopied, setResendPwdCopied] = useState(false);
-  const [resendLinkCopied, setResendLinkCopied] = useState(false);
-  const [resendShortCopied, setResendShortCopied] = useState(false);
+  // Copy-feedback state lives inside ResendCredentialsDialog / CopyableField;
+  // the page just owns open-state and the response payload.
   const resendCredsM = useMutation({
     mutationFn: () => resendCredentials(id),
     onSuccess: (r) => {
@@ -135,9 +136,6 @@ export function TenantDetail() {
         short_magic_link: r.short_magic_link,
         magic_link_in_email: r.magic_link_in_email,
       });
-      setResendPwdCopied(false);
-      setResendLinkCopied(false);
-      setResendShortCopied(false);
       setResendCredsOpen(true);
       toast({
         type: "success",
@@ -167,13 +165,6 @@ export function TenantDetail() {
     setMagicLinkCopied(true);
     setTimeout(() => setMagicLinkCopied(false), 2000);
   };
-  const copyPwd = async () => {
-    if (!rotatedPwd) return;
-    await navigator.clipboard.writeText(rotatedPwd);
-    setPwdCopied(true);
-    setTimeout(() => setPwdCopied(false), 1500);
-  };
-
   const closeDeleteDialog = () => {
     if (deleteM.isPending) return;
     setConfirmDelete(false);
@@ -512,147 +503,13 @@ export function TenantDetail() {
         </div>
       </Dialog>
 
-      <Dialog open={!!rotatedPwd} onClose={() => setRotatedPwd(null)} title="New password" size="md" closable={false}>
-        {rotatedPwd && (
-          <div className="space-y-3 text-sm">
-            <p className="text-amber-300">Save this password now — it will not be shown again.</p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
-                {rotatedPwd}
-              </code>
-              <Button variant="secondary" size="icon" onClick={copyPwd}>
-                {pwdCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
-            <div className="flex justify-end pt-2">
-              <Button onClick={() => setRotatedPwd(null)}>Done</Button>
-            </div>
-          </div>
-        )}
-      </Dialog>
+      <RotatedPasswordDialog password={rotatedPwd} onClose={() => setRotatedPwd(null)} />
 
-      {/* Resend-credentials result dialog. The email is sent in the background,
-          but the operator gets the password + magic link inline here too so
-          they can copy and forward (Brevo can lag, mail can land in spam, etc.). */}
-      <Dialog
+      <ResendCredentialsDialog
         open={resendCredsOpen}
         onClose={() => setResendCredsOpen(false)}
-        title="Credenciais reenviadas"
-        size="md"
-      >
-        {resendCredsData && (
-          <div className="space-y-4 text-sm">
-            <p className="text-emerald-300">
-              Email enviado para <strong>{resendCredsData.sent_to}</strong>. Se demorar
-              chegar (ou cair no spam), copie a senha e o link daqui mesmo.
-            </p>
-
-            <div>
-              <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
-                URL do painel
-              </label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
-                  {resendCredsData.dashboard_url}
-                </code>
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
-                Email de login
-              </label>
-              <code className="block break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
-                {resendCredsData.sent_to}
-              </code>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
-                Senha nova
-              </label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
-                  {resendCredsData.initial_password}
-                </code>
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(resendCredsData.initial_password);
-                    setResendPwdCopied(true);
-                    setTimeout(() => setResendPwdCopied(false), 1500);
-                  }}
-                >
-                  {resendPwdCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-                </Button>
-              </div>
-              <p className="mt-1 text-xs text-amber-300">A senha anterior parou de funcionar agora.</p>
-            </div>
-
-            {resendCredsData.magic_link ? (
-              <>
-                {resendCredsData.short_magic_link && (
-                  <div>
-                    <label className="mb-1 block text-xs uppercase tracking-wider text-emerald-400">
-                      Link curto (WhatsApp / SMS · 24h)
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-emerald-200">
-                        {resendCredsData.short_magic_link}
-                      </code>
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        onClick={async () => {
-                          await navigator.clipboard.writeText(resendCredsData.short_magic_link);
-                          setResendShortCopied(true);
-                          setTimeout(() => setResendShortCopied(false), 1500);
-                        }}
-                      >
-                        {resendShortCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      Redirect 302 → magic link Supabase. Expira em 24h. Bom pra compartilhar por canais com limite de caracteres.
-                    </p>
-                  </div>
-                )}
-                <div>
-                  <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
-                    Magic link completo (Supabase)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-[10px] text-zinc-100">
-                      {resendCredsData.magic_link}
-                    </code>
-                    <Button
-                      variant="secondary"
-                      size="icon"
-                      onClick={async () => {
-                        await navigator.clipboard.writeText(resendCredsData.magic_link);
-                        setResendLinkCopied(true);
-                        setTimeout(() => setResendLinkCopied(false), 1500);
-                      }}
-                    >
-                      {resendLinkCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <p className="text-xs text-amber-300">
-                Magic link falhou ao gerar (verifique allowlist Redirect URLs no Supabase Dashboard).
-                A senha acima ainda funciona normalmente.
-              </p>
-            )}
-
-            <div className="flex justify-end pt-2">
-              <Button onClick={() => setResendCredsOpen(false)}>Fechar</Button>
-            </div>
-          </div>
-        )}
-      </Dialog>
+        data={resendCredsData}
+      />
 
       <Dialog
         open={magicLinkOpen}
