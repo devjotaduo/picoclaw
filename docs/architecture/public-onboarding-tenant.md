@@ -166,26 +166,34 @@ VITE_ONBOARDING_TENANT_URL=https://onboarding.jotaduo.com
 
 ## Known gaps (follow-ups)
 
-- **Phase 10 functional cutover (partial).** The SSE adapter ships as
-  `web/saas-admin/src/pages/pre-cadastro/clara/onboardingTenantChat.ts`
-  with vitest coverage. `useClaraChat.ts` still keeps the flag gated
-  until two backend pieces land:
-  1. **`intake_id` ↔ `session_id` binding.** The tenant's
-     `onboarding-mark-qualified` / `onboarding-submit-intake` skills
-     HMAC-callback the controlplane with `intake_id`. The agent loop
-     doesn't currently propagate the publicweb `session_id` to skill
-     scripts, so the cleanest path is: have the agent export
-     `PICOCLAW_CHAT_SESSION_ID` to skill env, and have the browser use
-     `intake_id` as the `session_id` it sends to the tenant.
-  2. **`extracted` / `qualified` / `tenant_provisioned` bridging.**
-     Today those events come inline in the legacy chat SSE. The tenant
-     only emits raw text. Pick one: (a) poll
-     `GET /api/v1/public/company-intakes/{id}` while in
-     qualified-but-not-provisioned state and synthesize the events
-     from intake-row changes (cheap; requires item 1 so the row is
-     actually updated by the tenant's skills); or (b) enrich
-     `publicweb.Channel.Send` with typed `OutboundEvent` variants and
-     have skills publish them through the bus.
+- **Phase 10 functional cutover (foundation complete, wire-up pending).**
+  All three building blocks ship as isolated, vitest-covered modules:
+  1. ✅ **SSE adapter** — `web/saas-admin/src/pages/pre-cadastro/clara/onboardingTenantChat.ts`.
+     POST + GET-stream against the public-onboarding tenant, typed
+     `{open|message|close}` events, open-handshake gate so the first
+     reply isn't dropped by `publicweb.Channel.Send`'s `ErrNoStream`
+     branch.
+  2. ✅ **`intake_id` ↔ `session_id` binding** — `pkg/tools.ExecTool`
+     extends every skill subprocess env with `PICOCLAW_CHAT_*` vars
+     derived from `WithToolContext`. Onboarding skill scripts default
+     `intake_id` to `$PICOCLAW_CHAT_SESSION_ID` when no positional
+     argument is passed. Browser sets `session_id = intake_id` when
+     opening the SSE stream.
+  3. ✅ **Polling bridge** — `web/saas-admin/src/pages/pre-cadastro/clara/onboardingIntakePolling.ts`.
+     Diffs the intake row (`GET /api/v1/public/company-intakes/{id}`)
+     and synthesizes the legacy `extracted` / `qualified` /
+     `tenant_provisioned` events. Public response now exposes
+     `qualified_at`, `linked_tenant_id`, and the resolved
+     `tenant_url` / `tenant_subdomain` / `tenant_login_mode` via
+     `Handler.publicIntakeResponseWithTenant`. Terminal on
+     `tenant_provisioned`.
+
+  What's left is the actual wire-up inside `useClaraChat`: replace the
+  legacy POST with `openOnboardingTenantChat(...)` and run
+  `openOnboardingIntakePolling(...)` alongside it, gated by
+  `VITE_USE_ONBOARDING_TENANT`. That's a small change (~30 LOC) but it
+  flips production behavior so it ships behind the flag with an
+  explicit staging rollout.
 - **IP-roaming visitors.** Identity is `sha256(session_id+ip)[:8]`, so a
   mobile→wifi switch mid-conversation creates a new identity and the
   agent loses context. Acceptable v1; revisit if real-world complaint.

@@ -322,7 +322,7 @@ function CompanyOnboardingCard({ className }: { className?: string }) {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {isLoading && (
           <div className="text-muted-foreground px-2 py-6 text-xs">
             Verificando dados...
@@ -336,7 +336,7 @@ function CompanyOnboardingCard({ className }: { className?: string }) {
           </div>
         )}
 
-        <div className="flex flex-col">
+        <ul className="flex h-full flex-col gap-1 overflow-y-auto overscroll-contain pr-1 pb-2 [scrollbar-gutter:stable]">
           {visibleItems.map((item, index) => (
             <OnboardingStepRow
               key={item.id}
@@ -350,7 +350,7 @@ function CompanyOnboardingCard({ className }: { className?: string }) {
               }
             />
           ))}
-        </div>
+        </ul>
       </div>
 
       <Button
@@ -413,12 +413,12 @@ function OnboardingStepRow({
   onOpen: () => void
 }) {
   return (
-    <div className={cn(separated && "border-border/60 border-t")}>
+    <li className={cn(separated && "border-border/60 border-t pt-1")}>
       <button
         type="button"
         className={cn(
-          "focus-visible:ring-ring flex w-full items-start gap-2 rounded-2xl px-2 py-2 text-left outline-none focus-visible:ring-2",
-          open && "bg-muted/70",
+          "focus-visible:ring-ring flex w-full items-start gap-2 rounded-2xl px-2.5 py-2.5 text-left outline-none transition-colors focus-visible:ring-2",
+          open && "bg-muted/70 pb-3",
         )}
         onClick={onOpen}
       >
@@ -428,22 +428,30 @@ function OnboardingStepRow({
           <IconCircleDashed className="text-muted-foreground/60 mt-0.5 size-4 shrink-0" />
         )}
         <span className="min-w-0 flex-1">
-          <span className="text-foreground block truncate text-xs font-semibold">
+          <span
+            className={cn(
+              "text-foreground block text-xs leading-4 font-semibold break-words",
+              !open && "line-clamp-1",
+            )}
+          >
             {item.title}
           </span>
           <Collapsible open={open}>
-            <CollapsibleContent>
-              <span className="text-muted-foreground mt-2 block text-[11px] leading-4">
+            <CollapsibleContent className="overflow-hidden">
+              <span className="text-muted-foreground mt-2 block text-[11px] leading-5 break-words">
                 {item.description}
               </span>
             </CollapsibleContent>
           </Collapsible>
         </span>
-        {!open && (
-          <IconChevronRight className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-        )}
+        <IconChevronRight
+          className={cn(
+            "text-muted-foreground mt-0.5 size-4 shrink-0 transition-transform",
+            open && "rotate-90",
+          )}
+        />
       </button>
-    </div>
+    </li>
   )
 }
 

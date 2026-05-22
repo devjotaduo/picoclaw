@@ -28,6 +28,14 @@ export type CompanyIntake = {
   created_at: string;
   updated_at: string;
   submitted_at?: string | null;
+  // Phase 10 polling-bridge fields. Surfaced by the public GET endpoint
+  // so useOnboardingIntakePolling can synthesize the legacy SSE events
+  // (qualified, tenant_provisioned) when the chat runs in the public
+  // onboarding tenant.
+  qualified_at?: string | null;
+  tenant_url?: string;
+  tenant_subdomain?: string;
+  tenant_login_mode?: "password" | "magic_link" | string;
 };
 
 export async function createPublicIntake() {
