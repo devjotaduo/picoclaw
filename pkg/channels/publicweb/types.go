@@ -13,24 +13,18 @@
 // HTTP layer.
 package publicweb
 
-// Settings is the (mostly informational) settings struct for the public-web
-// channel. None of these knobs are enforced inside the channel itself; the
-// HTTP handler in Phase 5 reads them to drive rate-limiting and captcha
-// behavior, but storing them here keeps the configuration in one place.
-type Settings struct {
-	// RateLimitPerIP is the maximum number of inbound messages an IP may
-	// send per minute. Enforced by the Phase 5 HTTP handler.
-	RateLimitPerIP int `json:"rate_limit_per_ip" yaml:"rate_limit_per_ip"`
+import "github.com/sipeed/picoclaw/pkg/config"
 
-	// SessionTTLSeconds is the maximum idle time before a session is
-	// considered expired and evicted from the in-memory map.
-	SessionTTLSeconds int `json:"session_ttl_seconds" yaml:"session_ttl_seconds"`
-
-	// RequireCaptchaHeader, when true, causes the HTTP handler to demand a
-	// validated captcha proof header on every inbound POST. The channel
-	// itself does not validate captchas; it only carries the flag.
-	RequireCaptchaHeader bool `json:"require_captcha_header" yaml:"require_captcha_header"`
-}
+// Settings is the public-web channel's settings struct. It is now an alias
+// of config.PublicWebSettings so the pkg/config validator and decoder
+// recognise the "public-web" channel type as registered.
+//
+// Pre-Phase 5/8 this lived locally as its own struct because pkg/config
+// didn't yet know about public-web; the factory in init.go fell back to
+// defaultSettings() when no typed prototype was registered. With
+// config.PublicWebSettings + the channelSettingsFactory entry in place,
+// the factory now receives a fully-populated prototype.
+type Settings = config.PublicWebSettings
 
 // defaultSettings returns the baseline configuration used when no Settings
 // are supplied (e.g. when the channel is constructed directly by tests or
