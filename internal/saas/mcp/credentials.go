@@ -57,11 +57,11 @@ func DecryptCredentials(blob string, key []byte) (map[string]string, error) {
 	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new cipher: %w", err)
 	}
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new gcm: %w", err)
 	}
 	plaintext, err := gcm.Open(nil, nonce, sealed, nil)
 	if err != nil {
