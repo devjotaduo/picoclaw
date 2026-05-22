@@ -14,6 +14,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+	openOnboardingTenantChat,
+	type OnboardingTenantChat,
+} from "./onboardingTenantChat";
+import {
+	openOnboardingIntakePolling,
+	type OnboardingIntakePolling,
+} from "./onboardingIntakePolling";
+
 export type ClaraRole = "user" | "assistant" | "system";
 
 export type ClaraMessage = {
@@ -176,6 +185,28 @@ export function useClaraChat({
 
 	const abortRef = useRef<AbortController | null>(null);
 
+	// Phase 10 — tenant routing. When VITE_USE_ONBOARDING_TENANT === "true"
+	// AND VITE_ONBOARDING_TENANT_URL is set, the chat runs against the
+	// public onboarding tenant (via onboardingTenantChat) and the legacy
+	// `extracted` / `qualified` / `tenant_provisioned` SSE events are
+	// bridged from the intake row by onboardingIntakePolling. The flag is
+	// resolved once at hook init — flipping it at runtime is intentionally
+	// not supported (would require tearing down the legacy + opening the
+	// tenant stream on the same render, too risky for an MVP cutover).
+	const useTenant =
+		import.meta.env.VITE_USE_ONBOARDING_TENANT === "true" &&
+		Boolean(import.meta.env.VITE_ONBOARDING_TENANT_URL);
+	const tenantChatRef = useRef<OnboardingTenantChat | null>(null);
+	const tenantPollingRef = useRef<OnboardingIntakePolling | null>(null);
+	// id of the assistant bubble currently receiving tenant chunks. Set in
+	// send(), read by the chat onEvent handler, cleared by the turn-end
+	// debounce or a stream close.
+	const tenantStreamingIdRef = useRef<string | null>(null);
+	// publicweb has no "turn complete" event in its SSE contract, so we
+	// treat N ms of silence after the last chunk as the end of the
+	// assistant's reply. Each chunk resets the timer.
+	const turnDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
 	// Persist transcript on every change so a reload, an error, or even a
 	// crash never costs the visitor their progress (P0.4 ticket).
 	useEffect(() => {
@@ -195,6 +226,111 @@ export function useClaraChat({
 	useEffect(() => {
 		return () => abortRef.current?.abort();
 	}, []);
+
+	// Phase 10 — open the tenant chat stream + intake polling for the
+	// session lifetime. Closes both on unmount or when the intake
+	// credentials change. The legacy code path is fully bypassed in
+	// `send()` when this effect successfully attaches the chat ref.
+	useEffect(() => {
+		if (!useTenant || !intakeId || !resumeToken) return;
+		const tenantUrl = import.meta.env.VITE_ONBOARDING_TENANT_URL as string;
+		let cancelled = false;
+
+		const clearDebounce = () => {
+			if (turnDebounceRef.current) {
+				clearTimeout(turnDebounceRef.current);
+				turnDebounceRef.current = null;
+			}
+		};
+		const markTurnComplete = () => {
+			const targetId = tenantStreamingIdRef.current;
+			tenantStreamingIdRef.current = null;
+			if (targetId) {
+				setMessages((prev) =>
+					prev.map((m) => (m.id === targetId ? { ...m, streaming: false } : m)),
+				);
+			}
+			setStatus((s) => (s === "streaming" || s === "sending" ? "idle" : s));
+		};
+
+		(async () => {
+			try {
+				const chat = await openOnboardingTenantChat({
+					tenantUrl,
+					sessionId: intakeId,
+					onEvent: (e) => {
+						if (e.type === "open") return;
+						if (e.type === "message") {
+							const targetId = tenantStreamingIdRef.current;
+							if (!targetId) return;
+							setMessages((prev) =>
+								prev.map((m) =>
+									m.id === targetId
+										? { ...m, content: m.content + e.text, streaming: true }
+										: m,
+								),
+							);
+							setStatus("streaming");
+							clearDebounce();
+							turnDebounceRef.current = setTimeout(markTurnComplete, 1500);
+						} else if (e.type === "close") {
+							clearDebounce();
+							markTurnComplete();
+						}
+					},
+				});
+				if (cancelled) {
+					chat.close();
+					return;
+				}
+				tenantChatRef.current = chat;
+			} catch (err) {
+				if (cancelled) return;
+				const msg = err instanceof Error ? err.message : String(err);
+				setError(humanizeError(msg));
+				setStatus("error");
+			}
+		})();
+
+		const polling = openOnboardingIntakePolling({
+			intakeId,
+			resumeToken,
+			onEvent: (e) => {
+				if (e.type === "extracted") {
+					setExtracted((cur) => mergeSnapshotIntoExtracted(cur, e.snapshot));
+				} else if (e.type === "qualified") {
+					setQualified(true);
+					// Polling-bridge doesn't carry a `qualified_reason` — Clara
+					// states it in chat instead. Mark provisioning as in-flight
+					// so the UI shows the spinner; the next polling tick will
+					// flip it to provisioned once AutoProvisioner lands.
+					setProvisioning((s) => (s === "idle" ? "provisioning" : s));
+				} else if (e.type === "tenant_provisioned") {
+					setProvisioned({
+						url: e.url,
+						subdomain: e.subdomain,
+						// email/initial_password aren't in the polling payload;
+						// Clara already mentioned them in chat, and the visitor
+						// gets the magic link by email regardless.
+						email: "",
+						loginMode: e.loginMode,
+					});
+					setProvisioning("provisioned");
+				}
+			},
+		});
+		tenantPollingRef.current = polling;
+
+		return () => {
+			cancelled = true;
+			clearDebounce();
+			tenantChatRef.current?.close();
+			tenantChatRef.current = null;
+			tenantPollingRef.current?.stop();
+			tenantPollingRef.current = null;
+			tenantStreamingIdRef.current = null;
+		};
+	}, [useTenant, intakeId, resumeToken]);
 
 	const cancel = useCallback(() => {
 		abortRef.current?.abort();
@@ -231,48 +367,55 @@ export function useClaraChat({
 				},
 			]);
 
+			// Phase 10 — tenant routing branch. The persistent SSE stream and
+			// the polling bridge are owned by the useEffect above; here we
+			// just push the visitor's message through the tenant POST and
+			// let the shared onEvent handler render the agent's reply onto
+			// `assistantId`. Errors from chat.send() (network, 4xx) end the
+			// turn synchronously since the stream itself stays open.
+			if (useTenant) {
+				const chat = tenantChatRef.current;
+				if (!chat) {
+					// The tenant stream is still doing its handshake (or it
+					// failed to open). Reject with a clear message rather than
+					// pretending the message went through.
+					setMessages((prev) =>
+						prev.map((m) =>
+							m.id === assistantId
+								? {
+										...m,
+										streaming: false,
+										errorText: "conexão ainda abrindo, tenta de novo",
+									}
+								: m,
+						),
+					);
+					setError("Sessão ainda conectando — tenta de novo em alguns segundos.");
+					setStatus("error");
+					return;
+				}
+				tenantStreamingIdRef.current = assistantId;
+				try {
+					await chat.send(trimmed);
+					setStatus("streaming");
+				} catch (err) {
+					tenantStreamingIdRef.current = null;
+					const msg = err instanceof Error ? err.message : String(err);
+					setMessages((prev) =>
+						prev.map((m) =>
+							m.id === assistantId
+								? { ...m, streaming: false, errorText: humanizeError(msg) }
+								: m,
+						),
+					);
+					setError(humanizeError(msg));
+					setStatus("error");
+				}
+				return;
+			}
+
 			const abort = new AbortController();
 			abortRef.current = abort;
-
-			// Phase 10 — Frontend cutover (partial).
-			//
-			// The tenant-side wire format is now isolated in
-			// ./onboardingTenantChat.ts (openOnboardingTenantChat). When the
-			// flag is on, that module handles POST + SSE-GET against the
-			// public onboarding tenant. The flag is intentionally still
-			// gated here because two pieces of plumbing are still missing
-			// before a full cutover is correct:
-			//
-			//   1. intake_id ↔ session_id binding. The tenant's
-			//      onboarding-mark-qualified and onboarding-submit-intake
-			//      skills need to know which intake row to update via HMAC
-			//      callback. The cleanest path is to use intake_id as the
-			//      publicweb session_id and have the agent expose it to
-			//      skill scripts via env (e.g. PICOCLAW_CHAT_SESSION_ID).
-			//      Today the agent loop does not propagate session_id to
-			//      skill env, so wiring this up requires a small backend
-			//      change in pkg/agent/.
-			//
-			//   2. extracted / qualified / tenant_provisioned bridging.
-			//      Today those events come inline in the legacy SSE. The
-			//      tenant only emits raw text. Two options:
-			//        (a) Poll GET /api/v1/public/company-intakes/{id} every
-			//            few seconds while in qualified-but-not-provisioned
-			//            state and synthesize the events when the intake row
-			//            changes. Requires (1) so the intake is updated by
-			//            the tenant's skills.
-			//        (b) Enrich publicweb.Channel.Send with typed
-			//            OutboundEvent variants and have the onboarding
-			//            skills publish them through the bus.
-			//
-			// For an opt-in dev/staging cutover that ignores extracted/
-			// provisioning UI (raw chat only), uncomment the route below
-			// and flip the env var. Once (1) lands we can move the rest
-			// of this hook to the new module.
-			const _onboardingTenantFlagSet =
-				import.meta.env.VITE_USE_ONBOARDING_TENANT === "true" &&
-				Boolean(import.meta.env.VITE_ONBOARDING_TENANT_URL);
-			void _onboardingTenantFlagSet;
 
 			let response: Response;
 			try {
@@ -468,7 +611,7 @@ export function useClaraChat({
 				abortRef.current = null;
 			}
 		},
-		[intakeId, resumeToken, status],
+		[intakeId, resumeToken, status, useTenant],
 	);
 
 	const value = useMemo<ClaraChatState>(
@@ -518,6 +661,45 @@ type SSEEvent = {
 	// authoritative state on a subsequent GET.
 	[key: string]: unknown;
 };
+
+// mergeSnapshotIntoExtracted maps a polling-style answers snapshot
+// (Record<string, unknown>, identical to legacy SSE `extracted` event's
+// shape minus the wrapping `type` field) onto ClaraExtracted. Same field
+// mapping as the inline `case "extracted"` in the legacy applyEvent.
+function mergeSnapshotIntoExtracted(
+	cur: ClaraExtracted,
+	snapshot: Record<string, unknown>,
+): ClaraExtracted {
+	return {
+		...cur,
+		companyName: stringOrPrev(snapshot.company_name, cur.companyName),
+		contactName: stringOrPrev(snapshot.contact_name, cur.contactName),
+		segments: arrayOrPrev(snapshot.segments, cur.segments),
+		channels: arrayOrPrev(snapshot.channels, cur.channels),
+		pains: arrayOrPrev(snapshot.pains, cur.pains),
+		systems: arrayOrPrev(snapshot.systems, cur.systems),
+		offer: stringOrPrev(snapshot.offer, cur.offer),
+		website: stringOrPrev(snapshot.website, cur.website),
+		instagram: stringOrPrev(snapshot.instagram, cur.instagram),
+		crmName: stringOrPrev(snapshot.crm_name, cur.crmName),
+		crmNotes: stringOrPrev(snapshot.crm_notes, cur.crmNotes),
+		quotingPersonalized:
+			typeof snapshot.quoting_personalized === "boolean"
+				? (snapshot.quoting_personalized as boolean)
+				: cur.quotingPersonalized,
+		quotingNotes: stringOrPrev(snapshot.quoting_notes, cur.quotingNotes),
+		priorityAgent: priorityAgentOrPrev(snapshot.priority_agent, cur.priorityAgent),
+		priorityReason: stringOrPrev(snapshot.priority_reason, cur.priorityReason),
+		problemArea: problemAreaOrPrev(snapshot.problem_area, cur.problemArea),
+		problemAreaNote: stringOrPrev(snapshot.problem_area_note, cur.problemAreaNote),
+		salesOnline:
+			typeof snapshot.sales_online === "boolean"
+				? (snapshot.sales_online as boolean)
+				: cur.salesOnline,
+		productType: stringOrPrev(snapshot.product_type, cur.productType),
+		salesNote: stringOrPrev(snapshot.sales_note, cur.salesNote),
+	};
+}
 
 function mirrorTool(current: ClaraExtracted, _ev: SSEEvent): ClaraExtracted {
 	// The server always follows up `tool_applied` with an `extracted` event
