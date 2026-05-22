@@ -47,6 +47,7 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { useUIVisibility } from "@/hooks/use-ui-visibility"
 import {
   actionableDashboardItems,
   dashboardItemStamp,
@@ -66,6 +67,7 @@ interface NavItem {
   translateTitle?: boolean
   external?: boolean
   adminOnly?: boolean
+  elementId?: string
 }
 
 interface NavGroup {
@@ -106,19 +108,6 @@ const featureFallbacks: Record<string, string> = {
   integrations: "config",
 }
 
-// Features hidden from the sidebar across the board (still reachable via
-// direct URLs / commands if the user knows where to find them).
-const hiddenSidebarFeatures = new Set([
-  "models",
-  "credentials",
-  "agent_hub",
-  "agent_templates",
-  "template_editor",
-  "skill_editor",
-  "tools",
-  "logs",
-])
-
 function fallbackFeature(feature: string): string | undefined {
   if (feature.startsWith("channel:")) {
     return "channels"
@@ -135,6 +124,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     string,
     LauncherFeatureAccess
   > | null>(null)
+  const [launcherRole, setLauncherRole] = React.useState<string | undefined>()
   const [isSaasAdmin, setIsSaasAdmin] = React.useState(false)
   const [workspaceAgents, setWorkspaceAgents] = React.useState<
     WorkspaceAgent[]
@@ -149,12 +139,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       .then((policy) => {
         if (active) {
           setFeatures(policy.features)
+          setLauncherRole(policy.role)
           setIsSaasAdmin(Boolean(policy.is_saas_admin))
         }
       })
       .catch(() => {
         if (active) {
           setFeatures(null)
+          setLauncherRole(undefined)
           setIsSaasAdmin(false)
         }
       })
@@ -213,6 +205,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const sidebarPendingItems = React.useMemo(() => {
     return actionableDashboardItems(sidebarDashboardItems)
   }, [sidebarDashboardItems])
+  const visibilityPolicyInput = React.useMemo(
+    () =>
+      launcherRole
+        ? {
+            role: launcherRole,
+            is_saas_admin: isSaasAdmin,
+          }
+        : undefined,
+    [isSaasAdmin, launcherRole],
+  )
+  const { visible: isVisible } = useUIVisibility(visibilityPolicyInput)
 
   const canRead = React.useCallback(
     (feature: string) => {
@@ -242,6 +245,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/",
             icon: IconMessageCircle,
             feature: "chat",
+            elementId: "sidebar.chat",
             translateTitle: true,
           },
         ],
@@ -254,6 +258,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/models",
             icon: IconAtom,
             feature: "models",
+            elementId: "sidebar.models",
             translateTitle: true,
             adminOnly: true,
           },
@@ -262,6 +267,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/credentials",
             icon: IconKey,
             feature: "credentials",
+            elementId: "sidebar.credentials",
             translateTitle: true,
             adminOnly: true,
           },
@@ -275,6 +281,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/agent/dashboard",
             icon: IconLayoutDashboard,
             feature: "agent_editor",
+            elementId: "sidebar.agent_dashboard",
             translateTitle: true,
           },
           {
@@ -282,6 +289,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/agent/agents",
             icon: IconRobot,
             feature: "agent_editor",
+            elementId: "sidebar.agent_editor",
             translateTitle: true,
           },
           {
@@ -289,6 +297,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/agent/whatsapp",
             icon: IconBrandWhatsapp,
             feature: "whatsapp_inbox",
+            elementId: "sidebar.whatsapp_inbox",
             translateTitle: true,
           },
           {
@@ -296,6 +305,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/agent/whatsapp-reports",
             icon: IconChartBar,
             feature: "whatsapp_reports",
+            elementId: "sidebar.whatsapp_reports",
             translateTitle: true,
           },
           {
@@ -303,6 +313,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/agent/hub",
             icon: IconSearch,
             feature: "agent_hub",
+            elementId: "sidebar.agent_hub",
             translateTitle: true,
             adminOnly: true,
           },
@@ -311,6 +322,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/agent/templates",
             icon: IconUserCheck,
             feature: "agent_templates",
+            elementId: "sidebar.agent_templates",
             translateTitle: true,
             adminOnly: true,
           },
@@ -319,6 +331,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/agent/template-editor",
             icon: IconListDetails,
             feature: "template_editor",
+            elementId: "sidebar.template_editor",
             translateTitle: true,
             adminOnly: true,
           },
@@ -327,6 +340,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/agent/skills",
             icon: IconSparkles,
             feature: "skills",
+            elementId: "sidebar.skills",
             translateTitle: true,
             adminOnly: true,
           },
@@ -335,6 +349,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/agent/skill-editor",
             icon: IconListDetails,
             feature: "skill_editor",
+            elementId: "sidebar.skill_editor",
             translateTitle: true,
             adminOnly: true,
           },
@@ -349,6 +364,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/readiness",
             icon: IconCircleCheck,
             feature: "operacao_readiness",
+            elementId: "sidebar.readiness",
             translateTitle: true,
           },
           {
@@ -356,6 +372,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/memory",
             icon: IconBook,
             feature: "operacao_memory",
+            elementId: "sidebar.memory",
             translateTitle: true,
           },
           {
@@ -363,6 +380,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/pendencias",
             icon: IconAlertTriangle,
             feature: "operacao_pendencias",
+            elementId: "sidebar.pendencias",
             translateTitle: true,
           },
           {
@@ -370,6 +388,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/cron",
             icon: IconClockHour4,
             feature: "operacao_cron",
+            elementId: "sidebar.cron",
             translateTitle: true,
           },
         ],
@@ -382,6 +401,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/integrations",
             icon: IconPlugConnected,
             feature: "integrations",
+            elementId: "sidebar.integrations",
             translateTitle: true,
           },
           {
@@ -389,6 +409,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/agent/tools",
             icon: IconTools,
             feature: "tools",
+            elementId: "sidebar.tools",
             translateTitle: true,
             adminOnly: true,
           },
@@ -397,6 +418,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/config",
             icon: IconSettings,
             feature: "config",
+            elementId: "sidebar.config",
             translateTitle: true,
           },
           {
@@ -404,6 +426,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/logs",
             icon: IconListDetails,
             feature: "logs",
+            elementId: "sidebar.logs",
             translateTitle: true,
             adminOnly: true,
           },
@@ -424,6 +447,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   url: "/admin/tenants",
                   icon: IconServer,
                   feature: "admin_panel",
+                  elementId: "sidebar.admin_tenants",
                   translateTitle: true,
                 },
                 {
@@ -431,6 +455,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   url: "/admin/tenants/new",
                   icon: IconPlus,
                   feature: "admin_panel",
+                  elementId: "sidebar.admin_new_tenant",
                   translateTitle: true,
                 },
                 {
@@ -438,6 +463,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   url: "/admin/clone",
                   icon: IconCopy,
                   feature: "admin_panel",
+                  elementId: "sidebar.admin_clone",
                   translateTitle: true,
                 },
               ],
@@ -450,12 +476,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         items: group.items.filter(
           (item) =>
             (!item.adminOnly || isSaasAdmin) &&
-            !hiddenSidebarFeatures.has(item.feature) &&
+            isVisible(item.elementId ?? `sidebar.${item.feature}`) &&
             canRead(item.feature),
         ),
       }))
       .filter((group) => group.items.length > 0)
-  }, [canRead, isSaasAdmin])
+  }, [canRead, isSaasAdmin, isVisible])
+
+  const showSidebarNavigation = isVisible("sidebar.navigation")
+  const showSidebarPendingRequests = isVisible("sidebar.pending_requests")
+
+  if (!showSidebarNavigation && !showSidebarPendingRequests) {
+    return null
+  }
 
   return (
     <Sidebar
@@ -463,85 +496,91 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       collapsible="icon"
       className="bg-background border-r-border/20 border-r pt-3"
     >
-      <SidebarContent className="bg-background gap-1 px-2 pt-3 pb-2">
-        {navGroups.map((group) => {
-          const isFlatGroup =
-            group.label === "navigation.agent_group" ||
-            group.label === "navigation.chat" ||
-            group.label === "navigation.channels_group" ||
-            group.label === "navigation.config"
-          const menuContent = (
-            <SidebarMenu>
-              {group.items.map((item) => {
-                const isActive =
-                  currentPath === item.url ||
-                  (item.url !== "/" && currentPath.startsWith(`${item.url}/`))
-                const title =
-                  item.translateTitle === false ? item.title : t(item.title)
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive}
-                      onClick={handleNavItemClick}
-                      tooltip={title}
-                      data-tour={
-                        item.url === "/models" ? "models-nav" : undefined
-                      }
-                      className={`h-9 px-3 ${isActive ? "bg-accent/80 text-foreground font-medium" : "text-muted-foreground hover:bg-muted/60"}`}
-                    >
-                      {item.external ? (
-                        <a href={item.url}>
-                          <item.icon className="size-4 opacity-60" />
-                          <span className="opacity-80">{title}</span>
-                        </a>
-                      ) : (
-                        <Link to={item.url}>
-                          <item.icon
-                            className={`size-4 ${isActive ? "opacity-100" : "opacity-60"}`}
-                          />
-                          <span
-                            className={isActive ? "opacity-100" : "opacity-80"}
-                          >
-                            {title}
-                          </span>
-                        </Link>
-                      )}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          )
+      {showSidebarNavigation ? (
+        <SidebarContent className="bg-background gap-1 px-2 pt-3 pb-2">
+          {navGroups.map((group) => {
+            const isFlatGroup =
+              group.label === "navigation.agent_group" ||
+              group.label === "navigation.chat" ||
+              group.label === "navigation.channels_group" ||
+              group.label === "navigation.config"
+            const menuContent = (
+              <SidebarMenu>
+                {group.items.map((item) => {
+                  const isActive =
+                    currentPath === item.url ||
+                    (item.url !== "/" && currentPath.startsWith(`${item.url}/`))
+                  const title =
+                    item.translateTitle === false ? item.title : t(item.title)
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        onClick={handleNavItemClick}
+                        tooltip={title}
+                        data-tour={
+                          item.url === "/models" ? "models-nav" : undefined
+                        }
+                        className={`h-9 px-3 ${isActive ? "bg-accent/80 text-foreground font-medium" : "text-muted-foreground hover:bg-muted/60"}`}
+                      >
+                        {item.external ? (
+                          <a href={item.url}>
+                            <item.icon className="size-4 opacity-60" />
+                            <span className="opacity-80">{title}</span>
+                          </a>
+                        ) : (
+                          <Link to={item.url}>
+                            <item.icon
+                              className={`size-4 ${isActive ? "opacity-100" : "opacity-60"}`}
+                            />
+                            <span
+                              className={
+                                isActive ? "opacity-100" : "opacity-80"
+                              }
+                            >
+                              {title}
+                            </span>
+                          </Link>
+                        )}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )
+                })}
+              </SidebarMenu>
+            )
 
-          if (isFlatGroup) {
+            if (isFlatGroup) {
+              return (
+                <SidebarGroup key={group.label} className="mb-0 px-0 py-0">
+                  <SidebarGroupContent className="pt-0">
+                    {menuContent}
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              )
+            }
+
             return (
-              <SidebarGroup key={group.label} className="mb-0 px-0 py-0">
+              <SidebarGroup key={group.label} className="mb-0.5 px-0 py-0">
+                <SidebarGroupLabel className="px-2 py-1.5">
+                  <span>{t(group.label)}</span>
+                </SidebarGroupLabel>
                 <SidebarGroupContent className="pt-0">
                   {menuContent}
                 </SidebarGroupContent>
               </SidebarGroup>
             )
-          }
-
-          return (
-            <SidebarGroup key={group.label} className="mb-0.5 px-0 py-0">
-              <SidebarGroupLabel className="px-2 py-1.5">
-                <span>{t(group.label)}</span>
-              </SidebarGroupLabel>
-              <SidebarGroupContent className="pt-0">
-                {menuContent}
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )
-        })}
-      </SidebarContent>
-      <SidebarFooter className="bg-background px-2 pt-2 pb-3 group-data-[collapsible=icon]:hidden">
-        <SidebarAgentPendingList
-          agents={workspaceAgents}
-          items={sidebarPendingItems}
-        />
-      </SidebarFooter>
+          })}
+        </SidebarContent>
+      ) : null}
+      {showSidebarPendingRequests ? (
+        <SidebarFooter className="bg-background px-2 pt-2 pb-3 group-data-[collapsible=icon]:hidden">
+          <SidebarAgentPendingList
+            agents={workspaceAgents}
+            items={sidebarPendingItems}
+          />
+        </SidebarFooter>
+      ) : null}
       <SidebarRail />
     </Sidebar>
   )

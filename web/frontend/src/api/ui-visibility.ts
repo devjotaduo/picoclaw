@@ -1,0 +1,208 @@
+import type { LauncherPolicyResponse } from "@/api/launcher-policy"
+
+export type UIVisibilityProfile = "admin" | "tenant" | "public"
+
+export interface UIVisibilityProfileConfig {
+  description?: string
+  visibility: Record<string, boolean>
+}
+
+export interface UIVisibilityPolicy {
+  version: number
+  source?: string
+  active_profile?: UIVisibilityProfile | null
+  default_profile: UIVisibilityProfile
+  default_visibility: boolean
+  profiles: Record<UIVisibilityProfile, UIVisibilityProfileConfig>
+}
+
+export const LOCAL_UI_VISIBILITY_POLICY_URL = "/mock-api/ui-visibility.json"
+
+export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
+  version: 1,
+  source: "frontend-fallback",
+  active_profile: null,
+  default_profile: "tenant",
+  default_visibility: true,
+  profiles: {
+    admin: { visibility: {} },
+    tenant: {
+      visibility: {
+        "layout.sidebar_trigger": true,
+        "header.settings": true,
+        "header.logout": true,
+        "sidebar.navigation": true,
+        "sidebar.pending_requests": true,
+        "sidebar.models": false,
+        "sidebar.credentials": false,
+        "sidebar.agent_hub": false,
+        "sidebar.agent_templates": false,
+        "sidebar.template_editor": false,
+        "sidebar.skills": false,
+        "sidebar.skill_editor": false,
+        "sidebar.tools": false,
+        "sidebar.logs": false,
+        "chat.model_selector": false,
+        "chat.assistant_details_toggle": false,
+        "chat.new_chat": false,
+        "chat.session_history": false,
+        "chat.test_attendant": true,
+        "chat.pending_handoffs_sidebar": true,
+      },
+    },
+    public: {
+      visibility: {
+        "layout.sidebar_trigger": false,
+        "header.settings": false,
+        "header.logout": false,
+        "sidebar.navigation": false,
+        "sidebar.pending_requests": false,
+        "sidebar.chat": false,
+        "sidebar.models": false,
+        "sidebar.credentials": false,
+        "sidebar.agent_dashboard": false,
+        "sidebar.agent_editor": false,
+        "sidebar.whatsapp_inbox": false,
+        "sidebar.whatsapp_reports": false,
+        "sidebar.agent_hub": false,
+        "sidebar.agent_templates": false,
+        "sidebar.template_editor": false,
+        "sidebar.skills": false,
+        "sidebar.skill_editor": false,
+        "sidebar.readiness": false,
+        "sidebar.memory": false,
+        "sidebar.pendencias": false,
+        "sidebar.cron": false,
+        "sidebar.integrations": false,
+        "sidebar.tools": false,
+        "sidebar.config": false,
+        "sidebar.logs": false,
+        "sidebar.admin_tenants": false,
+        "sidebar.admin_new_tenant": false,
+        "sidebar.admin_clone": false,
+        "chat.model_selector": false,
+        "chat.assistant_details_toggle": false,
+        "chat.new_chat": false,
+        "chat.session_history": false,
+        "chat.test_attendant": false,
+        "chat.pending_handoffs_sidebar": false,
+      },
+    },
+  },
+}
+
+export async function getLocalUIVisibilityPolicy(): Promise<UIVisibilityPolicy> {
+  const res = await fetch(LOCAL_UI_VISIBILITY_POLICY_URL, {
+    cache: "no-store",
+  })
+  if (!res.ok) {
+    throw new Error(`UI visibility policy error: ${res.status}`)
+  }
+  return normalizeUIVisibilityPolicy(await res.json())
+}
+
+export function resolveUIVisibilityProfile(
+  policy: UIVisibilityPolicy,
+  launcherPolicy?: Pick<LauncherPolicyResponse, "role" | "is_saas_admin">,
+): UIVisibilityProfile {
+  if (policy.active_profile) {
+    return policy.active_profile
+  }
+
+  if (launcherPolicy?.is_saas_admin) {
+    return "admin"
+  }
+
+  switch (launcherPolicy?.role) {
+    case "platform_admin":
+      return "tenant"
+    case "tenant_owner":
+    case "tenant_admin":
+    case "operator":
+    case "viewer":
+      return "tenant"
+    default:
+      return "public"
+  }
+}
+
+export function isUIElementVisible(
+  policy: UIVisibilityPolicy,
+  profile: UIVisibilityProfile,
+  element: string,
+  fallback = policy.default_visibility,
+): boolean {
+  const profileVisibility =
+    policy.profiles[profile]?.visibility ??
+    policy.profiles[policy.default_profile]?.visibility ??
+    {}
+
+  if (Object.hasOwn(profileVisibility, element)) {
+    return profileVisibility[element] !== false
+  }
+
+  return fallback
+}
+
+function normalizeUIVisibilityPolicy(value: unknown): UIVisibilityPolicy {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return DEFAULT_UI_VISIBILITY_POLICY
+  }
+
+  const raw = value as Partial<UIVisibilityPolicy>
+  const defaultProfile = isUIVisibilityProfile(raw.default_profile)
+    ? raw.default_profile
+    : DEFAULT_UI_VISIBILITY_POLICY.default_profile
+
+  return {
+    version:
+      typeof raw.version === "number"
+        ? raw.version
+        : DEFAULT_UI_VISIBILITY_POLICY.version,
+    source:
+      typeof raw.source === "string"
+        ? raw.source
+        : DEFAULT_UI_VISIBILITY_POLICY.source,
+    active_profile: isUIVisibilityProfile(raw.active_profile)
+      ? raw.active_profile
+      : null,
+    default_profile: defaultProfile,
+    default_visibility:
+      typeof raw.default_visibility === "boolean"
+        ? raw.default_visibility
+        : DEFAULT_UI_VISIBILITY_POLICY.default_visibility,
+    profiles: {
+      admin: normalizeProfile(raw.profiles?.admin),
+      tenant: normalizeProfile(raw.profiles?.tenant),
+      public: normalizeProfile(raw.profiles?.public),
+    },
+  }
+}
+
+function normalizeProfile(value: unknown): UIVisibilityProfileConfig {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { visibility: {} }
+  }
+  const raw = value as Partial<UIVisibilityProfileConfig>
+  const visibility =
+    raw.visibility &&
+    typeof raw.visibility === "object" &&
+    !Array.isArray(raw.visibility)
+      ? Object.fromEntries(
+          Object.entries(raw.visibility).filter(
+            ([key, visible]) =>
+              typeof key === "string" && typeof visible === "boolean",
+          ),
+        )
+      : {}
+
+  return {
+    description:
+      typeof raw.description === "string" ? raw.description : undefined,
+    visibility,
+  }
+}
+
+function isUIVisibilityProfile(value: unknown): value is UIVisibilityProfile {
+  return value === "admin" || value === "tenant" || value === "public"
+}

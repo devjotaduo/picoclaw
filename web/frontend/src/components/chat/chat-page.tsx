@@ -26,6 +26,7 @@ import { useChatModels } from "@/hooks/use-chat-models"
 import { useGateway } from "@/hooks/use-gateway"
 import { usePicoChat } from "@/hooks/use-pico-chat"
 import { useSessionHistory } from "@/hooks/use-session-history"
+import { useUIVisibility } from "@/hooks/use-ui-visibility"
 import type { ConnectionState } from "@/store/chat"
 import type { ChatAttachment } from "@/store/chat"
 import { showAssistantDetailsAtom } from "@/store/chat"
@@ -265,6 +266,7 @@ export function ChatPage() {
     queryFn: getLauncherPolicy,
     staleTime: 30_000,
   })
+  const { visible: isVisible } = useUIVisibility(launcherPolicyQ.data)
 
   const {
     messages,
@@ -315,11 +317,16 @@ export function ChatPage() {
     assistantDetailsPolicyReady &&
     launcherPolicyQ.data.ui?.show_tool_calls !== false
   const canToggleAssistantDetails = canShowReasoning || canShowToolCalls
-  const showChatTitleExtra = false
-  const showModelSelector = false
-  const showAssistantDetailsToggle = false
-  const showNewChatButton = false
-  const showSessionHistoryButton = false
+  const showChatTitleExtra = isVisible("chat.title_extra", false)
+  const showModelSelector = isVisible("chat.model_selector", false)
+  const showAssistantDetailsToggle = isVisible(
+    "chat.assistant_details_toggle",
+    false,
+  )
+  const showNewChatButton = isVisible("chat.new_chat", false)
+  const showSessionHistoryButton = isVisible("chat.session_history", false)
+  const showAttendantTestButton = isVisible("chat.test_attendant")
+  const showPendingHandoffsSidebar = isVisible("chat.pending_handoffs_sidebar")
   const canShowModelSelector =
     launcherPolicyQ.isSuccess &&
     launcherPolicyQ.data.ui?.show_model_selector !== false
@@ -339,6 +346,12 @@ export function ChatPage() {
     requiresWebSocket: true,
   })
   const canInput = inputDisabledReason === null
+
+  useEffect(() => {
+    if (!showAttendantTestButton && testingPublicAttendant) {
+      setTestingPublicAttendant(false)
+    }
+  }, [showAttendantTestButton, testingPublicAttendant])
 
   const {
     sessions,
@@ -656,13 +669,21 @@ export function ChatPage() {
           inputDisabledReason={inputDisabledReason}
           canSend={canSubmit}
           contextUsage={contextUsage}
-          attendantTestActive={testingPublicAttendant}
-          onToggleAttendantTest={() => {
-            setTestingPublicAttendant((prev) => !prev)
-          }}
+          attendantTestActive={
+            showAttendantTestButton && testingPublicAttendant
+          }
+          onToggleAttendantTest={
+            showAttendantTestButton
+              ? () => {
+                  setTestingPublicAttendant((prev) => !prev)
+                }
+              : undefined
+          }
         />
       </div>
-      <PendingHandoffsSidebar className="hidden xl:flex" />
+      {showPendingHandoffsSidebar ? (
+        <PendingHandoffsSidebar className="hidden xl:flex" />
+      ) : null}
     </div>
   )
 }

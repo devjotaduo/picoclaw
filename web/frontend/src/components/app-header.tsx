@@ -9,11 +9,13 @@ import {
   IconSettings,
   IconSun,
 } from "@tabler/icons-react"
+import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import * as React from "react"
 import { useTranslation } from "react-i18next"
 
 import { postLauncherDashboardLogout } from "@/api/launcher-auth"
+import { getLauncherPolicy } from "@/api/launcher-policy"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,13 +44,22 @@ import {
 } from "@/components/ui/tooltip"
 import { useGateway } from "@/hooks/use-gateway.ts"
 import { useTheme } from "@/hooks/use-theme.ts"
+import { useUIVisibility } from "@/hooks/use-ui-visibility"
 
 export function AppHeader() {
   const { t } = useTranslation()
   const { theme, toggleTheme } = useTheme()
+  const launcherPolicyQ = useQuery({
+    queryKey: ["launcher-policy"],
+    queryFn: getLauncherPolicy,
+    staleTime: 30_000,
+  })
+  const { visible: isVisible } = useUIVisibility(launcherPolicyQ.data)
   const showSidebarToggle = false
   const showConnectionStatus = false
   const showHeaderActions = true
+  const showHeaderSettings = isVisible("header.settings")
+  const showHeaderLogout = isVisible("header.logout")
   const {
     state: gwState,
     loading: gwLoading,
@@ -277,73 +288,82 @@ export function AppHeader() {
           </Tooltip>
         )}
 
-        <Separator
-          className="mx-4 my-2 hidden md:block"
-          orientation="vertical"
-        />
+        {showHeaderSettings || showHeaderLogout ? (
+          <Separator
+            className="mx-4 my-2 hidden md:block"
+            orientation="vertical"
+          />
+        ) : null}
 
-        {/* Settings menu (theme + dangerous gateway controls) */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              aria-label={t("header.settings.tooltip", "Configurações")}
-            >
-              <IconSettings className="size-4.5" aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel className="text-[10px] tracking-wide uppercase">
-              {t("header.settings.appearance", "Aparência")}
-            </DropdownMenuLabel>
-            <DropdownMenuItem onClick={toggleTheme}>
-              {theme === "dark" ? (
-                <IconSun className="size-3.5" />
-              ) : (
-                <IconMoon className="size-3.5" />
-              )}
-              {theme === "dark"
-                ? t("header.theme.light", "Modo claro")
-                : t("header.theme.dark", "Modo escuro")}
-            </DropdownMenuItem>
-            {isRunning && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-[10px] tracking-wide uppercase">
-                  {t("header.settings.gateway", "Gateway")}
-                </DropdownMenuLabel>
-                <DropdownMenuItem
-                  onClick={handleGatewayToggle}
-                  disabled={gwLoading}
-                  className="text-red-700 focus:bg-red-500/10 focus:text-red-700 dark:text-red-300 dark:focus:bg-red-500/20"
+        {showHeaderSettings ? (
+          <>
+            {/* Settings menu (theme + dangerous gateway controls) */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  aria-label={t("header.settings.tooltip", "Configurações")}
                 >
-                  <IconPower className="size-3.5" />
-                  {t("header.gateway.action.stop", "Parar gateway")}
+                  <IconSettings className="size-4.5" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="text-[10px] tracking-wide uppercase">
+                  {t("header.settings.appearance", "Aparência")}
+                </DropdownMenuLabel>
+                <DropdownMenuItem onClick={toggleTheme}>
+                  {theme === "dark" ? (
+                    <IconSun className="size-3.5" />
+                  ) : (
+                    <IconMoon className="size-3.5" />
+                  )}
+                  {theme === "dark"
+                    ? t("header.theme.light", "Modo claro")
+                    : t("header.theme.dark", "Modo escuro")}
                 </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                {isRunning && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-[10px] tracking-wide uppercase">
+                      {t("header.settings.gateway", "Gateway")}
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onClick={handleGatewayToggle}
+                      disabled={gwLoading}
+                      className="text-red-700 focus:bg-red-500/10 focus:text-red-700 dark:text-red-300 dark:focus:bg-red-500/20"
+                    >
+                      <IconPower className="size-3.5" />
+                      {t("header.gateway.action.stop", "Parar gateway")}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        ) : null}
 
-        <Separator className="mx-2 my-2" orientation="vertical" />
+        {showHeaderSettings && showHeaderLogout ? (
+          <Separator className="mx-2 my-2" orientation="vertical" />
+        ) : null}
 
-        {/* Logout */}
-        <Tooltip delayDuration={700}>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              onClick={() => setShowLogoutDialog(true)}
-              aria-label={t("header.logout.tooltip")}
-            >
-              <IconLogout className="size-4.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t("header.logout.tooltip")}</TooltipContent>
-        </Tooltip>
+        {showHeaderLogout ? (
+          <Tooltip delayDuration={700}>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={() => setShowLogoutDialog(true)}
+                aria-label={t("header.logout.tooltip")}
+              >
+                <IconLogout className="size-4.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("header.logout.tooltip")}</TooltipContent>
+          </Tooltip>
+        ) : null}
       </div>
     </header>
   )
