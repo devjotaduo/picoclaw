@@ -1,0 +1,19 @@
+[Unit]
+Description=Daily trigger for tenant backup to Cloudflare R2
+Documentation=https://github.com/devjotaduo/picoclaw/blob/main/docs/operations/tenant-backups.md
+Requires=picoclaw-r2-backup.service
+
+[Timer]
+# Daily 06:00 UTC = 03:00 America/Sao_Paulo. Off-peak for Brazilian
+# customers AND a few hours after the weekly cleanup timer (Sun 04:00
+# UTC) so the two never collide.
+OnCalendar=*-*-* 06:00:00
+Unit=picoclaw-r2-backup.service
+# If the box was off at trigger, run on next boot.
+Persistent=true
+# Spread fires across a 10 min window to avoid thundering herd if many
+# VPS share infra.
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target
