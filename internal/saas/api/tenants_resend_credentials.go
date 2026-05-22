@@ -47,7 +47,11 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if t.SupabaseUserID == nil || *t.SupabaseUserID == "" {
-		writeError(w, http.StatusBadRequest, "tenant is not linked to a Supabase user; only supabase-backed tenants support this flow")
+		writeError(
+			w,
+			http.StatusBadRequest,
+			"tenant is not linked to a Supabase user; only supabase-backed tenants support this flow",
+		)
 		return
 	}
 	if h.Supabase == nil {
@@ -55,7 +59,11 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if h.Mailer == nil || !h.Mailer.Enabled() {
-		writeError(w, http.StatusServiceUnavailable, "SMTP not configured on the controlplane; configure SMTP_HOST/USER/PASSWORD/ALERT_FROM first")
+		writeError(
+			w,
+			http.StatusServiceUnavailable,
+			"SMTP not configured on the controlplane; configure SMTP_HOST/USER/PASSWORD/ALERT_FROM first",
+		)
 		return
 	}
 
@@ -98,10 +106,10 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 	)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"sent_to":              t.OwnerEmail,
-		"password_rotated":     true,
-		"magic_link_in_email":  magicLink != "",
-		"dashboard_url":        dashboardURL,
-		"info":                 "Email with login + new password (and magic link if available) was queued.",
+		"sent_to":             t.OwnerEmail,
+		"password_rotated":    true,
+		"magic_link_in_email": magicLink != "",
+		"dashboard_url":       dashboardURL,
+		"info":                "Email with login + new password (and magic link if available) was queued.",
 	})
 }

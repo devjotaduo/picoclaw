@@ -581,7 +581,7 @@ func main() {
 		// the /api/auth/status endpoint reports ready unconditionally —
 		// the SPA's session guard would otherwise bounce every request
 		// to /launcher-setup because dashboardauth.db is empty by design.
-		AuthMode:      os.Getenv("PICOCLAW_AUTH_MODE"),
+		AuthMode: os.Getenv("PICOCLAW_AUTH_MODE"),
 	})
 
 	// API Routes (e.g. /api/status)
