@@ -90,7 +90,7 @@ export function Workspaces() {
   });
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Workspaces"
         description="Diretórios completos que cada tenant herda no provisionamento — config.json, agentes, skills e o frontend compilado."
@@ -106,14 +106,14 @@ export function Workspaces() {
           <Plus className="size-4" /> Novo workspace
         </Button>
       </PageHeader>
-      <div className="flex-1 overflow-hidden">
-        <div className="mx-auto grid h-full max-w-[1280px] grid-cols-[260px_minmax(0,1fr)] gap-4 p-4">
-          <aside className="self-start">
-            <Card>
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="mx-auto grid h-full min-h-0 max-w-[1280px] grid-cols-[260px_minmax(0,1fr)] gap-4 p-4">
+          <aside className="min-h-0 overflow-hidden">
+            <Card className="flex max-h-full min-h-0 flex-col">
               <CardHeader>
                 <CardTitle>Workspaces</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-2">
                 {workspaces.map((ws) => (
                   <button
                     key={ws.id}
@@ -140,7 +140,7 @@ export function Workspaces() {
               </CardContent>
             </Card>
           </aside>
-          <div className="min-h-0 space-y-4">
+          <div className="min-h-0 space-y-4 overflow-y-auto pr-1 pb-4 [scrollbar-gutter:stable]">
             {selected ? (
               <WorkspaceEditor key={selected.id} workspace={selected} />
             ) : (
