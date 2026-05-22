@@ -144,6 +144,7 @@ describe("openOnboardingIntakePolling", () => {
 				tenant_url: "https://acme.jotaduo.com",
 				tenant_subdomain: "acme",
 				tenant_login_mode: "password",
+				contact_email: "owner@acme.com",
 			}),
 		);
 
@@ -165,6 +166,7 @@ describe("openOnboardingIntakePolling", () => {
 			type: "tenant_provisioned",
 			url: "https://acme.jotaduo.com",
 			subdomain: "acme",
+			email: "owner@acme.com",
 			loginMode: "password",
 		});
 

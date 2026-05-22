@@ -198,3 +198,33 @@ func TestIsPublicChatRoute(t *testing.T) {
 		})
 	}
 }
+
+// TestIsPublicChatHealthRoute confirms only the canonical health probe
+// matches — chat / chat/stream pay the per-IP cap, while /health stays
+// uncounted so load-balancer probes don't burn the budget. Path traversal
+// attempts that would otherwise smuggle in /health are normalized by
+// path.Clean before the comparison.
+func TestIsPublicChatHealthRoute(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"/api/public/chat/health", true},
+		{"/api/public/chat/health/", true},
+		{"/api/public/chat", false},
+		{"/api/public/chat/stream", false},
+		{"/api/public/chat/health/extra", false},
+		{"/api/public/chat/../chat/health", true},
+		{"/api/public/chat/health/../stream", false},
+		{"/health", false},
+		{"/", false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.path, func(t *testing.T) {
+			if got := isPublicChatHealthRoute(tc.path); got != tc.want {
+				t.Errorf("isPublicChatHealthRoute(%q) = %v, want %v", tc.path, got, tc.want)
+			}
+		})
+	}
+}

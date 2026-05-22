@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -30,7 +31,14 @@ type Handler struct {
 	Provisioner    *tenant.Provisioner
 	LoginAttempts  *loginAttempts
 	ClaraRateLimit *rateLimiter
-	CRM            *crmClient
+	// PublicChatRateLimit caps anonymous traffic to the public-onboarding
+	// tenant's chat endpoints (matched by isPublicChatRoute). Anonymous
+	// POST + SSE on the open internet needs SOME backstop — this is the
+	// in-process baseline; pair with Cloudflare Turnstile / WAF for
+	// stronger mitigation. Default: 60 hits / 1 min / IP (chat needs
+	// more headroom than the 5-min login limiter).
+	PublicChatRateLimit *rateLimiter
+	CRM                 *crmClient
 	Mailer         *mailer.Mailer
 	// Supabase is the optional Auth client for tenants whose dashboard logins
 	// are gated by Supabase JWT instead of the legacy local sessions table.
@@ -64,7 +72,13 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		Provisioner:    prov,
 		LoginAttempts:  newLoginAttempts(),
 		ClaraRateLimit: newRateLimiter(cfg.ClaraRateLimitPerIP, cfg.ClaraRateWindow),
-		Mailer:         mlr,
+		// Anonymous public-chat traffic gets a moderate per-IP cap when no
+		// upstream protection (Cloudflare Turnstile / WAF) is configured.
+		// 60/min/IP fits a normal multi-turn discovery chat (~30 user
+		// turns × POST + SSE GET counted together) while making a single
+		// IP unable to burn arbitrary LiteLLM budget.
+		PublicChatRateLimit: newRateLimiter(60, time.Minute),
+		Mailer:              mlr,
 	}
 	if cfg.OpenCRMURL != "" {
 		h.CRM = newCRMClient(cfg.OpenCRMURL)
