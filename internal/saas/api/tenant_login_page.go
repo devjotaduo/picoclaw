@@ -139,6 +139,15 @@ var tenantLoginTpl = template.Must(template.New("tenantLogin").Parse(`<!DOCTYPE 
     document.cookie = name + "=" + encodeURIComponent(accessToken) + attrs;
   }
 
+  // Clear any stale picoclaw_magic cookie. If the user previously arrived
+  // via a magic link, the cookie is per-host (no Domain attr on the original
+  // Set-Cookie), so it would silently downgrade this real Supabase login to
+  // a role=public magic visitor. The gateway also defends against this
+  // server-side, but clearing here keeps the cookie jar tidy.
+  function clearMagicCookie(){
+    document.cookie = "picoclaw_magic=; Max-Age=0; Path=/; SameSite=Lax";
+  }
+
   document.getElementById("loginForm").addEventListener("submit", async function(ev){
     ev.preventDefault();
     var email = document.getElementById("email").value.trim();
@@ -156,6 +165,7 @@ var tenantLoginTpl = template.Must(template.New("tenantLogin").Parse(`<!DOCTYPE 
         showMsg("err", body.error_description || body.msg || ("Falha no login (HTTP " + resp.status + ")"));
         return;
       }
+      clearMagicCookie();
       setAuthCookie(body.access_token, body.expires_in || 3600);
       window.location.assign(NEXT);
     } catch (e) {

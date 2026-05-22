@@ -101,11 +101,20 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 	// dashboard login, no Supabase JWT. Operator-issued and time-bounded by
 	// the token's expiry, so revoking access is "rotate the gateway secret
 	// + recreate tenant" — there's no per-link revoke list yet.
-	if claims, ok := h.magicLinkClaimsFromCookie(r, t); ok {
-		h.proxyTenantRequest(w, r, target, func(req *http.Request) {
-			h.signMagicVisitorRequest(req, t, claims)
-		})
-		return
+	//
+	// PRIORITY: a present Supabase access-token cookie ALWAYS wins over a
+	// magic visitor cookie. Magic links are a fallback for anonymous visitors;
+	// once a real user authenticates via Supabase, they should get their full
+	// tenant_owner / tenant_admin role, not be silently downgraded to "public"
+	// because a stale magic cookie is still in the jar. Skipping the magic
+	// branch here lets authenticateTenantRequest below pick up the JWT.
+	if !h.hasSupabaseAuthCookie(r) {
+		if claims, ok := h.magicLinkClaimsFromCookie(r, t); ok {
+			h.proxyTenantRequest(w, r, target, func(req *http.Request) {
+				h.signMagicVisitorRequest(req, t, claims)
+			})
+			return
+		}
 	}
 
 	// Public-onboarding tenants accept anonymous traffic on a tiny set of chat
@@ -280,6 +289,24 @@ func (h *Handler) authenticateSupabaseTenant(
 		}
 	}
 	return claims.UserID, claims.Email, mapSupabaseRoleToTenantRole(claims.Role), true
+}
+
+// hasSupabaseAuthCookie reports whether the request carries ANY Supabase
+// access-token cookie (project-scoped or legacy short name). Used by the
+// gateway to skip the magic-link visitor branch when a real authenticated
+// user is present — magic links shouldn't downgrade a real login to public.
+// The full validation happens later in authenticateTenantRequest; this is
+// just the cheap "is there a credential to verify" check.
+func (h *Handler) hasSupabaseAuthCookie(r *http.Request) bool {
+	if h.Cfg.SupabaseProjectRef != "" {
+		if c, err := r.Cookie("sb-" + h.Cfg.SupabaseProjectRef + "-auth-token"); err == nil && strings.TrimSpace(c.Value) != "" {
+			return true
+		}
+	}
+	if c, err := r.Cookie("sb-access-token"); err == nil && strings.TrimSpace(c.Value) != "" {
+		return true
+	}
+	return false
 }
 
 // readSupabaseAccessToken extracts the access token from any cookie name
