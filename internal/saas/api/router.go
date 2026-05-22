@@ -117,6 +117,14 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 // Idempotent: safe to call once at boot; subsequent calls are no-ops on
 // already-started workers.
 func (h *Handler) StartBackground(ctx context.Context) {
+	// Bootstrap the default-auto workspace if missing. This closes the gap
+	// where a fresh install requires the operator to manually create a
+	// workspace before Clara can provision the first tenant. Logs and moves
+	// on if it fails — startup should not be gated on workspace seeding.
+	if err := h.EnsureDefaultWorkspace(ctx); err != nil {
+		log.Printf("WARN: bootstrap default workspace failed: %v", err)
+	}
+
 	if h.ReminderWorker != nil {
 		h.ReminderWorker.Start(ctx)
 	}
