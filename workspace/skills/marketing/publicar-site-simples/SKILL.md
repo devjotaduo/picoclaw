@@ -18,6 +18,7 @@ visibility: global
 - Fonte mínima 16px, contraste WCAG AA.
 - Sem rastreamento de terceiros.
 - HTTPS obrigatório em produção (configurado via `PICOCLAW_PUBLIC_BASE_URL`).
+- **Design**: antes de gerar HTML, consultar `marketing/design-visual` para paleta, fonte e layout correto para o segmento da empresa. Nunca usar gradiente roxo genérico, Arial ou Roboto.
 
 ## Onde salvar os arquivos
 
