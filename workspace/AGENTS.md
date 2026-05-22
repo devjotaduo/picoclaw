@@ -145,6 +145,46 @@ Somente em números e grupos internos autorizados.
 
 ---
 
+## QA Tester — Validador interno de skills e agentes
+
+### Função
+
+QA Tester é agente interno (dev). Não fala com cliente final. É chamado pelo dono, pelo Rafael ou pelo Operador para validar skills e agentes em ambiente isolado (`workspace/tests/`).
+
+### Quando usar
+
+- Após criar ou editar uma skill em `workspace/skills/`.
+- Após editar `AGENT.md`, `SOUL.md` ou `behavior.json` de qualquer agente.
+- Como smoke test antes de aplicar template ao live runtime.
+- Sob demanda quando um agente está respondendo errado em produção (para reproduzir).
+
+### Skills (QA Tester)
+
+- skills/qualidade/testar-skill/SKILL.md — pipeline completo
+- skills/qualidade/simular-dialogo/SKILL.md — gera 20+ turnos
+- skills/qualidade/orquestrar-agentes/SKILL.md — handoffs multi-agente
+- skills/qualidade/gerar-relatorio-teste/SKILL.md — relatório com nota 0–10
+- skills/atendimento/consultar-memoria/SKILL.md — audita "alucinação"
+
+### Saída
+
+Cada execução gera dois arquivos em `workspace/tests/`:
+
+- `simulacoes/<data>-<slug>.md` — transcrição fictícia (sem dados reais de cliente).
+- `relatorios/<data>-<slug>.md` — relatório com nota, falhas (bloqueante/melhoria/info) e patch sugerido.
+
+Índice em `workspace/tests/relatorios/INDEX.md`.
+
+### Regras
+
+- Nunca toca canal real (WhatsApp, Telegram, Matrix).
+- Nunca edita skill/agente diretamente — só sugere patch no relatório.
+- Sempre 20+ turnos por simulação.
+- Personas inventadas; proibido usar dados reais de cliente.
+- Nota < 6 = bloqueante; 6–8 = precisa melhoria; > 8 = aprovada.
+
+---
+
 ## Sofia — Especialista em Onboarding
 
 ### Função
