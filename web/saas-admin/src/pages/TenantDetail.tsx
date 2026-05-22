@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Copy, Check, Sparkles, Bot, ExternalLink, PlusCircle, ScrollText } from "lucide-react";
+import { ArrowLeft, Copy, Check, Sparkles, Bot, ExternalLink, PlusCircle, ScrollText, FolderTree } from "lucide-react";
 import {
   getTenant,
   getUsage,
@@ -174,6 +174,13 @@ export function TenantDetail() {
                 </Button>
               </Link>
             </>
+          )}
+          {isPlatformAdmin && (
+            <Link to={`/tenants/${tenant.id}/files`}>
+              <Button variant="outline" size="sm">
+                <FolderTree className="h-4 w-4" /> Arquivos
+              </Button>
+            </Link>
           )}
           {isPlatformAdmin && (
             <Link to={`/tenants/${tenant.id}/logs`}>

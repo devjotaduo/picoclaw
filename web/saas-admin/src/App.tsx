@@ -13,6 +13,7 @@ import { CrmPage } from "@/pages/CrmPage";
 import { AcceptInvite } from "@/pages/AcceptInvite";
 import { Workspaces } from "@/pages/Workspaces";
 import { WorkspaceFiles } from "@/pages/WorkspaceFiles";
+import { TenantFiles } from "@/pages/TenantFiles";
 import { AuditLog } from "@/pages/AuditLog";
 import { TenantLogs } from "@/pages/TenantLogs";
 import { UserManagement } from "@/pages/UserManagement";
@@ -63,6 +64,7 @@ export default function App() {
         <Route path="/tenants/:id" element={<TenantDetail />} />
         <Route path="/tenants/:id/settings" element={<AgentSettings />} />
         <Route path="/tenants/:id/agent" element={<AgentEdit />} />
+        <Route path="/tenants/:id/files" element={<RequirePlatform><TenantFiles /></RequirePlatform>} />
         <Route path="/tenants/:id/skills" element={<SkillsList />} />
         <Route path="/tenants/:id/skills/:name" element={<SkillEdit />} />
         <Route path="/tenants/:id/logs" element={<RequirePlatform><TenantLogs /></RequirePlatform>} />
