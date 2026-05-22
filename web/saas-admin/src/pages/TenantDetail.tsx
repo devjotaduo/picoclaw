@@ -171,7 +171,7 @@ export function TenantDetail() {
     budgetPct >= 90 ? "bg-red-500" : budgetPct >= 70 ? "bg-amber-500" : "bg-zinc-600";
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
+    <div className="mx-auto min-h-full w-full max-w-5xl p-6">
       <Link to="/tenants" className="mb-3 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-200">
         <ArrowLeft className="h-3 w-3" /> Back to tenants
       </Link>

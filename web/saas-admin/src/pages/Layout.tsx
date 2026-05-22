@@ -39,13 +39,13 @@ export function Layout() {
     status.state === "authenticated" && status.me.platform_role === "platform_admin";
 
   return (
-    <div className="flex h-full">
-      <aside className="flex w-56 flex-col border-r border-zinc-800 bg-zinc-950">
+    <div className="flex h-full min-h-0">
+      <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950">
         <div className="border-b border-zinc-800 px-4 py-4">
           <div className="text-sm font-semibold text-brand-500">Picoclaw SaaS</div>
           <div className="text-xs text-zinc-500">control plane</div>
         </div>
-        <nav className="flex-1 py-2">
+        <nav className="min-h-0 flex-1 overflow-y-auto py-2">
           {isPlatformAdmin && (
             <SideLink to="/dashboard" icon={<LayoutDashboard className="h-4 w-4" />} active={loc.pathname === "/dashboard"}>
               Dashboard
@@ -139,7 +139,7 @@ export function Layout() {
           </div>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto">
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>
