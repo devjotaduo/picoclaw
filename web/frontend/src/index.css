@@ -305,8 +305,7 @@
   --gray-900: #0b0b0b;
 
   /* ===== TIPOGRAFIA ===== */
-  --font-sans:
-    "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Anthropic Serif", Georgia, "Times New Roman", serif;
   --font-mono:
     "Anthropic Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,

@@ -291,9 +291,14 @@ func parseResponse(apiResp *responses.Response) *protocoltypes.LLMResponse {
 				}
 			}
 		case "function_call":
+			// openai-go 3.37 wraps Arguments in a union struct
+			// (ResponseOutputItemUnionArguments) so the raw JSON string is
+			// in `.OfString`. For function-call items the union always
+			// resolves to the string variant.
+			rawArgs := item.Arguments.OfString
 			var args map[string]any
-			if err := json.Unmarshal([]byte(item.Arguments), &args); err != nil {
-				args = map[string]any{"raw": item.Arguments}
+			if err := json.Unmarshal([]byte(rawArgs), &args); err != nil {
+				args = map[string]any{"raw": rawArgs}
 			}
 			toolCalls = append(toolCalls, protocoltypes.ToolCall{
 				ID:        item.CallID,

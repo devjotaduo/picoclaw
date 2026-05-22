@@ -109,7 +109,7 @@ export function AIOrbAvatar({
         draggable={false}
         className={cn(
           "pointer-events-none absolute inset-0 size-full scale-[2.55] object-cover mix-blend-screen select-none",
-          redTone && "hue-rotate-[140deg] saturate-[1.55] brightness-[1.08]",
+          redTone && "brightness-[1.08] hue-rotate-[140deg] saturate-[1.55]",
         )}
         onError={(event) => {
           event.currentTarget.style.display = "none"

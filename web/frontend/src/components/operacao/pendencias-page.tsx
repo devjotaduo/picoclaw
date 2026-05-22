@@ -9,7 +9,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useMemo } from "react"
 
-import { listPendencias, type PendenciaItem } from "@/api/pendencias"
+import { type PendenciaItem, listPendencias } from "@/api/pendencias"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 
@@ -116,7 +116,7 @@ export function PendenciasPage() {
                       </span>
                       <div className="min-w-0 flex-1">
                         {item.heading ? (
-                          <p className="text-muted-foreground mb-0.5 text-xs uppercase tracking-wide opacity-70">
+                          <p className="text-muted-foreground mb-0.5 text-xs tracking-wide uppercase opacity-70">
                             {item.heading}
                           </p>
                         ) : null}

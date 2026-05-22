@@ -11,9 +11,9 @@ import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 
 import {
-  getReadiness,
   type AgentReadiness,
   type AgentReadinessStatus,
+  getReadiness,
 } from "@/api/readiness"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"

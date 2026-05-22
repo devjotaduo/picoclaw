@@ -272,7 +272,10 @@ func applyThinkingConfig(params *anthropic.MessageNewParams, level string) {
 	params.Temperature = anthropic.MessageNewParams{}.Temperature
 
 	if level == "adaptive" {
-		adaptive := anthropic.NewThinkingConfigAdaptiveParam()
+		// anthropic-sdk-go 1.45 dropped the NewThinkingConfigAdaptiveParam
+		// constructor. The struct literal produces the same JSON because
+		// `Type` defaults to "adaptive" via its `default:"adaptive"` tag.
+		adaptive := anthropic.ThinkingConfigAdaptiveParam{}
 		params.Thinking = anthropic.ThinkingConfigParamUnion{OfAdaptive: &adaptive}
 		params.OutputConfig = anthropic.OutputConfigParam{
 			Effort: anthropic.OutputConfigEffortHigh,
