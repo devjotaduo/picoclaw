@@ -28,6 +28,20 @@
       "enabled": true,
       "schedule": { "kind": "cron", "expr": "0 6 * * 1", "tz": "America/Sao_Paulo" },
       "payload": { "kind": "command", "command": "analytics.patterns.weekly" }
+    },
+    {
+      "id": "lia-weekly-proposals",
+      "name": "Lia — Tendências e propostas semanais",
+      "enabled": false,
+      "schedule": { "kind": "cron", "expr": "0 9 * * 1", "tz": "America/Sao_Paulo" },
+      "payload": { "kind": "agent_turn", "message": "Gere tendências da semana, ideias de posts e uma campanha semanal. Salve o resultado como proposta de marketing.", "channel": "cron", "to": "lia-weekly-proposals", "agent_id": "lia" }
+    },
+    {
+      "id": "lia-monthly-positioning",
+      "name": "Lia — Posicionamento mensal da marca",
+      "enabled": false,
+      "schedule": { "kind": "cron", "expr": "0 9 1 * *", "tz": "America/Sao_Paulo" },
+      "payload": { "kind": "agent_turn", "message": "Gere um relatório mensal de posicionamento da marca com sugestões de melhoria. Salve o resultado como proposta de marketing.", "channel": "cron", "to": "lia-monthly-positioning", "agent_id": "lia" }
     }
   ]
 }
