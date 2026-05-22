@@ -11,6 +11,7 @@ import {
   IconLayoutDashboard,
   IconListDetails,
   IconMessageCircle,
+  IconPlugConnected,
   IconPlus,
   IconPlugConnected,
   IconRobot,
