@@ -147,3 +147,69 @@ func looksLikeWorkspaceText(path string) bool {
 	}
 	return true
 }
+
+// ── Validate workspace ───────────────────────────────────────────────
+
+// workspaceValidationRow flags one required/recommended file as present or
+// missing. UI renders this as a checklist.
+type workspaceValidationRow struct {
+	Path        string `json:"path"`
+	Required    bool   `json:"required"`
+	Present     bool   `json:"present"`
+	Description string `json:"description"`
+}
+
+type workspaceValidationResponse struct {
+	WorkspaceID string                   `json:"workspace_id"`
+	OK          bool                     `json:"ok"` // true when every Required file is Present
+	Rows        []workspaceValidationRow `json:"rows"`
+}
+
+// handleValidateWorkspace runs the canonical "is this workspace complete
+// enough to provision a tenant from?" check. Required files block tenant
+// boot if missing; recommended files improve security / DX but don't break
+// the launcher. The UI surfaces both so the operator sees what to fix.
+func (h *Handler) handleValidateWorkspace(w http.ResponseWriter, r *http.Request) {
+	ws, ok := h.getWorkspace(w, r)
+	if !ok {
+		return
+	}
+	homeDir := filepath.Join(ws.HostPath, tenant.WorkspaceHomeSubdir)
+
+	checks := []struct {
+		Rel         string
+		Required    bool
+		Description string
+	}{
+		{"config.json", true, "Runtime config (model_list, channel_list, gateway). Sem ele o launcher não inicia."},
+		{"workspace/AGENT.md", true, "Prompt principal + frontmatter (model, skills, tool_allowlist). Sem ele o agente não tem prompt."},
+		{"workspace/SOUL.md", true, "Identidade do agente (marca, tom, idioma)."},
+		{"workspace/behavior.json", true, "Hard filters (DM/grupo, business_hours, handoff_keywords)."},
+		{".security.yml", false, "Permissions / allowlist de ferramentas. Sem isso, defaults conservadores."},
+		{"auth.json", false, "OAuth credentials (Codex, Claude CLI, GitHub). Bootstrap cria vazio; preenche via `picoclaw auth login` ou copy do shared-auth.json."},
+		{"workspace/memory", false, "Memória estática (FAQ, info da empresa). Lido a cada turno."},
+		{"workspace/skills", false, "Skills curadas pro tenant."},
+	}
+
+	rows := make([]workspaceValidationRow, 0, len(checks))
+	allRequiredPresent := true
+	for _, c := range checks {
+		_, err := os.Stat(filepath.Join(homeDir, c.Rel))
+		present := err == nil
+		rows = append(rows, workspaceValidationRow{
+			Path:        c.Rel,
+			Required:    c.Required,
+			Present:     present,
+			Description: c.Description,
+		})
+		if c.Required && !present {
+			allRequiredPresent = false
+		}
+	}
+
+	writeJSON(w, http.StatusOK, workspaceValidationResponse{
+		WorkspaceID: ws.ID,
+		OK:          allRequiredPresent,
+		Rows:        rows,
+	})
+}
