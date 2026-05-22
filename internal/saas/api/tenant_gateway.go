@@ -299,7 +299,10 @@ func (h *Handler) authenticateSupabaseTenant(
 // just the cheap "is there a credential to verify" check.
 func (h *Handler) hasSupabaseAuthCookie(r *http.Request) bool {
 	if h.Cfg.SupabaseProjectRef != "" {
-		if c, err := r.Cookie("sb-" + h.Cfg.SupabaseProjectRef + "-auth-token"); err == nil && strings.TrimSpace(c.Value) != "" {
+		if c, err := r.Cookie(
+			"sb-" + h.Cfg.SupabaseProjectRef + "-auth-token",
+		); err == nil &&
+			strings.TrimSpace(c.Value) != "" {
 			return true
 		}
 	}
