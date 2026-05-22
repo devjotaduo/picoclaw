@@ -29,6 +29,7 @@ type Handler struct {
 	Workspaces     *store.WorkspaceStore
 	CompanyIntakes *store.CompanyIntakeStore
 	MagicLinks     *store.MagicLinkStore
+	Shortlinks     *store.ShortlinkStore
 	Usage          *store.UsageStore
 	MCP            *store.WorkspaceMCPStore
 	// MCPEncKey is the decoded AES-256-GCM key (32 bytes) used to seal
@@ -76,6 +77,7 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		Workspaces:     &store.WorkspaceStore{DB: db},
 		CompanyIntakes: &store.CompanyIntakeStore{DB: db},
 		MagicLinks:     &store.MagicLinkStore{DB: db},
+		Shortlinks:     &store.ShortlinkStore{DB: db},
 		Usage:          &store.UsageStore{DB: db},
 		MCP:            &store.WorkspaceMCPStore{DB: db},
 		Provisioner:    prov,
@@ -163,6 +165,12 @@ func (h *Handler) Routes() http.Handler {
 		_, _ = w.Write([]byte("ok"))
 	})
 
+	// Shortlink resolver — public, no auth. Lives at /s/{code} on the
+	// apex domain (and works on any subdomain too, since the router
+	// runs before the tenant gateway dispatch). 302's to the stored
+	// target URL or shows a small 404 page on miss/expired.
+	r.Get("/s/{code}", h.handleResolveShortlink)
+
 	// open-crm reverse proxy. Mounted at /crm, sits behind platform auth, and
 	// forwards every sub-path verbatim to the opencrm container.
 	crmProxy := newCRMProxy(h.Cfg.OpenCRMURL)
@@ -240,6 +248,12 @@ func (h *Handler) Routes() http.Handler {
 				r.Post("/tenants/{id}/magic-link", h.handleGenerateMagicLink)
 				r.Post("/tenants/{id}/resend-credentials", h.handleResendCredentials)
 				r.Post("/magic-links/{nonce}/consume", h.handleConsumeMagicLink)
+				// Shortlinks: admin-only CRUD. The public resolver
+				// /s/{code} sits outside the auth group below (added
+				// at the root, not under /api/v1).
+				r.Post("/shortlinks", h.handleCreateShortlink)
+				r.Get("/shortlinks", h.handleListShortlinks)
+				r.Delete("/shortlinks/{code}", h.handleDeleteShortlink)
 				r.Delete("/tenants/{id}", h.handleDeleteTenant)
 				r.Post("/tenants/{id}/mark-delivered", h.handleMarkPasswordDelivered)
 				r.Put("/tenants/{id}/crm", h.handleSetCRMLinks)

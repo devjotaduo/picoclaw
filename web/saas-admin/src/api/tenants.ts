@@ -125,6 +125,10 @@ export type ResendCredentialsResult = {
   dashboard_url: string;
   initial_password: string;
   magic_link: string;
+  // short_magic_link is the /s/<code> wrapper around magic_link, scoped
+  // to the apex domain. WhatsApp/SMS-friendly. Empty when shortening
+  // failed (the long magic_link still works).
+  short_magic_link: string;
   info: string;
 };
 export async function resendCredentials(id: string) {

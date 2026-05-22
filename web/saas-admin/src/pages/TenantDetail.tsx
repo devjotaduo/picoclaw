@@ -118,10 +118,12 @@ export function TenantDetail() {
     dashboard_url: string;
     initial_password: string;
     magic_link: string;
+    short_magic_link: string;
     magic_link_in_email: boolean;
   } | null>(null);
   const [resendPwdCopied, setResendPwdCopied] = useState(false);
   const [resendLinkCopied, setResendLinkCopied] = useState(false);
+  const [resendShortCopied, setResendShortCopied] = useState(false);
   const resendCredsM = useMutation({
     mutationFn: () => resendCredentials(id),
     onSuccess: (r) => {
@@ -130,10 +132,12 @@ export function TenantDetail() {
         dashboard_url: r.dashboard_url,
         initial_password: r.initial_password,
         magic_link: r.magic_link,
+        short_magic_link: r.short_magic_link,
         magic_link_in_email: r.magic_link_in_email,
       });
       setResendPwdCopied(false);
       setResendLinkCopied(false);
+      setResendShortCopied(false);
       setResendCredsOpen(true);
       toast({
         type: "success",
@@ -587,27 +591,55 @@ export function TenantDetail() {
             </div>
 
             {resendCredsData.magic_link ? (
-              <div>
-                <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
-                  Magic link (1 clique, sem senha)
-                </label>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-[10px] text-zinc-100">
-                    {resendCredsData.magic_link}
-                  </code>
-                  <Button
-                    variant="secondary"
-                    size="icon"
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(resendCredsData.magic_link);
-                      setResendLinkCopied(true);
-                      setTimeout(() => setResendLinkCopied(false), 1500);
-                    }}
-                  >
-                    {resendLinkCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-                  </Button>
+              <>
+                {resendCredsData.short_magic_link && (
+                  <div>
+                    <label className="mb-1 block text-xs uppercase tracking-wider text-emerald-400">
+                      Link curto (WhatsApp / SMS · 24h)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-emerald-200">
+                        {resendCredsData.short_magic_link}
+                      </code>
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(resendCredsData.short_magic_link);
+                          setResendShortCopied(true);
+                          setTimeout(() => setResendShortCopied(false), 1500);
+                        }}
+                      >
+                        {resendShortCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Redirect 302 → magic link Supabase. Expira em 24h. Bom pra compartilhar por canais com limite de caracteres.
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
+                    Magic link completo (Supabase)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-[10px] text-zinc-100">
+                      {resendCredsData.magic_link}
+                    </code>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(resendCredsData.magic_link);
+                        setResendLinkCopied(true);
+                        setTimeout(() => setResendLinkCopied(false), 1500);
+                      }}
+                    >
+                      {resendLinkCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              </>
             ) : (
               <p className="text-xs text-amber-300">
                 Magic link falhou ao gerar (verifique allowlist Redirect URLs no Supabase Dashboard).

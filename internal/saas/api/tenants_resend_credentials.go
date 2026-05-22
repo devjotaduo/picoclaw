@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -90,19 +91,40 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		magicLink = link
 	}
 
+	// 3b. Wrap the Supabase magic link in a /s/<code> shortlink so the
+	// admin has something WhatsApp/SMS-friendly to share. The full
+	// Supabase link is 200+ chars with the bearer token baked into the
+	// query string — fine for email, terrible for any other channel.
+	// Failure is non-fatal: the long URL still works.
+	var shortMagicLink string
+	if magicLink != "" {
+		label := "magic-link tenant=" + t.ID
+		if short, sherr := h.CreateShortlinkInternal(r.Context(), magicLink, label, 24*time.Hour); sherr != nil {
+			log.Printf("resend-credentials: shortlink wrap failed for tenant %s: %v", t.ID, sherr)
+		} else {
+			shortMagicLink = short
+		}
+	}
+
 	// 4. Compose the dashboard URL exactly like the provisioner does, so
 	// the email looks identical to the original "welcome" mail.
 	dashboardURL := "https://" + t.Subdomain + "." + h.Cfg.TenantBaseDomain + "/"
 
-	// 5. Fire-and-forget the email (matches the original SendCredentialsEmail
-	// usage at tenants.go:172 — the mailer logs internally on failure).
+	// 5. Fire-and-forget the email. We send the SHORT magic link in the
+	// email when available — easier for the recipient to click on a
+	// mobile mail client + survives line-wrapping mishandling. Falls
+	// back to the long URL if shortening failed.
+	mailMagicLink := magicLink
+	if shortMagicLink != "" {
+		mailMagicLink = shortMagicLink
+	}
 	go h.Mailer.SendCredentialsEmail(
 		t.OwnerEmail,
 		t.DisplayName,
 		dashboardURL,
 		t.OwnerEmail,
 		newPassword,
-		magicLink,
+		mailMagicLink,
 	)
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -117,8 +139,9 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		// platform-admin-only access (the endpoint is gated by
 		// requirePlatformAdmin and the cookie travels over TLS), and the
 		// password was already in transit to the operator via SMTP anyway.
-		"initial_password": newPassword,
-		"magic_link":       magicLink,
-		"info":             "Senha rotacionada. Email enfileirado para " + t.OwnerEmail + " — se demorar, copie a senha/link diretamente abaixo.",
+		"initial_password":  newPassword,
+		"magic_link":        magicLink,
+		"short_magic_link":  shortMagicLink,
+		"info":              "Senha rotacionada. Email enfileirado para " + t.OwnerEmail + " — se demorar, copie a senha/link diretamente abaixo.",
 	})
 }
