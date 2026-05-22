@@ -7,7 +7,7 @@ package mcp
 // Entry describes one MCP server admins can activate per workspace.
 type Entry struct {
 	ID           string
-	Name         string
+	DisplayName  string
 	Vendor       string
 	Category     string
 	Description  string
@@ -24,9 +24,9 @@ type Entry struct {
 // minus Enabled (set at activation time) and Env/EnvFile (filled per-tenant
 // during provisioning).
 type ServerSpec struct {
+	Type    string
 	Command string
 	Args    []string
-	Type    string
 	URL     string
 	EnvKeys []string
 }
@@ -35,30 +35,32 @@ type ServerSpec struct {
 // the MCP. Each field's Key becomes both the env var name AND the JSON key
 // in the encrypted credentials blob stored in workspace_mcp_servers.
 type CredentialField struct {
-	Key      string
-	Label    string
-	Help     string
-	Required bool
-	Secret   bool
+	Key         string
+	Label       string
+	Placeholder string
+	Help        string
+	Required    bool
+	Secret      bool
 }
 
 // Catalog is the curated list. Order here drives display order in the admin.
 var Catalog = []Entry{
 	{
 		ID:           "notion",
-		Name:         "Notion",
+		DisplayName:  "Notion",
 		Vendor:       "Notion",
 		Category:     "knowledge",
 		Description:  "Base de conhecimento e FAQ consultáveis pelo agente.",
 		Integrations: []string{"knowledge_base", "internal_knowledge_base"},
 		Verticals:    []string{"atendente-geral", "suporte-tecnico", "assistente-interno", "atendente-loja"},
 		Server: ServerSpec{
+			Type:    "stdio",
 			Command: "npx",
 			Args:    []string{"-y", "@notionhq/notion-mcp-server"},
 			EnvKeys: []string{"NOTION_API_KEY"},
 		},
 		Credentials: []CredentialField{
-			{Key: "NOTION_API_KEY", Label: "Integration token", Help: "Crie em notion.so/my-integrations e compartilhe as páginas com a integração.", Required: true, Secret: true},
+			{Key: "NOTION_API_KEY", Label: "Integration token", Placeholder: "ntn_...", Help: "Crie em notion.so/my-integrations e compartilhe as páginas com a integração.", Required: true, Secret: true},
 		},
 		Official: true,
 		DocsURL:  "https://github.com/makenotion/notion-mcp-server",
@@ -66,19 +68,20 @@ var Catalog = []Entry{
 	},
 	{
 		ID:           "tavily-search",
-		Name:         "Tavily Web Search",
+		DisplayName:  "Tavily Web Search",
 		Vendor:       "Tavily",
 		Category:     "search",
 		Description:  "Busca web para fallback quando a base de conhecimento não cobrir a dúvida.",
 		Integrations: []string{},
 		Verticals:    []string{"atendente-geral", "suporte-tecnico", "vendas-prospec"},
 		Server: ServerSpec{
+			Type:    "stdio",
 			Command: "npx",
 			Args:    []string{"-y", "tavily-mcp"},
 			EnvKeys: []string{"TAVILY_API_KEY"},
 		},
 		Credentials: []CredentialField{
-			{Key: "TAVILY_API_KEY", Label: "API key", Help: "Obtenha em tavily.com/api. 1000 requests grátis/mês.", Required: true, Secret: true},
+			{Key: "TAVILY_API_KEY", Label: "API key", Placeholder: "tvly_...", Help: "Obtenha em tavily.com/api. 1000 requests grátis/mês.", Required: true, Secret: true},
 		},
 		Official: false,
 		DocsURL:  "https://github.com/tavily-ai/tavily-mcp",
@@ -86,19 +89,20 @@ var Catalog = []Entry{
 	},
 	{
 		ID:           "google-calendar",
-		Name:         "Google Calendar",
+		DisplayName:  "Google Calendar",
 		Vendor:       "Google",
 		Category:     "calendar",
 		Description:  "Agendar, remarcar e consultar disponibilidade em calendários do Google.",
 		Integrations: []string{"calendar"},
 		Verticals:    []string{"atendente-clinica", "vendas-prospec"},
 		Server: ServerSpec{
+			Type:    "stdio",
 			Command: "npx",
 			Args:    []string{"-y", "@cocal/google-calendar-mcp"},
 			EnvKeys: []string{"GOOGLE_OAUTH_CREDENTIALS"},
 		},
 		Credentials: []CredentialField{
-			{Key: "GOOGLE_OAUTH_CREDENTIALS", Label: "OAuth credentials JSON", Help: "Cole o JSON inteiro do OAuth 2.0 Client ID do Google Cloud Console.", Required: true, Secret: true},
+			{Key: "GOOGLE_OAUTH_CREDENTIALS", Label: "OAuth credentials JSON", Placeholder: "{...}", Help: "Cole o JSON inteiro do OAuth 2.0 Client ID do Google Cloud Console.", Required: true, Secret: true},
 		},
 		Official: false,
 		DocsURL:  "https://github.com/nspady/google-calendar-mcp",
@@ -106,19 +110,20 @@ var Catalog = []Entry{
 	},
 	{
 		ID:           "cal-com",
-		Name:         "Cal.com",
+		DisplayName:  "Cal.com",
 		Vendor:       "Cal.com",
 		Category:     "calendar",
 		Description:  "Agendamento multi-profissional (alternativa open-source ao Google Calendar).",
 		Integrations: []string{"calendar"},
 		Verticals:    []string{"atendente-clinica", "vendas-prospec"},
 		Server: ServerSpec{
+			Type:    "stdio",
 			Command: "npx",
 			Args:    []string{"-y", "@calcom/mcp"},
 			EnvKeys: []string{"CALCOM_API_KEY"},
 		},
 		Credentials: []CredentialField{
-			{Key: "CALCOM_API_KEY", Label: "API key", Help: "Settings → Developer → API keys no app.cal.com.", Required: true, Secret: true},
+			{Key: "CALCOM_API_KEY", Label: "API key", Placeholder: "cal_...", Help: "Settings → Developer → API keys no app.cal.com.", Required: true, Secret: true},
 		},
 		Official: true,
 		DocsURL:  "https://cal.com/docs/api-reference/v2/introduction",
@@ -126,19 +131,20 @@ var Catalog = []Entry{
 	},
 	{
 		ID:           "hubspot",
-		Name:         "HubSpot",
+		DisplayName:  "HubSpot",
 		Vendor:       "HubSpot",
 		Category:     "crm",
 		Description:  "Criar e atualizar leads, contatos e deals no HubSpot CRM.",
 		Integrations: []string{"crm", "sales_pipeline"},
 		Verticals:    []string{"vendas-prospec", "atendente-geral", "atendente-loja"},
 		Server: ServerSpec{
+			Type:    "stdio",
 			Command: "npx",
 			Args:    []string{"-y", "@hubspot/mcp-server"},
 			EnvKeys: []string{"HUBSPOT_ACCESS_TOKEN"},
 		},
 		Credentials: []CredentialField{
-			{Key: "HUBSPOT_ACCESS_TOKEN", Label: "Private app token", Help: "Settings → Integrations → Private Apps → Create.", Required: true, Secret: true},
+			{Key: "HUBSPOT_ACCESS_TOKEN", Label: "Private app token", Placeholder: "pat-...", Help: "Settings → Integrations → Private Apps → Create.", Required: true, Secret: true},
 		},
 		Official: true,
 		DocsURL:  "https://github.com/HubSpot/mcp-server",
@@ -146,20 +152,21 @@ var Catalog = []Entry{
 	},
 	{
 		ID:           "shopify",
-		Name:         "Shopify",
+		DisplayName:  "Shopify",
 		Vendor:       "Shopify",
 		Category:     "ecommerce",
 		Description:  "Consultar catálogo, estoque, pedidos e status de envio da loja.",
 		Integrations: []string{"ecommerce_platform"},
 		Verticals:    []string{"atendente-loja"},
 		Server: ServerSpec{
+			Type:    "stdio",
 			Command: "npx",
 			Args:    []string{"-y", "@shopify/dev-mcp"},
 			EnvKeys: []string{"SHOPIFY_ACCESS_TOKEN", "SHOPIFY_SHOP_DOMAIN"},
 		},
 		Credentials: []CredentialField{
-			{Key: "SHOPIFY_SHOP_DOMAIN", Label: "Shop domain", Help: "Ex: minhaloja.myshopify.com (sem https://).", Required: true, Secret: false},
-			{Key: "SHOPIFY_ACCESS_TOKEN", Label: "Admin API access token", Help: "Custom app → Configure Admin API scopes → Install.", Required: true, Secret: true},
+			{Key: "SHOPIFY_SHOP_DOMAIN", Label: "Shop domain", Placeholder: "myshop.myshopify.com", Help: "Ex: minhaloja.myshopify.com (sem https://).", Required: true, Secret: false},
+			{Key: "SHOPIFY_ACCESS_TOKEN", Label: "Admin API access token", Placeholder: "shpat_...", Help: "Custom app → Configure Admin API scopes → Install.", Required: true, Secret: true},
 		},
 		Official: true,
 		DocsURL:  "https://github.com/Shopify/dev-mcp",
@@ -167,19 +174,20 @@ var Catalog = []Entry{
 	},
 	{
 		ID:           "stripe",
-		Name:         "Stripe",
+		DisplayName:  "Stripe",
 		Vendor:       "Stripe",
 		Category:     "payment",
 		Description:  "Gerar links de pagamento, consultar transações e clientes no Stripe.",
 		Integrations: []string{"payment_gateway"},
 		Verticals:    []string{"atendente-loja", "vendas-prospec"},
 		Server: ServerSpec{
+			Type:    "stdio",
 			Command: "npx",
 			Args:    []string{"-y", "@stripe/mcp", "--tools=all"},
 			EnvKeys: []string{"STRIPE_SECRET_KEY"},
 		},
 		Credentials: []CredentialField{
-			{Key: "STRIPE_SECRET_KEY", Label: "Secret key", Help: "Dashboard → Developers → API keys → Secret key. Use sk_test_* para homologação.", Required: true, Secret: true},
+			{Key: "STRIPE_SECRET_KEY", Label: "Secret key", Placeholder: "sk_test_...", Help: "Dashboard → Developers → API keys → Secret key. Use sk_test_* para homologação.", Required: true, Secret: true},
 		},
 		Official: true,
 		DocsURL:  "https://docs.stripe.com/mcp",
@@ -187,20 +195,21 @@ var Catalog = []Entry{
 	},
 	{
 		ID:           "resend",
-		Name:         "Resend",
+		DisplayName:  "Resend",
 		Vendor:       "Resend",
 		Category:     "email",
 		Description:  "Envio transacional de emails (confirmações, follow-ups).",
 		Integrations: []string{"email"},
 		Verticals:    []string{"vendas-prospec", "atendente-clinica", "atendente-loja"},
 		Server: ServerSpec{
+			Type:    "stdio",
 			Command: "npx",
 			Args:    []string{"-y", "@resend/mcp-send-email"},
 			EnvKeys: []string{"RESEND_API_KEY", "SENDER_EMAIL_ADDRESS"},
 		},
 		Credentials: []CredentialField{
-			{Key: "RESEND_API_KEY", Label: "API key", Help: "resend.com → API Keys.", Required: true, Secret: true},
-			{Key: "SENDER_EMAIL_ADDRESS", Label: "Email remetente", Help: "Domínio precisa estar verificado no Resend.", Required: true, Secret: false},
+			{Key: "RESEND_API_KEY", Label: "API key", Placeholder: "re_...", Help: "resend.com → API Keys.", Required: true, Secret: true},
+			{Key: "SENDER_EMAIL_ADDRESS", Label: "Email remetente", Placeholder: "noreply@example.com", Help: "Domínio precisa estar verificado no Resend.", Required: true, Secret: false},
 		},
 		Official: true,
 		DocsURL:  "https://github.com/resend/mcp-send-email",
@@ -208,20 +217,21 @@ var Catalog = []Entry{
 	},
 	{
 		ID:           "sentry",
-		Name:         "Sentry",
+		DisplayName:  "Sentry",
 		Vendor:       "Sentry",
 		Category:     "log",
 		Description:  "Consultar erros e issues para suporte técnico.",
 		Integrations: []string{"log_storage", "issue_tracker"},
 		Verticals:    []string{"suporte-tecnico"},
 		Server: ServerSpec{
+			Type:    "stdio",
 			Command: "npx",
 			Args:    []string{"-y", "@sentry/mcp-server"},
 			EnvKeys: []string{"SENTRY_AUTH_TOKEN", "SENTRY_ORG"},
 		},
 		Credentials: []CredentialField{
-			{Key: "SENTRY_AUTH_TOKEN", Label: "Auth token", Help: "User Settings → Auth Tokens (escopo project:read, org:read).", Required: true, Secret: true},
-			{Key: "SENTRY_ORG", Label: "Org slug", Help: "Ex: jotaduo (o que aparece em sentry.io/<org>/).", Required: true, Secret: false},
+			{Key: "SENTRY_AUTH_TOKEN", Label: "Auth token", Placeholder: "sntrys_...", Help: "User Settings → Auth Tokens (escopo project:read, org:read).", Required: true, Secret: true},
+			{Key: "SENTRY_ORG", Label: "Org slug", Placeholder: "my-org", Help: "Ex: jotaduo (o que aparece em sentry.io/<org>/).", Required: true, Secret: false},
 		},
 		Official: true,
 		DocsURL:  "https://github.com/getsentry/sentry-mcp",
@@ -229,13 +239,14 @@ var Catalog = []Entry{
 	},
 	{
 		ID:           "linear",
-		Name:         "Linear",
+		DisplayName:  "Linear",
 		Vendor:       "Linear",
 		Category:     "issue_tracker",
 		Description:  "Abrir tickets de suporte e bugs no Linear.",
 		Integrations: []string{"helpdesk", "issue_tracker", "ticketing_system"},
 		Verticals:    []string{"suporte-tecnico", "assistente-interno", "atendente-geral"},
 		Server: ServerSpec{
+			Type:    "stdio",
 			Command: "npx",
 			Args:    []string{"-y", "mcp-remote", "https://mcp.linear.app/sse"},
 			EnvKeys: []string{},

@@ -18,7 +18,7 @@ func TestCatalogIDsUnique(t *testing.T) {
 func TestCatalogIDsAreSlugs(t *testing.T) {
 	for _, e := range Catalog {
 		if e.ID == "" {
-			t.Errorf("empty ID in entry %q", e.Name)
+			t.Errorf("empty ID in entry %q", e.DisplayName)
 		}
 		if strings.ContainsAny(e.ID, " _ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
 			t.Errorf("ID %q must be lowercase-kebab-case", e.ID)
@@ -28,14 +28,17 @@ func TestCatalogIDsAreSlugs(t *testing.T) {
 
 func TestCatalogHasRequiredFields(t *testing.T) {
 	for _, e := range Catalog {
-		if e.Name == "" {
-			t.Errorf("entry %q missing Name", e.ID)
+		if e.DisplayName == "" {
+			t.Errorf("entry %q missing DisplayName", e.ID)
 		}
 		if e.Category == "" {
 			t.Errorf("entry %q missing Category", e.ID)
 		}
 		if e.Server.Command == "" && e.Server.URL == "" {
 			t.Errorf("entry %q has neither Command nor URL", e.ID)
+		}
+		if e.Server.Type == "" {
+			t.Errorf("entry %q missing Server.Type", e.ID)
 		}
 	}
 }
@@ -73,7 +76,7 @@ func TestLookup(t *testing.T) {
 	if !ok {
 		t.Fatal("expected notion to be in catalog")
 	}
-	if e.Name == "" {
+	if e.DisplayName == "" {
 		t.Error("Lookup returned empty entry")
 	}
 	if _, ok := Lookup("does-not-exist"); ok {
