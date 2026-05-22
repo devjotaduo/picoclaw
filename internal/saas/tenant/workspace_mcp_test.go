@@ -83,7 +83,9 @@ func TestWriteWorkspaceMCPMergesWithExisting(t *testing.T) {
 	servers := []ActiveMCPServer{
 		{Entry: mustLookup(t, "notion"), Credentials: map[string]string{"NOTION_API_KEY": "k"}},
 	}
-	_ = WriteWorkspaceMCP(dst, servers)
+	if err := WriteWorkspaceMCP(dst, servers); err != nil {
+		t.Fatal(err)
+	}
 
 	raw, _ := os.ReadFile(filepath.Join(dst, "config.json"))
 	var cfg map[string]any
