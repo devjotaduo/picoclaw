@@ -139,9 +139,9 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		// platform-admin-only access (the endpoint is gated by
 		// requirePlatformAdmin and the cookie travels over TLS), and the
 		// password was already in transit to the operator via SMTP anyway.
-		"initial_password":  newPassword,
-		"magic_link":        magicLink,
-		"short_magic_link":  shortMagicLink,
-		"info":              "Senha rotacionada. Email enfileirado para " + t.OwnerEmail + " — se demorar, copie a senha/link diretamente abaixo.",
+		"initial_password": newPassword,
+		"magic_link":       magicLink,
+		"short_magic_link": shortMagicLink,
+		"info":             "Senha rotacionada. Email enfileirado para " + t.OwnerEmail + " — se demorar, copie a senha/link diretamente abaixo.",
 	})
 }
