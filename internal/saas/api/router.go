@@ -214,6 +214,7 @@ func (h *Handler) Routes() http.Handler {
 				r.Post("/tenants/{id}/restart", h.handleRestartTenant)
 				r.Post("/tenants/{id}/recreate", h.handleRecreateTenant)
 				r.Post("/tenants/{id}/rotate-password", h.handleRotatePassword)
+				r.Post("/tenants/{id}/magic-link", h.handleGenerateMagicLink)
 				r.Delete("/tenants/{id}", h.handleDeleteTenant)
 				r.Post("/tenants/{id}/mark-delivered", h.handleMarkPasswordDelivered)
 				r.Put("/tenants/{id}/crm", h.handleSetCRMLinks)

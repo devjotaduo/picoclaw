@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Copy, Check, Sparkles, Bot, ExternalLink, PlusCircle, ScrollText, FolderTree } from "lucide-react";
+import { ArrowLeft, Copy, Check, Sparkles, Bot, ExternalLink, PlusCircle, ScrollText, FolderTree, Link2 } from "lucide-react";
 import {
   getTenant,
   getUsage,
@@ -12,6 +12,7 @@ import {
   setCRMLinks,
   listMembers,
   createInvite,
+  generateTenantMagicLink,
 } from "@/api/tenants";
 import {
   getCRMContact,
@@ -61,6 +62,9 @@ export function TenantDetail() {
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [rotatedPwd, setRotatedPwd] = useState<string | null>(null);
   const [pwdCopied, setPwdCopied] = useState(false);
+  const [magicLinkOpen, setMagicLinkOpen] = useState(false);
+  const [magicLinkData, setMagicLinkData] = useState<{ url: string; expires_at: string } | null>(null);
+  const [magicLinkCopied, setMagicLinkCopied] = useState(false);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["tenant", id] });
 
@@ -89,6 +93,17 @@ export function TenantDetail() {
     onSuccess: (r) => setRotatedPwd(r.initial_password),
     onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to rotate password." }),
   });
+  const magicLinkM = useMutation({
+    mutationFn: () => generateTenantMagicLink(id),
+    onSuccess: (r) => setMagicLinkData({ url: r.url, expires_at: r.expires_at }),
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Falha ao gerar link." }),
+  });
+  const copyMagicLink = async () => {
+    if (!magicLinkData) return;
+    await navigator.clipboard.writeText(magicLinkData.url);
+    setMagicLinkCopied(true);
+    setTimeout(() => setMagicLinkCopied(false), 2000);
+  };
   const copyPwd = async () => {
     if (!rotatedPwd) return;
     await navigator.clipboard.writeText(rotatedPwd);
@@ -181,6 +196,21 @@ export function TenantDetail() {
                 <FolderTree className="h-4 w-4" /> Arquivos
               </Button>
             </Link>
+          )}
+          {isPlatformAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                magicLinkM.mutate(undefined, {
+                  onSuccess: () => setMagicLinkOpen(true),
+                });
+              }}
+              disabled={magicLinkM.isPending}
+            >
+              <Link2 className="h-4 w-4" />
+              {magicLinkM.isPending ? "Gerando..." : "Link de acesso"}
+            </Button>
           )}
           {isPlatformAdmin && (
             <Link to={`/tenants/${tenant.id}/logs`}>
@@ -413,6 +443,55 @@ export function TenantDetail() {
             </div>
           </div>
         )}
+      </Dialog>
+
+      <Dialog
+        open={magicLinkOpen}
+        onClose={() => setMagicLinkOpen(false)}
+        title="Link de acesso direto"
+        size="md"
+      >
+        <div className="space-y-4 text-sm">
+          <p className="text-zinc-300">
+            Compartilhe esse link com o lead/prospecto. Ao clicar, ele entra
+            direto no dashboard conversando com o agente — sem login, sem
+            senha. O link expira no horário abaixo; depois disso, clicks
+            voltam pra tela de login normal.
+          </p>
+          {magicLinkData && (
+            <>
+              <div className="space-y-1">
+                <div className="text-xs uppercase tracking-wider text-zinc-500">URL</div>
+                <div className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-950 p-2">
+                  <code className="flex-1 truncate font-mono text-xs text-emerald-300">
+                    {magicLinkData.url}
+                  </code>
+                  <Button size="sm" variant="outline" onClick={copyMagicLink}>
+                    {magicLinkCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                    {magicLinkCopied ? "Copiado" : "Copiar"}
+                  </Button>
+                </div>
+              </div>
+              <div className="text-xs text-zinc-400">
+                Expira em <b>{new Date(magicLinkData.expires_at).toLocaleString("pt-BR")}</b>.
+                Quem tiver o link consegue entrar até esse horário — pra revogar
+                antes, rotacione <code>PICOCLAW_SAAS_GATEWAY_SECRET</code> no
+                controlplane (invalida TODOS os links).
+              </div>
+              <div className="rounded-md border border-amber-700/50 bg-amber-950/30 p-2 text-xs text-amber-300">
+                ⚠️ Trate como token de acesso — não publique em canal público
+                nem cole em screenshots. Qualquer browser com o link entra como
+                visitor anônimo.
+              </div>
+            </>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setMagicLinkOpen(false)}>Fechar</Button>
+            <Button onClick={() => magicLinkM.mutate()} disabled={magicLinkM.isPending}>
+              {magicLinkM.isPending ? "Gerando..." : "Gerar outro"}
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );
