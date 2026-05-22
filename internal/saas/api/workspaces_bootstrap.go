@@ -85,7 +85,12 @@ func (h *Handler) EnsureDefaultWorkspace(ctx context.Context) error {
 		switch {
 		case isUsableDir(canonicalWorkspaceSource):
 			if err := copyDir(canonicalWorkspaceSource, workspaceDest); err != nil {
-				log.Printf("WARN: bootstrap workspace: copy host %s -> %s failed (%v); falling back to embedded baseline", canonicalWorkspaceSource, workspaceDest, err)
+				log.Printf(
+					"WARN: bootstrap workspace: copy host %s -> %s failed (%v); falling back to embedded baseline",
+					canonicalWorkspaceSource,
+					workspaceDest,
+					err,
+				)
 				if extractErr := extractEmbeddedBaseline(workspaceDest); extractErr != nil {
 					log.Printf("WARN: bootstrap workspace: embed extract also failed: %v", extractErr)
 				}

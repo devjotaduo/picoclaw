@@ -336,7 +336,7 @@ function CompanyOnboardingCard({ className }: { className?: string }) {
           </div>
         )}
 
-        <ul className="flex h-full flex-col gap-1 overflow-y-auto overscroll-contain pr-1 pb-2 [scrollbar-gutter:stable]">
+        <ul className="flex h-full [scrollbar-gutter:stable] flex-col gap-1 overflow-y-auto overscroll-contain pr-1 pb-2">
           {visibleItems.map((item, index) => (
             <OnboardingStepRow
               key={item.id}
@@ -417,7 +417,7 @@ function OnboardingStepRow({
       <button
         type="button"
         className={cn(
-          "focus-visible:ring-ring flex w-full items-start gap-2 rounded-2xl px-2.5 py-2.5 text-left outline-none transition-colors focus-visible:ring-2",
+          "focus-visible:ring-ring flex w-full items-start gap-2 rounded-2xl px-2.5 py-2.5 text-left transition-colors outline-none focus-visible:ring-2",
           open && "bg-muted/70 pb-3",
         )}
         onClick={onOpen}
