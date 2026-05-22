@@ -108,6 +108,25 @@ export async function rotatePassword(id: string) {
   );
 }
 
+// resendCredentials rotates the Supabase password to a fresh random value
+// AND emails the owner with URL + login + new password + magic link. The
+// new password is NOT returned to the admin (delivered exclusively via
+// email so it isn't accidentally surfaced in the admin UI). Differs from
+// rotatePassword which returns the new password but doesn't email.
+export type ResendCredentialsResult = {
+  sent_to: string;
+  password_rotated: boolean;
+  magic_link_in_email: boolean;
+  dashboard_url: string;
+  info: string;
+};
+export async function resendCredentials(id: string) {
+  return api<ResendCredentialsResult>(
+    `/api/v1/tenants/${encodeURIComponent(id)}/resend-credentials`,
+    { method: "POST" },
+  );
+}
+
 export async function markPasswordDelivered(id: string) {
   return api<void>(`/api/v1/tenants/${id}/mark-delivered`, { method: "POST" });
 }

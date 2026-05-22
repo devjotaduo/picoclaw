@@ -238,6 +238,7 @@ func (h *Handler) Routes() http.Handler {
 				r.Post("/tenants/{id}/recreate", h.handleRecreateTenant)
 				r.Post("/tenants/{id}/rotate-password", h.handleRotatePassword)
 				r.Post("/tenants/{id}/magic-link", h.handleGenerateMagicLink)
+				r.Post("/tenants/{id}/resend-credentials", h.handleResendCredentials)
 				r.Post("/magic-links/{nonce}/consume", h.handleConsumeMagicLink)
 				r.Delete("/tenants/{id}", h.handleDeleteTenant)
 				r.Post("/tenants/{id}/mark-delivered", h.handleMarkPasswordDelivered)

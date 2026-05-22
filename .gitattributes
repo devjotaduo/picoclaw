@@ -2,6 +2,9 @@
 *.sh text eol=lf
 docker/entrypoint.sh text eol=lf
 
+# Workspace archives can exceed GitHub's regular file-size limit.
+home.zip filter=lfs diff=lfs merge=lfs -text
+
 # Systemd unit files are parsed by systemd on Linux — CRLF would break them.
 *.service text eol=lf
 *.timer text eol=lf

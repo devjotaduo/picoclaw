@@ -1,0 +1,176 @@
+import { launcherFetch } from "@/api/http"
+
+export type ChannelConfig = Record<string, unknown>
+export type AppConfig = Record<string, unknown>
+
+export interface SupportedChannel {
+  name: string
+  display_name?: string
+  config_key: string
+  variant?: string
+}
+
+export interface ChannelStatus {
+  name: string
+  config_key: string
+  variant?: string
+  enabled: boolean
+}
+
+export interface ChannelConfigResponse {
+  config: ChannelConfig
+  configured_secrets: string[]
+  config_key: string
+  variant?: string
+}
+
+interface ChannelsCatalogResponse {
+  channels: SupportedChannel[]
+}
+
+interface ChannelsStatusResponse {
+  channels: ChannelStatus[]
+}
+
+interface ConfigActionResponse {
+  status: string
+  errors?: string[]
+}
+
+const BASE_URL = ""
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await launcherFetch(`${BASE_URL}${path}`, options)
+  if (!res.ok) {
+    let message = `API error: ${res.status} ${res.statusText}`
+    try {
+      const body = (await res.json()) as {
+        error?: string
+        errors?: string[]
+        status?: string
+      }
+      if (Array.isArray(body.errors) && body.errors.length > 0) {
+        message = body.errors.join("; ")
+      } else if (typeof body.error === "string" && body.error.trim() !== "") {
+        message = body.error
+      }
+    } catch {
+      // Keep default fallback message if response body is not JSON.
+    }
+    throw new Error(message)
+  }
+  return res.json() as Promise<T>
+}
+
+export async function getChannelsCatalog(): Promise<ChannelsCatalogResponse> {
+  return request<ChannelsCatalogResponse>("/api/channels/catalog")
+}
+
+export async function getChannelsStatus(): Promise<ChannelsStatusResponse> {
+  return request<ChannelsStatusResponse>("/api/channels/status")
+}
+
+export async function getAppConfig(): Promise<AppConfig> {
+  return request<AppConfig>("/api/config")
+}
+
+export async function getChannelConfig(
+  channelName: string,
+): Promise<ChannelConfigResponse> {
+  return request<ChannelConfigResponse>(
+    `/api/channels/${encodeURIComponent(channelName)}/config`,
+  )
+}
+
+export async function patchAppConfig(
+  patch: Record<string, unknown>,
+): Promise<ConfigActionResponse> {
+  return request<ConfigActionResponse>("/api/config", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  })
+}
+
+// WeChat QR login flow API
+
+export interface WeixinFlowResponse {
+  flow_id: string
+  status: "wait" | "scaned" | "confirmed" | "expired" | "error"
+  qr_data_uri?: string
+  account_id?: string
+  error?: string
+}
+
+export interface WecomFlowResponse {
+  flow_id: string
+  status: "wait" | "scaned" | "confirmed" | "expired" | "error"
+  qr_data_uri?: string
+  bot_id?: string
+  error?: string
+}
+
+export async function startWeixinFlow(): Promise<WeixinFlowResponse> {
+  return request<WeixinFlowResponse>("/api/weixin/flows", { method: "POST" })
+}
+
+export async function pollWeixinFlow(
+  flowID: string,
+): Promise<WeixinFlowResponse> {
+  return request<WeixinFlowResponse>(
+    `/api/weixin/flows/${encodeURIComponent(flowID)}`,
+  )
+}
+
+export async function startWecomFlow(): Promise<WecomFlowResponse> {
+  return request<WecomFlowResponse>("/api/wecom/flows", { method: "POST" })
+}
+
+export async function pollWecomFlow(
+  flowID: string,
+): Promise<WecomFlowResponse> {
+  return request<WecomFlowResponse>(
+    `/api/wecom/flows/${encodeURIComponent(flowID)}`,
+  )
+}
+
+// WhatsApp native pairing API
+
+export type WhatsAppNativeQRStatus =
+  | "idle"
+  | "wait"
+  | "scanned"
+  | "confirmed"
+  | "expired"
+  | "error"
+  | "offline"
+  | "disabled"
+
+export interface WhatsAppNativeQRResponse {
+  status: WhatsAppNativeQRStatus
+  qr_data_uri?: string
+  phone_number?: string
+  error?: string
+  updated_at?: number
+  expires_at?: number
+}
+
+export async function getWhatsAppNativeQR(): Promise<WhatsAppNativeQRResponse> {
+  return request<WhatsAppNativeQRResponse>("/api/whatsapp_native/qr")
+}
+
+export async function disconnectWhatsAppNative(): Promise<void> {
+  const res = await fetch("/api/whatsapp_native/disconnect", { method: "POST" })
+  if (!res.ok) {
+    let detail: string
+    try {
+      const body = (await res.json()) as { error?: string }
+      detail = body.error ?? ""
+    } catch {
+      detail = res.statusText
+    }
+    throw new Error(detail || res.statusText)
+  }
+}
+
+export type { ChannelsCatalogResponse, ConfigActionResponse }
