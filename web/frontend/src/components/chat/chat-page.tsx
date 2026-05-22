@@ -327,6 +327,7 @@ export function ChatPage() {
   const showSessionHistoryButton = isVisible("chat.session_history", false)
   const showAttendantTestButton = isVisible("chat.test_attendant")
   const showPendingHandoffsSidebar = isVisible("chat.pending_handoffs_sidebar")
+  const showQualityIndicator = isVisible("chat.quality_indicator")
   const canShowModelSelector =
     launcherPolicyQ.isSuccess &&
     launcherPolicyQ.data.ui?.show_model_selector !== false
@@ -669,6 +670,7 @@ export function ChatPage() {
           inputDisabledReason={inputDisabledReason}
           canSend={canSubmit}
           contextUsage={contextUsage}
+          showQualityIndicator={showQualityIndicator}
           attendantTestActive={
             showAttendantTestButton && testingPublicAttendant
           }

@@ -145,7 +145,7 @@ export function ChatEmptyState({
   return (
     <div className="flex flex-col items-center justify-center py-16">
       <div
-        className="ring-border/40 mb-6 size-20 overflow-hidden rounded-full shadow-sm ring-1"
+        className="ring-border/40 mb-7 size-28 overflow-hidden rounded-full shadow-sm ring-1"
         aria-hidden="true"
       >
         {agent?.avatar?.image_url ? (

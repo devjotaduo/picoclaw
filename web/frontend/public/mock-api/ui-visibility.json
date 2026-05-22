@@ -42,6 +42,7 @@
         "chat.new_chat": true,
         "chat.session_history": true,
         "chat.test_attendant": true,
+        "chat.quality_indicator": true,
         "chat.pending_handoffs_sidebar": true
       }
     },
@@ -82,6 +83,7 @@
         "chat.new_chat": false,
         "chat.session_history": false,
         "chat.test_attendant": true,
+        "chat.quality_indicator": true,
         "chat.pending_handoffs_sidebar": true
       }
     },
@@ -122,6 +124,7 @@
         "chat.new_chat": false,
         "chat.session_history": false,
         "chat.test_attendant": false,
+        "chat.quality_indicator": false,
         "chat.pending_handoffs_sidebar": false
       }
     }

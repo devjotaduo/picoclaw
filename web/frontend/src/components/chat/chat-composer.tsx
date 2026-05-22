@@ -52,11 +52,15 @@ interface ChatComposerProps {
   contextUsage?: ContextUsage
   attendantTestActive?: boolean
   onToggleAttendantTest?: () => void
+  showQualityIndicator?: boolean
+  supportWhatsappUrl?: string
 }
 
 // Max audio recording length in seconds. Anything longer is auto-stopped to
 // keep the base64 payload under the DefaultMaxMediaSize budget on the server.
 const MAX_AUDIO_RECORDING_SECONDS = 120
+const DEFAULT_SUPPORT_WHATSAPP_URL =
+  "https://wa.me/85101035712601?text=Preciso%20de%20suporte%20no%20Jota%20Duo"
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -98,6 +102,8 @@ export function ChatComposer({
   contextUsage,
   attendantTestActive,
   onToggleAttendantTest,
+  showQualityIndicator = true,
+  supportWhatsappUrl = DEFAULT_SUPPORT_WHATSAPP_URL,
 }: ChatComposerProps) {
   const { t } = useTranslation()
   const canInput = inputDisabledReason === null
@@ -355,32 +361,39 @@ export function ChatComposer({
               <IconPlus className="size-5 stroke-[1.8]" />
             </Button>
             <Button
-              type="button"
+              asChild
               variant="ghost"
               size="sm"
               className="h-8 rounded-full px-2.5 text-xs font-medium whitespace-nowrap text-orange-500 hover:bg-orange-500/10 hover:text-orange-400 dark:text-orange-300 dark:hover:text-orange-200"
-              disabled={!canInput || isRecording}
             >
-              <IconShieldCheck className="size-3.5" />
-              {t("chat.fullAccess", "Acesso completo")}
-              <IconChevronDown className="size-3.5 opacity-80" />
+              <a
+                href={supportWhatsappUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={t("chat.supportWhatsapp", "Falar com o suporte")}
+              >
+                <IconShieldCheck className="size-3.5" />
+                {t("chat.supportWhatsapp", "Falar com o suporte")}
+              </a>
             </Button>
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:bg-muted/55 hover:text-foreground hidden h-8 rounded-full px-2.5 text-xs font-medium whitespace-nowrap sm:inline-flex"
-              disabled={!canInput || isRecording}
-            >
-              <span className="text-foreground/80 font-semibold tabular-nums">
-                5.5
-              </span>
-              <span>{t("chat.qualityHigh", "Altíssimo")}</span>
-              <IconChevronDown className="size-3.5 opacity-70" />
-            </Button>
+            {showQualityIndicator ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:bg-muted/55 hover:text-foreground hidden h-8 rounded-full px-2.5 text-xs font-medium whitespace-nowrap sm:inline-flex"
+                disabled={!canInput || isRecording}
+              >
+                <span className="text-foreground/80 font-semibold tabular-nums">
+                  5.5
+                </span>
+                <span>{t("chat.qualityHigh", "Altíssimo")}</span>
+                <IconChevronDown className="size-3.5 opacity-70" />
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="ghost"
