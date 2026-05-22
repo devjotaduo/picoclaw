@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>20% OFF na Massoterapia — Clínica Bella Vida</title>
+
+  <!-- OG meta para preview ao compartilhar no WhatsApp / Instagram -->
+  <meta property="og:title" content="20% de desconto na 1ª sessão de Massoterapia">
+  <meta property="og:description" content="Aproveite a promoção de estreia da Clínica Bella Vida. Válido até 31/05/2026 para novos clientes.">
+  <meta property="og:image" content="/public/marketing/bella-vida-promo-hero.png">
+  <meta property="og:url" content="http://localhost:18800/public/marketing/bella-vida-promo-maio.html">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bege:          #F5E6D3;
+      --bege-escuro:   #E8D0B8;
+      --marrom:        #8B6B52;
+      --marrom-escuro: #6B4F3A;
+      --branco:        #FFFFFF;
+      --texto:         #3D2B1F;
+      --cinza:         #7A6A60;
+      --verde-whats:   #25D366;
+    }
+
+    html { font-size: 16px; }
+
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      background-color: var(--branco);
+      color: var(--texto);
+      line-height: 1.65;
+    }
+
+    /* ── HERO COM IMAGEM ── */
+    .hero {
+      position: relative;
+      min-height: 320px;
+      background-color: var(--marrom);
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+    }
+
+    .hero__img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+      display: block;
+    }
+
+    .hero__overlay {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      padding: 40px 24px 36px;
+      background: linear-gradient(
+        to top,
+        rgba(107, 79, 58, 0.92) 0%,
+        rgba(107, 79, 58, 0.55) 60%,
+        transparent 100%
+      );
+    }
+
+    .hero__badge {
+      display: inline-block;
+      background-color: var(--bege);
+      color: var(--marrom-escuro);
+      font-size: 0.75rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 5px 14px;
+      border-radius: 20px;
+      margin-bottom: 14px;
+    }
+
+    .hero__titulo {
+      font-size: 2rem;
+      font-weight: bold;
+      color: var(--branco);
+      line-height: 1.2;
+      margin-bottom: 10px;
+    }
+
+    .hero__subtitulo {
+      font-size: 1rem;
+      color: var(--bege);
+      max-width: 340px;
+    }
+
+    /* ── SECAO OFERTA ── */
+    .oferta {
+      background-color: var(--bege);
+      padding: 40px 24px;
+    }
+
+    .oferta__titulo {
+      font-size: 1.2rem;
+      color: var(--marrom);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 16px;
+    }
+
+    .oferta p {
+      font-size: 1rem;
+      color: var(--texto);
+      margin-bottom: 14px;
+      max-width: 480px;
+    }
+
+    /* ── BENEFÍCIOS ── */
+    .beneficios {
+      padding: 36px 24px;
+      background-color: var(--branco);
+    }
+
+    .beneficios__titulo {
+      font-size: 1.2rem;
+      color: var(--marrom);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 20px;
+    }
+
+    .beneficios__lista {
+      list-style: none;
+      padding: 0;
+      max-width: 480px;
+    }
+
+    .beneficios__lista li {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--bege-escuro);
+      font-size: 1rem;
+      color: var(--texto);
+    }
+
+    .beneficios__lista li:last-child {
+      border-bottom: none;
+    }
+
+    .beneficios__icone {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      background-color: var(--marrom);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 2px;
+    }
+
+    .beneficios__icone svg {
+      fill: var(--branco);
+      width: 14px;
+      height: 14px;
+    }
+
+    /* ── CONTADOR DE URGÊNCIA ── */
+    .urgencia {
+      background-color: var(--marrom-escuro);
+      color: var(--branco);
+      text-align: center;
+      padding: 24px 20px;
+      margin: 0;
+    }
+
+    .urgencia__label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--bege);
+      margin-bottom: 6px;
+    }
+
+    .urgencia__data {
+      font-size: 1.4rem;
+      font-weight: bold;
+    }
+
+    /* ── CTA PRINCIPAL ── */
+    .cta-secao {
+      text-align: center;
+      padding: 40px 24px 48px;
+      background-color: var(--bege);
+    }
+
+    .cta-secao p {
+      font-size: 1rem;
+      color: var(--cinza);
+      margin-bottom: 24px;
+      max-width: 360px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-btn {
+      display: inline-block;
+      background-color: var(--verde-whats);
+      color: var(--branco);
+      text-decoration: none;
+      font-size: 1.1rem;
+      font-weight: bold;
+      padding: 18px 44px;
+      border-radius: 50px;
+      letter-spacing: 0.02em;
+      box-shadow: 0 4px 18px rgba(37, 211, 102, 0.35);
+    }
+
+    .cta-btn:active {
+      background-color: #1EBE5A;
+    }
+
+    .cta-obs {
+      margin-top: 14px;
+      font-size: 0.82rem;
+      color: var(--cinza);
+      display: block;
+    }
+
+    /* ── RODAPÉ ── */
+    footer {
+      background-color: var(--marrom);
+      color: var(--bege);
+      padding: 36px 24px;
+      text-align: center;
+    }
+
+    footer p {
+      font-size: 0.85rem;
+      margin-bottom: 6px;
+      line-height: 1.55;
+    }
+
+    footer a {
+      color: var(--bege-escuro);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    .footer__separador {
+      margin: 16px auto;
+      width: 48px;
+      border: none;
+      border-top: 1px solid var(--bege);
+      opacity: 0.35;
+    }
+
+    .footer__lgpd {
+      font-size: 0.78rem;
+      color: rgba(245,230,211,0.7);
+      margin-top: 12px;
+      max-width: 400px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (min-width: 600px) {
+      .hero { min-height: 420px; }
+      .hero__titulo { font-size: 2.6rem; }
+      .oferta, .beneficios, .cta-secao { padding: 48px 40px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HERO COM IMAGEM -->
+  <header class="hero" role="banner">
+    <img
+      class="hero__img"
+      src="/public/marketing/bella-vida-promo-hero.png"
+      alt="Ambiente relaxante da Clínica Bella Vida — velas, toalhas e pedras de massagem sobre fundo neutro"
+      loading="eager"
+    >
+    <div class="hero__overlay">
+      <span class="hero__badge">Promocao de estreia</span>
+      <h1 class="hero__titulo">20% de desconto<br>na 1ª sessão</h1>
+      <p class="hero__subtitulo">Massoterapia com toque terapêutico e acolhimento real.</p>
+    </div>
+  </header>
+
+  <main>
+    <!-- DESCRICAO DA OFERTA -->
+    <section class="oferta" aria-label="Descricão da promoção">
+      <h2 class="oferta__titulo">A promoção</h2>
+      <p>
+        Para quem ainda não conhece a Clínica Bella Vida, preparamos uma oferta de boas-vindas:
+        20% de desconto na primeira sessão de massoterapia. Um convite para sentir na prática
+        o que fazemos de diferente — atendimento personalizado, ambiente tranquilo e técnicas
+        que aliviam tensão de verdade.
+      </p>
+      <p>
+        A sessão tem duração de 60 minutos e é conduzida por profissional certificada.
+        Indicada para quem vive com estresse, dores musculares ou simplesmente quer se cuidar
+        com mais regularidade. Agende pelo WhatsApp e garanta seu horário.
+      </p>
+    </section>
+
+    <!-- BENEFÍCIOS -->
+    <section class="beneficios" aria-label="Por que escolher a Clínica Bella Vida">
+      <h2 class="beneficios__titulo">Por que a Bella Vida</h2>
+      <ul class="beneficios__lista">
+        <li>
+          <span class="beneficios__icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+            </svg>
+          </span>
+          <span>Profissionais certificadas com anos de experiência em técnicas terapêuticas e estéticas.</span>
+        </li>
+        <li>
+          <span class="beneficios__icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+            </svg>
+          </span>
+          <span>Ambiente pensado para o seu conforto: silencioso, climatizado e com aromaterapia.</span>
+        </li>
+        <li>
+          <span class="beneficios__icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+            </svg>
+          </span>
+          <span>Agendamento rápido pelo WhatsApp, sem espera e com confirmação imediata de horário.</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- CONTADOR DE URGÊNCIA -->
+    <div class="urgencia" role="region" aria-label="Prazo da promoção">
+      <p class="urgencia__label">Oferta valida ate</p>
+      <p class="urgencia__data">31 de maio de 2026</p>
+    </div>
+
+    <!-- CTA PRINCIPAL -->
+    <section class="cta-secao" aria-label="Agendar atendimento">
+      <p>Garanta seu desconto antes que a promoção encerre. Basta enviar uma mensagem:</p>
+      <a
+        class="cta-btn"
+        href="https://wa.me/5511998765432"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Agendar agora via WhatsApp"
+      >
+        Agendar agora
+      </a>
+      <span class="cta-obs">Segunda a sábado, das 8h às 18h · (11) 99876-5432</span>
+    </section>
+  </main>
+
+  <!-- RODAPÉ -->
+  <footer role="contentinfo">
+    <p><strong>Clínica Bella Vida</strong></p>
+    <p>Rua das Flores, 123 — São Paulo - SP</p>
+    <p>WhatsApp: (11) 99876-5432 · Instagram: @clinicabellavida</p>
+    <hr class="footer__separador" aria-hidden="true">
+    <p>CNPJ: 00.000.000/0001-00 (fictício)</p>
+    <p>
+      <a href="/politica-de-privacidade.html">Política de privacidade</a>
+      &nbsp;|&nbsp;
+      <a href="mailto:contato@clinicabellavida.com.br">contato@clinicabellavida.com.br</a>
+    </p>
+    <p class="footer__lgpd">
+      Esta página não coleta dados pessoais sem consentimento explícito. Para dúvidas sobre o
+      tratamento dos seus dados, acesse nossa
+      <a href="/politica-de-privacidade.html">política de privacidade</a>
+      ou entre em contato pelo e-mail acima.
+    </p>
+  </footer>
+
+</body>
+</html>

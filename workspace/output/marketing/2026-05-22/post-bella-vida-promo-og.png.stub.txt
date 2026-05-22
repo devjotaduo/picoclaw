@@ -1,0 +1,49 @@
+PROMPT VISUAL — gerar-imagem-post
+Formato: OG / Link preview  |  Resolução: 1200 × 630 px
+Campanha: promo-massoterapia-maio-2026
+Gerado por: Lia (marketing)
+Data: 2026-05-22
+Status: stub — imagem real pendente de ferramenta de geração
+
+──────────────────────────────────────────────
+PROMPT COMPLETO PARA GERAÇÃO:
+
+Imagem horizontal 1200x630 pixels. Fundo em tom bege rosé suave (#F5E6D3).
+No centro-esquerdo, overlay retangular levemente arredondado em marrom quente
+(#8B6B52, opacidade 92%), ocupando 55% da largura. Dentro do overlay:
+  - Texto principal em branco, serifado, bold: "20% OFF"
+    fonte grande, hierarquia clara.
+  - Subtítulo em branco, peso regular: "na 1ª sessão de Massoterapia"
+  - Texto pequeno abaixo: "Válido até 31 de maio de 2026"
+  - CTA pill em baixo: "Agende agora · WhatsApp"
+
+No lado direito (45% da largura): fotografia estilizada de ambiente spa clean —
+toalha branca dobrada, pedras de massagem escuras, vela acesa, fundo desfocado,
+tons neutros e quentes. SEM rosto humano. Estilo editorial, iluminação suave difusa.
+
+Canto inferior esquerdo: placeholder retangular branco simples para logo
+(40x40px, bordas arredondadas).
+
+Canto inferior direito: "@clinicabellavida" em branco, fonte pequena, levemente
+transparente.
+
+PROIBIDO: rostos ou corpos de pessoas reais, logomarcas de terceiros,
+elementos políticos, religiosos ou de concorrência, texto em inglês,
+claims de resultado (ex: "perde X kg", "rejuvenece em Y dias").
+
+Estilo geral: clean, elegante, feminino, minimalista. Semelhante a editorial
+de revista de bem-estar premium. Não usar gradiente forte nem cores neon.
+
+──────────────────────────────────────────────
+ARQUIVO ESPERADO:
+workspace/output/marketing/2026-05-22/post-bella-vida-promo-og.png
+
+STATUS: PENDENTE (aguardando execução da ferramenta de geração de imagem)
+
+NOTA TÉCNICA:
+Este arquivo .stub.txt substitui a imagem real enquanto a ferramenta
+`gerar-imagem-post` não tiver backend ativo neste workspace.
+Ao ativar o backend, usar o prompt acima exatamente como descrito.
+Salvar o resultado PNG neste mesmo diretório com o nome:
+  post-bella-vida-promo-og.png
+e registrar em memory/marketing.md com status=rascunho.

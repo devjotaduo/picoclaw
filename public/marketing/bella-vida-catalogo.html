@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clínica Bella Vida — Catálogo de Serviços</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bege:    #F5E6D3;
+      --marrom:  #8B6B52;
+      --marrom-escuro: #6B4F3A;
+      --branco:  #FFFFFF;
+      --texto:   #3D2B1F;
+      --cinza:   #7A6A60;
+      --bege-escuro: #E8D0B8;
+    }
+
+    html { font-size: 16px; }
+
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      background-color: var(--branco);
+      color: var(--texto);
+      line-height: 1.6;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      background-color: var(--marrom);
+      color: var(--branco);
+      text-align: center;
+      padding: 56px 24px 48px;
+    }
+
+    .hero__logo-area {
+      margin-bottom: 20px;
+    }
+
+    .hero__logo-icon {
+      font-size: 2.5rem;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .hero__nome {
+      font-size: 2rem;
+      font-weight: bold;
+      letter-spacing: 0.04em;
+      margin-bottom: 10px;
+    }
+
+    .hero__tagline {
+      font-size: 1.05rem;
+      font-weight: normal;
+      color: var(--bege);
+      letter-spacing: 0.02em;
+      max-width: 320px;
+      margin: 0 auto;
+    }
+
+    /* ── INTRO ── */
+    .intro {
+      background-color: var(--bege);
+      text-align: center;
+      padding: 32px 24px;
+    }
+
+    .intro p {
+      font-size: 1rem;
+      color: var(--cinza);
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    /* ── SERVIÇOS ── */
+    .servicos {
+      padding: 40px 20px;
+      background-color: var(--branco);
+    }
+
+    .servicos__titulo {
+      font-size: 1.25rem;
+      color: var(--marrom);
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 32px;
+    }
+
+    .servicos__grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background-color: var(--bege);
+      border-radius: 12px;
+      padding: 28px 24px;
+      border-left: 4px solid var(--marrom);
+    }
+
+    .card__icone {
+      font-size: 2rem;
+      margin-bottom: 12px;
+      display: block;
+      line-height: 1;
+    }
+
+    .card__nome {
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: var(--marrom-escuro);
+      margin-bottom: 10px;
+    }
+
+    .card__descricao {
+      font-size: 0.95rem;
+      color: var(--cinza);
+      line-height: 1.65;
+    }
+
+    /* ── PROMO BANNER ── */
+    .promo {
+      background-color: var(--marrom-escuro);
+      color: var(--branco);
+      text-align: center;
+      padding: 32px 24px;
+      margin: 0 20px 32px;
+      border-radius: 12px;
+    }
+
+    .promo__badge {
+      display: inline-block;
+      background-color: var(--bege);
+      color: var(--marrom-escuro);
+      font-size: 0.75rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 14px;
+    }
+
+    .promo__titulo {
+      font-size: 1.4rem;
+      margin-bottom: 8px;
+    }
+
+    .promo__detalhe {
+      font-size: 0.9rem;
+      color: var(--bege);
+      margin-bottom: 6px;
+    }
+
+    /* ── CTA PRINCIPAL ── */
+    .cta-secao {
+      text-align: center;
+      padding: 20px 24px 48px;
+    }
+
+    .cta-btn {
+      display: inline-block;
+      background-color: #25D366;
+      color: var(--branco);
+      text-decoration: none;
+      font-size: 1.05rem;
+      font-weight: bold;
+      padding: 16px 36px;
+      border-radius: 50px;
+      letter-spacing: 0.02em;
+      box-shadow: 0 4px 14px rgba(37, 211, 102, 0.35);
+    }
+
+    .cta-btn:active {
+      background-color: #1EBE5A;
+    }
+
+    .cta-obs {
+      margin-top: 14px;
+      font-size: 0.85rem;
+      color: var(--cinza);
+    }
+
+    /* ── RODAPÉ ── */
+    footer {
+      background-color: var(--bege-escuro);
+      padding: 32px 24px;
+      text-align: center;
+      border-top: 1px solid var(--marrom);
+    }
+
+    footer p {
+      font-size: 0.85rem;
+      color: var(--cinza);
+      margin-bottom: 6px;
+      line-height: 1.5;
+    }
+
+    footer a {
+      color: var(--marrom);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    .footer__separador {
+      margin: 16px auto;
+      width: 48px;
+      border: none;
+      border-top: 1px solid var(--marrom);
+      opacity: 0.4;
+    }
+
+    /* ── RESPONSIVE TABLET ── */
+    @media (min-width: 600px) {
+      .servicos__grid {
+        grid-template-columns: 1fr 1fr;
+        max-width: 640px;
+      }
+
+      .hero__nome { font-size: 2.4rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HERO -->
+  <header class="hero" role="banner">
+    <div class="hero__logo-area">
+      <span class="hero__logo-icon" aria-hidden="true">&#10022;</span>
+    </div>
+    <h1 class="hero__nome">Clínica Bella Vida</h1>
+    <p class="hero__tagline">Cuidado que renova. Bem-estar que transforma.</p>
+  </header>
+
+  <!-- INTRO -->
+  <section class="intro" aria-label="Sobre a clínica">
+    <p>Tratamentos estéticos e terapêuticos em um ambiente acolhedor no coração de São Paulo. Conheça nossos serviços e agende o seu horário.</p>
+  </section>
+
+  <!-- CATÁLOGO DE SERVIÇOS -->
+  <main>
+    <section class="servicos" aria-label="Nossos serviços">
+      <h2 class="servicos__titulo">Nossos Serviços</h2>
+
+      <div class="servicos__grid">
+
+        <!-- Card 1 -->
+        <article class="card">
+          <span class="card__icone" role="img" aria-label="Massoterapia">
+            <img src="/public/marketing/assets/icon-massagem.svg"
+                 width="36" height="36"
+                 alt=""
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+            <span style="display:none;font-size:2rem;">&#9670;</span>
+          </span>
+          <h3 class="card__nome">Massoterapia</h3>
+          <p class="card__descricao">Tecnicas manuais de relaxamento e alívio de tensões musculares. Indicada para stress, dores crônicas e recuperação do equilíbrio corporal.</p>
+        </article>
+
+        <!-- Card 2 -->
+        <article class="card">
+          <span class="card__icone" role="img" aria-label="Drenagem Linfática">
+            <img src="/public/marketing/assets/icon-drenagem.svg"
+                 width="36" height="36"
+                 alt=""
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+            <span style="display:none;font-size:2rem;">&#9671;</span>
+          </span>
+          <h3 class="card__nome">Drenagem Linfática</h3>
+          <p class="card__descricao">Estimula a circulação do sistema linfático, reduzindo inchaços e retencão de liquidos. Resultado visível já nas primeiras sessões.</p>
+        </article>
+
+        <!-- Card 3 -->
+        <article class="card">
+          <span class="card__icone" role="img" aria-label="Tratamento Facial">
+            <img src="/public/marketing/assets/icon-facial.svg"
+                 width="36" height="36"
+                 alt=""
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+            <span style="display:none;font-size:2rem;">&#9633;</span>
+          </span>
+          <h3 class="card__nome">Tratamento Facial</h3>
+          <p class="card__descricao">Protocolos personalizados para limpeza de pele, hidratação profunda e rejuvenescimento. Indicado para todos os tipos de pele.</p>
+        </article>
+
+        <!-- Card 4 -->
+        <article class="card">
+          <span class="card__icone" role="img" aria-label="Depilação a Laser">
+            <img src="/public/marketing/assets/icon-laser.svg"
+                 width="36" height="36"
+                 alt=""
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+            <span style="display:none;font-size:2rem;">&#9632;</span>
+          </span>
+          <h3 class="card__nome">Depilação a Laser</h3>
+          <p class="card__descricao">Tecnologia de ponta para remocão definitiva e segura dos pelos. Tratamento eficaz para todos os fototipos de pele com mínimo desconforto.</p>
+        </article>
+
+      </div><!-- /grid -->
+    </section>
+
+    <!-- BANNER PROMOÇÃO -->
+    <div class="promo" role="region" aria-label="Promoção vigente">
+      <span class="promo__badge">Oferta exclusiva</span>
+      <p class="promo__titulo">20% de desconto na 1ª sessão de massoterapia</p>
+      <p class="promo__detalhe">Válido até 31 de maio de 2026. Para novos clientes.</p>
+    </div>
+
+    <!-- CTA -->
+    <section class="cta-secao" aria-label="Agendar atendimento">
+      <a class="cta-btn"
+         href="https://wa.me/5511998765432"
+         target="_blank"
+         rel="noopener noreferrer"
+         aria-label="Agendar via WhatsApp">
+        Agendar via WhatsApp
+      </a>
+      <p class="cta-obs">Atendimento de segunda a sábado, das 8h às 18h</p>
+    </section>
+  </main>
+
+  <!-- RODAPÉ -->
+  <footer role="contentinfo">
+    <p><strong>Clínica Bella Vida</strong></p>
+    <p>Rua das Flores, 123 — São Paulo - SP</p>
+    <p>WhatsApp: (11) 99876-5432</p>
+    <p>Instagram: @clinicabellavida</p>
+    <hr class="footer__separador" aria-hidden="true">
+    <p>CNPJ: 00.000.000/0001-00 (fictício)</p>
+    <p>
+      <a href="/politica-de-privacidade.html">Política de privacidade</a>
+      &nbsp;|&nbsp;
+      <a href="mailto:contato@clinicabellavida.com.br">contato@clinicabellavida.com.br</a>
+    </p>
+    <p style="margin-top:10px;font-size:0.78rem;color:#AAA;">
+      Este catálogo é de uso informativo. Valores e disponibilidade sujeitos a alteração sem aviso prévio.
+    </p>
+  </footer>
+
+</body>
+</html>

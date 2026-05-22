@@ -48,6 +48,44 @@ aprendizado: o que funcionou / o que não
 expira_em: YYYY-MM-DD (para site/conteúdo temporário)
 ```
 
+---
+
+id: cmp-2026-05-22-bella-vida-catalogo
+data_alvo: 2026-05-22
+campanha: Catálogo de Serviços — Clínica Bella Vida
+objetivo: gerar lead
+canal: whatsapp
+oferta: Apresentação dos 4 serviços da clínica (catálogo para compartilhar)
+posts: []
+site: http://localhost:18800/public/marketing/bella-vida-catalogo.html
+arquivo: public/marketing/bella-vida-catalogo.html
+status: aguardando aprovação
+resultado: —
+aprendizado: —
+expira_em: 2026-12-31
+gerado_por: Lia (teste 2026-05-22)
+solicitado_por: Rafael (briefing: catálogo HTML para WhatsApp, mobile-first)
+
+---
+
+id: cmp-2026-05-22-bella-vida-promo-maio
+data_alvo: 2026-05-22
+campanha: Promoção 20% OFF — Massoterapia — Clínica Bella Vida
+objetivo: vender
+canal: site
+oferta: 20% de desconto na primeira sessão de massoterapia — novos clientes — válido até 31/05/2026
+posts: [workspace/output/marketing/2026-05-22/post-bella-vida-promo-og.png.stub.txt]
+site: http://localhost:18800/public/marketing/bella-vida-promo-maio.html
+arquivo: public/marketing/bella-vida-promo-maio.html
+status: publicado
+resultado: —
+aprendizado: —
+expira_em: 2026-05-31
+gerado_por: Lia (teste 2026-05-22)
+solicitado_por: Rafael (briefing: landing page promoção massoterapia)
+aprovado_por: dono (simulação de aprovação — teste 2026-05-22)
+data_publicacao: 2026-05-22
+
 ## Aprendizados acumulados
 - [ATUALIZAR após cada campanha]
 
