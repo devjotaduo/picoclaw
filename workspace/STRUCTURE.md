@@ -66,7 +66,7 @@ Skills modulares da equipe, organizadas por domínio.
 | `memoria/` | `global` | consultar-memoria, atualizar-memoria |
 | `humano/` | `global` | transferir-para-humano, resumo-para-humano |
 | `privacidade/` | `global` | detectar-pii, anti-fraude |
-| `marketing/` | `interno` | gerar-post-instagram, criar-site-html, sugerir-campanha, gerar-imagem |
+| `marketing/` | `interno` | criar-post-instagram, publicar-instagram, publicar-site-simples, sugerir-campanha, gerar-imagem-post |
 | `analytics/` | `interno` | analisar-conversas, identificar-padroes, gerar-relatorio |
 | `onboarding/` | `internal` | cadastrar-empresa, entrevistar-dono, identificar-perfil, preencher-memorias, glossario-simples, decidir-bloqueios-por-segmento, verificar-empresa, coletar-empresa-whatsapp |
 | `onboarding/playbooks/` | `internal` | saude, alimentacao, varejo, servicos, beleza, educacao, imobiliaria, default |
@@ -90,6 +90,11 @@ Arquivos de configuração individual de cada agente.
 |--------|---------|--------|
 | Lia | `agents/lia/AGENT.md` | Marketing — posts, sites HTML, campanhas |
 | Sofia | `agents/sofia/AGENT.md` | Onboarding — cadastro de empresas, playbooks por segmento |
+| Operador | `agents/operador/AGENT.md` | Assistente interno — análise, relatórios, tarefas de bastidor |
+| Clara | `agents/clara/AGENT.md` | Atendimento ao cliente final (flat file, diretório pendente) |
+| Marcos | `agents/marcos/AGENT.md` | Vendas / prospecção (flat file, diretório pendente) |
+| Camila | `agents/camila/AGENT.md` | Suporte técnico (flat file, diretório pendente) |
+| Rafael | `agents/rafael/AGENT.md` | Monitor proativo / heartbeat (flat file, diretório pendente) |
 
 ---
 
