@@ -108,11 +108,38 @@ export function TenantDetail() {
     onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Falha ao gerar link." }),
   });
   // resendCredsM rotates the Supabase password and emails the owner with
-  // URL + login + new password + magic link. Confirmation dialog in the
-  // button handler warns the operator that the previous password stops
-  // working. Toast on success shows whether magic link was bundled too.
+  // URL + login + new password + magic link. On success we ALSO get the
+  // password and link back so we can show them in a copy-friendly dialog
+  // (email could be slow / in spam / Brevo could be down). The toast
+  // doubles as confirmation that the email was queued.
+  const [resendCredsOpen, setResendCredsOpen] = useState(false);
+  const [resendCredsData, setResendCredsData] = useState<{
+    sent_to: string;
+    dashboard_url: string;
+    initial_password: string;
+    magic_link: string;
+    magic_link_in_email: boolean;
+  } | null>(null);
+  const [resendPwdCopied, setResendPwdCopied] = useState(false);
+  const [resendLinkCopied, setResendLinkCopied] = useState(false);
   const resendCredsM = useMutation({
     mutationFn: () => resendCredentials(id),
+    onSuccess: (r) => {
+      setResendCredsData({
+        sent_to: r.sent_to,
+        dashboard_url: r.dashboard_url,
+        initial_password: r.initial_password,
+        magic_link: r.magic_link,
+        magic_link_in_email: r.magic_link_in_email,
+      });
+      setResendPwdCopied(false);
+      setResendLinkCopied(false);
+      setResendCredsOpen(true);
+      toast({
+        type: "success",
+        message: "Senha rotacionada. Email enviado para " + r.sent_to + ".",
+      });
+    },
     onError: (e: { error?: string }) =>
       toast({ type: "error", message: e?.error ?? "Falha ao reenviar credenciais." }),
   });
@@ -249,17 +276,16 @@ export function TenantDetail() {
               variant="outline"
               size="sm"
               onClick={() => {
-                if (!confirm(
-                  "Isto vai gerar uma SENHA NOVA (a anterior deixa de funcionar) e enviar " +
-                    "por email para " + (tenant.owner_email || "o owner") + ", com URL + login + senha + magic link. Continuar?"
-                )) return;
-                resendCredsM.mutate(undefined, {
-                  onSuccess: (r) => toast({
-                    type: "success",
-                    message: "Email enviado para " + r.sent_to + ". " +
-                      (r.magic_link_in_email ? "Inclui magic link." : "Magic link falhou — apenas senha foi enviada."),
-                  }),
-                });
+                if (
+                  !confirm(
+                    "Isto vai gerar uma SENHA NOVA (a anterior deixa de funcionar) e enviar " +
+                      "por email para " +
+                      (tenant.owner_email || "o owner") +
+                      ", com URL + login + senha + magic link. Continuar?",
+                  )
+                )
+                  return;
+                resendCredsM.mutate();
               }}
               disabled={resendCredsM.isPending}
               title="Rotaciona a senha do owner no Supabase e envia URL + login + senha + magic link por email."
@@ -496,6 +522,101 @@ export function TenantDetail() {
             </div>
             <div className="flex justify-end pt-2">
               <Button onClick={() => setRotatedPwd(null)}>Done</Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
+
+      {/* Resend-credentials result dialog. The email is sent in the background,
+          but the operator gets the password + magic link inline here too so
+          they can copy and forward (Brevo can lag, mail can land in spam, etc.). */}
+      <Dialog
+        open={resendCredsOpen}
+        onClose={() => setResendCredsOpen(false)}
+        title="Credenciais reenviadas"
+        size="md"
+      >
+        {resendCredsData && (
+          <div className="space-y-4 text-sm">
+            <p className="text-emerald-300">
+              Email enviado para <strong>{resendCredsData.sent_to}</strong>. Se demorar
+              chegar (ou cair no spam), copie a senha e o link daqui mesmo.
+            </p>
+
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
+                URL do painel
+              </label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
+                  {resendCredsData.dashboard_url}
+                </code>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
+                Email de login
+              </label>
+              <code className="block break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
+                {resendCredsData.sent_to}
+              </code>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
+                Senha nova
+              </label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
+                  {resendCredsData.initial_password}
+                </code>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(resendCredsData.initial_password);
+                    setResendPwdCopied(true);
+                    setTimeout(() => setResendPwdCopied(false), 1500);
+                  }}
+                >
+                  {resendPwdCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="mt-1 text-xs text-amber-300">A senha anterior parou de funcionar agora.</p>
+            </div>
+
+            {resendCredsData.magic_link ? (
+              <div>
+                <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
+                  Magic link (1 clique, sem senha)
+                </label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-[10px] text-zinc-100">
+                    {resendCredsData.magic_link}
+                  </code>
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(resendCredsData.magic_link);
+                      setResendLinkCopied(true);
+                      setTimeout(() => setResendLinkCopied(false), 1500);
+                    }}
+                  >
+                    {resendLinkCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-amber-300">
+                Magic link falhou ao gerar (verifique allowlist Redirect URLs no Supabase Dashboard).
+                A senha acima ainda funciona normalmente.
+              </p>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <Button onClick={() => setResendCredsOpen(false)}>Fechar</Button>
             </div>
           </div>
         )}

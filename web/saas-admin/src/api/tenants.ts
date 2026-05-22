@@ -112,6 +112,28 @@ export async function rotatePassword(id: string) {
   );
 }
 
+// resendCredentials rotates the Supabase password to a fresh random value,
+// regenerates a magic link, emails the bundle to the owner, AND returns
+// the new password + magic link to the admin caller so the UI can show
+// them in a "copy here" dialog. This makes the action useful even when
+// SMTP is slow / mail lands in spam / the operator wants to forward the
+// link by another channel.
+export type ResendCredentialsResult = {
+  sent_to: string;
+  password_rotated: boolean;
+  magic_link_in_email: boolean;
+  dashboard_url: string;
+  initial_password: string;
+  magic_link: string;
+  info: string;
+};
+export async function resendCredentials(id: string) {
+  return api<ResendCredentialsResult>(
+    `/api/v1/tenants/${encodeURIComponent(id)}/resend-credentials`,
+    { method: "POST" },
+  );
+}
+
 export async function markPasswordDelivered(id: string) {
   return api<void>(`/api/v1/tenants/${id}/mark-delivered`, { method: "POST" });
 }

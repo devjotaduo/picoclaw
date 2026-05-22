@@ -110,6 +110,15 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		"password_rotated":    true,
 		"magic_link_in_email": magicLink != "",
 		"dashboard_url":       dashboardURL,
-		"info":                "Email with login + new password (and magic link if available) was queued.",
+		// Return the actual password + magic link too. The admin UI shows
+		// these in a dialog with copy buttons so the operator can hand them
+		// off directly when email is slow / goes to spam / Brevo is down.
+		// Trade-off: the password is plaintext in the response — fine for
+		// platform-admin-only access (the endpoint is gated by
+		// requirePlatformAdmin and the cookie travels over TLS), and the
+		// password was already in transit to the operator via SMTP anyway.
+		"initial_password": newPassword,
+		"magic_link":       magicLink,
+		"info":             "Senha rotacionada. Email enfileirado para " + t.OwnerEmail + " — se demorar, copie a senha/link diretamente abaixo.",
 	})
 }
