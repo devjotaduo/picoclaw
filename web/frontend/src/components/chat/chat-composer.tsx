@@ -234,7 +234,7 @@ export function ChatComposer({
 
   return (
     <div className="before:bg-background pointer-events-none relative z-10 -mt-[24px] shrink-0 [scrollbar-gutter:stable] overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] before:pointer-events-none before:absolute before:inset-x-0 before:top-[24px] before:bottom-0 before:content-[''] md:px-8 md:pb-8 lg:px-24 xl:px-48">
-      <div className="bg-card/95 border-border/55 pointer-events-auto relative mx-auto flex max-w-[1000px] flex-col rounded-[28px] border p-3 shadow-[0_22px_70px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-white/[0.025] backdrop-blur-xl transition-shadow duration-200 focus-within:shadow-[0_26px_82px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.07)] md:p-4">
+      <div className="bg-card/95 border-border/55 pointer-events-auto relative mx-auto flex max-w-[1000px] flex-col rounded-[28px] border p-3 shadow-[0_8px_24px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-white/[0.025] backdrop-blur-xl transition-shadow duration-200 focus-within:shadow-[0_10px_30px_rgba(0,0,0,0.15),inset_0_1px_0_rgba(255,255,255,0.07)] md:p-4">
         {attachments.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-2 px-2">
             {attachments.map((attachment, index) =>
