@@ -152,3 +152,47 @@ export async function getUsage(id: string, from?: string, to?: string) {
   q.set("limit", "100");
   return api<UsageResponse>(`/api/v1/tenants/${id}/usage?${q.toString()}`);
 }
+
+// ── Tenant files editor ─────────────────────────────────────────────
+// Inline editor for AGENT.md, SOUL.md, behavior.json, memory/*.md, etc.
+// inside a tenant's live bind-mounted volume. Mirrors the workspaces
+// files API but with a tighter hidden-files filter (runtime state, secrets,
+// provisioner-managed paths are never exposed).
+
+export type TenantFileTreeEntry = {
+  path: string;
+  is_dir: boolean;
+  size: number;
+  is_text: boolean;
+};
+
+export type TenantFileTree = {
+  tenant_id: string;
+  root: string;
+  entries: TenantFileTreeEntry[];
+  truncated?: boolean;
+};
+
+export type TenantFile = {
+  path: string;
+  size: number;
+  mode: string;
+  content: string;
+};
+
+export async function listTenantFiles(id: string) {
+  return api<TenantFileTree>(`/api/v1/tenants/${encodeURIComponent(id)}/files/tree`);
+}
+
+export async function readTenantFile(id: string, path: string) {
+  return api<TenantFile>(
+    `/api/v1/tenants/${encodeURIComponent(id)}/files?path=${encodeURIComponent(path)}`,
+  );
+}
+
+export async function writeTenantFile(id: string, path: string, content: string) {
+  return api<TenantFile>(`/api/v1/tenants/${encodeURIComponent(id)}/files`, {
+    method: "PUT",
+    body: JSON.stringify({ path, content }),
+  });
+}
