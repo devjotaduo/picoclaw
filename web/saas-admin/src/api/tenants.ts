@@ -219,3 +219,14 @@ export async function generateTenantMagicLink(id: string, ttlSeconds?: number) {
     body: JSON.stringify({ ttl_seconds: ttlSeconds ?? 0 }),
   });
 }
+
+// Manually mark a magic link as consumed. Visitors clicking the link
+// afterwards see the friendly thank-you page with the optional summary
+// text instead of the dashboard. Called for ad-hoc links not tied to
+// an intake, or to short-circuit a stuck conversation.
+export async function consumeMagicLink(nonce: string, summary?: string) {
+  return api<void>(`/api/v1/magic-links/${encodeURIComponent(nonce)}/consume`, {
+    method: "POST",
+    body: JSON.stringify({ summary: summary ?? "" }),
+  });
+}

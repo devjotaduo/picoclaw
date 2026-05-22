@@ -111,6 +111,19 @@ func (h *Handler) handleOnboardingCallback(w http.ResponseWriter, r *http.Reques
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+
+		// Auto-invalidate any magic links tied to this intake. The summary
+		// shown to the visitor on a subsequent click is built from the intake's
+		// own fields (company + contact) so the message is personalised.
+		if h.MagicLinks != nil {
+			summary := buildMagicLinkSummaryFromIntake(submitted)
+			if rows, mErr := h.MagicLinks.MarkConsumedByIntake(r.Context(), submitted.ID, summary); mErr != nil {
+				log.Printf("onboarding-callback: invalidate magic links failed (intake=%s): %v", submitted.ID, mErr)
+			} else if rows > 0 {
+				log.Printf("onboarding-callback: invalidated %d magic link(s) for intake=%s", rows, submitted.ID)
+			}
+		}
+
 		resp := map[string]any{"status": "submitted"}
 		// Same auto-provision shape as handleSubmitCompanyIntake — see
 		// company_intakes.go:310-341.
@@ -176,4 +189,32 @@ func absInt64(x int64) int64 {
 		return -x
 	}
 	return x
+}
+
+// buildMagicLinkSummaryFromIntake assembles the personalised message shown
+// to a visitor who clicks an already-consumed magic link. Pulls the
+// freshest contact info from the submitted intake so the visitor sees their
+// own name + which email/whatsapp will receive the follow-up.
+func buildMagicLinkSummaryFromIntake(intake *store.CompanyIntake) string {
+	if intake == nil {
+		return ""
+	}
+	parts := []string{}
+	if name := strings.TrimSpace(intake.ContactName); name != "" {
+		parts = append(parts, "Olá "+name+"!")
+	}
+	if company := strings.TrimSpace(intake.CompanyName); company != "" {
+		parts = append(parts, "Recebemos as informações da "+company+".")
+	}
+	channels := []string{}
+	if email := strings.TrimSpace(intake.ContactEmail); email != "" {
+		channels = append(channels, "e-mail "+email)
+	}
+	if wa := strings.TrimSpace(intake.ContactWhatsApp); wa != "" {
+		channels = append(channels, "WhatsApp "+wa)
+	}
+	if len(channels) > 0 {
+		parts = append(parts, "Vamos retornar pelo "+strings.Join(channels, " e ")+".")
+	}
+	return strings.Join(parts, " ")
 }
