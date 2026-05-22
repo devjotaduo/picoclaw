@@ -425,6 +425,12 @@ function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
             <FolderTree className="mr-1 size-4" />
             Abrir editor de arquivos
           </Link>
+          <Link
+            to={`/workspaces/${encodeURIComponent(workspace.id)}/mcp`}
+            className="ml-2 inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
+          >
+            MCPs
+          </Link>
         </CardContent>
       </Card>
 
