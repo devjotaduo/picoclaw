@@ -15,6 +15,7 @@ import {
   generateTenantMagicLink,
   consumeMagicLink,
   resendCredentials,
+  type MagicLinkRole,
 } from "@/api/tenants";
 import {
   getCRMContact,
@@ -72,6 +73,25 @@ export function TenantDetail() {
   const [magicLinkCopied, setMagicLinkCopied] = useState(false);
   const [magicLinkSummary, setMagicLinkSummary] = useState("");
   const [magicLinkConsumed, setMagicLinkConsumed] = useState(false);
+  // Role selector for the next magic link to mint. Default "public" keeps
+  // the legacy lead-onboarding behavior; "tenant_owner" / "tenant_admin"
+  // produce a password-less owner/admin login link (TTL-capped server-side).
+  const [magicLinkRole, setMagicLinkRole] = useState<MagicLinkRole>("public");
+  // Role recovered from the token of the LAST minted link, so the dialog
+  // can warn appropriately. The token payload is base64-url JSON like
+  // {"tid":...,"exp":...,"n":...,"r":"tenant_owner"} — `r` is omitted for
+  // public links via Go's omitempty.
+  const mintedMagicRole: MagicLinkRole = (() => {
+    if (!magicLinkData?.token) return "public";
+    try {
+      const payload = magicLinkData.token.split(".")[0];
+      const claims = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+      const r = claims?.r;
+      return r === "tenant_owner" || r === "tenant_admin" ? r : "public";
+    } catch {
+      return "public";
+    }
+  })();
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["tenant", id] });
 
@@ -101,7 +121,8 @@ export function TenantDetail() {
     onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to rotate password." }),
   });
   const magicLinkM = useMutation({
-    mutationFn: () => generateTenantMagicLink(id),
+    mutationFn: (roleOverride?: MagicLinkRole) =>
+      generateTenantMagicLink(id, undefined, roleOverride ?? magicLinkRole),
     onSuccess: (r) => {
       setMagicLinkData({ url: r.url, expires_at: r.expires_at, token: r.token });
       setMagicLinkConsumed(false);
@@ -252,19 +273,44 @@ export function TenantDetail() {
             </Link>
           )}
           {isPlatformAdmin && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                magicLinkM.mutate(undefined, {
-                  onSuccess: () => setMagicLinkOpen(true),
-                });
-              }}
-              disabled={magicLinkM.isPending}
-            >
-              <Link2 className="h-4 w-4" />
-              {magicLinkM.isPending ? "Gerando..." : "Link de acesso"}
-            </Button>
+            <div className="flex items-center gap-1">
+              <select
+                value={magicLinkRole}
+                onChange={(e) => setMagicLinkRole(e.target.value as MagicLinkRole)}
+                disabled={magicLinkM.isPending}
+                className="h-8 rounded-md border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+                title="Role concedido ao clicar no link. Owner/admin = acesso ao dashboard sem precisar de senha."
+              >
+                <option value="public">Público (visitante)</option>
+                <option value="tenant_admin">tenant_admin (sem senha)</option>
+                <option value="tenant_owner">tenant_owner (sem senha)</option>
+              </select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (magicLinkRole !== "public") {
+                    const confirmed = confirm(
+                      "Você está gerando um link de acesso com role '" +
+                        magicLinkRole +
+                        "'. Qualquer pessoa que receber o link entrará como " +
+                        (magicLinkRole === "tenant_owner" ? "DONO" : "admin") +
+                        " do tenant até expirar (TTL " +
+                        (magicLinkRole === "tenant_owner" ? "24h" : "7 dias") +
+                        " — cap do servidor). Continuar?",
+                    );
+                    if (!confirmed) return;
+                  }
+                  magicLinkM.mutate(undefined, {
+                    onSuccess: () => setMagicLinkOpen(true),
+                  });
+                }}
+                disabled={magicLinkM.isPending}
+              >
+                <Link2 className="h-4 w-4" />
+                {magicLinkM.isPending ? "Gerando..." : "Link de acesso"}
+              </Button>
+            </div>
           )}
           {isPlatformAdmin && tenant.supabase_user_id && (
             <Button
@@ -518,11 +564,24 @@ export function TenantDetail() {
         size="md"
       >
         <div className="space-y-4 text-sm">
+          {mintedMagicRole !== "public" && (
+            <div className="rounded-md border border-red-700/60 bg-red-950/40 p-3 text-xs text-red-200">
+              <div className="mb-1 text-sm font-semibold">
+                ⚠️ Link de acesso elevado — role <code>{mintedMagicRole}</code>
+              </div>
+              Qualquer pessoa que clicar entra como{" "}
+              {mintedMagicRole === "tenant_owner" ? "DONO do tenant" : "admin do tenant"} até expirar.
+              Não publique em canal público, não cole em screenshot. Quando terminar de usar, clique em
+              <b> "Concluir agora"</b> abaixo pra revogar imediatamente.
+            </div>
+          )}
           <p className="text-zinc-300">
-            Compartilhe esse link com o lead/prospecto. Ao clicar, ele entra
-            direto no dashboard conversando com o agente — sem login, sem
-            senha. O link expira no horário abaixo; depois disso, clicks
-            voltam pra tela de login normal.
+            {mintedMagicRole === "public"
+              ? "Compartilhe esse link com o lead/prospecto. Ao clicar, ele entra direto no dashboard conversando com o agente — sem login, sem senha."
+              : "Use esse link pra entrar no dashboard como " +
+                (mintedMagicRole === "tenant_owner" ? "dono" : "admin") +
+                " sem precisar de senha. Login por senha do Supabase continua funcionando em paralelo."}{" "}
+            O link expira no horário abaixo; depois disso, clicks voltam pra tela de login normal.
           </p>
           {magicLinkData && (
             <>
@@ -571,7 +630,7 @@ export function TenantDetail() {
                 <div className="flex justify-end">
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant={mintedMagicRole !== "public" && !magicLinkConsumed ? "danger" : "outline"}
                     onClick={() => consumeMagicM.mutate()}
                     disabled={consumeMagicM.isPending || magicLinkConsumed}
                   >
@@ -587,7 +646,7 @@ export function TenantDetail() {
           )}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setMagicLinkOpen(false)}>Fechar</Button>
-            <Button onClick={() => magicLinkM.mutate()} disabled={magicLinkM.isPending}>
+            <Button onClick={() => magicLinkM.mutate(undefined)} disabled={magicLinkM.isPending}>
               {magicLinkM.isPending ? "Gerando..." : "Gerar outro"}
             </Button>
           </div>

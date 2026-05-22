@@ -36,10 +36,59 @@ const defaultMagicLinkTTL = 24 * time.Hour
 const maxMagicLinkTTL = 30 * 24 * time.Hour
 
 // magicLinkClaims is the signed payload embedded in the URL token.
+//
+// Role is optional and defaults to "public" (the lead-onboarding case the
+// link was originally built for). Setting it to "tenant_owner" or
+// "tenant_admin" makes the link grant that role on click — useful for
+// password-less owner access from the admin panel. The HMAC signature
+// covers the marshaled JSON, so the role field is tamper-proof; old
+// tokens minted before this field existed deserialize with Role="" and
+// fall through to the public default.
 type magicLinkClaims struct {
 	TenantID string `json:"tid"`
 	Exp      int64  `json:"exp"`
 	Nonce    string `json:"n"`
+	Role     string `json:"r,omitempty"`
+}
+
+// magicLinkAllowedRoles is the whitelist of roles a magic link is allowed
+// to carry. platform_admin / operator / viewer are deliberately excluded:
+// platform_admin is controlplane-only (escaping that scope via a tenant
+// link would be a privilege boundary break); operator/viewer aren't
+// useful for a "log me in without a password" link and would just expand
+// the attack surface.
+var magicLinkAllowedRoles = map[string]bool{
+	"":             true, // backward-compat alias of "public"
+	"public":       true,
+	"tenant_owner": true,
+	"tenant_admin": true,
+}
+
+// normalizeMagicLinkRole trims+lowercases the input and validates against
+// the whitelist. Returns (canonical, true) when accepted, ("", false)
+// otherwise. Empty input is accepted and returns "" so the caller can
+// treat it as "public" via signMagicVisitorRequest fallback.
+func normalizeMagicLinkRole(s string) (string, bool) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if !magicLinkAllowedRoles[s] {
+		return "", false
+	}
+	return s, true
+}
+
+// magicLinkRoleTTLCap returns the max TTL allowed for a given role.
+// Elevated roles get shorter caps so a leaked link's blast radius is
+// bounded; public links keep the original 30-day cap because the worst a
+// public visitor can do is chat with the agent.
+func magicLinkRoleTTLCap(role string) time.Duration {
+	switch role {
+	case "tenant_owner":
+		return 24 * time.Hour
+	case "tenant_admin":
+		return 7 * 24 * time.Hour
+	default: // "", "public"
+		return maxMagicLinkTTL
+	}
 }
 
 // signMagicLinkToken returns the URL-safe token "<base64 payload>.<base64 sig>"
@@ -94,13 +143,18 @@ func verifyMagicLinkToken(secret, token string) (magicLinkClaims, bool) {
 // defaults.
 type magicLinkGenerateRequest struct {
 	// TTLSeconds is the link's lifetime. Defaults to defaultMagicLinkTTL,
-	// clamped to maxMagicLinkTTL.
+	// clamped to maxMagicLinkTTL (or to magicLinkRoleTTLCap when Role
+	// asks for an elevated role).
 	TTLSeconds int64 `json:"ttl_seconds,omitempty"`
 	// IntakeID optionally ties the link to a specific company_intakes row.
 	// When set, the onboarding-callback submit-intake handler auto-marks
 	// every active link tied to this intake as consumed (the visitor will
 	// see the thank-you page on any subsequent click).
 	IntakeID string `json:"intake_id,omitempty"`
+	// Role optionally elevates the link from the default "public" visitor
+	// role to "tenant_owner" / "tenant_admin". Empty / "public" produces
+	// the legacy lead-onboarding link. Validated against magicLinkAllowedRoles.
+	Role string `json:"role,omitempty"`
 }
 
 // magicLinkGenerateResponse is what the admin UI gets back.
@@ -136,12 +190,18 @@ func (h *Handler) handleGenerateMagicLink(w http.ResponseWriter, r *http.Request
 	// Body is optional; ignore decode errors for empty bodies.
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
+	role, ok := normalizeMagicLinkRole(req.Role)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "role must be one of: public, tenant_owner, tenant_admin")
+		return
+	}
+
 	ttl := defaultMagicLinkTTL
 	if req.TTLSeconds > 0 {
 		ttl = time.Duration(req.TTLSeconds) * time.Second
 	}
-	if ttl > maxMagicLinkTTL {
-		ttl = maxMagicLinkTTL
+	if cap := magicLinkRoleTTLCap(role); ttl > cap {
+		ttl = cap
 	}
 
 	nonceBytes := make([]byte, 12)
@@ -153,6 +213,7 @@ func (h *Handler) handleGenerateMagicLink(w http.ResponseWriter, r *http.Request
 		TenantID: t.ID,
 		Exp:      time.Now().Add(ttl).Unix(),
 		Nonce:    base64.RawURLEncoding.EncodeToString(nonceBytes),
+		Role:     role,
 	}
 	token, err := signMagicLinkToken(h.Cfg.GatewaySharedSecret, claims)
 	if err != nil {
@@ -188,6 +249,24 @@ func (h *Handler) handleGenerateMagicLink(w http.ResponseWriter, r *http.Request
 		Scheme: "https",
 		Host:   subdomain + "." + h.Cfg.TenantBaseDomain,
 		Path:   "/m/" + token,
+	}
+
+	// Audit. Elevated roles (tenant_owner / tenant_admin) get the role
+	// suffix on the action so SELECT WHERE action LIKE
+	// 'tenant.magic_link.generate.tenant_owner' finds owner-grade mints
+	// quickly. Public links keep the bare action for the lead funnel
+	// dashboards.
+	if h.Audit != nil {
+		actor, _ := userFromContext(r.Context())
+		var actorID *int64
+		if actor != nil {
+			actorID = &actor.ID
+		}
+		action := "tenant.magic_link.generate"
+		if role != "" && role != "public" {
+			action = "tenant.magic_link.generate." + role
+		}
+		_ = h.Audit.Insert(r.Context(), actorID, &t.ID, action, "magic_link", claims.Nonce)
 	}
 
 	writeJSON(w, http.StatusOK, magicLinkGenerateResponse{
@@ -368,15 +447,45 @@ func magicLinkConsumedHTML(tenantName, summary, consumedAt string) string {
 
 
 // signMagicVisitorRequest annotates the proxied request with trusted_gateway
-// HMAC + visitor-role claims so the launcher accepts the request as if a
-// real (anonymous) user had logged in via the dashboard.
+// HMAC claims derived from the magic-link's signed payload. Honours
+// claims.Role when present (whitelist-validated) and falls back to "public"
+// for legacy tokens or unrecognized values.
+//
+// Identity propagation by role:
+//   - "public" (or empty): UserID = "visitor:<nonce>", no email. This is
+//     the lead-onboarding case — visitor is anonymous on purpose.
+//   - Elevated ("tenant_owner" / "tenant_admin"): UserID =
+//     "magic:<role>:<nonce>" and UserEmail = tenant.OwnerEmail so the
+//     launcher's audit log distinguishes magic-link-owner from
+//     password-owner. Without this, owner actions via magic link would
+//     attribute to a synthetic visitor id — a real audit hole.
 func (h *Handler) signMagicVisitorRequest(req *http.Request, t *store.Tenant, claims magicLinkClaims) {
+	role, ok := normalizeMagicLinkRole(claims.Role)
+	if !ok {
+		// Defence in depth: a token whose JSON contained a role outside
+		// the whitelist (e.g. forged by an attacker bypassing the
+		// generate-time check, or a future role string this binary
+		// doesn't know about) is downgraded silently to "public" rather
+		// than refused — the worst we'd hand them is the same access a
+		// stranger off the street gets.
+		role = "public"
+	}
+	if role == "" {
+		role = "public"
+	}
+
+	userID := "visitor:" + claims.Nonce
+	userEmail := ""
+	if role != "public" {
+		userID = "magic:" + role + ":" + claims.Nonce
+		userEmail = t.OwnerEmail
+	}
+
 	gatewayauth.AnnotateRequest(req, h.Cfg.GatewaySharedSecret, gatewayauth.Claims{
-		TenantID: t.ID,
-		// Stable per-link visitor id so the agent memory layer can keep
-		// session continuity across page reloads from the same browser.
-		UserID: "visitor:" + claims.Nonce,
-		Role:   "public",
+		TenantID:  t.ID,
+		UserID:    userID,
+		UserEmail: userEmail,
+		Role:      role,
 	}, time.Now())
 }
 

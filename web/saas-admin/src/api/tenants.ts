@@ -243,10 +243,21 @@ export type MagicLink = {
   expires_at: string;
 };
 
-export async function generateTenantMagicLink(id: string, ttlSeconds?: number) {
+// MagicLinkRole values accepted by the controlplane. Empty / undefined =
+// "public" (legacy lead-onboarding link). Elevated roles let the admin
+// hand out a no-password owner/admin access link — the TTL is capped
+// server-side (24h owner, 7d admin) and the controlplane writes an
+// audit row.
+export type MagicLinkRole = "public" | "tenant_owner" | "tenant_admin";
+
+export async function generateTenantMagicLink(
+  id: string,
+  ttlSeconds?: number,
+  role?: MagicLinkRole,
+) {
   return api<MagicLink>(`/api/v1/tenants/${encodeURIComponent(id)}/magic-link`, {
     method: "POST",
-    body: JSON.stringify({ ttl_seconds: ttlSeconds ?? 0 }),
+    body: JSON.stringify({ ttl_seconds: ttlSeconds ?? 0, role: role ?? "" }),
   });
 }
 
