@@ -17,6 +17,7 @@ import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as LogsRouteImport } from './routes/logs'
 import { Route as LauncherSetupRouteImport } from './routes/launcher-setup'
 import { Route as LauncherLoginRouteImport } from './routes/launcher-login'
+import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as CronRouteImport } from './routes/cron'
 import { Route as CredentialsRouteImport } from './routes/credentials'
 import { Route as ConfigRouteImport } from './routes/config'
@@ -81,6 +82,11 @@ const LauncherSetupRoute = LauncherSetupRouteImport.update({
 const LauncherLoginRoute = LauncherLoginRouteImport.update({
   id: '/launcher-login',
   path: '/launcher-login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntegrationsRoute = IntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CronRoute = CronRouteImport.update({
@@ -216,6 +222,7 @@ export interface FileRoutesByFullPath {
   '/config': typeof ConfigRouteWithChildren
   '/credentials': typeof CredentialsRoute
   '/cron': typeof CronRoute
+  '/integrations': typeof IntegrationsRoute
   '/launcher-login': typeof LauncherLoginRoute
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
@@ -251,6 +258,7 @@ export interface FileRoutesByTo {
   '/config': typeof ConfigRouteWithChildren
   '/credentials': typeof CredentialsRoute
   '/cron': typeof CronRoute
+  '/integrations': typeof IntegrationsRoute
   '/launcher-login': typeof LauncherLoginRoute
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
@@ -287,6 +295,7 @@ export interface FileRoutesById {
   '/config': typeof ConfigRouteWithChildren
   '/credentials': typeof CredentialsRoute
   '/cron': typeof CronRoute
+  '/integrations': typeof IntegrationsRoute
   '/launcher-login': typeof LauncherLoginRoute
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
@@ -324,6 +333,7 @@ export interface FileRouteTypes {
     | '/config'
     | '/credentials'
     | '/cron'
+    | '/integrations'
     | '/launcher-login'
     | '/launcher-setup'
     | '/logs'
@@ -359,6 +369,7 @@ export interface FileRouteTypes {
     | '/config'
     | '/credentials'
     | '/cron'
+    | '/integrations'
     | '/launcher-login'
     | '/launcher-setup'
     | '/logs'
@@ -394,6 +405,7 @@ export interface FileRouteTypes {
     | '/config'
     | '/credentials'
     | '/cron'
+    | '/integrations'
     | '/launcher-login'
     | '/launcher-setup'
     | '/logs'
@@ -430,6 +442,7 @@ export interface RootRouteChildren {
   ConfigRoute: typeof ConfigRouteWithChildren
   CredentialsRoute: typeof CredentialsRoute
   CronRoute: typeof CronRoute
+  IntegrationsRoute: typeof IntegrationsRoute
   LauncherLoginRoute: typeof LauncherLoginRoute
   LauncherSetupRoute: typeof LauncherSetupRoute
   LogsRoute: typeof LogsRoute
@@ -501,6 +514,13 @@ declare module '@tanstack/react-router' {
       path: '/launcher-login'
       fullPath: '/launcher-login'
       preLoaderRoute: typeof LauncherLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/integrations': {
+      id: '/integrations'
+      path: '/integrations'
+      fullPath: '/integrations'
+      preLoaderRoute: typeof IntegrationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cron': {
@@ -743,6 +763,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConfigRoute: ConfigRouteWithChildren,
   CredentialsRoute: CredentialsRoute,
   CronRoute: CronRoute,
+  IntegrationsRoute: IntegrationsRoute,
   LauncherLoginRoute: LauncherLoginRoute,
   LauncherSetupRoute: LauncherSetupRoute,
   LogsRoute: LogsRoute,

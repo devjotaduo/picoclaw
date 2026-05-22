@@ -12,6 +12,7 @@ import {
   IconListDetails,
   IconMessageCircle,
   IconPlus,
+  IconPlugConnected,
   IconRobot,
   IconSearch,
   IconServer,
@@ -102,6 +103,7 @@ const featureFallbacks: Record<string, string> = {
   operacao_pendencias: "config",
   operacao_cron: "config",
   operacao_readiness: "config",
+  integrations: "config",
 }
 
 // Features hidden from the sidebar across the board (still reachable via
@@ -375,6 +377,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {
         ...baseNavGroups[3],
         items: [
+          {
+            title: "navigation.integrations",
+            url: "/integrations",
+            icon: IconPlugConnected,
+            feature: "integrations",
+            translateTitle: true,
+          },
           {
             title: "navigation.tools",
             url: "/agent/tools",
