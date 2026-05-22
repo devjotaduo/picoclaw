@@ -1,0 +1,16 @@
+[Unit]
+Description=Picoclaw weekly housekeeping (Docker prune, log review)
+Documentation=https://github.com/devjotaduo/picoclaw/blob/main/docs/operations/auto-cleanup.md
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/picoclaw-cleanup.sh
+User=root
+Group=root
+# Cleanup is best-effort; never let a stuck prune burn forever.
+TimeoutStartSec=30min
+# Low priority — never starve real workload.
+Nice=15
+IOSchedulingClass=idle

@@ -1,0 +1,17 @@
+[Unit]
+Description=Weekly trigger for Picoclaw housekeeping
+Documentation=https://github.com/devjotaduo/picoclaw/blob/main/docs/operations/auto-cleanup.md
+Requires=picoclaw-cleanup.service
+
+[Timer]
+# Sunday 04:00 UTC = 01:00 America/Sao_Paulo. Off-peak for both
+# Brazilian customers and any GHCR / CI activity.
+OnCalendar=Sun *-*-* 04:00:00
+Unit=picoclaw-cleanup.service
+# If the box was off at trigger time, run on next boot.
+Persistent=true
+# Spread across +/- 5 min to avoid thundering-herd if many VPS share infra.
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
