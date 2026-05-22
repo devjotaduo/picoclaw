@@ -12,18 +12,15 @@ import (
 	"github.com/sipeed/picoclaw/internal/saas/store"
 )
 
-// handleResendCredentials rotates the tenant owner's Supabase password to
-// a fresh random value, generates a one-shot magic link, and emails the
-// owner with URL + login + new password + magic link. Used by the admin
-// when an operator forgot the password / didn't receive the provisioning
-// email / wants to share a fresh access link.
+// handleResendCredentials rotates the tenant owner's password and emails the
+// owner with URL + login + new password. Supports two backends:
 //
-// Why rotate instead of resending the original password: the original is
-// not stored anywhere after provision (only the bcrypt hash for the
-// Supabase user lives in their database, and we never had plaintext to
-// begin with after the SendCredentialsEmail goroutine ran). Generating a
-// fresh password is the only way to give the operator something usable
-// without a full account-recovery dance through Supabase.
+//   - "launcher" (new default): reseeds the launcher's dashboardauth.db SQLite
+//     with a fresh bcrypt hash and restarts the container so the new hash is
+//     loaded. No magic link — the owner logs in via /launcher-login.
+//
+//   - "supabase" (legacy): rotates the Supabase password + generates a one-shot
+//     magic link, same as before.
 //
 // Route: POST /api/v1/tenants/{id}/resend-credentials (requirePlatformAdmin)
 func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request) {
@@ -47,12 +44,50 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "tenant has no owner_email on record; cannot resend credentials")
 		return
 	}
-	if t.SupabaseUserID == nil || *t.SupabaseUserID == "" {
-		writeError(
-			w,
-			http.StatusBadRequest,
-			"tenant is not linked to a Supabase user; only supabase-backed tenants support this flow",
+
+	// ── Launcher-native path (default for new tenants) ────────────────────
+	if t.AuthBackend != "supabase" {
+		if h.Mailer == nil || !h.Mailer.Enabled() {
+			writeError(w, http.StatusServiceUnavailable,
+				"SMTP não configurado — configure SMTP_HOST/USER/PASSWORD/ALERT_FROM primeiro")
+			return
+		}
+
+		// RotatePassword generates a fresh password, writes the bcrypt hash into
+		// dashboardauth.db, then restarts the container so the new hash is loaded.
+		newPassword, err := h.Provisioner.RotatePassword(r.Context(), t.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "rotate launcher password: "+err.Error())
+			return
+		}
+
+		dashboardURL := "https://" + t.Subdomain + "." + h.Cfg.TenantBaseDomain + "/"
+		go h.Mailer.SendCredentialsEmail(
+			t.OwnerEmail,
+			t.DisplayName,
+			dashboardURL,
+			t.OwnerEmail,
+			newPassword,
+			"",
 		)
+
+		writeJSON(w, http.StatusOK, map[string]any{
+			"sent_to":             t.OwnerEmail,
+			"password_rotated":    true,
+			"magic_link_in_email": false,
+			"dashboard_url":       dashboardURL,
+			"initial_password":    newPassword,
+			"magic_link":          "",
+			"short_magic_link":    "",
+			"info":                "Senha rotacionada. Email enviado para " + t.OwnerEmail + ".",
+		})
+		return
+	}
+
+	// ── Legacy Supabase path ───────────────────────────────────────────────
+	if t.SupabaseUserID == nil || *t.SupabaseUserID == "" {
+		writeError(w, http.StatusBadRequest,
+			"tenant is not linked to a Supabase user; only supabase-backed tenants support this flow")
 		return
 	}
 	if h.Supabase == nil {
@@ -60,30 +95,22 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if h.Mailer == nil || !h.Mailer.Enabled() {
-		writeError(
-			w,
-			http.StatusServiceUnavailable,
-			"SMTP not configured on the controlplane; configure SMTP_HOST/USER/PASSWORD/ALERT_FROM first",
-		)
+		writeError(w, http.StatusServiceUnavailable,
+			"SMTP not configured on the controlplane; configure SMTP_HOST/USER/PASSWORD/ALERT_FROM first")
 		return
 	}
 
-	// 1. Generate fresh password (16-char base64 url-safe, ~96 bits entropy).
 	newPassword, err := auth.GeneratePassword()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "generate password: "+err.Error())
 		return
 	}
 
-	// 2. Push it to Supabase. If this fails, abort BEFORE emailing — we
-	// don't want the operator to receive credentials that don't work.
 	if err := h.Supabase.UpdateUserPassword(*t.SupabaseUserID, newPassword); err != nil {
 		writeError(w, http.StatusInternalServerError, "rotate password in supabase: "+err.Error())
 		return
 	}
 
-	// 3. Generate a fresh magic link too (it's bundled in the same email).
-	// Failure here is non-fatal: the email still ships with email + password.
 	var magicLink string
 	if link, mlerr := h.Supabase.GenerateMagicLink(t.OwnerEmail, t.Subdomain); mlerr != nil {
 		log.Printf("resend-credentials: magic link generation failed for tenant %s: %v", t.ID, mlerr)
@@ -91,11 +118,6 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		magicLink = link
 	}
 
-	// 3b. Wrap the Supabase magic link in a /s/<code> shortlink so the
-	// admin has something WhatsApp/SMS-friendly to share. The full
-	// Supabase link is 200+ chars with the bearer token baked into the
-	// query string — fine for email, terrible for any other channel.
-	// Failure is non-fatal: the long URL still works.
 	var shortMagicLink string
 	if magicLink != "" {
 		label := "magic-link tenant=" + t.ID
@@ -106,14 +128,7 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// 4. Compose the dashboard URL exactly like the provisioner does, so
-	// the email looks identical to the original "welcome" mail.
 	dashboardURL := "https://" + t.Subdomain + "." + h.Cfg.TenantBaseDomain + "/"
-
-	// 5. Fire-and-forget the email. We send the SHORT magic link in the
-	// email when available — easier for the recipient to click on a
-	// mobile mail client + survives line-wrapping mishandling. Falls
-	// back to the long URL if shortening failed.
 	mailMagicLink := magicLink
 	if shortMagicLink != "" {
 		mailMagicLink = shortMagicLink
@@ -132,16 +147,9 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		"password_rotated":    true,
 		"magic_link_in_email": magicLink != "",
 		"dashboard_url":       dashboardURL,
-		// Return the actual password + magic link too. The admin UI shows
-		// these in a dialog with copy buttons so the operator can hand them
-		// off directly when email is slow / goes to spam / Brevo is down.
-		// Trade-off: the password is plaintext in the response — fine for
-		// platform-admin-only access (the endpoint is gated by
-		// requirePlatformAdmin and the cookie travels over TLS), and the
-		// password was already in transit to the operator via SMTP anyway.
-		"initial_password": newPassword,
-		"magic_link":       magicLink,
-		"short_magic_link": shortMagicLink,
-		"info":             "Senha rotacionada. Email enfileirado para " + t.OwnerEmail + " — se demorar, copie a senha/link diretamente abaixo.",
+		"initial_password":    newPassword,
+		"magic_link":          magicLink,
+		"short_magic_link":    shortMagicLink,
+		"info":                "Senha rotacionada. Email enfileirado para " + t.OwnerEmail + " — se demorar, copie a senha/link diretamente abaixo.",
 	})
 }

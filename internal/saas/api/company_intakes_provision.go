@@ -17,7 +17,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 	"sync"
@@ -144,11 +143,9 @@ func (a *AutoProvisioner) Run(
 		return nil, fmt.Errorf("subdomain: %w", err)
 	}
 
-	useSupabase := a.Supabase != nil
-	authBackend := "local"
-	if useSupabase {
-		authBackend = "supabase"
-	}
+	// New tenants always use launcher-native auth — Supabase JWT path retired
+	// because the 1h TTL without refresh broke `/pico/ws`. See provisioner.go.
+	authBackend := "launcher"
 
 	// Resolve the workspace marked is_default_auto. Auto-provision is
 	// workspace-only now — operator must mark one workspace as default
@@ -171,7 +168,7 @@ func (a *AutoProvisioner) Run(
 		WorkspaceID:           ws.ID,
 		MemLimitMB:            512,
 		CPUQuota:              0.5,
-		SkipDashboardPassword: useSupabase,
+		SkipDashboardPassword: false,
 		AuthBackend:           authBackend,
 	})
 	if err != nil {
@@ -200,48 +197,12 @@ func (a *AutoProvisioner) Run(
 		// (também sai magic_link no email), "password" no caminho legacy.
 	}
 
-	if useSupabase {
-		// Sempre cria o user com senha (EmailConfirm=true) — Supabase em
-		// mode 'password' não envia email automaticamente, então a entrega
-		// é nossa.
-		userID, _, suerr := a.Supabase.CreateTenantOwner(
-			email, out.TenantID, subdomain,
-			supaauth.LoginModePassword, out.InitialPassword,
-		)
-		if suerr != nil {
-			// Best-effort rollback. We don't want a tenant the visitor can never
-			// log into. Logged via the SSE provision_error emit at the caller.
-			_ = a.Provisioner.Delete(ctx, out.TenantID)
-			return nil, fmt.Errorf("supabase user: %w", suerr)
-		}
-		if err := a.Tenants.SetSupabaseUserID(ctx, out.TenantID, userID); err != nil {
-			return nil, fmt.Errorf("save supabase user id: %w", err)
-		}
-		// Gera magic link extra — entregamos URL + login + senha + magic
-		// link juntos. Falha aqui não é fatal: o tenant continua acessível
-		// via email + senha.
-		var magicLink string
-		if ml, mlerr := a.Supabase.GenerateMagicLink(email, subdomain); mlerr != nil {
-			log.Printf("autoprovisioner: magic link generation failed for tenant %s: %v", out.TenantID, mlerr)
-		} else {
-			magicLink = ml
-		}
-
-		res.SupabaseUserID = userID
-		res.InitialPassword = out.InitialPassword
-		res.MagicLink = magicLink
-		// Sempre 'password' a partir daqui — também temos magic link, mas o
-		// SSE handler usa LoginMode pra decidir o que mostrar no chat. O
-		// email transacional carrega ambos.
-		res.LoginMode = string(supaauth.LoginModePassword)
-
-		if a.Mailer != nil && a.Mailer.Enabled() {
-			go a.Mailer.SendCredentialsEmail(email, company, out.URL, email, out.InitialPassword, magicLink)
-		}
-	} else {
-		// Legacy mode: visitor logs in with the bcrypt-seeded local password.
-		res.InitialPassword = out.InitialPassword
-		res.LoginMode = "password"
+	// Launcher-native auth: bcrypt-seeded local password, no magic link, no
+	// Supabase user. The credentials email carries URL + email + password.
+	res.InitialPassword = out.InitialPassword
+	res.LoginMode = "password"
+	if a.Mailer != nil && a.Mailer.Enabled() {
+		go a.Mailer.SendCredentialsEmail(email, company, out.URL, email, out.InitialPassword, "")
 	}
 
 	// Best-effort link. Linked status helps the admin filter "already provisioned".

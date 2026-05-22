@@ -4,10 +4,9 @@ import { CopyableField } from "@/components/ui/copyable-field";
 
 // ResendCredentialsDialog renders the result of POST
 // /api/v1/tenants/{id}/resend-credentials: dashboard URL, login email,
-// freshly-rotated password, short magic link (when shortener succeeded),
-// and the long Supabase magic link as a fallback. Extracted from
-// TenantDetail.tsx so the page doesn't accumulate 100+ JSX lines per
-// admin action.
+// freshly-rotated password, and optionally a short magic link (Supabase
+// legacy tenants only). Extracted from TenantDetail.tsx so the page
+// doesn't accumulate 100+ JSX lines per admin action.
 
 export type ResendCredentialsData = {
   sent_to: string;
@@ -41,7 +40,7 @@ export function ResendCredentialsDialog(props: {
             warning="A senha anterior parou de funcionar agora."
           />
 
-          {data.magic_link ? (
+          {data.magic_link && (
             <>
               {data.short_magic_link && (
                 <CopyableField
@@ -57,11 +56,6 @@ export function ResendCredentialsDialog(props: {
                 variant="tight"
               />
             </>
-          ) : (
-            <p className="text-xs text-amber-300">
-              Magic link falhou ao gerar (verifique allowlist Redirect URLs no
-              Supabase Dashboard). A senha acima ainda funciona normalmente.
-            </p>
           )}
 
           <div className="flex justify-end pt-2">

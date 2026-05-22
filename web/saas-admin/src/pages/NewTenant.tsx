@@ -315,12 +315,6 @@ export function NewTenant() {
               </div>
             </div>
 
-            {result.supabase_user_id && (
-              <div className="text-[10px] uppercase tracking-wide text-zinc-500">
-                Login: email + senha · magic link
-              </div>
-            )}
-
             {result.info && (
               <div className="rounded bg-emerald-950/40 px-3 py-2 text-xs text-emerald-300">
                 {result.info}

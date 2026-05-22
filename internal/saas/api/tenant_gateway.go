@@ -70,14 +70,33 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 
 	target, _ := url.Parse(fmt.Sprintf("http://tenant-%s:18800", t.ID))
 
+	// New default: the launcher runs in its native "local" auth mode
+	// (dashboardauth.db bcrypt + HttpOnly cookie). The controlplane is a
+	// transparent reverse proxy for everything except the legacy Supabase
+	// path and the public-chat anonymous surface. This fixes the WS
+	// disconnect after the Supabase JWT (1h, no refresh) expired.
+	//
+	// Tenants with auth_backend='supabase' still flow through the legacy
+	// Supabase /login + JWT branch below for backwards compat.
+	// Public-onboarding tenants (t.IsPublic) keep the HMAC-signed anonymous
+	// branch further down because the launcher's VerifyRequest rejects
+	// empty claims and we need a stable identity for the public-web channel.
+	useLauncherNativeAuth := t.AuthBackend != "supabase" && !t.IsPublic
+
 	// Tenant-scoped login page. Served BY the controlplane (not the launcher)
 	// because the launcher in trusted_gateway mode doesn't authenticate users
 	// itself — the controlplane has to. The page POSTs directly to Supabase
 	// from the browser, sets the project-scoped cookie on .<baseDomain>, then
 	// redirects to the `next` URL. See serveTenantLogin for the HTML.
 	if r.Method == http.MethodGet && path.Clean("/"+strings.TrimPrefix(r.URL.Path, "/")) == "/login" {
-		if h.SupabaseConfigured() && t.SupabaseUserID != nil && *t.SupabaseUserID != "" {
+		if !useLauncherNativeAuth && h.SupabaseConfigured() && t.SupabaseUserID != nil && *t.SupabaseUserID != "" {
 			h.serveTenantLogin(w, r, t)
+			return
+		}
+		if useLauncherNativeAuth {
+			// New tenants don't have a controlplane-served login page;
+			// the launcher's own /launcher-login (React SPA) handles it.
+			http.Redirect(w, r, "/launcher-login", http.StatusFound)
 			return
 		}
 		// Tenant doesn't use Supabase auth — fall through to launcher (it
@@ -144,6 +163,16 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 				Role:   "public",
 			}, time.Now())
 		})
+		return
+	}
+
+	// Launcher-native auth path: the controlplane is a transparent reverse
+	// proxy. The launcher runs in PICOCLAW_AUTH_MODE=local and handles its
+	// own bcrypt login + HttpOnly session cookie + role policy enforcement.
+	// WebSocket /pico/ws works without TTL expiry because the launcher's
+	// cookie is 31d and host-scoped to <tenant>.<baseDomain>.
+	if useLauncherNativeAuth {
+		h.proxyTenantRequest(w, r, target, nil)
 		return
 	}
 

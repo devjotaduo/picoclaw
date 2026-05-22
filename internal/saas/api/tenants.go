@@ -7,11 +7,9 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
-	supaauth "github.com/sipeed/picoclaw/internal/saas/auth"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 	"github.com/sipeed/picoclaw/internal/saas/tenant"
 )
@@ -67,15 +65,12 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// When Supabase is configured, the tenant's dashboard login is gated by
-	// Supabase JWT — skip seeding a local bcrypt password and record
-	// auth_backend accordingly. Otherwise stay on the legacy local-password
-	// + controlplane invite-token flow.
-	useSupabase := h.Supabase != nil
-	authBackend := "local"
-	if useSupabase {
-		authBackend = "supabase"
-	}
+	// New tenants always use launcher-native auth (bcrypt password + HttpOnly
+	// session cookie via the launcher's dashboardauth). Supabase JWT path is
+	// deprecated because the 1h TTL without refresh broke `/pico/ws`.
+	// Legacy Supabase-backed tenants keep working — only newly-created ones
+	// default to the launcher backend.
+	authBackend := "launcher"
 
 	out, err := h.Provisioner.Create(r.Context(), tenant.CreateInput{
 		DisplayName:           req.DisplayName,
@@ -85,7 +80,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		MemLimitMB:            req.MemLimitMB,
 		CPUQuota:              req.CPUQuota,
 		WorkspaceID:           req.WorkspaceID,
-		SkipDashboardPassword: useSupabase,
+		SkipDashboardPassword: false,
 		AuthBackend:           authBackend,
 	})
 	if err != nil {
@@ -114,111 +109,21 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		"url":       out.URL,
 	}
 
-	if useSupabase {
-		// Cria o user com senha (EmailConfirm=true) — Supabase em mode
-		// 'password' não envia email automaticamente, então a entrega é
-		// nossa.
-		userID, _, suerr := h.Supabase.CreateTenantOwner(
-			req.OwnerEmail, out.TenantID, req.Subdomain,
-			supaauth.LoginModePassword, out.InitialPassword,
+	resp["initial_password"] = out.InitialPassword
+	resp["login_mode"] = "password"
+	if h.Mailer != nil && h.Mailer.Enabled() {
+		go h.Mailer.SendCredentialsEmail(
+			req.OwnerEmail,
+			req.DisplayName,
+			out.URL,
+			req.OwnerEmail,
+			out.InitialPassword,
+			"", // magic link not used in the launcher-native flow
 		)
-		if suerr != nil {
-			// Best-effort rollback so we don't leave an orphan tenant without
-			// a way to log in.
-			_ = h.Provisioner.Delete(r.Context(), out.TenantID)
-			writeError(w, http.StatusInternalServerError, "supabase user: "+suerr.Error())
-			return
-		}
-		if err := h.Tenants.SetSupabaseUserID(r.Context(), out.TenantID, userID); err != nil {
-			// We've already created the tenant + Supabase user; failing to
-			// persist the linkage leaves an orphan that nobody can clean up
-			// from the admin UI later. Best-effort rollback of both sides,
-			// then surface the error with enough identifiers for manual
-			// recovery if the rollback itself fails.
-			log.Printf("rollback orphan: SetSupabaseUserID failed for tenant=%s supabase_user=%s err=%v",
-				out.TenantID, userID, err)
-			if delErr := h.Supabase.DeleteTenantUser(userID); delErr != nil {
-				log.Printf(
-					"rollback orphan: DeleteTenantUser(%s) failed: %v — MANUAL CLEANUP NEEDED in Supabase Auth dashboard",
-					userID,
-					delErr,
-				)
-			}
-			if delErr := h.Provisioner.Delete(r.Context(), out.TenantID); delErr != nil {
-				log.Printf(
-					"rollback orphan: Provisioner.Delete(%s) failed: %v — MANUAL CLEANUP NEEDED via docker rm + DB delete",
-					out.TenantID,
-					delErr,
-				)
-			}
-			writeError(w, http.StatusInternalServerError, "save supabase user id: "+err.Error())
-			return
-		}
-		// Gera magic link extra para o mesmo user — entrega-se URL + login
-		// + senha + magic link juntos no mesmo email. Falha aqui não é
-		// fatal: o tenant continua acessível via email + senha.
-		var magicLink string
-		if ml, mlerr := h.Supabase.GenerateMagicLink(req.OwnerEmail, req.Subdomain); mlerr != nil {
-			log.Printf("supabase magic link generation failed for tenant %s: %v", out.TenantID, mlerr)
-		} else {
-			magicLink = ml
-		}
-
-		resp["supabase_user_id"] = userID
-		resp["initial_password"] = out.InitialPassword
-		if magicLink != "" {
-			resp["magic_link"] = magicLink
-		}
-		if h.Mailer != nil && h.Mailer.Enabled() {
-			go h.Mailer.SendCredentialsEmail(
-				req.OwnerEmail,
-				req.DisplayName,
-				out.URL,
-				req.OwnerEmail,
-				out.InitialPassword,
-				magicLink,
-			)
-			resp["info"] = "Email com URL, login, senha e magic link enviado para o owner."
-		} else {
-			resp["info"] = "Tenant created. Save the credentials now — they will not be shown again."
-			resp["warning"] = "SMTP não configurado — entregue email + senha (e magic link) manualmente."
-		}
+		resp["info"] = "Email com URL, login e senha enviado para o owner."
 	} else {
-		// Legacy invite-token flow — kept as a fallback for deployments
-		// without Supabase Auth wired in.
-		var ownerInviteToken string
-		var ownerInviteExpiresAt time.Time
-		if actor, ok := userFromContext(r.Context()); ok {
-			if inv, token, err := h.Invites.Create(
-				r.Context(),
-				out.TenantID,
-				req.OwnerEmail,
-				store.RoleTenantOwner,
-				actor.ID,
-				7*24*time.Hour,
-			); err == nil {
-				ownerInviteToken = token
-				ownerInviteExpiresAt = inv.ExpiresAt
-			} else {
-				log.Printf("invite: owner invite failed for tenant %s: %v", out.TenantID, err)
-			}
-		}
-		if ownerInviteToken != "" && h.Mailer != nil && h.Mailer.Enabled() {
-			inviteURL := h.Mailer.AdminBaseURL() + "/accept-invite?token=" + ownerInviteToken
-			go h.Mailer.SendInviteEmail(
-				req.OwnerEmail,
-				req.DisplayName,
-				string(store.RoleTenantOwner),
-				inviteURL,
-				ownerInviteExpiresAt,
-			)
-		}
-		resp["owner_invite_token"] = ownerInviteToken
-		if h.Mailer == nil || !h.Mailer.Enabled() {
-			resp["warning"] = "SMTP is not configured — share the invite token manually."
-		} else {
-			resp["info"] = "Invite email was sent to the owner. The token is included as a delivery fallback."
-		}
+		resp["info"] = "Tenant criado. Salve as credenciais agora — elas não serão exibidas de novo."
+		resp["warning"] = "SMTP não configurado — entregue email + senha manualmente."
 	}
 
 	// Best-effort: mirror the new tenant as a Contact in open-crm. Failures

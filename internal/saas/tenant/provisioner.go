@@ -244,42 +244,50 @@ func (p *Provisioner) runProvision(
 		log.Printf("WARN: provisioner: copy shared auth.json: %v", err)
 	}
 
-	// 2. Dashboard password (skipped for Supabase / public tenants).
-	if !skipDashboardPassword {
-		if err := SeedDashboardPassword(ctx, t.VolumePath, password); err != nil {
-			return fmt.Errorf("seed password: %w", err)
+	// Raw workspaces opt out of EVERY post-copy transformation. The
+	// launcher-auth.db, LiteLLM key, config.json placeholders, and
+	// launcher_policy.json are all whatever the operator put in the zip.
+	// Useful when the uploader wants the container to boot against the
+	// exact bytes they shipped — typically an existing tenant volume
+	// re-bundled, or a self-hosted LiteLLM-free setup.
+	if !ws.IsRaw {
+		// 2. Dashboard password (skipped for Supabase / public tenants).
+		if !skipDashboardPassword {
+			if err := SeedDashboardPassword(ctx, t.VolumePath, password); err != nil {
+				return fmt.Errorf("seed password: %w", err)
+			}
 		}
-	}
 
-	// 3. Per-tenant LiteLLM virtual key + placeholder substitution. The
-	// workspace's config.json carries "${LITELLM_KEY}" / "${LITELLM_URL}" /
-	// "${TENANT_ID}" placeholders that get filled in here. We never write
-	// config.json from scratch — operator owns the schema.
-	if p.LiteLLM != nil {
-		out, err := p.LiteLLM.GenerateKey(ctx, litellm.GenerateKeyInput{
-			TenantID:         t.ID,
-			MonthlyBudgetUSD: t.MonthlyBudgetUSD,
-		})
-		if err != nil {
-			return fmt.Errorf("litellm key: %w", err)
+		// 3. Per-tenant LiteLLM virtual key + placeholder substitution. The
+		// workspace's config.json carries "${LITELLM_KEY}" / "${LITELLM_URL}" /
+		// "${TENANT_ID}" placeholders that get filled in here. We never write
+		// config.json from scratch — operator owns the schema.
+		if p.LiteLLM != nil {
+			out, err := p.LiteLLM.GenerateKey(ctx, litellm.GenerateKeyInput{
+				TenantID:         t.ID,
+				MonthlyBudgetUSD: t.MonthlyBudgetUSD,
+			})
+			if err != nil {
+				return fmt.Errorf("litellm key: %w", err)
+			}
+			h := sha256.Sum256([]byte(out.Key))
+			if err := p.Tenants.SetLiteLLMKey(ctx, t.ID, out.KeyName, hex.EncodeToString(h[:])); err != nil {
+				_ = p.LiteLLM.DeleteKey(ctx, t.ID)
+				return fmt.Errorf("save litellm key: %w", err)
+			}
+			if err := SubstituteConfigPlaceholders(t.VolumePath, map[string]string{
+				"${LITELLM_KEY}": out.Key,
+				"${LITELLM_URL}": p.Cfg.LiteLLMURL,
+				"${TENANT_ID}":   t.ID,
+			}); err != nil {
+				return fmt.Errorf("substitute placeholders: %w", err)
+			}
 		}
-		h := sha256.Sum256([]byte(out.Key))
-		if err := p.Tenants.SetLiteLLMKey(ctx, t.ID, out.KeyName, hex.EncodeToString(h[:])); err != nil {
-			_ = p.LiteLLM.DeleteKey(ctx, t.ID)
-			return fmt.Errorf("save litellm key: %w", err)
-		}
-		if err := SubstituteConfigPlaceholders(t.VolumePath, map[string]string{
-			"${LITELLM_KEY}": out.Key,
-			"${LITELLM_URL}": p.Cfg.LiteLLMURL,
-			"${TENANT_ID}":   t.ID,
-		}); err != nil {
-			return fmt.Errorf("substitute placeholders: %w", err)
-		}
-	}
 
-	// 4. RBAC from the workspace's role_policy_json DB column.
-	if err := WriteLauncherPolicy(t.VolumePath, ws.RolePolicy()); err != nil {
-		return fmt.Errorf("write launcher policy: %w", err)
+		// 4. RBAC from the workspace's role_policy_json DB column.
+		if err := WriteLauncherPolicy(t.VolumePath, ws.RolePolicy()); err != nil {
+			return fmt.Errorf("write launcher policy: %w", err)
+		}
 	}
 
 	// 5. Container with two binds (home + optional frontend-dist). The
@@ -466,11 +474,25 @@ func (p *Provisioner) buildSpec(t *store.Tenant) ContainerSpec {
 		"picoclaw.saas.managed":   "true",
 	}
 
+	// Auth mode selection:
+	//   - "supabase" backend (legacy): trusted_gateway — controlplane signs
+	//     auth headers because the launcher doesn't speak Supabase JWT.
+	//   - IsPublic tenants: trusted_gateway — controlplane signs anonymous
+	//     "public" claims for the public-web chat surface.
+	//   - everything else (default "launcher"/"local"): launcher runs in its
+	//     native "local" mode with the dashboardauth.db bcrypt + HttpOnly
+	//     cookie, and the controlplane is a transparent reverse proxy. This
+	//     fixes the Supabase-JWT-expires-and-WS-disconnects issue.
+	authMode := "local"
+	if t.AuthBackend == "supabase" || t.IsPublic {
+		authMode = "trusted_gateway"
+	}
+
 	env := map[string]string{
 		"PICOCLAW_HOME":                   "/root/.picoclaw",
 		"PICOCLAW_LAUNCHER_HOST":          "0.0.0.0",
 		"PICOCLAW_GATEWAY_HOST":           "0.0.0.0",
-		"PICOCLAW_AUTH_MODE":              "trusted_gateway",
+		"PICOCLAW_AUTH_MODE":              authMode,
 		"PICOCLAW_TRUSTED_GATEWAY_SECRET": p.Cfg.GatewaySharedSecret,
 		"PICOCLAW_ALLOWED_CHANNELS":       "whatsapp_native",
 	}
