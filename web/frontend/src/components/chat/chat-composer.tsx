@@ -1,9 +1,11 @@
 import {
   IconArrowUp,
+  IconChevronDown,
   IconFileText,
   IconMicrophone,
-  IconPaperclip,
   IconPlayerStopFilled,
+  IconPlus,
+  IconShieldCheck,
   IconUserCheck,
   IconX,
 } from "@tabler/icons-react"
@@ -232,7 +234,7 @@ export function ChatComposer({
 
   return (
     <div className="before:bg-background pointer-events-none relative z-10 -mt-[24px] shrink-0 [scrollbar-gutter:stable] overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] before:pointer-events-none before:absolute before:inset-x-0 before:top-[24px] before:bottom-0 before:content-[''] md:px-8 md:pb-8 lg:px-24 xl:px-48">
-      <div className="bg-card border-border/60 pointer-events-auto relative mx-auto flex max-w-[1000px] flex-col rounded-2xl border p-3 shadow-sm">
+      <div className="bg-card/95 border-border/55 pointer-events-auto relative mx-auto flex max-w-[1000px] flex-col rounded-[28px] border p-3 shadow-[0_22px_70px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-white/[0.025] backdrop-blur-xl transition-shadow duration-200 focus-within:shadow-[0_26px_82px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.07)] md:p-4">
         {attachments.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-2 px-2">
             {attachments.map((attachment, index) =>
@@ -329,7 +331,7 @@ export function ChatComposer({
             disabled={!canInput}
             title={disabledMessage || undefined}
             className={cn(
-              "placeholder:text-muted-foreground/50 max-h-[200px] min-h-[64px] resize-none border-0 bg-transparent px-2 py-1 text-[15px] shadow-none transition-colors focus-visible:ring-0 focus-visible:outline-none dark:bg-transparent",
+              "placeholder:text-muted-foreground/55 max-h-[200px] min-h-[58px] resize-none border-0 bg-transparent px-2 py-1 text-[15px] leading-6 shadow-none transition-colors focus-visible:ring-0 focus-visible:outline-none dark:bg-transparent",
               !canInput &&
                 "placeholder:text-muted-foreground cursor-not-allowed",
             )}
@@ -338,19 +340,46 @@ export function ChatComposer({
           />
         )}
 
-        <div className="mt-2 flex items-center justify-between px-1">
-          <div className="flex items-center gap-1">
+        <div className="mt-3 flex items-center justify-between gap-3 px-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="text-muted-foreground hover:text-foreground h-8 w-8 rounded-full"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/55 h-8 w-8 rounded-full"
               onClick={onAddAttachments}
               disabled={!canInput || isRecording}
               aria-label={t("chat.attachFile")}
               title={t("chat.attachFile")}
             >
-              <IconPaperclip className="size-4" />
+              <IconPlus className="size-5 stroke-[1.8]" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 rounded-full px-2.5 text-xs font-medium whitespace-nowrap text-orange-500 hover:bg-orange-500/10 hover:text-orange-400 dark:text-orange-300 dark:hover:text-orange-200"
+              disabled={!canInput || isRecording}
+            >
+              <IconShieldCheck className="size-3.5" />
+              {t("chat.fullAccess", "Acesso completo")}
+              <IconChevronDown className="size-3.5 opacity-80" />
+            </Button>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:bg-muted/55 hover:text-foreground hidden h-8 rounded-full px-2.5 text-xs font-medium whitespace-nowrap sm:inline-flex"
+              disabled={!canInput || isRecording}
+            >
+              <span className="text-foreground/80 font-semibold tabular-nums">
+                5.5
+              </span>
+              <span>{t("chat.qualityHigh", "Altíssimo")}</span>
+              <IconChevronDown className="size-3.5 opacity-70" />
             </Button>
             <Button
               type="button"
@@ -360,7 +389,7 @@ export function ChatComposer({
                 "h-8 w-8 rounded-full",
                 isRecording
                   ? "bg-red-600 text-white shadow-[0_0_0_4px_rgba(220,38,38,0.16)] hover:bg-red-700"
-                  : "text-muted-foreground hover:text-foreground",
+                  : "text-muted-foreground hover:bg-muted/55 hover:text-foreground",
               )}
               onClick={isRecording ? stopRecording : startRecording}
               disabled={!canInput}
@@ -377,9 +406,6 @@ export function ChatComposer({
                 <IconMicrophone className="size-4" />
               )}
             </Button>
-          </div>
-
-          <div className="flex items-center gap-1.5">
             {onToggleAttendantTest && (
               <Button
                 type="button"
@@ -412,7 +438,7 @@ export function ChatComposer({
                     <Button
                       type="button"
                       size="icon"
-                      className="size-8 rounded-full bg-violet-500 text-white transition-transform hover:bg-violet-600 active:scale-95"
+                      className="focus-visible:ring-foreground/20 size-9 rounded-full bg-[#bfc0c2] text-[#303030] shadow-[0_7px_18px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.45)] transition-transform hover:bg-[#d8d8d8] active:scale-95 disabled:bg-[#a9aaad] disabled:text-[#4b4b4b] disabled:opacity-70"
                       onClick={onSend}
                       disabled={!canSend}
                       aria-label={t("chat.sendMessage")}

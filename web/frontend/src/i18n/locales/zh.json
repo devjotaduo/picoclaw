@@ -69,7 +69,7 @@
     "welcome": "今天我能为您做些什么？",
     "welcomeWithAgent": "你好！我是 {{name}}，需要我帮什么忙？",
     "welcomeDesc": "您可以询问我天气、设置或其他任何任务，我随时为您效劳。",
-    "placeholder": "输入新消息...",
+    "placeholder": "提出更多修改...",
     "disabledPlaceholder": {
       "gatewayUnknown": "无法对话：网关状态仍在检测中。请稍候重试，如仍无效请刷新页面或重启 Launcher。",
       "gatewayStarting": "无法对话：网关正在启动。请等待启动完成后重试。",

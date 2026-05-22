@@ -76,7 +76,7 @@
       "marketing": "{{name}} helps create campaigns, content, and visual materials.",
       "assistant": "{{name}} helps with schedules, reports, documents, and agent coordination."
     },
-    "placeholder": "Inicie uma nova mensagem...",
+    "placeholder": "Request additional changes",
     "disabledPlaceholder": {
       "gatewayUnknown": "Não é possível conversar: o status do Gateway ainda está sendo verificado. Aguarde e atualize a página ou reinicie o Launcher se necessário.",
       "gatewayStarting": "Não é possível conversar: o Gateway está iniciando. Aguarde a inicialização concluir e tente novamente.",
