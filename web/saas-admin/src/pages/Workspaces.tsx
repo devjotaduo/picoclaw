@@ -640,10 +640,13 @@ function UploadWorkspaceDialog(props: {
         <div>
           <h2 className="text-lg font-semibold text-zinc-100">Upload de workspace</h2>
           <p className="mt-1 text-xs text-zinc-400">
-            Suba um <code>.zip</code> com o conteúdo de <code>home/</code> do
-            workspace. Aceita tanto <code>home/config.json + home/workspace/AGENT.md...</code>
-            quanto <code>config.json + workspace/AGENT.md...</code> na raiz —
-            o backend detecta a forma. Limite 50&nbsp;MB.
+            Suba um <code>.zip</code> com qualquer combinação de{" "}
+            <code>home/</code>, <code>frontend-src/</code> e{" "}
+            <code>frontend-dist/</code> na raiz do arquivo. Também aceita
+            só os arquivos de <code>home/</code> direto na raiz (sem prefixo)
+            para compatibilidade. O backend detecta o layout e pula
+            automaticamente pastas runtime (<code>sessions/</code>,{" "}
+            <code>whatsapp/</code>, <code>state/</code>, etc.). Limite 50&nbsp;MB.
           </p>
         </div>
 

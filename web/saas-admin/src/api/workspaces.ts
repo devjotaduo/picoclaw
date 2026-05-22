@@ -147,15 +147,23 @@ export async function validateWorkspace(id: string) {
 }
 
 // ── Upload workspace ─────────────────────────────────────────────────
-// Operator uploads a zip containing the workspace's home/ subtree
-// (config.json, .security.yml, auth.json, workspace/AGENT.md etc).
-// Backend validates (size cap, path traversal, hidden runtime files
-// blocked, zip-bomb defence) before writing anything to disk.
+// Operator uploads a zip containing one or more of the workspace's
+// three subdirs: home/ (the bind-mounted tenant container content),
+// frontend-src/ (editable React source), frontend-dist/ (compiled vite
+// bundle bind-mounted read-only into the tenant). Backend validates
+// (size cap, path traversal, runtime files skipped, zip-bomb defence)
+// before writing anything to disk.
 //
-// Archive can be structured either way:
-//   (a) home/config.json, home/workspace/AGENT.md ... (with prefix)
-//   (b) config.json, workspace/AGENT.md ... (no prefix)
-// Backend detects which shape and adapts.
+// Three layouts auto-detected by the backend:
+//   (a) home/config.json, home/workspace/AGENT.md ...
+//       → everything lands at <ws>/home/...
+//   (b) config.json, workspace/AGENT.md ...
+//       → no prefix; backend assumes it's a home/ payload and lands
+//         everything at <ws>/home/...
+//   (c) home/config.json, frontend-src/package.json,
+//       frontend-dist/index.html ...
+//       → each top-level dir routes to its matching subdir on the
+//         workspace. Any subset of the three is accepted.
 
 export async function uploadWorkspace(input: {
   name: string;

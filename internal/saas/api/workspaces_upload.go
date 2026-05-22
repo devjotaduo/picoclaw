@@ -31,21 +31,33 @@ const maxWorkspaceExtractedBytes = 200 << 20 // 200 MiB
 const maxWorkspaceExtractedFiles = 5000
 
 // handleUploadWorkspace receives a multipart/form-data POST with a zip
-// archive containing the workspace's home/ subtree and creates a new
-// Workspace row + on-disk directory from it. The form fields:
+// archive and creates a new Workspace row + on-disk directory from it.
+// Form fields:
 //
-//	name           string  (required)
-//	slug           string  (optional — derived from name if empty)
-//	description    string  (optional)
-//	is_default_auto string ("true"/"false", optional, default false)
-//	is_available_manual string ("true"/"false", optional, default true)
-//	archive        file    (required) — .zip containing a single top-level
-//	                                    "home/" or the workspace files
-//	                                    directly at root
+//	name                string  (required)
+//	slug                string  (optional — derived from name if empty)
+//	description         string  (optional)
+//	is_default_auto     string  ("true"/"false", optional, default false)
+//	is_available_manual string  ("true"/"false", optional, default true)
+//	archive             file    (required) — see "Archive shapes" below
 //
-// The zip's content is validated against the path-traversal /
-// hidden-files / size rules before anything lands on disk. Partial
-// failures clean up the destination directory so the operator can retry.
+// Archive shapes accepted (auto-detected by detectArchiveLayout):
+//
+//  1. "home only" — every entry starts with `home/`. Stripped on extract
+//     so files land at <ws>/home/. The historical shape.
+//
+//  2. "bare home" — no recognised top-level dir prefix. Treated as a
+//     home/ payload too, landing at <ws>/home/. Backwards-compat.
+//
+//  3. "multi-folder" — every entry starts with one of the three known
+//     top-level dirs (`home/`, `frontend-src/`, `frontend-dist/`). Each
+//     entry is routed to its matching subdir on the workspace. Operator
+//     can ship any subset (e.g. only `frontend-dist/` to refresh a
+//     compiled bundle without touching home).
+//
+// The zip's content is validated against the path-traversal / size
+// rules before anything lands on disk. Partial failures clean up the
+// destination directory so the operator can retry.
 func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(maxWorkspaceUploadBytes); err != nil {
 		writeError(w, http.StatusBadRequest, "parse upload: "+err.Error())
@@ -109,7 +121,6 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 	}
 
 	hostPath := filepath.Join(h.Cfg.WorkspaceDir, slug)
-	homeDir := filepath.Join(hostPath, tenant.WorkspaceHomeSubdir)
 
 	// Reject if the slug is already in use on disk — overwriting an existing
 	// workspace via upload would be a foot-gun.
@@ -130,10 +141,13 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	// Extract into home/. The cleanup path removes the entire workspace dir
-	// on extraction failure so the operator doesn't see a half-written tree.
+	// Extract into the workspace root. The extractor inspects the layout
+	// and routes each entry to the matching subdir (home/, frontend-src/,
+	// or frontend-dist/). The cleanup path removes the entire workspace
+	// dir on extraction failure so the operator doesn't see a half-
+	// written tree.
 	cleanup := func() { _ = os.RemoveAll(hostPath) }
-	if err := extractWorkspaceZip(zipReader, homeDir); err != nil {
+	if err := extractWorkspaceZip(zipReader, hostPath); err != nil {
 		cleanup()
 		writeError(w, http.StatusInternalServerError, "extract: "+err.Error())
 		return
@@ -163,9 +177,110 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusCreated, summarizeWorkspace(ws))
 }
 
+// workspaceTopLevelSubdirs lists the directories an admin-managed
+// workspace owns on disk. They're the only top-level prefixes the
+// multi-folder upload layout accepts; any other top-level name forces
+// the legacy "everything is home/" interpretation.
+var workspaceTopLevelSubdirs = []string{
+	tenant.WorkspaceHomeSubdir,         // "home"
+	tenant.WorkspaceFrontendSrcSubdir,  // "frontend-src"
+	tenant.WorkspaceFrontendDistSubdir, // "frontend-dist"
+}
+
+// archiveLayout describes how to interpret the uploaded zip.
+type archiveLayout int
+
+const (
+	// layoutHomeStripped: every entry starts with `home/`. Strip that
+	// prefix on extract; everything lands under <ws>/home/.
+	layoutHomeStripped archiveLayout = iota
+	// layoutBareHome: no recognised top-level dir prefix. Treat as a
+	// raw home payload — entries land at <ws>/home/<entry>. Backwards-
+	// compat with the original single-subtree upload.
+	layoutBareHome
+	// layoutMultiFolder: every entry starts with one of the known
+	// workspace subdirs (home/, frontend-src/, frontend-dist/). Each
+	// entry routes to its matching subdir as-is.
+	layoutMultiFolder
+)
+
+// detectArchiveLayout inspects the zip's top-level names once and picks
+// the layout. Empty archives are treated as layoutBareHome (the writer
+// path no-ops on zero entries).
+func detectArchiveLayout(zr *zip.Reader) archiveLayout {
+	allowed := make(map[string]struct{}, len(workspaceTopLevelSubdirs))
+	for _, s := range workspaceTopLevelSubdirs {
+		allowed[s] = struct{}{}
+	}
+	seenTops := make(map[string]struct{})
+	anyEntry := false
+	for _, f := range zr.File {
+		name := filepath.ToSlash(f.Name)
+		if name == "" {
+			continue
+		}
+		anyEntry = true
+		// Top-level segment of the entry name.
+		top := name
+		if i := strings.IndexByte(name, '/'); i >= 0 {
+			top = name[:i]
+		}
+		if _, ok := allowed[top]; !ok {
+			// Any unknown top-level name forces the legacy bare-home
+			// interpretation. Mixing 'home/x' with 'random.txt' would
+			// land random.txt at <ws>/home/random.txt — which is the
+			// historical behaviour we don't want to regress.
+			return layoutBareHome
+		}
+		seenTops[top] = struct{}{}
+	}
+	if !anyEntry {
+		return layoutBareHome
+	}
+	// All tops are known workspace subdirs.
+	if _, onlyHome := seenTops[tenant.WorkspaceHomeSubdir]; onlyHome && len(seenTops) == 1 {
+		return layoutHomeStripped
+	}
+	return layoutMultiFolder
+}
+
+// archivePathForLayout converts a raw zip entry name to the relative path
+// (forward-slashed) under the workspace root, applying the layout's
+// stripping/routing rule. Returns ("", false) for entries that should be
+// skipped entirely (e.g. the empty / placeholder dir entry "home").
+func archivePathForLayout(rawName string, layout archiveLayout) (string, bool) {
+	name := filepath.ToSlash(rawName)
+	if name == "" {
+		return "", false
+	}
+	switch layout {
+	case layoutHomeStripped:
+		// home/foo → home/foo (already prefixed; just keep it)
+		// Operators sometimes ship a "home" placeholder dir entry —
+		// MkdirAll for home/ runs once on workspace setup, so no work.
+		if name == "home" || name == "home/" {
+			return "", false
+		}
+		return name, true
+	case layoutBareHome:
+		// foo → home/foo
+		return tenant.WorkspaceHomeSubdir + "/" + name, true
+	case layoutMultiFolder:
+		// home/foo → home/foo (no rewrite). frontend-src/foo → frontend-src/foo.
+		// Skip the placeholder top-level dir entries — the workspace
+		// setup already MkdirAll'd them.
+		for _, top := range workspaceTopLevelSubdirs {
+			if name == top || name == top+"/" {
+				return "", false
+			}
+		}
+		return name, true
+	}
+	return "", false
+}
+
 // validateWorkspaceZip walks the archive and rejects MALICIOUS inputs only:
 //   - paths with .. or absolute paths (path traversal)
-//   - paths outside the expected "home/" prefix when used
 //   - symlinks / device files (non-regular)
 //   - more than maxWorkspaceExtractedFiles entries
 //   - more than maxWorkspaceExtractedBytes total uncompressed
@@ -182,13 +297,10 @@ func validateWorkspaceZip(zr *zip.Reader) error {
 	}
 
 	var total int64
-	stripHome := allEntriesShareHomePrefix(zr)
+	layout := detectArchiveLayout(zr)
 	for _, f := range zr.File {
-		rel := filepath.ToSlash(f.Name)
-		if stripHome {
-			rel = strings.TrimPrefix(rel, "home/")
-		}
-		if rel == "" {
+		rel, keep := archivePathForLayout(f.Name, layout)
+		if !keep {
 			continue
 		}
 		if strings.HasPrefix(rel, "/") || strings.Contains(rel, "\\") {
@@ -201,10 +313,15 @@ func validateWorkspaceZip(zr *zip.Reader) error {
 		if !f.FileInfo().Mode().IsRegular() && !f.FileInfo().IsDir() {
 			return fmt.Errorf("entry %q is not a regular file or directory (no symlinks / device files)", f.Name)
 		}
-		// Runtime files don't count toward the byte cap — they'll be skipped
-		// on extract. Only "real" workspace content contributes to total.
-		if shouldHideTenantPath(cleaned, f.FileInfo().IsDir()) {
-			continue
+		// shouldHideTenantPath only knows about home-subtree paths. Apply
+		// the predicate to the home-relative slice of the cleaned path.
+		// Anything outside home/ (frontend-src/, frontend-dist/) doesn't
+		// get the runtime-skip treatment — those directories don't have
+		// runtime state semantics.
+		if homeRel, isHome := strings.CutPrefix(cleaned, tenant.WorkspaceHomeSubdir+"/"); isHome {
+			if shouldHideTenantPath(homeRel, f.FileInfo().IsDir()) {
+				continue
+			}
 		}
 		total += int64(f.UncompressedSize64)
 		if total > maxWorkspaceExtractedBytes {
@@ -214,60 +331,34 @@ func validateWorkspaceZip(zr *zip.Reader) error {
 	return nil
 }
 
-// allEntriesShareHomePrefix returns true when every non-empty entry in the
-// archive starts with "home/". That lets us accept BOTH:
+// extractWorkspaceZip writes the archive contents into dst (the workspace
+// host_path). Each entry is routed to its matching subdir based on the
+// detected layout — see archiveLayout for the three accepted shapes.
+// Assumes validateWorkspaceZip already passed (this function does NOT
+// re-check for malicious paths beyond a final containment assert).
 //
-//	(a) archive structured as home/config.json, home/workspace/AGENT.md ...
-//	    → strip the "home/" prefix on extract so it lands at <ws>/home/...
-//
-//	(b) archive structured as config.json, workspace/AGENT.md ...
-//	    → no strip, lands at <ws>/home/...
-//
-// Operators tend to zip either shape; this avoids forcing them to know
-// which one the server wants.
-func allEntriesShareHomePrefix(zr *zip.Reader) bool {
-	any := false
-	for _, f := range zr.File {
-		name := filepath.ToSlash(f.Name)
-		if name == "" {
-			continue
-		}
-		if !strings.HasPrefix(name, "home/") && name != "home" {
-			return false
-		}
-		any = true
-	}
-	return any
-}
-
-// extractWorkspaceZip writes the archive contents into dst. Assumes
-// validateWorkspaceZip already passed (this function does NOT re-check
-// for malicious paths beyond a final containment assert).
-//
-// Runtime-only entries (sessions/, whatsapp/, state/, *.pid, etc.) are
-// silently skipped — they're either re-created by the launcher on first
-// boot or owned exclusively by the provisioner. Lets operators upload a
-// zip of a live tenant volume without curating it.
+// Runtime-only entries (sessions/, whatsapp/, state/, *.pid, etc.) inside
+// the home/ subtree are silently skipped — they're either re-created by
+// the launcher on first boot or owned exclusively by the provisioner.
+// Lets operators upload a zip of a live tenant volume without curating it.
 func extractWorkspaceZip(zr *zip.Reader, dst string) error {
-	stripHome := allEntriesShareHomePrefix(zr)
+	layout := detectArchiveLayout(zr)
 	dstAbs, err := filepath.Abs(dst)
 	if err != nil {
 		return err
 	}
 	for _, f := range zr.File {
-		rel := filepath.ToSlash(f.Name)
-		if stripHome {
-			rel = strings.TrimPrefix(rel, "home/")
-		}
-		if rel == "" {
+		rel, keep := archivePathForLayout(f.Name, layout)
+		if !keep {
 			continue
 		}
 		cleaned := filepath.ToSlash(filepath.Clean(filepath.FromSlash(rel)))
-		// Skip runtime-only entries silently. shouldHideTenantPath is the
-		// same predicate the file editor uses to hide these from the admin,
-		// so what gets dropped here is consistent with the rest of the UI.
-		if shouldHideTenantPath(cleaned, f.FileInfo().IsDir()) {
-			continue
+		// Runtime-skip applies only to the home/ subtree; see validator
+		// for the rationale.
+		if homeRel, isHome := strings.CutPrefix(cleaned, tenant.WorkspaceHomeSubdir+"/"); isHome {
+			if shouldHideTenantPath(homeRel, f.FileInfo().IsDir()) {
+				continue
+			}
 		}
 		target := filepath.Join(dst, filepath.FromSlash(rel))
 		// Final containment: even after validation, double-check abs path
