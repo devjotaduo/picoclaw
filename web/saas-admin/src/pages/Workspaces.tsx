@@ -644,10 +644,29 @@ function UploadWorkspaceDialog(props: {
             <code>home/</code>, <code>frontend-src/</code> e{" "}
             <code>frontend-dist/</code> na raiz do arquivo. Também aceita
             só os arquivos de <code>home/</code> direto na raiz (sem prefixo)
-            para compatibilidade. O backend detecta o layout e pula
-            automaticamente pastas runtime (<code>sessions/</code>,{" "}
-            <code>whatsapp/</code>, <code>state/</code>, etc.). Limite 50&nbsp;MB.
+            para compatibilidade. O backend pula automaticamente:
           </p>
+          <ul className="mt-1 text-xs text-zinc-400 list-disc pl-5">
+            <li>
+              dentro de <code>home/</code>: <code>sessions/</code>,{" "}
+              <code>whatsapp/</code>, <code>state/</code>, <code>logs/</code>,{" "}
+              <code>*.pid</code>, <code>launcher-auth.db</code>,{" "}
+              <code>litellm.key</code>
+            </li>
+            <li>
+              dentro de <code>frontend-src/</code>:{" "}
+              <code>node_modules/</code>, <code>.cache/</code>,{" "}
+              <code>.git/</code>, <code>dist/</code>, <code>.next/</code>,{" "}
+              <code>.svelte-kit/</code>, <code>.turbo/</code>{" "}
+              (rode <code>pnpm install</code> via &quot;Compilar frontend&quot;
+              depois)
+            </li>
+            <li>
+              <code>frontend-dist/</code>: nada é pulado &mdash; é o bundle
+              compilado servido pelo launcher
+            </li>
+          </ul>
+          <p className="mt-1 text-xs text-zinc-500">Limite 50&nbsp;MB no zip comprimido / 200&nbsp;MB descompactado.</p>
         </div>
 
         <div className="space-y-3">
