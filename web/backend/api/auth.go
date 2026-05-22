@@ -30,6 +30,14 @@ type LauncherAuthRouteOpts struct {
 	// non-nil and PasswordStore is nil, auth endpoints fail closed with a
 	// recovery message.
 	StoreError error
+	// AuthMode mirrors PICOCLAW_AUTH_MODE. When set to "trusted_gateway", the
+	// dashboard password flow is bypassed: /api/auth/status reports authenticated
+	// and initialized regardless of dashboardauth.db state because the upstream
+	// controlplane is responsible for auth (SeedDashboardPassword is skipped
+	// for Supabase-backed tenants, so the store stays empty by design).
+	// Without this, the launcher SPA's session guard would see initialized=false
+	// and redirect every request to /launcher-setup.
+	AuthMode string
 }
 
 type launcherAuthLoginBody struct {
@@ -58,6 +66,7 @@ func RegisterLauncherAuthRoutes(mux *http.ServeMux, opts LauncherAuthRouteOpts) 
 		store:         opts.PasswordStore,
 		storeErr:      opts.StoreError,
 		loginLimit:    newLoginRateLimiter(),
+		authMode:      opts.AuthMode,
 	}
 	mux.HandleFunc("POST /api/auth/login", h.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", h.handleLogout)
@@ -71,6 +80,10 @@ type launcherAuthHandlers struct {
 	store         PasswordStore
 	storeErr      error // set when the store failed to open; drives recovery messages
 	loginLimit    *loginRateLimiter
+	// authMode mirrors PICOCLAW_AUTH_MODE; "trusted_gateway" short-circuits
+	// /api/auth/status to authenticated+initialized=true (see field doc on
+	// LauncherAuthRouteOpts for the why).
+	authMode string
 }
 
 // isStoreInitialized safely queries the store.
@@ -166,6 +179,24 @@ func (h *launcherAuthHandlers) handleLogout(w http.ResponseWriter, r *http.Reque
 
 func (h *launcherAuthHandlers) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	// Trusted-gateway short-circuit: if /api/auth/status is being served at
+	// all under trusted_gateway mode, the upstream LauncherDashboardAuth
+	// middleware already verified the HMAC headers (unauthenticated requests
+	// get rejected before reaching this handler). Report fully ready so the
+	// SPA session guard doesn't redirect to /launcher-setup or /launcher-login.
+	// dashboardauth.db state is irrelevant in this mode — the controlplane
+	// owns auth.
+	if strings.EqualFold(strings.TrimSpace(h.authMode), "trusted_gateway") {
+		resp := launcherAuthStatusResponse{Authenticated: true, Initialized: true}
+		enc, err := json.Marshal(resp)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			writeErrorf(w, "marshal response failed: %v", err)
+			return
+		}
+		_, _ = w.Write(enc)
+		return
+	}
 	authed := false
 	if c, err := r.Cookie(middleware.LauncherDashboardCookieName); err == nil {
 		authed = subtle.ConstantTimeCompare([]byte(c.Value), []byte(h.sessionCookie)) == 1

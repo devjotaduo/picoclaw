@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Copy, Check, Sparkles, Bot, ExternalLink, PlusCircle, ScrollText, FolderTree, Link2 } from "lucide-react";
+import { ArrowLeft, Copy, Check, Sparkles, Bot, ExternalLink, PlusCircle, ScrollText, FolderTree, Link2, Mail } from "lucide-react";
 import {
   getTenant,
   getUsage,
@@ -14,6 +14,7 @@ import {
   createInvite,
   generateTenantMagicLink,
   consumeMagicLink,
+  resendCredentials,
 } from "@/api/tenants";
 import {
   getCRMContact,
@@ -105,6 +106,15 @@ export function TenantDetail() {
       setMagicLinkSummary("");
     },
     onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Falha ao gerar link." }),
+  });
+  // resendCredsM rotates the Supabase password and emails the owner with
+  // URL + login + new password + magic link. Confirmation dialog in the
+  // button handler warns the operator that the previous password stops
+  // working. Toast on success shows whether magic link was bundled too.
+  const resendCredsM = useMutation({
+    mutationFn: () => resendCredentials(id),
+    onError: (e: { error?: string }) =>
+      toast({ type: "error", message: e?.error ?? "Falha ao reenviar credenciais." }),
   });
   const consumeMagicM = useMutation({
     mutationFn: () => {
@@ -232,6 +242,30 @@ export function TenantDetail() {
             >
               <Link2 className="h-4 w-4" />
               {magicLinkM.isPending ? "Gerando..." : "Link de acesso"}
+            </Button>
+          )}
+          {isPlatformAdmin && tenant.supabase_user_id && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!confirm(
+                  "Isto vai gerar uma SENHA NOVA (a anterior deixa de funcionar) e enviar " +
+                    "por email para " + (tenant.owner_email || "o owner") + ", com URL + login + senha + magic link. Continuar?"
+                )) return;
+                resendCredsM.mutate(undefined, {
+                  onSuccess: (r) => toast({
+                    type: "success",
+                    message: "Email enviado para " + r.sent_to + ". " +
+                      (r.magic_link_in_email ? "Inclui magic link." : "Magic link falhou — apenas senha foi enviada."),
+                  }),
+                });
+              }}
+              disabled={resendCredsM.isPending}
+              title="Rotaciona a senha do owner no Supabase e envia URL + login + senha + magic link por email."
+            >
+              <Mail className="h-4 w-4" />
+              {resendCredsM.isPending ? "Enviando..." : "Reenviar credenciais"}
             </Button>
           )}
           {isPlatformAdmin && (

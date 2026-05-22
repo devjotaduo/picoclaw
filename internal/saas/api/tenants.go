@@ -509,5 +509,9 @@ func summarizeTenant(t *store.Tenant) map[string]any {
 		"crm_deal_id":                t.CRMDealID,
 		"workspace_id":               t.WorkspaceID,
 		"workspace_version_applied":  t.WorkspaceVersionApplied,
+		// supabase_user_id surfaced so the admin UI can gate the
+		// "Reenviar credenciais" button (only works for supabase-backed
+		// tenants; legacy local-auth tenants don't have a user to update).
+		"supabase_user_id":           t.SupabaseUserID,
 	}
 }

@@ -19,6 +19,10 @@ export type Tenant = {
   crm_contact_id?: number | null;
   workspace_id?: string | null;
   workspace_version_applied?: number | null;
+  // supabase_user_id is set when the tenant's dashboard login is backed
+  // by Supabase Auth (as opposed to the legacy local sessions table).
+  // The "Reenviar credenciais" admin action depends on this being non-null.
+  supabase_user_id?: string | null;
 };
 
 export type CreateTenantInput = {

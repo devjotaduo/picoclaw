@@ -69,6 +69,21 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 	}
 
 	target, _ := url.Parse(fmt.Sprintf("http://tenant-%s:18800", t.ID))
+
+	// Tenant-scoped login page. Served BY the controlplane (not the launcher)
+	// because the launcher in trusted_gateway mode doesn't authenticate users
+	// itself — the controlplane has to. The page POSTs directly to Supabase
+	// from the browser, sets the project-scoped cookie on .<baseDomain>, then
+	// redirects to the `next` URL. See serveTenantLogin for the HTML.
+	if r.Method == http.MethodGet && path.Clean("/"+strings.TrimPrefix(r.URL.Path, "/")) == "/login" {
+		if h.SupabaseConfigured() && t.SupabaseUserID != nil && *t.SupabaseUserID != "" {
+			h.serveTenantLogin(w, r, t)
+			return
+		}
+		// Tenant doesn't use Supabase auth — fall through to launcher (it
+		// has its own /launcher-login that the legacy local-auth path uses).
+	}
+
 	if isPublicTenantRoute(r.Method, r.URL.Path) {
 		h.proxyTenantRequest(w, r, target, nil)
 		return
@@ -302,18 +317,32 @@ func mapSupabaseRoleToTenantRole(role string) string {
 	}
 }
 
+// rejectSupabaseTenantAuth handles an unauthenticated tenant request when the
+// tenant uses Supabase Auth. API/WebSocket get 401; HTML pages get a 302 to
+// a tenant-scoped login page at /login on the SAME subdomain (NOT the apex
+// Supabase site_url — that's the admin login, a separate user table).
+//
+// Why same-subdomain instead of apex:
+//   - apex /login is the controlplane admin login (table `users`), which has
+//     nothing to do with Supabase `auth.users`. Login there succeeds but
+//     does not set the `sb-<projectRef>-auth-token` cookie this gateway
+//     looks for, so the user just bounces back here on next request.
+//   - same-subdomain /login serves a small HTML page (see serveTenantLogin)
+//     that POSTs directly to Supabase auth, sets the right cookie scoped
+//     to .<baseDomain>, then redirects to the original URL.
 func rejectSupabaseTenantAuth(w http.ResponseWriter, r *http.Request, siteURL string) {
 	p := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
 	if strings.HasPrefix(p, "/api/") || p == "/pico/ws" || strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	// Always send the user to /login on the SAME host. siteURL is intentionally
+	// ignored for the host portion; it stays apex-only for things like Supabase
+	// magic-link redirects that we configure in the Supabase dashboard.
+	_ = siteURL
 	target := "/login"
-	if siteURL != "" {
-		target = strings.TrimRight(siteURL, "/") + "/login"
-	}
 	if r.URL != nil && r.URL.RequestURI() != "" {
-		target += "?next=" + url.QueryEscape("https://"+r.Host+r.URL.RequestURI())
+		target += "?next=" + url.QueryEscape(r.URL.RequestURI())
 	}
 	http.Redirect(w, r, target, http.StatusFound)
 }
@@ -334,7 +363,11 @@ func isPublicTenantRoute(method, rawPath string) bool {
 		return false
 	}
 	p := path.Clean("/" + strings.TrimPrefix(rawPath, "/"))
-	return p == "/launcher-login" || p == "/launcher-setup"
+	// /login is served BY the controlplane (see serveTenantLogin) before the
+	// launcher proxy ever runs, so this branch is mostly defensive — but
+	// listing it here keeps the predicate honest and unblocks the proxy path
+	// if a future refactor stops short-circuiting the request.
+	return p == "/launcher-login" || p == "/launcher-setup" || p == "/login"
 }
 
 func isPublicTenantStatic(method, rawPath string) bool {

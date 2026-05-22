@@ -175,6 +175,30 @@ func (s *SupabaseClient) GenerateMagicLink(email, subdomain string) (string, err
 	return link.ActionLink, nil
 }
 
+// UpdateUserPassword resets the Supabase user's password to newPassword.
+// Used by the admin "resend credentials" flow to rotate a forgotten /
+// leaked password before mailing a fresh one. EmailConfirm stays true
+// because the user was already confirmed at create time.
+func (s *SupabaseClient) UpdateUserPassword(userIDStr, newPassword string) error {
+	if s == nil {
+		return ErrSupabaseNotConfigured
+	}
+	if newPassword == "" {
+		return fmt.Errorf("update password: empty password")
+	}
+	id, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return fmt.Errorf("parse user id: %w", err)
+	}
+	if _, err := s.admin.AdminUpdateUser(types.AdminUpdateUserRequest{
+		UserID:   id,
+		Password: newPassword,
+	}); err != nil {
+		return fmt.Errorf("supabase update user: %w", err)
+	}
+	return nil
+}
+
 // DeleteTenantUser removes the user from Supabase. Idempotent at the caller
 // site: the lifecycle delete logs and continues if the user is already gone.
 func (s *SupabaseClient) DeleteTenantUser(userIDStr string) error {
