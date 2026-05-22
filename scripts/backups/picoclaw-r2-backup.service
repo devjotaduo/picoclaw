@@ -1,0 +1,19 @@
+[Unit]
+Description=Picoclaw daily tenant backup to Cloudflare R2 (restic)
+Documentation=https://github.com/devjotaduo/picoclaw/blob/main/docs/operations/tenant-backups.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/picoclaw-r2-backup.sh
+User=root
+Group=root
+# Large repos can take a while; cap so a stuck network never burns forever.
+TimeoutStartSec=2h
+# Low priority — backups must never starve real workload.
+Nice=15
+IOSchedulingClass=idle
+# Don't kill the deploy timer if both happen to fire in the same second.
+# (Lock is also enforced inside the script via flock.)
