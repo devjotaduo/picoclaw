@@ -196,3 +196,26 @@ export async function writeTenantFile(id: string, path: string, content: string)
     body: JSON.stringify({ path, content }),
   });
 }
+
+// ── Magic link ─────────────────────────────────────────────
+// Operator-generated URL that lets a prospect/lead click and land
+// directly inside the tenant's dashboard chatting with the agent — no
+// password, no Supabase login. Used by the onboarding tenant funnel.
+//
+// Token is HMAC-signed by the controlplane with the gateway shared
+// secret. Setting MaxAge via the consumption endpoint sets a per-tenant
+// HttpOnly cookie so subsequent navigation works without keeping the
+// token in the URL bar.
+
+export type MagicLink = {
+  url: string;
+  token: string;
+  expires_at: string;
+};
+
+export async function generateTenantMagicLink(id: string, ttlSeconds?: number) {
+  return api<MagicLink>(`/api/v1/tenants/${encodeURIComponent(id)}/magic-link`, {
+    method: "POST",
+    body: JSON.stringify({ ttl_seconds: ttlSeconds ?? 0 }),
+  });
+}

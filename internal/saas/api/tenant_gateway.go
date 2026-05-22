@@ -74,6 +74,25 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		return
 	}
 
+	// Magic link click: /m/<token> → validate, set cookie, redirect. Handled
+	// BEFORE auth so visitors arriving via a shared link don't bounce off
+	// the dashboard login page.
+	if h.consumeMagicLink(w, r, t) {
+		return
+	}
+
+	// Magic link visitor: if the browser has a valid magic cookie for THIS
+	// tenant, proxy the request as an anonymous visitor (role=public). No
+	// dashboard login, no Supabase JWT. Operator-issued and time-bounded by
+	// the token's expiry, so revoking access is "rotate the gateway secret
+	// + recreate tenant" — there's no per-link revoke list yet.
+	if claims, ok := h.magicLinkClaimsFromCookie(r, t); ok {
+		h.proxyTenantRequest(w, r, target, func(req *http.Request) {
+			h.signMagicVisitorRequest(req, t, claims)
+		})
+		return
+	}
+
 	// Public-onboarding tenants accept anonymous traffic on a tiny set of chat
 	// endpoints. Skip Supabase JWT but still sign trusted_gateway HMAC so the
 	// launcher knows the request came from the controlplane. Sentinel values
