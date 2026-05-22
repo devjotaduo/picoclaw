@@ -228,7 +228,7 @@ func parseBufferResponse(body []byte, httpStatus int) (updateID, status, dueAt, 
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(body, &raw); err != nil {
 		bufErr = fmt.Sprintf("unparseable response from Buffer (HTTP %d)", httpStatus)
-		return
+		return updateID, status, dueAt, shareURL, bufErr
 	}
 
 	// Error field — present on failure.
@@ -263,5 +263,5 @@ func parseBufferResponse(body []byte, httpStatus int) (updateID, status, dueAt, 
 		}
 	}
 
-	return
+	return updateID, status, dueAt, shareURL, bufErr
 }
