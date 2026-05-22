@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -6,9 +6,20 @@ import {
   listWorkspaceMCP,
   putWorkspaceMCP,
   deleteWorkspaceMCP,
+  type MCPActivation,
   type MCPCatalogEntry,
 } from "@/api/workspace-mcp";
 import { getWorkspace } from "@/api/workspaces";
+
+function extractApiErrorMessage(e: unknown): string {
+  if (e && typeof e === "object" && "error" in e && typeof (e as { error: unknown }).error === "string") {
+    return (e as { error: string }).error;
+  }
+  if (e instanceof Error) {
+    return e.message;
+  }
+  return "Erro desconhecido";
+}
 
 export default function WorkspaceMcp() {
   const { id = "" } = useParams<{ id: string }>();
@@ -21,6 +32,16 @@ export default function WorkspaceMcp() {
   });
 
   const [modal, setModal] = useState<MCPCatalogEntry | null>(null);
+
+  const deactivate = useMutation({
+    mutationFn: (catalogId: string) => deleteWorkspaceMCP(id, catalogId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workspace-mcp", id] });
+    },
+    onError: (e: unknown) => {
+      alert(extractApiErrorMessage(e));
+    },
+  });
 
   if (ws.isLoading || catalog.isLoading || activations.isLoading) {
     return <div className="p-6">Carregando…</div>;
@@ -46,6 +67,7 @@ export default function WorkspaceMcp() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {catalog.data?.entries.map((e) => {
           const active = activeMap.get(e.id);
+          const isDeactivating = deactivate.isPending && deactivate.variables === e.id;
           return (
             <div key={e.id} className="border rounded-lg p-4 bg-white space-y-2 flex flex-col">
               <div className="flex items-center justify-between">
@@ -68,6 +90,7 @@ export default function WorkspaceMcp() {
               </div>
               <div className="flex gap-2 pt-2 border-t">
                 <button
+                  type="button"
                   className="text-xs px-3 py-1 border rounded hover:bg-gray-50"
                   onClick={() => setModal(e)}
                 >
@@ -75,14 +98,15 @@ export default function WorkspaceMcp() {
                 </button>
                 {active && (
                   <button
-                    className="text-xs px-3 py-1 border rounded text-red-600 hover:bg-red-50"
-                    onClick={async () => {
+                    type="button"
+                    className="text-xs px-3 py-1 border rounded text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    disabled={isDeactivating}
+                    onClick={() => {
                       if (!confirm(`Desativar ${e.name}?`)) return;
-                      await deleteWorkspaceMCP(id, e.id);
-                      qc.invalidateQueries({ queryKey: ["workspace-mcp", id] });
+                      deactivate.mutate(e.id);
                     }}
                   >
-                    Desativar
+                    {isDeactivating ? "Desativando…" : "Desativar"}
                   </button>
                 )}
                 <a
@@ -103,6 +127,7 @@ export default function WorkspaceMcp() {
         <ActivationModal
           entry={modal}
           workspaceId={id}
+          active={activeMap.get(modal.id)}
           onClose={() => {
             setModal(null);
             qc.invalidateQueries({ queryKey: ["workspace-mcp", id] });
@@ -116,34 +141,58 @@ export default function WorkspaceMcp() {
 function ActivationModal({
   entry,
   workspaceId,
+  active,
   onClose,
 }: {
   entry: MCPCatalogEntry;
   workspaceId: string;
+  active?: MCPActivation;
   onClose: () => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string>("");
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
 
   const save = useMutation({
     mutationFn: () =>
       putWorkspaceMCP(workspaceId, entry.id, { enabled: true, credentials: values }),
     onSuccess: onClose,
     onError: (e: unknown) => {
-      if (e && typeof e === "object" && "error" in e && typeof (e as { error: unknown }).error === "string") {
-        setError((e as { error: string }).error);
-      } else if (e instanceof Error) {
-        setError(e.message);
-      } else {
-        setError("Erro desconhecido");
-      }
+      setError(extractApiErrorMessage(e));
     },
   });
 
+  const showEditHint =
+    entry.credentials.length > 0 &&
+    !!active?.enabled &&
+    Object.keys(active.credentials_masked).length > 0;
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
-        <h2 className="text-lg font-semibold">Ativar {entry.name}</h2>
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      onClick={onClose}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mcp-modal-title"
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            onClose();
+          }
+        }}
+        className="bg-white rounded-lg p-6 w-full max-w-md space-y-4 outline-none"
+      >
+        <h3 id="mcp-modal-title" className="text-lg font-semibold">
+          Ativar {entry.name}
+        </h3>
         <p className="text-sm text-gray-600">{entry.description}</p>
         {entry.credentials.length === 0 ? (
           <p className="text-sm text-gray-700">
@@ -151,6 +200,11 @@ function ActivationModal({
           </p>
         ) : (
           <div className="space-y-3">
+            {showEditHint && (
+              <p className="text-xs text-gray-500">
+                Deixe em branco para manter o valor atual.
+              </p>
+            )}
             {entry.credentials.map((c) => (
               <div key={c.key}>
                 <label className="block text-sm font-medium">
@@ -171,10 +225,15 @@ function ActivationModal({
         )}
         {error && <div className="text-sm text-red-600">{error}</div>}
         <div className="flex justify-end gap-2 pt-2">
-          <button className="px-3 py-1 border rounded text-sm" onClick={onClose}>
+          <button
+            type="button"
+            className="px-3 py-1 border rounded text-sm"
+            onClick={onClose}
+          >
             Cancelar
           </button>
           <button
+            type="button"
             className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
             disabled={save.isPending}
             onClick={() => {
