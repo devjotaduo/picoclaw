@@ -787,6 +787,25 @@ type SlackWebhookTarget struct {
 	IconEmoji  string       `json:"icon_emoji,omitempty" yaml:"-"`
 }
 
+// PublicWebSettings configures the anonymous public-web SSE channel
+// (pkg/channels/publicweb). Values drive the launcher's HTTP layer
+// (rate limiting + captcha gating); the channel itself just carries
+// the flags. Empty / zero values pick sensible defaults at runtime.
+type PublicWebSettings struct {
+	// RateLimitPerIP is the maximum number of inbound messages an IP may
+	// send per minute. Enforced by the launcher's HTTP handler.
+	RateLimitPerIP int `json:"rate_limit_per_ip,omitempty" yaml:"rate_limit_per_ip,omitempty"`
+
+	// SessionTTLSeconds is the maximum idle time before a session is
+	// considered expired and evicted from the in-memory map.
+	SessionTTLSeconds int `json:"session_ttl_seconds,omitempty" yaml:"session_ttl_seconds,omitempty"`
+
+	// RequireCaptchaHeader, when true, causes the HTTP handler to demand a
+	// validated captcha proof header on every inbound POST. The channel
+	// itself does not validate captchas; it only carries the flag.
+	RequireCaptchaHeader bool `json:"require_captcha_header,omitempty" yaml:"require_captcha_header,omitempty"`
+}
+
 type HeartbeatConfig struct {
 	Enabled  bool `json:"enabled"  env:"PICOCLAW_HEARTBEAT_ENABLED"`
 	Interval int  `json:"interval" env:"PICOCLAW_HEARTBEAT_INTERVAL"` // minutes, min 5
