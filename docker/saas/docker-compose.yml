@@ -143,6 +143,11 @@ services:
   # launcher container ships the `agent-browser` Node CLI and connects
   # here via $BROWSER_CDP_URL — no per-tenant Chromium. See
   # docker/Dockerfile.browser-sidecar for the security envelope.
+  #
+  # Port 9222 is bound to 127.0.0.1 (host-only) so an operator can run
+  # `export BROWSER_CDP_URL=http://localhost:9222` from a shell on the
+  # host for quick CDP probes / tests. NEVER expose to 0.0.0.0 — CDP is
+  # fully privileged on whatever profile the headless Chromium runs.
   browser-sidecar:
     image: picoclaw/browser-sidecar:latest
     build:
@@ -151,16 +156,20 @@ services:
     container_name: browser-sidecar
     restart: unless-stopped
     init: true
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /home/chrome/.config
+    # NOT read_only — Chromium needs to write to ~/.cache, ~/.local,
+    # /tmp/.org.chromium.Chromium.* etc. Tried tmpfs over /home/chrome
+    # but ownership doesn't survive a tmpfs mount on Docker so chromium
+    # can't chown its profile dirs. The other security envelope still
+    # applies (cap_drop=ALL, no-new-privileges, dedicated user, no
+    # exposed ports beyond CDP on host-loopback).
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     networks:
       - saas_llm
+    ports:
+      - "127.0.0.1:9222:9222"
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9222/json/version || exit 1"]
       interval: 30s
@@ -202,6 +211,13 @@ services:
       dockerproxy:
         condition: service_started
       opencrm:
+        condition: service_started
+      # Browser sidecar is a tenant-runtime dependency (controlplane itself
+      # doesn't talk to CDP), but listing it here means `docker compose up
+      # -d controlplane` (without --no-deps) brings the sidecar up alongside
+      # everything else. service_started instead of service_healthy so an
+      # unhealthy Chromium doesn't block the controlplane from booting.
+      browser-sidecar:
         condition: service_started
     ports:
       - "127.0.0.1:18801:8080"

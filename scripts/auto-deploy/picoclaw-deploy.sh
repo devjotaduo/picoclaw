@@ -92,6 +92,24 @@ if ! docker compose -p "$COMPOSE_PROJECT" \
   exit 1
 fi
 
+# Ensure peer services that controlplane benefits from but doesn't bring
+# up itself (due to --no-deps above) are running. These services have
+# restart: unless-stopped in compose, so once started they survive
+# reboots — this block only matters on a cold host or after an explicit
+# `docker compose down`. `up -d` is a no-op when the container is
+# already running with the same image, so safe to call every cycle.
+for peer in browser-sidecar; do
+  if ! docker inspect "$peer" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
+    log "peer service $peer not running — bringing it up"
+    if ! docker compose -p "$COMPOSE_PROJECT" \
+                        -f "$COMPOSE_FILE" \
+                        --env-file "$ENV_FILE" \
+                        up -d --no-deps "$peer"; then
+      log "WARN: failed to start $peer (continuing — tenants without it lose browser tooling only)"
+    fi
+  fi
+done
+
 # Give the healthcheck a moment, then report. We DON'T fail the deploy on
 # a still-starting health state — the timer's next tick won't re-deploy
 # (image ID matches now) so the recreation is settled regardless.
