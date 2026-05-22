@@ -11,9 +11,10 @@ visibility: global
 - Dono ou Rafael pediu "cria uma arte para...".
 
 ## Antes de gerar
-1. Consultar `memory/marketing.md` → paleta, tipografia, estilo, exemplos aprovados.
-2. Consultar `memory/empresa.md` → nome, segmento, posicionamento.
-3. Se faltar identidade visual, **perguntar ao dono** antes de gerar. Não inventar.
+1. Consultar `marketing/design-instagram` — Seção 5 para o template de prompt do tipo de post, Seção 6 para safe zones.
+2. Consultar `memory/marketing.md` → paleta, tipografia, estilo, exemplos aprovados.
+3. Consultar `memory/empresa.md` → nome, segmento, posicionamento.
+4. Se faltar identidade visual, **perguntar ao dono** antes de gerar. Não inventar.
 
 ## Formatos suportados
 | Formato | Resolução |

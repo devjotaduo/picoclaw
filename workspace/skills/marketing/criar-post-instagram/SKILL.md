@@ -11,6 +11,12 @@ visibility: global
 - Quando data comemorativa ou campanha aparecer em `memory/marketing.md`.
 - Quando Lia quiser propor conteúdo proativo para feed, story, reel ou carrossel.
 
+> **Antes de escrever qualquer copy**, consultar `marketing/design-instagram`:
+> - Seção 2 para identificar o tipo de post
+> - Seção 3 para a fórmula de copy do tipo
+> - Seção 4 para o gancho correto
+> - Seção 9 para hashtags por segmento
+
 ## Estrutura da legenda
 1. **Gancho** — 1ª linha, deve fazer parar de rolar.
 2. **Contexto** — 2 a 4 linhas explicando o tema.

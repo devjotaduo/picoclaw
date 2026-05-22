@@ -8,6 +8,7 @@ skills:
   - marketing/calendario-sazonal
   - marketing/catalogo-interativo
   - marketing/criar-post-instagram
+  - marketing/design-instagram
   - marketing/design-visual
   - marketing/gerar-imagem-post
   - marketing/publicar-site-simples
