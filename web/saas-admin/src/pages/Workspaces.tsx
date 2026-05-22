@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Plus, Download, Hammer, Save, Trash2, FileText, FolderTree, CheckCircle2, XCircle, ShieldCheck } from "lucide-react";
+import { Plus, Download, Hammer, Save, Trash2, FileText, FolderTree, CheckCircle2, XCircle, ShieldCheck, Upload } from "lucide-react";
 
 import {
   buildWorkspaceFrontend,
@@ -11,6 +11,7 @@ import {
   listWorkspaces,
   readWorkspaceFile,
   updateWorkspace,
+  uploadWorkspace,
   validateWorkspace,
   writeWorkspaceFile,
   type Workspace,
@@ -89,6 +90,41 @@ export function Workspaces() {
     },
   });
 
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadName, setUploadName] = useState("");
+  const [uploadSlug, setUploadSlug] = useState("");
+  const [uploadDescription, setUploadDescription] = useState("");
+  const [uploadDefaultAuto, setUploadDefaultAuto] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState<string>("");
+
+  const uploadM = useMutation({
+    mutationFn: () => {
+      if (!uploadFile) throw new Error("Selecione um arquivo .zip");
+      if (!uploadName.trim()) throw new Error("Preencha o nome");
+      return uploadWorkspace({
+        name: uploadName.trim(),
+        slug: uploadSlug.trim() || undefined,
+        description: uploadDescription.trim() || undefined,
+        is_default_auto: uploadDefaultAuto,
+        is_available_manual: true,
+        archive: uploadFile,
+      });
+    },
+    onSuccess: async (ws) => {
+      await qc.invalidateQueries({ queryKey: ["workspaces"] });
+      setSelectedId(ws.id);
+      setUploadOpen(false);
+      setUploadName("");
+      setUploadSlug("");
+      setUploadDescription("");
+      setUploadDefaultAuto(false);
+      setUploadFile(null);
+      setUploadError("");
+    },
+    onError: (e: Error) => setUploadError(e.message || "Falha no upload"),
+  });
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
@@ -102,10 +138,38 @@ export function Workspaces() {
         >
           <Download className="size-4" /> Importar do $PICOCLAW_HOME
         </Button>
+        <Button variant="secondary" onClick={() => setUploadOpen(true)}>
+          <Upload className="size-4" /> Upload (.zip)
+        </Button>
         <Button onClick={() => createM.mutate()} disabled={createM.isPending}>
           <Plus className="size-4" /> Novo workspace
         </Button>
       </PageHeader>
+
+      {uploadOpen && (
+        <UploadWorkspaceDialog
+          name={uploadName}
+          setName={setUploadName}
+          slug={uploadSlug}
+          setSlug={setUploadSlug}
+          description={uploadDescription}
+          setDescription={setUploadDescription}
+          defaultAuto={uploadDefaultAuto}
+          setDefaultAuto={setUploadDefaultAuto}
+          file={uploadFile}
+          setFile={setUploadFile}
+          error={uploadError}
+          isPending={uploadM.isPending}
+          onCancel={() => {
+            setUploadOpen(false);
+            setUploadError("");
+          }}
+          onSubmit={() => {
+            setUploadError("");
+            uploadM.mutate();
+          }}
+        />
+      )}
       <div className="min-h-0 flex-1 overflow-hidden">
         <div className="mx-auto grid h-full min-h-0 max-w-[1280px] grid-cols-[260px_minmax(0,1fr)] gap-4 p-4">
           <aside className="min-h-0 overflow-hidden">
@@ -532,5 +596,152 @@ function ValidationPanel({ workspaceId }: { workspaceId: string }) {
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+function UploadWorkspaceDialog(props: {
+  name: string;
+  setName: (v: string) => void;
+  slug: string;
+  setSlug: (v: string) => void;
+  description: string;
+  setDescription: (v: string) => void;
+  defaultAuto: boolean;
+  setDefaultAuto: (v: boolean) => void;
+  file: File | null;
+  setFile: (f: File | null) => void;
+  error: string;
+  isPending: boolean;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+
+  const pickedFile = (f: File | undefined | null) => {
+    if (!f) return;
+    if (!f.name.toLowerCase().endsWith(".zip")) {
+      // Friendlier than the backend's 415 — catch the obvious wrong type
+      // before sending.
+      props.setFile(null);
+      return;
+    }
+    props.setFile(f);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-lg space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-5 text-sm">
+        <div>
+          <h2 className="text-lg font-semibold text-zinc-100">Upload de workspace</h2>
+          <p className="mt-1 text-xs text-zinc-400">
+            Suba um <code>.zip</code> com o conteúdo de <code>home/</code> do
+            workspace. Aceita tanto <code>home/config.json + home/workspace/AGENT.md...</code>
+            quanto <code>config.json + workspace/AGENT.md...</code> na raiz —
+            o backend detecta a forma. Limite 50&nbsp;MB.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
+              Nome
+            </label>
+            <Input
+              value={props.name}
+              onChange={(e) => props.setName(e.target.value)}
+              placeholder="Ex: Clínica X — Atendimento"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
+              Slug <span className="text-zinc-500">(opcional — derivado do nome)</span>
+            </label>
+            <Input
+              value={props.slug}
+              onChange={(e) => props.setSlug(e.target.value)}
+              placeholder="clinica-x"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
+              Descrição <span className="text-zinc-500">(opcional)</span>
+            </label>
+            <Textarea
+              value={props.description}
+              onChange={(e) => props.setDescription(e.target.value)}
+              rows={2}
+            />
+          </div>
+
+          <label
+            htmlFor="workspace-zip-input"
+            className={[
+              "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed p-6 text-center text-xs transition-colors",
+              dragOver ? "border-blue-500 bg-blue-950/30" : "border-zinc-700 bg-zinc-950 hover:bg-zinc-900",
+            ].join(" ")}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              pickedFile(e.dataTransfer.files?.[0]);
+            }}
+          >
+            <Upload className="size-5 text-zinc-400" />
+            {props.file ? (
+              <div>
+                <div className="font-medium text-zinc-200">{props.file.name}</div>
+                <div className="text-zinc-500">
+                  {(props.file.size / 1024 / 1024).toFixed(2)} MB · clique para trocar
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="text-zinc-200">Arraste o .zip aqui</div>
+                <div className="text-zinc-500">ou clique para escolher</div>
+              </div>
+            )}
+            <input
+              id="workspace-zip-input"
+              type="file"
+              accept=".zip,application/zip"
+              className="hidden"
+              onChange={(e) => pickedFile(e.target.files?.[0])}
+            />
+          </label>
+
+          <label className="flex items-center gap-2 text-xs text-zinc-300">
+            <input
+              type="checkbox"
+              checked={props.defaultAuto}
+              onChange={(e) => props.setDefaultAuto(e.target.checked)}
+            />
+            Marcar como workspace padrão pro auto-provisionamento
+            <span className="text-zinc-500">(só um workspace pode ter esse flag)</span>
+          </label>
+        </div>
+
+        {props.error && (
+          <div className="rounded border border-red-800 bg-red-950/50 px-3 py-2 text-xs text-red-300">
+            {props.error}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 border-t border-zinc-800 pt-3">
+          <Button variant="outline" onClick={props.onCancel} disabled={props.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={props.onSubmit}
+            disabled={props.isPending || !props.file || !props.name.trim()}
+          >
+            {props.isPending ? "Enviando..." : "Enviar e criar workspace"}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

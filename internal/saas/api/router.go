@@ -196,6 +196,7 @@ func (h *Handler) Routes() http.Handler {
 				// Workspaces — single source of truth for tenant content.
 				r.Get("/workspaces", h.handleListWorkspaces)
 				r.Post("/workspaces", h.handleCreateWorkspace)
+				r.Post("/workspaces/upload", h.handleUploadWorkspace)
 				r.Post("/workspaces/import-from-home", h.handleImportWorkspaceFromHome)
 				r.Get("/workspaces/{id}", h.handleGetWorkspace)
 				r.Put("/workspaces/{id}", h.handleUpdateWorkspace)

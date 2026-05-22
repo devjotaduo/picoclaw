@@ -145,3 +145,44 @@ export type WorkspaceValidation = {
 export async function validateWorkspace(id: string) {
   return api<WorkspaceValidation>(`/api/v1/workspaces/${encodeURIComponent(id)}/validate`);
 }
+
+// ── Upload workspace ─────────────────────────────────────────────────
+// Operator uploads a zip containing the workspace's home/ subtree
+// (config.json, .security.yml, auth.json, workspace/AGENT.md etc).
+// Backend validates (size cap, path traversal, hidden runtime files
+// blocked, zip-bomb defence) before writing anything to disk.
+//
+// Archive can be structured either way:
+//   (a) home/config.json, home/workspace/AGENT.md ... (with prefix)
+//   (b) config.json, workspace/AGENT.md ... (no prefix)
+// Backend detects which shape and adapts.
+
+export async function uploadWorkspace(input: {
+  name: string;
+  slug?: string;
+  description?: string;
+  is_default_auto?: boolean;
+  is_available_manual?: boolean;
+  archive: File;
+}) {
+  const fd = new FormData();
+  fd.set("name", input.name);
+  if (input.slug) fd.set("slug", input.slug);
+  if (input.description) fd.set("description", input.description);
+  if (input.is_default_auto !== undefined) fd.set("is_default_auto", String(input.is_default_auto));
+  if (input.is_available_manual !== undefined) fd.set("is_available_manual", String(input.is_available_manual));
+  fd.set("archive", input.archive);
+
+  // Note: don't set Content-Type header — the browser adds the boundary
+  // automatically when the body is a FormData.
+  const r = await fetch("/api/v1/workspaces/upload", {
+    method: "POST",
+    body: fd,
+    credentials: "include",
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(text || `HTTP ${r.status}`);
+  }
+  return (await r.json()) as Workspace;
+}
