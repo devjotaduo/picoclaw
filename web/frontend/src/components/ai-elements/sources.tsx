@@ -1,7 +1,7 @@
 "use client"
 
-import { IconChevronDown, IconExternalLink } from "@tabler/icons-react"
-import { type AnchorHTMLAttributes, type HTMLAttributes } from "react"
+import { BookIcon, ChevronDownIcon } from "lucide-react"
+import type { ComponentProps } from "react"
 
 import {
   Collapsible,
@@ -10,86 +10,69 @@ import {
 } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
 
-export function Sources({
-  children,
-  className,
-  ...props
-}: HTMLAttributes<HTMLDivElement>) {
-  return (
-    <Collapsible
-      defaultOpen={false}
-      className={cn(
-        "group/sources border-border/50 bg-card/70 overflow-hidden rounded-xl border",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </Collapsible>
-  )
+export type SourcesProps = ComponentProps<"div">
+
+export const Sources = ({ className, ...props }: SourcesProps) => (
+  <Collapsible
+    className={cn("not-prose text-primary mb-4 text-xs", className)}
+    {...props}
+  />
+)
+
+export type SourcesTriggerProps = ComponentProps<typeof CollapsibleTrigger> & {
+  count: number
 }
 
-export function SourcesTrigger({
+export const SourcesTrigger = ({
+  className,
   count,
-  className,
-  ...props
-}: HTMLAttributes<HTMLButtonElement> & { count: number }) {
-  return (
-    <CollapsibleTrigger
-      className={cn(
-        "text-muted-foreground hover:text-foreground flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors outline-none",
-        className,
-      )}
-      {...props}
-    >
-      <IconExternalLink className="size-4 shrink-0" />
-      <span className="min-w-0 flex-1 truncate">
-        {count === 1 ? "1 fonte" : `${count} fontes`}
-      </span>
-      <IconChevronDown className="size-4 shrink-0 transition-transform group-data-[state=open]/sources:rotate-180" />
-    </CollapsibleTrigger>
-  )
-}
-
-export function SourcesContent({
   children,
-  className,
   ...props
-}: HTMLAttributes<HTMLDivElement>) {
-  return (
-    <CollapsibleContent
-      className={cn(
-        "border-border/40 grid gap-1 border-t px-2 py-2",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </CollapsibleContent>
-  )
-}
+}: SourcesTriggerProps) => (
+  <CollapsibleTrigger
+    className={cn("flex items-center gap-2", className)}
+    {...props}
+  >
+    {children ?? (
+      <>
+        <p className="font-medium">Used {count} sources</p>
+        <ChevronDownIcon className="h-4 w-4" />
+      </>
+    )}
+  </CollapsibleTrigger>
+)
 
-export function Source({
-  children,
+export type SourcesContentProps = ComponentProps<typeof CollapsibleContent>
+
+export const SourcesContent = ({
   className,
-  href,
-  title,
   ...props
-}: AnchorHTMLAttributes<HTMLAnchorElement>) {
-  return (
-    <a
-      href={href}
-      title={title}
-      target="_blank"
-      rel="noreferrer"
-      className={cn(
-        "hover:bg-muted/50 text-muted-foreground hover:text-foreground flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors",
-        className,
-      )}
-      {...props}
-    >
-      <IconExternalLink className="size-3.5 shrink-0" />
-      <span className="truncate">{children || title || href}</span>
-    </a>
-  )
-}
+}: SourcesContentProps) => (
+  <CollapsibleContent
+    className={cn(
+      "mt-3 flex w-fit flex-col gap-2",
+      "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 data-[state=closed]:animate-out data-[state=open]:animate-in outline-none",
+      className,
+    )}
+    {...props}
+  />
+)
+
+export type SourceProps = ComponentProps<"a">
+
+export const Source = ({ href, title, children, ...props }: SourceProps) => (
+  <a
+    className="flex items-center gap-2"
+    href={href}
+    rel="noreferrer"
+    target="_blank"
+    {...props}
+  >
+    {children ?? (
+      <>
+        <BookIcon className="h-4 w-4" />
+        <span className="block font-medium">{title}</span>
+      </>
+    )}
+  </a>
+)

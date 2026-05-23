@@ -140,6 +140,13 @@ function toolOutput(toolCall: ChatToolCall): string {
   return toolCall.extraContent?.toolFeedbackExplanation?.trim() ?? ""
 }
 
+function toolDisplayType(name: string): `tool-${string}` {
+  const normalized = name.trim() || "task"
+  return normalized.startsWith("tool-")
+    ? (normalized as `tool-${string}`)
+    : `tool-${normalized}`
+}
+
 function AssistantReasoningStatus({
   content,
   showContent,
@@ -151,12 +158,16 @@ function AssistantReasoningStatus({
 
   return (
     <Reasoning isStreaming={!hasContent} defaultOpen={hasContent}>
-      <ReasoningTrigger isStreaming={!hasContent}>Pensando</ReasoningTrigger>
-      {hasContent ? (
-        <ReasoningContent>
-          <MessageResponse>{content}</MessageResponse>
-        </ReasoningContent>
-      ) : null}
+      <ReasoningTrigger
+        getThinkingMessage={(isStreaming, duration) =>
+          isStreaming
+            ? "Pensando"
+            : duration
+              ? `Pensou por ${duration}s`
+              : "Pensamento"
+        }
+      />
+      {hasContent ? <ReasoningContent>{content}</ReasoningContent> : null}
     </Reasoning>
   )
 }
@@ -177,6 +188,7 @@ function AssistantToolStatus({
         const output = toolOutput(toolCall)
         const input = toolInput(toolCall)
         const state = output ? "output-available" : "input-available"
+        const type = toolDisplayType(name)
 
         return (
           <Tool
@@ -184,20 +196,20 @@ function AssistantToolStatus({
             defaultOpen={showContent && !output}
           >
             <ToolHeader
-              state={state}
               title={
                 showContent ? summarizeToolCall(toolCall) : "Executando tarefa"
               }
-              toolName={friendlyToolName(name)}
-              type={name}
+              state={state}
+              type={type}
             />
             {showContent ? (
               <ToolContent>
-                <ToolInput input={input} />
+                <ToolInput input={input || {}} />
                 <ToolOutput
                   output={
                     output ? <MessageResponse>{output}</MessageResponse> : null
                   }
+                  errorText={undefined}
                 />
               </ToolContent>
             ) : null}
@@ -205,7 +217,7 @@ function AssistantToolStatus({
         )
       })}
       <Reasoning isStreaming defaultOpen={false}>
-        <ReasoningTrigger isStreaming>Pensando</ReasoningTrigger>
+        <ReasoningTrigger getThinkingMessage={() => "Pensando"} />
       </Reasoning>
     </div>
   )
