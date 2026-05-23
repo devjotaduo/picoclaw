@@ -20,7 +20,7 @@
         "header.theme_toggle": true,
         "header.gateway_stop_menu": true,
         "sidebar.navigation": true,
-        "sidebar.pending_requests": true,
+        "sidebar.pending_requests": false,
         "sidebar.chat": true,
         "sidebar.models": true,
         "sidebar.credentials": true,
@@ -56,7 +56,7 @@
         "chat.reasoning_messages": true,
         "chat.tool_call_messages": true,
         "agent_editor.create_agents": true,
-        "chat.pending_handoffs_sidebar": true
+        "chat.pending_handoffs_sidebar": false
       }
     },
     "tenant": {
