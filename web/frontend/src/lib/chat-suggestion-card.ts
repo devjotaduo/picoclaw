@@ -131,6 +131,10 @@ function isTechnicalChoiceText(value: string): boolean {
   return TECHNICAL_CHOICE_RE.test(cleanInlineMarkdown(value))
 }
 
+function isChoiceDescriptionLine(value: string): boolean {
+  return /^(use quando|quando usar:?)/i.test(cleanInlineMarkdown(value))
+}
+
 function findPlainChoiceRun(lines: string[]): number[] {
   let currentRun: number[] = []
 
@@ -158,6 +162,14 @@ export function isChatSuggestionOptionText(content: string): boolean {
       .map((line) => line.trim())
       .filter(Boolean),
   )
+
+  if (
+    lines.length === 2 &&
+    matchOptionLine(lines[0]) &&
+    isQuestionLike(lines[1])
+  ) {
+    return true
+  }
 
   return (
     lines.length > 0 && lines.every((line) => Boolean(matchOptionLine(line)))
@@ -204,7 +216,22 @@ export function parseChatSuggestionCard(
     .filter((index) => index >= 0)
 
   if (optionIndexes.length < 2) {
-    return null
+    const singleOptionIndex = optionIndexes[0]
+    if (singleOptionIndex === undefined) {
+      return null
+    }
+
+    const optionText = matchOptionLine(lines[singleOptionIndex])
+    const nextLine = lines[singleOptionIndex + 1] ?? ""
+    const isSingleChoice =
+      optionText &&
+      !isTechnicalChoiceText(optionText) &&
+      (SUGGESTION_CUE_RE.test(cleanInlineMarkdown(optionText)) ||
+        isChoiceDescriptionLine(nextLine))
+
+    if (!isSingleChoice) {
+      return null
+    }
   }
 
   const plainChoiceRun = findPlainChoiceRun(lines)
@@ -222,10 +249,12 @@ export function parseChatSuggestionCard(
       })) ||
     optionIndexes.some((index) => {
       const optionText = matchOptionLine(lines[index])
+      const nextLine = lines[index + 1] ?? ""
       return Boolean(
         optionText &&
         !isTechnicalChoiceText(optionText) &&
-        SUGGESTION_CUE_RE.test(cleanInlineMarkdown(optionText)),
+        (SUGGESTION_CUE_RE.test(cleanInlineMarkdown(optionText)) ||
+          SUGGESTION_CUE_RE.test(cleanInlineMarkdown(nextLine))),
       )
     }) ||
     lines
@@ -262,7 +291,7 @@ export function parseChatSuggestionCard(
       !choice.description &&
       nextLine &&
       !nextIsOption &&
-      !isQuestionLike(nextLine)
+      (!isQuestionLike(nextLine) || isChoiceDescriptionLine(nextLine))
     ) {
       choice.description = cleanInlineMarkdown(nextLine)
       index += 1
@@ -273,7 +302,7 @@ export function parseChatSuggestionCard(
     }
   }
 
-  if (options.length < 2) {
+  if (options.length < 1) {
     return null
   }
 
@@ -318,7 +347,7 @@ function buildGroupedSuggestionMessage<T extends ChatSuggestionMessageInput>(
     cursor += 1
   }
 
-  if (optionMessages.length < 2) {
+  if (optionMessages.length < 1) {
     return null
   }
 

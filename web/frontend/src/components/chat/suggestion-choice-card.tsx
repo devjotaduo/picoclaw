@@ -35,7 +35,11 @@ export function SuggestionChoiceCard({
   const [dismissed, setDismissed] = useState(false)
   const trimmedCustomValue = customValue.trim()
   const selectedChoice = card.options[selectedIndex]
-  const canSend = Boolean(trimmedCustomValue || selectedChoice) && !disabled
+  const hasEnoughChoices = card.options.length > 1
+  const canSend =
+    hasEnoughChoices &&
+    Boolean(trimmedCustomValue || selectedChoice) &&
+    !disabled
 
   const submit = () => {
     if (!canSend) {
@@ -176,7 +180,18 @@ export function SuggestionChoiceCard({
           )
         })}
 
-        <div className="rounded-lg border border-[#3b3b3b] bg-[#2d2d2d] px-3 py-2.5">
+        {!hasEnoughChoices ? (
+          <div className="text-muted-foreground rounded-lg border border-[#3b3b3b] bg-[#2d2d2d] px-3 py-2.5 text-sm">
+            Aguardando outras opções...
+          </div>
+        ) : null}
+
+        <div
+          className={cn(
+            "rounded-lg border border-[#3b3b3b] bg-[#2d2d2d] px-3 py-2.5",
+            !hasEnoughChoices && "opacity-55",
+          )}
+        >
           <div className="mb-2 flex items-center justify-between gap-3">
             <label
               htmlFor={inputId}
@@ -194,6 +209,7 @@ export function SuggestionChoiceCard({
             value={customValue}
             className="text-foreground h-9 w-full rounded-md border border-[#474747] bg-[#3a3a3a] px-3 text-sm outline-none placeholder:text-zinc-500 focus:border-amber-300/55 focus:ring-3 focus:ring-amber-300/15"
             placeholder={t("chat.suggestionChoice.placeholder")}
+            disabled={!hasEnoughChoices}
             onChange={(event) => setCustomValue(event.target.value)}
             onFocus={() => setSelectedIndex(-1)}
             onKeyDown={(event) => {

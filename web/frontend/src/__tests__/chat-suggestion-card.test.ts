@@ -150,6 +150,49 @@ Aqui vão 4 opções:
     ])
   })
 
+  it("extracts separate multiline numbered use-when choices into one card", () => {
+    const grouped = groupChatSuggestionMessages([
+      {
+        id: "one",
+        role: "assistant",
+        content:
+          "1. Melhorar a primeira resposta\nUse quando o atendimento começa frio ou genérico.",
+      },
+      {
+        id: "two",
+        role: "assistant",
+        content:
+          "2. Organizar triagem\nUse quando a conversa precisa ir para o assunto certo.",
+      },
+      {
+        id: "three",
+        role: "assistant",
+        content:
+          "3. Melhorar o encaminhamento\nUse quando o cliente chega até o setor errado ou fica sem saber com quem vai falar.",
+      },
+      {
+        id: "four",
+        role: "assistant",
+        content:
+          "4. Criar follow-up padrão\nUse quando muitas conversas ficam paradas e falta uma retomada simples e natural.",
+      },
+      {
+        id: "pick",
+        role: "assistant",
+        content: "Se quiser, escolha uma opção pelo número ou pelo título.",
+      },
+    ])
+    const parsed = parseChatSuggestionCard(grouped[0].content)
+
+    expect(grouped[0].id).toBe("one-suggestions")
+    expect(parsed?.options).toHaveLength(4)
+    expect(parsed?.options[2]).toEqual({
+      title: "Melhorar o encaminhamento",
+      description:
+        "Use quando o cliente chega até o setor errado ou fica sem saber com quem vai falar.",
+    })
+  })
+
   it("extracts nested-looking option prompts from one markdown list item", () => {
     const parsed = parseChatSuggestionCard(`
 - 3 opções mais chiques
