@@ -1,0 +1,213 @@
+import { IconArrowUp, IconX } from "@tabler/icons-react"
+import { type KeyboardEvent, useId, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
+
+import { Button } from "@/components/ui/button"
+import type {
+  ChatSuggestionCardData,
+  ChatSuggestionChoice,
+} from "@/lib/chat-suggestion-card"
+import { cn } from "@/lib/utils"
+
+interface SuggestionChoiceCardProps {
+  card: ChatSuggestionCardData
+  disabled?: boolean
+  onSubmit?: (value: string) => void
+}
+
+function serializeChoice(choice: ChatSuggestionChoice): string {
+  return choice.description
+    ? `${choice.title}: ${choice.description}`
+    : choice.title
+}
+
+export function SuggestionChoiceCard({
+  card,
+  disabled = false,
+  onSubmit,
+}: SuggestionChoiceCardProps) {
+  const { t } = useTranslation()
+  const inputId = useId()
+  const customInputRef = useRef<HTMLInputElement>(null)
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [customValue, setCustomValue] = useState("")
+  const [dismissed, setDismissed] = useState(false)
+  const trimmedCustomValue = customValue.trim()
+  const selectedChoice = card.options[selectedIndex]
+  const canSend = Boolean(trimmedCustomValue || selectedChoice) && !disabled
+
+  const submit = () => {
+    if (!canSend) {
+      return
+    }
+
+    onSubmit?.(
+      trimmedCustomValue ||
+        (selectedChoice ? serializeChoice(selectedChoice) : ""),
+    )
+    setDismissed(true)
+  }
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || disabled) {
+      return
+    }
+
+    const target = event.target
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
+    ) {
+      return
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault()
+      submit()
+      return
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault()
+      setDismissed(true)
+      return
+    }
+
+    const optionNumber = Number(event.key)
+    if (
+      Number.isInteger(optionNumber) &&
+      optionNumber >= 1 &&
+      optionNumber <= card.options.length
+    ) {
+      event.preventDefault()
+      setCustomValue("")
+      setSelectedIndex(optionNumber - 1)
+      return
+    }
+
+    if (event.key === "5") {
+      event.preventDefault()
+      customInputRef.current?.focus()
+    }
+  }
+
+  if (dismissed) {
+    return null
+  }
+
+  return (
+    <div
+      className="bg-card/95 p-4 outline-none"
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+    >
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="size-2 shrink-0 rounded-full bg-yellow-300" />
+          <h3 className="text-foreground truncate text-base font-semibold">
+            {card.title}
+          </h3>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="text-muted-foreground hover:text-foreground"
+          aria-label={t("chat.suggestionChoice.dismiss")}
+          onClick={() => setDismissed(true)}
+        >
+          <IconX className="size-4" />
+        </Button>
+      </div>
+
+      <div className="space-y-1.5">
+        {card.options.map((option, index) => {
+          const selected = index === selectedIndex && !trimmedCustomValue
+          return (
+            <button
+              key={`${option.title}-${index}`}
+              type="button"
+              className={cn(
+                "group/choice bg-muted/35 hover:bg-muted/55 flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                selected
+                  ? "bg-muted/55 border-yellow-300/35"
+                  : "border-transparent",
+              )}
+              onClick={() => {
+                setCustomValue("")
+                setSelectedIndex(index)
+              }}
+            >
+              <span className="min-w-0 flex-1">
+                <span className="text-foreground block text-sm font-semibold">
+                  {option.title}
+                </span>
+                {option.description ? (
+                  <span className="text-muted-foreground mt-0.5 block text-[13px] leading-snug">
+                    {option.description}
+                  </span>
+                ) : null}
+              </span>
+              <span className="border-border/70 bg-background/35 text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-semibold">
+                {index + 1}
+              </span>
+            </button>
+          )
+        })}
+
+        <div className="bg-muted/35 rounded-lg px-3 py-2.5">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <label
+              htmlFor={inputId}
+              className="text-foreground text-sm font-semibold"
+            >
+              {t("chat.suggestionChoice.other")}
+            </label>
+            <span className="border-border/70 bg-background/35 text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-semibold">
+              5
+            </span>
+          </div>
+          <input
+            ref={customInputRef}
+            id={inputId}
+            value={customValue}
+            className="bg-background/35 text-foreground placeholder:text-muted-foreground/70 h-9 w-full rounded-md border border-transparent px-3 text-sm outline-none focus:border-yellow-300/45 focus:ring-3 focus:ring-yellow-300/15"
+            placeholder={t("chat.suggestionChoice.placeholder")}
+            onChange={(event) => setCustomValue(event.target.value)}
+            onFocus={() => setSelectedIndex(-1)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                submit()
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="mt-4 flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground"
+          onClick={() => setDismissed(true)}
+        >
+          {t("chat.suggestionChoice.skip")}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="disabled:bg-muted disabled:text-muted-foreground bg-zinc-200 text-zinc-950 hover:bg-zinc-100"
+          disabled={!canSend}
+          onClick={submit}
+        >
+          {t("chat.suggestionChoice.send")}
+          <IconArrowUp className="size-3.5" />
+        </Button>
+      </div>
+    </div>
+  )
+}

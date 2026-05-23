@@ -15,8 +15,10 @@ import rehypeRaw from "rehype-raw"
 import rehypeSanitize from "rehype-sanitize"
 import remarkGfm from "remark-gfm"
 
+import { SuggestionChoiceCard } from "@/components/chat/suggestion-choice-card"
 import { Button } from "@/components/ui/button"
 import { formatMessageTime } from "@/hooks/use-pico-chat"
+import { parseChatSuggestionCard } from "@/lib/chat-suggestion-card"
 import { cn } from "@/lib/utils"
 import {
   type AssistantMessageKind,
@@ -31,6 +33,7 @@ interface AssistantMessageProps {
   kind?: AssistantMessageKind
   toolCalls?: ChatToolCall[]
   timestamp?: string | number
+  onSuggestionReply?: (content: string) => void
 }
 
 function localizeContextCommandContent(content: string): string {
@@ -54,6 +57,7 @@ export function AssistantMessage({
   kind = "normal",
   toolCalls = [],
   timestamp = "",
+  onSuggestionReply,
 }: AssistantMessageProps) {
   const { t } = useTranslation()
   const [isCopied, setIsCopied] = useState(false)
@@ -76,6 +80,8 @@ export function AssistantMessage({
   const formattedTimestamp =
     timestamp !== "" ? formatMessageTime(timestamp) : ""
   const messageMeta = [assistantName.trim(), formattedTimestamp].filter(Boolean)
+  const suggestionCard =
+    kind === "normal" ? parseChatSuggestionCard(displayContent) : null
 
   const handleCopy = async () => {
     const markCopied = () => {
@@ -226,24 +232,34 @@ export function AssistantMessage({
             </div>
           )}
           {(!isCollapsedBlock || isExpanded) && !isToolCalls && hasText && (
-            <div
-              className={cn(
-                "prose dark:prose-invert prose-pre:my-2 prose-pre:overflow-x-auto prose-pre:rounded-lg prose-pre:border prose-pre:bg-zinc-100 prose-pre:p-0 prose-pre:text-zinc-900 dark:prose-pre:bg-zinc-950 dark:prose-pre:text-zinc-100 max-w-none [overflow-wrap:anywhere] break-words",
-                isThought
-                  ? "prose-p:my-1.5 prose-p:whitespace-pre-wrap px-3 pt-0 pb-3 text-[13px] leading-relaxed opacity-70"
-                  : "prose-p:my-2 prose-p:whitespace-pre-wrap p-4 text-[15px] leading-relaxed",
+            <>
+              {suggestionCard ? (
+                <SuggestionChoiceCard
+                  card={suggestionCard}
+                  disabled={!onSuggestionReply}
+                  onSubmit={onSuggestionReply}
+                />
+              ) : (
+                <div
+                  className={cn(
+                    "prose dark:prose-invert prose-pre:my-2 prose-pre:overflow-x-auto prose-pre:rounded-lg prose-pre:border prose-pre:bg-zinc-100 prose-pre:p-0 prose-pre:text-zinc-900 dark:prose-pre:bg-zinc-950 dark:prose-pre:text-zinc-100 max-w-none [overflow-wrap:anywhere] break-words",
+                    isThought
+                      ? "prose-p:my-1.5 prose-p:whitespace-pre-wrap px-3 pt-0 pb-3 text-[13px] leading-relaxed opacity-70"
+                      : "prose-p:my-2 prose-p:whitespace-pre-wrap p-4 text-[15px] leading-relaxed",
+                  )}
+                >
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
+                  >
+                    {displayContent}
+                  </ReactMarkdown>
+                </div>
               )}
-            >
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
-              >
-                {displayContent}
-              </ReactMarkdown>
-            </div>
+            </>
           )}
 
-          {!isCollapsedBlock && hasText && (
+          {!isCollapsedBlock && hasText && !suggestionCard && (
             <Button
               variant="ghost"
               size="icon"

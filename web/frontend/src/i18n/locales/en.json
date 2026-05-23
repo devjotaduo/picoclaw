@@ -121,6 +121,13 @@
       "noModel": "Nenhum modelo padrão configurado. Vá para a página de Modelos para definir um."
     },
     "sendMessage": "Enviar mensagem",
+    "suggestionChoice": {
+      "dismiss": "Close suggestion",
+      "other": "Other",
+      "placeholder": "Type your own answer here",
+      "skip": "Skip",
+      "send": "Send"
+    },
     "sendHint": "Pressione Enter para enviar\nShift + Enter para nova linha",
     "contextTitle": "Contexto",
     "contextDetail": "Ver Detalhes",

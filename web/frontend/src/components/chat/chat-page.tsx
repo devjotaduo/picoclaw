@@ -431,6 +431,20 @@ export function ChatPage() {
     }
   }
 
+  const handleSuggestionReply = (content: string) => {
+    if (!content.trim() || !canInput) return
+    if (
+      sendMessage({
+        content,
+        attachments: [],
+        agentID: selectedAgentID,
+      })
+    ) {
+      setInput("")
+      setAttachments([])
+    }
+  }
+
   const handleAddAttachments = () => {
     if (!canInput) return
     fileInputRef.current?.click()
@@ -631,6 +645,7 @@ export function ChatPage() {
                       kind={msg.kind}
                       toolCalls={msg.toolCalls}
                       timestamp={msg.timestamp}
+                      onSuggestionReply={handleSuggestionReply}
                     />
                   ) : (
                     <UserMessage
