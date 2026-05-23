@@ -86,6 +86,26 @@ function isShortChoiceText(value: string): boolean {
   )
 }
 
+function findPlainChoiceRun(lines: string[]): number[] {
+  let currentRun: number[] = []
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const optionText = matchOptionLine(lines[index])
+
+    if (optionText && isShortChoiceText(optionText)) {
+      currentRun.push(index)
+      if (currentRun.length >= MIN_PLAIN_CHOICE_OPTIONS) {
+        return currentRun
+      }
+      continue
+    }
+
+    currentRun = []
+  }
+
+  return []
+}
+
 export function isChatSuggestionOptionText(content: string): boolean {
   const lines = expandInlineOptions(
     content
@@ -142,15 +162,13 @@ export function parseChatSuggestionCard(
     return null
   }
 
-  const firstOptionIndex = optionIndexes[0]
+  const plainChoiceRun = findPlainChoiceRun(lines)
   const isPlainChoiceList =
     rawLines.length === lines.length &&
-    optionIndexes.length >= MIN_PLAIN_CHOICE_OPTIONS &&
-    optionIndexes.length === lines.length &&
-    optionIndexes.every((index) => {
-      const optionText = matchOptionLine(lines[index])
-      return Boolean(optionText && isShortChoiceText(optionText))
-    })
+    plainChoiceRun.length >= MIN_PLAIN_CHOICE_OPTIONS
+  const firstOptionIndex = isPlainChoiceList
+    ? plainChoiceRun[0]
+    : optionIndexes[0]
   const hasSuggestionCue =
     isPlainChoiceList ||
     lines
@@ -183,6 +201,7 @@ export function parseChatSuggestionCard(
     const nextLine = lines[index + 1]
     const nextIsOption = nextLine ? Boolean(matchOptionLine(nextLine)) : false
     if (
+      !isPlainChoiceList &&
       !choice.description &&
       nextLine &&
       !nextIsOption &&

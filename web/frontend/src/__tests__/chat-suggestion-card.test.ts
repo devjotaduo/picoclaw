@@ -116,6 +116,29 @@ Cores:
     ])
   })
 
+  it("extracts the first short choice list even when there is follow-up text", () => {
+    const parsed = parseChatSuggestionCard(`
+- Resposta inicial mais rápida
+- Triagem automática por assunto
+- Follow-up de conversas paradas
+- Histórico do cliente no atendimento
+
+Se quiser, eu também posso transformar isso em:
+- botões prontos para menu
+- opções mais comerciais
+- opções mais humanas para apresentar ao cliente
+`)
+
+    expect(parsed?.title).toBe("Escolha uma opção")
+    expect(parsed?.options.map((option) => option.title)).toEqual([
+      "Resposta inicial mais rápida",
+      "Triagem automática por assunto",
+      "Follow-up de conversas paradas",
+      "Histórico do cliente no atendimento",
+    ])
+    expect(parsed?.options[3].description).toBe("")
+  })
+
   it("keeps long sentence lists as markdown when there is no cue", () => {
     const parsed = parseChatSuggestionCard(`
 - Cliente pediu uma revisão completa do atendimento antes da publicação.
