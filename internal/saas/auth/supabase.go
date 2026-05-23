@@ -141,7 +141,14 @@ func (s *SupabaseClient) CreateTenantOwner(
 	userID = resp.User.ID.String()
 
 	if mode == LoginModeMagicLink {
-		redirect := fmt.Sprintf("https://%s.%s/", subdomain, baseHostFromSiteURL(s.siteURL))
+		// Redirect through the tenant's /login page (NOT /) so the implicit-flow
+		// hash fragment (#access_token=...&refresh_token=...) is parsed by the
+		// JS handler that writes the sb-<projectRef>-auth-token cookie.
+		// Sending the user to / drops the token: the gateway redirects them to
+		// /login while stripping the hash, and they end up unauthenticated.
+		// Matches GenerateMagicLink (the resend path) so both flows behave the
+		// same.
+		redirect := fmt.Sprintf("https://%s.%s/login?next=/", subdomain, baseHostFromSiteURL(s.siteURL))
 		link, lerr := s.admin.AdminGenerateLink(types.AdminGenerateLinkRequest{
 			Type:       types.LinkTypeMagicLink,
 			Email:      email,

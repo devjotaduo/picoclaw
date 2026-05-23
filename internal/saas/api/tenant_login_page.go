@@ -212,14 +212,21 @@ var tenantLoginTpl = template.Must(template.New("tenantLogin").Parse(`<!DOCTYPE 
       // the auth dance (write the cookie, then navigate to NEXT). Sending
       // them to "/" directly would lose the access_token because the
       // root has no handler for the implicit-flow hash params.
+      //
+      // GoTrue's REST API takes the post-verify redirect as the
+      // 'redirect_to' QUERY parameter on /otp — NOT as a body field. The
+      // 'options.email_redirect_to' shape is the JS SDK's surface; the
+      // SDK translates it to ?redirect_to=... before sending. Putting it
+      // in the body is silently ignored and the email link falls back to
+      // the project's default Site URL (apex), which has no JWT handler.
       var callbackURL = window.location.origin + "/login?next=" + encodeURIComponent(NEXT);
-      var resp = await fetch(AUTH_URL + "/otp", {
+      var otpURL = AUTH_URL + "/otp?redirect_to=" + encodeURIComponent(callbackURL);
+      var resp = await fetch(otpURL, {
         method: "POST",
         headers: { "apikey": ANON, "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email,
           create_user: false,
-          options: { email_redirect_to: callbackURL },
         }),
       });
       if (resp.ok){
