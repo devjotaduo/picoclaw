@@ -2,6 +2,7 @@ import { IconArrowUp, IconX } from "@tabler/icons-react"
 import { type KeyboardEvent, useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
+import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion"
 import { Button } from "@/components/ui/button"
 import type {
   ChatSuggestionCardData,
@@ -122,15 +123,16 @@ export function SuggestionChoiceCard({
         </Button>
       </div>
 
-      <div className="space-y-1.5">
+      <Suggestions>
         {card.options.map((option, index) => {
           const selected = index === selectedIndex && !trimmedCustomValue
           return (
-            <button
+            <Suggestion
               key={`${option.title}-${index}`}
-              type="button"
+              suggestion={serializeChoice(option)}
               className={cn(
                 "group/choice flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all duration-200",
+                "justify-start whitespace-normal",
                 selected
                   ? "border-amber-300/55 bg-[#3a3324] shadow-[inset_3px_0_0_rgba(245,188,65,0.85)]"
                   : "border-[#3b3b3b] bg-[#2d2d2d] hover:border-amber-300/35 hover:bg-[#36332d]",
@@ -170,7 +172,7 @@ export function SuggestionChoiceCard({
               >
                 {index + 1}
               </span>
-            </button>
+            </Suggestion>
           )
         })}
 
@@ -202,7 +204,7 @@ export function SuggestionChoiceCard({
             }}
           />
         </div>
-      </div>
+      </Suggestions>
 
       <div className="mt-4 flex justify-end gap-2">
         <Button

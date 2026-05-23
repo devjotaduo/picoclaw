@@ -7,12 +7,8 @@ import {
 } from "@tabler/icons-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import ReactMarkdown from "react-markdown"
-import rehypeHighlight from "rehype-highlight"
-import rehypeRaw from "rehype-raw"
-import rehypeSanitize from "rehype-sanitize"
-import remarkGfm from "remark-gfm"
 
+import { MessageResponse } from "@/components/ai-elements/message"
 import { SuggestionChoiceCard } from "@/components/chat/suggestion-choice-card"
 import { Button } from "@/components/ui/button"
 import { formatMessageTime } from "@/hooks/use-pico-chat"
@@ -257,12 +253,9 @@ export function AssistantMessage({
                       : "prose-p:my-2 prose-p:whitespace-pre-wrap p-4 text-[15px] leading-relaxed",
                   )}
                 >
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
-                  >
+                  <MessageResponse>
                     {displayContent}
-                  </ReactMarkdown>
+                  </MessageResponse>
                 </div>
               )}
             </>
