@@ -215,10 +215,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         : undefined,
     [isSaasAdmin, launcherRole],
   )
-  const { visible: isVisible } = useUIVisibility(visibilityPolicyInput)
+  const { visible: isVisible, profile: uiVisibilityProfile } =
+    useUIVisibility(visibilityPolicyInput)
+  const showAdminSidebarPages = isSaasAdmin || uiVisibilityProfile === "admin"
 
   const canRead = React.useCallback(
     (feature: string) => {
+      if (uiVisibilityProfile === "admin") {
+        return true
+      }
+
       if (!features) {
         return true
       }
@@ -226,7 +232,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         features[feature] ?? features[fallbackFeature(feature) ?? ""]
       return access === "read" || access === "write"
     },
-    [features],
+    [features, uiVisibilityProfile],
   )
 
   const handleNavItemClick = React.useCallback(() => {
@@ -432,11 +438,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           },
         ],
       },
-      // Administração — só aparece quando o launcher está em modo SaaS
-      // admin (PICOCLAW_SAAS_ADMIN_MODE=true + creds do controlplane). A
-      // checagem real fica no backend; aqui apenas escondemos o grupo para
-      // não confundir o usuário comum do launcher.
-      ...(isSaasAdmin
+      // Administração aparece quando o backend reconhece admin SaaS ou quando
+      // o perfil local de visibilidade foi definido como admin.
+      ...(showAdminSidebarPages
         ? [
             {
               label: "navigation.admin_group",
@@ -475,13 +479,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ...group,
         items: group.items.filter(
           (item) =>
-            (!item.adminOnly || isSaasAdmin) &&
+            (!item.adminOnly || showAdminSidebarPages) &&
             isVisible(item.elementId ?? `sidebar.${item.feature}`) &&
             canRead(item.feature),
         ),
       }))
       .filter((group) => group.items.length > 0)
-  }, [canRead, isSaasAdmin, isVisible])
+  }, [canRead, isVisible, showAdminSidebarPages])
 
   const showSidebarNavigation = isVisible("sidebar.navigation")
   const showSidebarPendingRequests = isVisible("sidebar.pending_requests")
