@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "local-json-mock",
-  "active_profile": "public",
+  "active_profile": "admin",
   "default_profile": "tenant",
   "default_visibility": true,
   "profiles": {
@@ -10,8 +10,8 @@
       "visibility": {
         "layout.sidebar_trigger": true,
         "header.actions": true,
-        "header.sidebar_toggle": false,
-        "header.connection_status": false,
+        "header.sidebar_toggle": true,
+        "header.connection_status": true,
         "header.settings": true,
         "header.logout": true,
         "header.gateway_restart": true,
