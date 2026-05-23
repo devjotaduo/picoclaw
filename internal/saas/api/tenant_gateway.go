@@ -39,7 +39,14 @@ func (h *Handler) tenantSubdomain(hostport string) (string, bool) {
 		host = strings.ToLower(h)
 	}
 	host = strings.Trim(host, ".")
-	if host == base || host == "admin."+base || host == "adm."+base {
+	// Apex + admin + www variations bypass tenant matching and fall through
+	// to the chi router (admin SPA). www is excluded so www.<base> doesn't
+	// 404 as a missing tenant — common operator mistake when copy-pasting
+	// the dashboard URL.
+	if host == base ||
+		host == "admin."+base ||
+		host == "adm."+base ||
+		host == "www."+base {
 		return "", false
 	}
 	suffix := "." + base
@@ -127,7 +134,7 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 	// tenant_owner / tenant_admin role, not be silently downgraded to "public"
 	// because a stale magic cookie is still in the jar. Skipping the magic
 	// branch here lets authenticateTenantRequest below pick up the JWT.
-	if !h.hasSupabaseAuthCookie(r) {
+	if !h.hasSupabaseAuthCookieForTenant(r, t) {
 		if claims, ok := h.magicLinkClaimsFromCookie(r, t); ok {
 			h.proxyTenantRequest(w, r, target, func(req *http.Request) {
 				h.signMagicVisitorRequest(req, t, claims)
@@ -320,25 +327,43 @@ func (h *Handler) authenticateSupabaseTenant(
 	return claims.UserID, claims.Email, mapSupabaseRoleToTenantRole(claims.Role), true
 }
 
-// hasSupabaseAuthCookie reports whether the request carries ANY Supabase
-// access-token cookie (project-scoped or legacy short name). Used by the
+// hasSupabaseAuthCookie reports whether the request carries a Supabase
+// access-token cookie that is ACTUALLY VALID FOR THIS TENANT. Used by the
 // gateway to skip the magic-link visitor branch when a real authenticated
 // user is present — magic links shouldn't downgrade a real login to public.
-// The full validation happens later in authenticateTenantRequest; this is
-// just the cheap "is there a credential to verify" check.
+//
+// Cookies are scoped to .<baseDomain>, so a stale token from another
+// tenant (or one whose tenant was deleted) rides along on every request.
+// We must verify both the signature and that claims.TenantID matches the
+// tenant being requested; otherwise an unrelated cookie blocks the magic
+// link unnecessarily.
+//
+// When the tenant in question (t) is nil — i.e. the caller just wants to
+// know "is there ANY plausible Supabase credential" without scoping —
+// fall back to the cheap cookie-presence check.
 func (h *Handler) hasSupabaseAuthCookie(r *http.Request) bool {
-	if h.Cfg.SupabaseProjectRef != "" {
-		if c, err := r.Cookie(
-			"sb-" + h.Cfg.SupabaseProjectRef + "-auth-token",
-		); err == nil &&
-			strings.TrimSpace(c.Value) != "" {
-			return true
-		}
+	return h.hasSupabaseAuthCookieForTenant(r, nil)
+}
+
+func (h *Handler) hasSupabaseAuthCookieForTenant(r *http.Request, t *store.Tenant) bool {
+	token := readSupabaseAccessToken(r, h.Cfg.SupabaseProjectRef)
+	if token == "" {
+		return false
 	}
-	if c, err := r.Cookie("sb-access-token"); err == nil && strings.TrimSpace(c.Value) != "" {
+	// No tenant-scope check requested: presence is enough.
+	if t == nil {
 		return true
 	}
-	return false
+	// Tenant didn't use Supabase: even a valid Supabase token isn't an
+	// "owner login here" — let the magic-link path proceed.
+	if t.SupabaseUserID == nil || strings.TrimSpace(*t.SupabaseUserID) == "" || h.Supabase == nil {
+		return false
+	}
+	claims, err := h.Supabase.VerifyAccessToken(token)
+	if err != nil {
+		return false
+	}
+	return claims.TenantID == t.ID
 }
 
 // readSupabaseAccessToken extracts the access token from any cookie name
@@ -478,15 +503,29 @@ func isPublicChatHealthRoute(rawPath string) bool {
 	return path.Clean("/"+strings.TrimPrefix(rawPath, "/")) == "/api/public/chat/health"
 }
 
+// rejectTenantGatewayAuth handles unauthenticated tenant requests in the
+// launcher-native (trusted-gateway) path. API and WebSocket get a clean
+// 401; HTML pages get a 302 to the launcher's own /launcher-login page on
+// the SAME tenant subdomain.
+//
+// We deliberately stay on the tenant subdomain — sending the user to
+// adm.<base>/login (the platform-admin login on a separate users table)
+// would put them in front of a form they have no account for, and looks
+// like a domain hijack from the user's perspective. Each tenant owns its
+// /launcher-login page (served by the embedded SPA at the launcher).
+//
+// The baseDomain arg is preserved for callers that still want it for log
+// context but no longer affects the redirect target.
 func rejectTenantGatewayAuth(w http.ResponseWriter, r *http.Request, baseDomain string) {
+	_ = baseDomain
 	p := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
 	if strings.HasPrefix(p, "/api/") || p == "/pico/ws" || strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	target := "/login"
-	if baseDomain != "" {
-		target = "https://adm." + strings.Trim(baseDomain, ".") + "/login"
+	target := "/launcher-login"
+	if r.URL != nil && r.URL.RequestURI() != "" && p != "/launcher-login" {
+		target += "?next=" + url.QueryEscape(r.URL.RequestURI())
 	}
 	http.Redirect(w, r, target, http.StatusFound)
 }

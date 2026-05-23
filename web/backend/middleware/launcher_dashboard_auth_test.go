@@ -5,7 +5,22 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/sipeed/picoclaw/internal/saas/gatewayauth"
 )
+
+// signGatewayHeaders is a thin wrapper over gatewayauth.AnnotateRequest used
+// by tests that exercise the trusted-gateway HMAC path on the launcher side.
+// Kept tiny so the call sites read like the production controlplane code.
+func signGatewayHeaders(t *testing.T, r *http.Request, secret string, now time.Time, tenantID, userID, userEmail, role string) {
+	t.Helper()
+	gatewayauth.AnnotateRequest(r, secret, gatewayauth.Claims{
+		TenantID:  tenantID,
+		UserID:    userID,
+		UserEmail: userEmail,
+		Role:      role,
+	}, now)
+}
 
 func TestNewLauncherDashboardSessionCookie(t *testing.T) {
 	a, err := NewLauncherDashboardSessionCookie()
@@ -269,6 +284,56 @@ func TestLauncherDashboardAuth_CookieOnly(t *testing.T) {
 	h.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusUnauthorized {
 		t.Fatalf("bearer auth should not be accepted: status = %d", rec2.Code)
+	}
+}
+
+// In local mode, signed trusted-gateway HMAC headers must also pass auth
+// (hybrid mode). Lets controlplane-issued magic links work on tenants
+// running PICOCLAW_AUTH_MODE=local without baking the launcher's random
+// session cookie into the controlplane.
+func TestLauncherDashboardAuth_LocalAcceptsTrustedGatewayHeadersAsFallback(t *testing.T) {
+	secret := "shared-controlplane-secret-xyz"
+	cfg := LauncherDashboardAuthConfig{
+		ExpectedCookie:       "unused-in-this-test",
+		AuthMode:             "local",
+		TrustedGatewaySecret: secret,
+	}
+	nextCalled := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		if _, ok := TrustedGatewayClaims(r); !ok {
+			t.Error("expected trusted-gateway claims in context")
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	h := LauncherDashboardAuth(cfg, next)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	now := time.Now()
+	signGatewayHeaders(t, req, secret, now,
+		"tenant-abc", "magic:tenant_owner:nonce-1", "owner@example.com", "tenant_owner")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HMAC fallback rejected: status = %d", rec.Code)
+	}
+	if !nextCalled {
+		t.Fatal("next handler should run when HMAC headers are valid")
+	}
+
+	// Without TrustedGatewaySecret configured, HMAC headers must NOT be a
+	// shortcut — protects deployments that explicitly disabled the gateway
+	// trust (set the env to empty / removed).
+	cfgNoSecret := LauncherDashboardAuthConfig{ExpectedCookie: "x", AuthMode: "local"}
+	hNoSecret := LauncherDashboardAuth(cfgNoSecret, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("next must not run when TrustedGatewaySecret is empty")
+	}))
+	req2 := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	signGatewayHeaders(t, req2, secret, now, "tenant-abc", "u", "", "tenant_owner")
+	rec2 := httptest.NewRecorder()
+	hNoSecret.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when secret empty: got %d", rec2.Code)
 	}
 }
 
