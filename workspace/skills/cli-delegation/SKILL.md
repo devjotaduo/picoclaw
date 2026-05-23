@@ -7,10 +7,28 @@ metadata: {"nanobot":{"emoji":"🪜","requires":{"bins":["claude","codex"]},"ins
 
 # CLI Delegation Skill
 
-Padrão de delegação para tarefas que podem ser executadas por sub-agentes CLI
-nativos (Claude, Codex). Esta skill define a **cadeia de prioridade** que
-todos os agentes internos especializados (`pixel`, `doc-maker`, `dev-coder`)
-devem seguir antes de executar a tarefa por conta própria.
+**Padrão thin-router**: os agentes internos (`pixel`, `doc-maker`, `dev-coder`)
+**NÃO** fazem o trabalho. Eles apenas formulam um prompt completo e delegam
+ao CLI externo. O CLI tem suas próprias ferramentas, plugins, MCPs, acesso
+a arquivos, browsers, git, etc. — usa tudo isso por conta própria.
+
+O agente interno é responsável por:
+
+1. Receber o pedido humano.
+2. **Formular o prompt** — claro, autocontido, com paths/arquivos relevantes
+   listados explicitamente para o CLI saber onde olhar.
+3. **Despachar via cadeia CLI** (regras abaixo).
+4. **Relatar o resultado** — repassar o stdout do CLI, mais 1 linha no
+   rodapé indicando qual CLI respondeu.
+
+O agente interno **NÃO** deve:
+
+- Tentar ler/escrever arquivos por si mesmo quando a tarefa cabe ao CLI.
+- Carregar outras skills do workspace para tentar "ajudar" o CLI.
+- Implementar fallback local elaborado — se ambos os CLIs falharem, relate
+  o erro ao usuário e pare.
+- Quebrar a tarefa em sub-pedidos ao CLI — passe o pedido inteiro de uma vez
+  e deixe o CLI decidir como executar (ele tem seu próprio loop de tools).
 
 ## Cadeia de prioridade
 
@@ -19,9 +37,14 @@ ausente, timeout, exit code != 0, ou resposta vazia).
 
 | Ordem | CLI | Comando base | Quando usar |
 |---|---|---|---|
-| 1 | **Anthropic Claude CLI** | `claude --print "<tarefa>"` | Sempre tente primeiro. Forte em raciocínio, texto longo, refatoração e código. |
-| 2 | **OpenAI Codex CLI** | `codex exec "<tarefa>"` | Fallback se Claude não responder ou faltar binário. Bom para geração zero-shot. |
-| 3 | **Fallback local** | LLM próprio + ferramentas locais | Só se os dois CLIs falharem. Avise o usuário. |
+| 1 | **Anthropic Claude CLI** | `claude --print --dangerously-skip-permissions "<tarefa>"` | Sempre tente primeiro. Forte em raciocínio, texto longo, refatoração e código. Tem suas próprias tools (read/write/edit, bash, web fetch, MCP). |
+| 2 | **OpenAI Codex CLI** | `codex exec "<tarefa>"` | Fallback se Claude não responder ou faltar binário. Tem sandbox próprio + ferramentas próprias. |
+| 3 | **Reportar erro** | — | Se os dois CLIs falharem, NÃO tente trabalho local. Informe o usuário e pare. |
+
+> O flag `--dangerously-skip-permissions` no Claude CLI desativa o prompt
+> interativo de confirmação por tool (necessário em modo `--print`
+> não-interativo). O CLI ainda roda dentro do container do tenant — o
+> isolamento é o do Docker, não o do prompt.
 
 > GitHub Copilot CLI foi removido da cadeia. Se reaparecer no futuro, entra
 > como degrau adicional — não como degrau 1.
@@ -54,7 +77,7 @@ Antes de chamar cada CLI:
    - Se exit != 0 → pule para o passo 2.
 2. Execute o prompt:
    ```
-   exec run command='claude --print "<tarefa>"' timeout=120
+   exec run command='claude --print --dangerously-skip-permissions "<tarefa>"' timeout=300
    ```
    - Se `exit_code == 0` e `stdout` não vazio → use `stdout` e marque
      `CLI: claude`. Fim.
@@ -66,15 +89,20 @@ Antes de chamar cada CLI:
    pule para o passo 3.
 2. Execute o prompt:
    ```
-   exec run command='codex exec "<tarefa>"' timeout=120
+   exec run command='codex exec "<tarefa>"' timeout=300
    ```
    - Se `exit_code == 0` e `stdout` não vazio → use `stdout` e marque
      `CLI: codex`. Fim.
    - Caso contrário → siga para o passo 3.
 
-### Passo 3 — Fallback local
+### Passo 3 — Reportar erro
 
-Use seu próprio LLM + ferramentas internas. Marque `CLI: local`.
+Os dois CLIs falharam. **NÃO** tente executar a tarefa por conta própria
+com tools internas — esse é o contrato thin-router. Responda ao usuário:
+
+> "Não consegui executar a tarefa: ambos os CLIs externos
+> (Claude, Codex) falharam. Detalhes: \<último stderr\>. Verifique auth
+> (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) ou tente de novo."
 
 ### Observações
 
@@ -94,17 +122,28 @@ Use seu próprio LLM + ferramentas internas. Marque `CLI: local`.
   reporte qual CLI respondeu no rodapé: `(via claude-cli)`.
 - **Nunca passe segredos no prompt** (tokens, senhas, chaves). Os CLIs
   podem logar prompts.
-- **Sempre cite o resultado** — não invente. Se o CLI retornar JSON,
-  parse com `jq` antes de mostrar.
-- **Cache não é responsabilidade desta skill** — cada agente decide.
-- **Logs**: registre tentativa, CLI escolhido e duração em
+- **Repasse o stdout literal** — não reformate, resuma ou "melhore" o
+  output do CLI. O CLI é a fonte de verdade.
+- **Não use suas próprias tools** para fazer o trabalho que o CLI deveria
+  fazer (read/edit/write/git/etc). Você é router, não worker.
+- **Logs**: opcionalmente registre tentativa, CLI escolhido e duração em
   `memory/cli-delegation.log` (uma linha por tentativa).
 
-## Quando NÃO delegar
+## Formulando o prompt para o CLI
 
-- Tarefas que dependem de estado local do tenant (ler `config.json`,
-  `memory/*.md`, sessions). Faça você mesmo.
-- Ações destrutivas (`git push --force`, `rm -rf`, alterações em
-  produção). Sempre pedir confirmação humana antes.
-- Tarefas que envolvem credencial do tenant (OAuth, tokens). Use o
-  pipeline interno.
+Como o CLI vai executar com suas próprias ferramentas, o prompt precisa ser
+**autossuficiente**:
+
+- Diga **explicitamente o cwd / caminhos relevantes** (`/root/.picoclaw`,
+  paths de arquivos). O CLI default usa o cwd do `exec`.
+- Liste **artefatos esperados** ("crie `/output/X.pdf`", "abra PR no repo Y").
+- Inclua **restrições** ("não toque em `secrets/`", "não rode `git push`").
+- Para tarefas longas, peça **resumo final em 1 parágrafo** no fim do prompt
+  pra economizar tokens no retorno.
+
+## Quando NÃO usar esta skill
+
+- O agente que invoca a skill é cliente-facing (Clara, Marcos, etc.) — esses
+  jamais devem chamar CLI externo, é só para sub-agentes internos do operador.
+- Ações destrutivas explícitas (`git push --force`, `rm -rf`). Confirmação
+  humana primeiro, independente do CLI.
