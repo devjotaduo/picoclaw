@@ -150,7 +150,7 @@ func ClearLauncherDashboardSessionCookie(w http.ResponseWriter, r *http.Request,
 // a SECONDARY credential when TrustedGatewaySecret is configured. This is
 // what makes controlplane-issued magic links work on local-mode tenants:
 // the controlplane signs the request with the shared HMAC secret, and the
-// launcher honours it just like a normal session cookie. The local-cookie
+// launcher honors it just like a normal session cookie. The local-cookie
 // path is tried FIRST (so a real interactive owner's cookie always wins),
 // HMAC is the fallback for the magic-link visitor flow.
 func LauncherDashboardAuth(cfg LauncherDashboardAuthConfig, next http.Handler) http.Handler {

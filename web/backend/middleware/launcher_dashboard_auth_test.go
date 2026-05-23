@@ -12,7 +12,13 @@ import (
 // signGatewayHeaders is a thin wrapper over gatewayauth.AnnotateRequest used
 // by tests that exercise the trusted-gateway HMAC path on the launcher side.
 // Kept tiny so the call sites read like the production controlplane code.
-func signGatewayHeaders(t *testing.T, r *http.Request, secret string, now time.Time, tenantID, userID, userEmail, role string) {
+func signGatewayHeaders(
+	t *testing.T,
+	r *http.Request,
+	secret string,
+	now time.Time,
+	tenantID, userID, userEmail, role string,
+) {
 	t.Helper()
 	gatewayauth.AnnotateRequest(r, secret, gatewayauth.Claims{
 		TenantID:  tenantID,

@@ -99,10 +99,10 @@ func TestRejectTenantGatewayAuthAPIPathsReturn401(t *testing.T) {
 // return the user where they were trying to go after a successful login.
 func TestRejectTenantGatewayAuthRedirectCases(t *testing.T) {
 	cases := []struct {
-		desc        string
-		baseDomain  string
-		requestURI  string
-		wantLoc     string
+		desc       string
+		baseDomain string
+		requestURI string
+		wantLoc    string
 	}{
 		{
 			desc:       "preserves ?next= for the original path",
