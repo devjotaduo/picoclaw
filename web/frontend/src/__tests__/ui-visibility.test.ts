@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  DEFAULT_UI_VISIBILITY_POLICY,
   type UIVisibilityPolicy,
   isUIElementVisible,
   resolveUIVisibilityProfile,
@@ -70,5 +71,36 @@ describe("ui visibility policy", () => {
     expect(isUIElementVisible(policy, "tenant", "sidebar.models")).toBe(false)
     expect(isUIElementVisible(policy, "admin", "sidebar.models")).toBe(true)
     expect(isUIElementVisible(policy, "tenant", "sidebar.chat")).toBe(true)
+  })
+
+  it("assigns public-only hidden controls to the public profile", () => {
+    expect(
+      isUIElementVisible(
+        DEFAULT_UI_VISIBILITY_POLICY,
+        "public",
+        "chat.context_usage",
+      ),
+    ).toBe(false)
+    expect(
+      isUIElementVisible(
+        DEFAULT_UI_VISIBILITY_POLICY,
+        "public",
+        "chat.reasoning_messages",
+      ),
+    ).toBe(false)
+    expect(
+      isUIElementVisible(
+        DEFAULT_UI_VISIBILITY_POLICY,
+        "public",
+        "agent_editor.create_agents",
+      ),
+    ).toBe(false)
+    expect(
+      isUIElementVisible(
+        DEFAULT_UI_VISIBILITY_POLICY,
+        "tenant",
+        "chat.context_usage",
+      ),
+    ).toBe(true)
   })
 })

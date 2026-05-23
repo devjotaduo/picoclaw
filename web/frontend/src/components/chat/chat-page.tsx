@@ -311,9 +311,11 @@ export function ChatPage() {
     apiKeyModels.length > 0 || oauthModels.length > 0 || localModels.length > 0
   const assistantDetailsPolicyReady = launcherPolicyQ.isSuccess
   const canShowReasoning =
+    isVisible("chat.reasoning_messages") &&
     assistantDetailsPolicyReady &&
     launcherPolicyQ.data.ui?.show_reasoning !== false
   const canShowToolCalls =
+    isVisible("chat.tool_call_messages") &&
     assistantDetailsPolicyReady &&
     launcherPolicyQ.data.ui?.show_tool_calls !== false
   const canToggleAssistantDetails = canShowReasoning || canShowToolCalls
@@ -328,13 +330,17 @@ export function ChatPage() {
   const showAttendantTestButton = isVisible("chat.test_attendant")
   const showPendingHandoffsSidebar = isVisible("chat.pending_handoffs_sidebar")
   const showQualityIndicator = isVisible("chat.quality_indicator")
+  const showContextUsage = isVisible("chat.context_usage")
+  const showQuickTasks = isVisible("chat.quick_tasks")
   const canShowModelSelector =
     launcherPolicyQ.isSuccess &&
     launcherPolicyQ.data.ui?.show_model_selector !== false
   const chatIntro = launcherPolicyQ.data?.ui?.chat_intro?.trim() || ""
-  const quickTasks = (launcherPolicyQ.data?.ui?.quick_tasks ?? []).filter(
-    (task) => task.label.trim() && task.prompt.trim(),
-  )
+  const quickTasks = showQuickTasks
+    ? (launcherPolicyQ.data?.ui?.quick_tasks ?? []).filter(
+        (task) => task.label.trim() && task.prompt.trim(),
+      )
+    : []
   const hasChatHeaderControls =
     showChatTitleExtra &&
     showModelSelector &&
@@ -669,7 +675,7 @@ export function ChatPage() {
           }}
           inputDisabledReason={inputDisabledReason}
           canSend={canSubmit}
-          contextUsage={contextUsage}
+          contextUsage={showContextUsage ? contextUsage : undefined}
           showQualityIndicator={showQualityIndicator}
           attendantTestActive={
             showAttendantTestButton && testingPublicAttendant
