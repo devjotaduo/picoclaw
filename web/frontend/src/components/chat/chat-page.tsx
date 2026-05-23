@@ -27,6 +27,7 @@ import { useGateway } from "@/hooks/use-gateway"
 import { usePicoChat } from "@/hooks/use-pico-chat"
 import { useSessionHistory } from "@/hooks/use-session-history"
 import { useUIVisibility } from "@/hooks/use-ui-visibility"
+import { groupChatSuggestionMessages } from "@/lib/chat-suggestion-card"
 import type { ConnectionState } from "@/store/chat"
 import type { ChatAttachment } from "@/store/chat"
 import { showAssistantDetailsAtom } from "@/store/chat"
@@ -278,6 +279,10 @@ export function ChatPage() {
     switchSession,
     newChat,
   } = usePicoChat()
+  const displayMessages = useMemo(
+    () => groupChatSuggestionMessages(messages),
+    [messages],
+  )
 
   const publicAttendantAgent = useMemo(
     () => findPublicAttendantAgent(agents),
@@ -621,7 +626,7 @@ export function ChatPage() {
               />
             )}
 
-            {messages.map((msg) => {
+            {displayMessages.map((msg) => {
               if (
                 msg.kind === "thought" &&
                 (!showAssistantDetails || !canShowReasoning)

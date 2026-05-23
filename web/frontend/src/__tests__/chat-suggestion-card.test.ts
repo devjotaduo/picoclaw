@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { parseChatSuggestionCard } from "@/lib/chat-suggestion-card"
+import {
+  groupChatSuggestionMessages,
+  parseChatSuggestionCard,
+} from "@/lib/chat-suggestion-card"
 
 describe("parseChatSuggestionCard", () => {
   it("extracts a suggestion card from numbered options", () => {
@@ -84,5 +87,37 @@ Resumo do atendimento:
 `)
 
     expect(parsed).toBeNull()
+  })
+})
+
+describe("groupChatSuggestionMessages", () => {
+  it("groups separate assistant option messages into one suggestion card input", () => {
+    const grouped = groupChatSuggestionMessages([
+      {
+        id: "intro",
+        role: "assistant",
+        content: "Aqui vão algumas opções do que eu posso fazer por você:",
+      },
+      {
+        id: "one",
+        role: "assistant",
+        content: "1. Escrever mensagens de atendimento no WhatsApp.",
+      },
+      {
+        id: "two",
+        role: "assistant",
+        content: "2. Criar fluxos para vendas, suporte ou triagem.",
+      },
+      {
+        id: "user",
+        role: "user",
+        content: "Quero a segunda.",
+      },
+    ])
+
+    expect(grouped).toHaveLength(2)
+    expect(grouped[0].id).toBe("intro-suggestions")
+    expect(parseChatSuggestionCard(grouped[0].content)?.options).toHaveLength(2)
+    expect(grouped[1].id).toBe("user")
   })
 })

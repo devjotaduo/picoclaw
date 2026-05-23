@@ -8,6 +8,15 @@ export interface ChatSuggestionCardData {
   options: ChatSuggestionChoice[]
 }
 
+export interface ChatSuggestionMessageInput {
+  id: string
+  role: string
+  content: string
+  kind?: string
+  attachments?: unknown[]
+  toolCalls?: unknown[]
+}
+
 const OPTION_LINE_RE = /^\s*(?:[-*•]|\d{1,2}[.)])\s+(.*)$/
 const CHECKBOX_LINE_RE = /^\s*[-*]\s+\[[ xX]\]\s+(.*)$/
 const SUGGESTION_CUE_RE =
@@ -26,6 +35,13 @@ function cleanInlineMarkdown(value: string): string {
 function isQuestionLike(value: string): boolean {
   const cleaned = cleanInlineMarkdown(value)
   return cleaned.endsWith("?") || SUGGESTION_CUE_RE.test(cleaned)
+}
+
+export function hasChatSuggestionCue(content: string): boolean {
+  return content
+    .split(/\r?\n/)
+    .map(cleanInlineMarkdown)
+    .some((line) => SUGGESTION_CUE_RE.test(line))
 }
 
 function matchOptionLine(line: string): string | null {
@@ -57,6 +73,19 @@ function splitChoice(value: string): ChatSuggestionChoice {
 
 function isOtherOption(value: string): boolean {
   return /^outro\b/i.test(cleanInlineMarkdown(value))
+}
+
+export function isChatSuggestionOptionText(content: string): boolean {
+  const lines = expandInlineOptions(
+    content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean),
+  )
+
+  return (
+    lines.length > 0 && lines.every((line) => Boolean(matchOptionLine(line)))
+  )
 }
 
 function expandInlineOptions(lines: string[]): string[] {
@@ -151,4 +180,88 @@ export function parseChatSuggestionCard(
   }
 
   return { title, options }
+}
+
+function isPlainAssistantMessage(message: ChatSuggestionMessageInput): boolean {
+  return (
+    message.role === "assistant" &&
+    (message.kind === undefined || message.kind === "normal") &&
+    (message.attachments?.length ?? 0) === 0 &&
+    (message.toolCalls?.length ?? 0) === 0 &&
+    message.content.trim().length > 0
+  )
+}
+
+function buildGroupedSuggestionMessage<T extends ChatSuggestionMessageInput>(
+  messages: readonly T[],
+  startIndex: number,
+): { message: T; nextIndex: number } | null {
+  const first = messages[startIndex]
+  if (!first || !isPlainAssistantMessage(first)) {
+    return null
+  }
+
+  const firstIsOption = isChatSuggestionOptionText(first.content)
+  const firstIsLead = hasChatSuggestionCue(first.content)
+  if (!firstIsOption && !firstIsLead) {
+    return null
+  }
+
+  const optionStartIndex = firstIsOption ? startIndex : startIndex + 1
+  const optionMessages: T[] = []
+  let cursor = optionStartIndex
+
+  while (
+    cursor < messages.length &&
+    isPlainAssistantMessage(messages[cursor]) &&
+    isChatSuggestionOptionText(messages[cursor].content)
+  ) {
+    optionMessages.push(messages[cursor])
+    cursor += 1
+  }
+
+  if (optionMessages.length < 2) {
+    return null
+  }
+
+  const content = [
+    firstIsOption ? "" : first.content,
+    ...optionMessages.map((message) => message.content),
+  ]
+    .filter(Boolean)
+    .join("\n")
+
+  if (!parseChatSuggestionCard(content)) {
+    return null
+  }
+
+  return {
+    message: {
+      ...first,
+      id: `${first.id}-suggestions`,
+      content,
+      attachments: undefined,
+      toolCalls: undefined,
+    },
+    nextIndex: cursor,
+  }
+}
+
+export function groupChatSuggestionMessages<
+  T extends ChatSuggestionMessageInput,
+>(messages: readonly T[]): T[] {
+  const grouped: T[] = []
+
+  for (let index = 0; index < messages.length; index += 1) {
+    const group = buildGroupedSuggestionMessage(messages, index)
+    if (group) {
+      grouped.push(group.message)
+      index = group.nextIndex - 1
+      continue
+    }
+
+    grouped.push(messages[index])
+  }
+
+  return grouped
 }
