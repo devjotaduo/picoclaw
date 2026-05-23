@@ -20,8 +20,9 @@ export interface ChatSuggestionMessageInput {
 const OPTION_LINE_RE = /^\s*(?:[-*•]|\d{1,2}[.)])\s+(.*)$/
 const CHECKBOX_LINE_RE = /^\s*[-*]\s+\[[ xX]\]\s+(.*)$/
 const SUGGESTION_CUE_RE =
-  /\b(sugest[aã]o|sugest[oõ]es|op[cç][aã]o|op[cç][oõ]es|escolh|aplicar|melhoria|alternativa|prefere|qual)\b/i
+  /\b(sugest[aã]o|sugest[oõ]es|op[cç][aã]o|op[cç][oõ]es|escolh|aplicar|melhoria|alternativa|prefere|qual|cores?|estilos?|modelos?|formatos?|tipos?)\b/i
 const MIN_PLAIN_CHOICE_OPTIONS = 4
+const SHORT_CHOICE_MAX_LENGTH = 48
 
 function cleanInlineMarkdown(value: string): string {
   return value
@@ -74,6 +75,15 @@ function splitChoice(value: string): ChatSuggestionChoice {
 
 function isOtherOption(value: string): boolean {
   return /^outro\b/i.test(cleanInlineMarkdown(value))
+}
+
+function isShortChoiceText(value: string): boolean {
+  const cleaned = cleanInlineMarkdown(value)
+  return (
+    cleaned.length > 0 &&
+    cleaned.length <= SHORT_CHOICE_MAX_LENGTH &&
+    !/[.!?;:]$/.test(cleaned)
+  )
 }
 
 export function isChatSuggestionOptionText(content: string): boolean {
@@ -136,7 +146,11 @@ export function parseChatSuggestionCard(
   const isPlainChoiceList =
     rawLines.length === lines.length &&
     optionIndexes.length >= MIN_PLAIN_CHOICE_OPTIONS &&
-    optionIndexes.length === lines.length
+    optionIndexes.length === lines.length &&
+    optionIndexes.every((index) => {
+      const optionText = matchOptionLine(lines[index])
+      return Boolean(optionText && isShortChoiceText(optionText))
+    })
   const hasSuggestionCue =
     isPlainChoiceList ||
     lines

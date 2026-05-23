@@ -98,6 +98,35 @@ Garantir navegacao por teclado.
     ])
   })
 
+  it("extracts short titled choice lists", () => {
+    const parsed = parseChatSuggestionCard(`
+Cores:
+- Coral
+- Vermelho
+- Bordô
+- Rosa-claro
+`)
+
+    expect(parsed?.title).toBe("Cores:")
+    expect(parsed?.options.map((option) => option.title)).toEqual([
+      "Coral",
+      "Vermelho",
+      "Bordô",
+      "Rosa-claro",
+    ])
+  })
+
+  it("keeps long sentence lists as markdown when there is no cue", () => {
+    const parsed = parseChatSuggestionCard(`
+- Cliente pediu uma revisão completa do atendimento antes da publicação.
+- Pedido ainda depende de confirmação do responsável financeiro.
+- Canal está pausado até a empresa concluir a configuração.
+- Relatório precisa ser validado antes do envio externo.
+`)
+
+    expect(parsed).toBeNull()
+  })
+
   it("ignores normal bullet lists without a suggestion cue", () => {
     const parsed = parseChatSuggestionCard(`
 Resumo do atendimento:
