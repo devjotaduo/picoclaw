@@ -92,16 +92,55 @@ func TestRejectTenantGatewayAuthAPIPathsReturn401(t *testing.T) {
 	}
 }
 
-func TestRejectTenantGatewayAuthEmptyBaseDomain(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
-	rec := httptest.NewRecorder()
-	rejectTenantGatewayAuth(rec, req, "")
-
-	if rec.Code != http.StatusFound {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusFound)
+// Reject redirects to /launcher-login on the SAME host regardless of
+// baseDomain. The baseDomain arg is no longer used (kept for log context
+// only — bouncing the user to adm.<base>/login was the old behavior).
+// `?next=` carries the original URI when present, so the launcher can
+// return the user where they were trying to go after a successful login.
+func TestRejectTenantGatewayAuthRedirectCases(t *testing.T) {
+	cases := []struct {
+		desc        string
+		baseDomain  string
+		requestURI  string
+		wantLoc     string
+	}{
+		{
+			desc:       "preserves ?next= for the original path",
+			baseDomain: "jotaduo.com",
+			requestURI: "/dashboard",
+			wantLoc:    "/launcher-login?next=%2Fdashboard",
+		},
+		{
+			desc:       "baseDomain ignored — never sends to adm.<base>",
+			baseDomain: "jotaduo.com",
+			requestURI: "/agents/clara",
+			wantLoc:    "/launcher-login?next=%2Fagents%2Fclara",
+		},
+		{
+			desc:       "empty baseDomain still redirects to launcher-login",
+			baseDomain: "",
+			requestURI: "/",
+			wantLoc:    "/launcher-login?next=%2F",
+		},
+		{
+			desc:       "already on /launcher-login: no ?next= loop",
+			baseDomain: "jotaduo.com",
+			requestURI: "/launcher-login",
+			wantLoc:    "/launcher-login",
+		},
 	}
-	if got := rec.Header().Get("Location"); got != "/login" {
-		t.Fatalf("Location = %q, want /login when base domain is empty", got)
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.requestURI, nil)
+			rec := httptest.NewRecorder()
+			rejectTenantGatewayAuth(rec, req, tc.baseDomain)
+			if rec.Code != http.StatusFound {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusFound)
+			}
+			if got := rec.Header().Get("Location"); got != tc.wantLoc {
+				t.Fatalf("Location = %q, want %q", got, tc.wantLoc)
+			}
+		})
 	}
 }
 

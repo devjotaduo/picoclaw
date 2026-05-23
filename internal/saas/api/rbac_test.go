@@ -62,7 +62,12 @@ func TestTenantSubdomainSkipsAdminHosts(t *testing.T) {
 	}
 }
 
-func TestRejectTenantGatewayAuthRedirectsToAdmHost(t *testing.T) {
+// Unauthenticated tenant requests redirect to the tenant's OWN
+// /launcher-login (same host) — NEVER to adm.<base>/login, which is the
+// platform-admin login on a separate users table. The query string
+// preserves the original path via ?next= so the launcher can return the
+// user where they wanted to go after logging in.
+func TestRejectTenantGatewayAuthRedirectsToSameHostLauncherLogin(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "https://carlao.jotaduo.com/", nil)
 	rec := httptest.NewRecorder()
 
@@ -71,8 +76,9 @@ func TestRejectTenantGatewayAuthRedirectsToAdmHost(t *testing.T) {
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusFound)
 	}
-	if got := rec.Header().Get("Location"); got != "https://adm.jotaduo.com/login" {
-		t.Fatalf("Location = %q", got)
+	got := rec.Header().Get("Location")
+	if got != "/launcher-login?next=%2F" {
+		t.Fatalf("Location = %q, want /launcher-login?next=%%2F (tenant's own launcher login, NOT adm.<base>)", got)
 	}
 }
 
