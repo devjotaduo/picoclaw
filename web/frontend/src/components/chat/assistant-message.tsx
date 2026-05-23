@@ -1,18 +1,29 @@
-import {
-  IconCheck,
-  IconCopy,
-  IconDownload,
-  IconFileText,
-  IconTerminal2,
-} from "@tabler/icons-react"
+import { IconCheck, IconCopy, IconFileText } from "@tabler/icons-react"
 import { useState } from "react"
-import { useTranslation } from "react-i18next"
 
 import {
   Message,
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message"
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "@/components/ai-elements/reasoning"
+import {
+  Source,
+  Sources,
+  SourcesContent,
+  SourcesTrigger,
+} from "@/components/ai-elements/sources"
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+} from "@/components/ai-elements/tool"
 import { SuggestionChoiceCard } from "@/components/chat/suggestion-choice-card"
 import { Button } from "@/components/ui/button"
 import { formatMessageTime } from "@/hooks/use-pico-chat"
@@ -119,36 +130,126 @@ function summarizeToolCall(toolCall: ChatToolCall): string {
   return truncateStatusText(summary || "tarefa")
 }
 
-function CompactAssistantStatus({
-  kind,
-  toolCalls,
-}: {
-  kind: AssistantMessageKind
-  toolCalls: ChatToolCall[]
-}) {
-  const { t } = useTranslation()
-  const isToolCalls = kind === "tool_calls"
-  const firstToolCall = toolCalls[0]
-  const status = isToolCalls
-    ? t("chat.executingStatus", {
-        action: firstToolCall ? summarizeToolCall(firstToolCall) : "tarefa",
-      })
-    : t("chat.thinkingStatus")
+function toolInput(toolCall: ChatToolCall): unknown {
+  const rawArguments = toolCall.function?.arguments?.trim() ?? ""
+  return parseToolArguments(rawArguments) ?? rawArguments
+}
+
+function toolOutput(toolCall: ChatToolCall): string {
+  return toolCall.extraContent?.toolFeedbackExplanation?.trim() ?? ""
+}
+
+function AssistantReasoningStatus({ content }: { content: string }) {
+  return (
+    <Reasoning isStreaming={!content.trim()} defaultOpen={Boolean(content)}>
+      <ReasoningTrigger isStreaming={!content.trim()}>
+        Pensando
+      </ReasoningTrigger>
+      {content.trim() ? (
+        <ReasoningContent>
+          <MessageResponse>{content}</MessageResponse>
+        </ReasoningContent>
+      ) : null}
+    </Reasoning>
+  )
+}
+
+function AssistantToolStatus({ toolCalls }: { toolCalls: ChatToolCall[] }) {
+  const visibleToolCalls = toolCalls.length > 0 ? toolCalls : [{}]
 
   return (
-    <div className="text-muted-foreground/75 flex flex-col gap-3 rounded-lg px-1 py-1 text-sm">
-      <div className="flex min-w-0 items-center gap-2">
-        {isToolCalls ? (
-          <IconTerminal2 className="size-4 shrink-0 opacity-80" />
-        ) : null}
-        <span className="truncate">{status}</span>
-      </div>
-      {!isToolCalls ? null : (
-        <div className="text-muted-foreground/70">
-          {t("chat.thinkingStatus")}
-        </div>
-      )}
+    <div className="grid gap-2">
+      {visibleToolCalls.map((toolCall, index) => {
+        const name = toolCall.function?.name || toolCall.type || "Ferramenta"
+        const output = toolOutput(toolCall)
+        const input = toolInput(toolCall)
+        const state = output ? "output-available" : "input-available"
+
+        return (
+          <Tool key={toolCall.id || `${name}-${index}`} defaultOpen={!output}>
+            <ToolHeader
+              state={state}
+              title={summarizeToolCall(toolCall)}
+              toolName={friendlyToolName(name)}
+              type={name}
+            />
+            <ToolContent>
+              <ToolInput input={input} />
+              <ToolOutput
+                output={
+                  output ? <MessageResponse>{output}</MessageResponse> : null
+                }
+              />
+            </ToolContent>
+          </Tool>
+        )
+      })}
+      <Reasoning isStreaming defaultOpen={false}>
+        <ReasoningTrigger isStreaming>Pensando</ReasoningTrigger>
+      </Reasoning>
     </div>
+  )
+}
+
+interface AssistantSource {
+  href: string
+  title: string
+}
+
+function extractLinks(content: string): AssistantSource[] {
+  const sources = new Map<string, AssistantSource>()
+  const markdownLinkRe = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g
+  const plainLinkRe = /https?:\/\/[^\s)]+/g
+
+  for (const match of content.matchAll(markdownLinkRe)) {
+    const title = cleanSourceTitle(match[1] || match[2] || "")
+    const href = cleanSourceHref(match[2] || "")
+    if (href) {
+      sources.set(href, { href, title: title || href })
+    }
+  }
+
+  for (const match of content.matchAll(plainLinkRe)) {
+    const href = cleanSourceHref(match[0] || "")
+    if (href && !sources.has(href)) {
+      sources.set(href, { href, title: href })
+    }
+  }
+
+  return [...sources.values()]
+}
+
+function cleanSourceHref(value: string): string {
+  return value.replace(/[.,;:!?]+$/, "").trim()
+}
+
+function cleanSourceTitle(value: string): string {
+  return value.replace(/\s+/g, " ").trim()
+}
+
+function attachmentSources(attachments: ChatAttachment[]): AssistantSource[] {
+  return attachments.map((attachment) => ({
+    href: attachment.url,
+    title: attachment.filename || attachment.url,
+  }))
+}
+
+function AssistantSources({ sources }: { sources: AssistantSource[] }) {
+  if (sources.length === 0) {
+    return null
+  }
+
+  return (
+    <Sources className="mt-1 max-w-xl">
+      <SourcesTrigger count={sources.length} />
+      <SourcesContent>
+        {sources.map((source) => (
+          <Source key={source.href} href={source.href} title={source.title}>
+            {source.title}
+          </Source>
+        ))}
+      </SourcesContent>
+    </Sources>
   )
 }
 
@@ -161,7 +262,6 @@ export function AssistantMessage({
   timestamp = "",
   onSuggestionReply,
 }: AssistantMessageProps) {
-  const { t } = useTranslation()
   const [isCopied, setIsCopied] = useState(false)
   const isThought = kind === "thought"
   const isToolCalls = kind === "tool_calls"
@@ -183,6 +283,10 @@ export function AssistantMessage({
   const messageMeta = [assistantName.trim(), formattedTimestamp].filter(Boolean)
   const suggestionCard =
     kind === "normal" ? parseChatSuggestionCard(displayContent) : null
+  const sources = [
+    ...extractLinks(displayContent),
+    ...attachmentSources(fileAttachments),
+  ]
 
   const handleCopy = async () => {
     const markCopied = () => {
@@ -237,9 +341,8 @@ export function AssistantMessage({
               : "bg-card text-card-foreground border-border/60",
           )}
         >
-          {isCollapsedBlock && (
-            <CompactAssistantStatus kind={kind} toolCalls={toolCalls} />
-          )}
+          {isThought && <AssistantReasoningStatus content={displayContent} />}
+          {isToolCalls && <AssistantToolStatus toolCalls={toolCalls} />}
           {!isCollapsedBlock && !isToolCalls && hasText && (
             <>
               {suggestionCard ? (
@@ -257,9 +360,7 @@ export function AssistantMessage({
                       : "prose-p:my-2 prose-p:whitespace-pre-wrap p-4 text-[15px] leading-relaxed",
                   )}
                 >
-                  <MessageResponse>
-                    {displayContent}
-                  </MessageResponse>
+                  <MessageResponse>{displayContent}</MessageResponse>
                 </div>
               )}
             </>
@@ -319,33 +420,31 @@ export function AssistantMessage({
       )}
 
       {fileAttachments.length > 0 && (
-        <div className="mt-1 flex flex-wrap gap-3">
+        <div className="mt-1 flex max-w-xl flex-wrap gap-2">
           {fileAttachments.map((attachment, index) => (
             <a
               key={`${attachment.url}-${index}`}
               href={attachment.url}
               download={attachment.filename}
-              className="group/file border-border/60 bg-card flex w-fit max-w-sm min-w-[220px] items-center gap-3.5 rounded-xl border px-4 py-3 transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-500/30 hover:shadow-sm dark:hover:border-violet-500/40"
+              className="border-border/60 bg-card hover:bg-muted/40 flex w-fit max-w-sm min-w-[220px] items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-violet-400 ring-1 ring-violet-500/10 dark:bg-violet-500/10 dark:text-violet-400 dark:ring-violet-500/30">
-                <IconFileText className="h-5 w-5" />
+              <div className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg">
+                <IconFileText className="size-4" />
               </div>
-              <div className="flex min-w-0 flex-1 flex-col pr-1">
-                <span className="text-foreground/90 truncate text-[14px] leading-tight font-medium transition-colors group-hover/file:text-violet-600 dark:group-hover/file:text-violet-400">
-                  {attachment.filename || "Download file"}
-                </span>
-                <span className="text-muted-foreground/70 mt-1 text-[12px] font-medium">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">
+                  {attachment.filename || "Documento"}
+                </div>
+                <div className="text-muted-foreground truncate text-xs">
                   {attachment.filename?.split(".").pop()?.toUpperCase() ||
-                    "FILE"}
-                </span>
-              </div>
-              <div className="bg-muted/60 text-muted-foreground/50 dark:bg-muted/20 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-300 group-hover/file:bg-violet-400 group-hover/file:text-white group-hover/file:shadow-sm dark:group-hover/file:bg-violet-400">
-                <IconDownload className="h-4 w-4 transition-transform duration-300 group-hover/file:-translate-y-[1px]" />
+                    "ARQUIVO"}
+                </div>
               </div>
             </a>
           ))}
         </div>
       )}
+      {!isCollapsedBlock ? <AssistantSources sources={sources} /> : null}
     </Message>
   )
 }
