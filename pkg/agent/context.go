@@ -92,11 +92,23 @@ func getGlobalConfigDir() string {
 func NewContextBuilder(workspace string) *ContextBuilder {
 	// builtin skills: skills directory in current project
 	// Use the skills/ directory under the current working directory
-	builtinSkillsDir := strings.TrimSpace(os.Getenv(config.EnvBuiltinSkills))
+	envBuiltin := strings.TrimSpace(os.Getenv(config.EnvBuiltinSkills))
+	builtinSkillsDir := envBuiltin
 	if builtinSkillsDir == "" {
 		wd, _ := os.Getwd()
 		builtinSkillsDir = filepath.Join(wd, "skills")
 	}
+
+	// Per-agent workspaces under `<parent>/agents/<id>/` don't have their own
+	// `skills/` subdir. Surface `<parent>/skills/` via the builtin tier so
+	// secondary agents inherit the main workspace's skill catalog (cli-delegation,
+	// github, tmux, etc.). An explicit PICOCLAW_BUILTIN_SKILLS env var still wins.
+	if envBuiltin == "" {
+		if shared := siblingWorkspaceSkillsDir(workspace); shared != "" {
+			builtinSkillsDir = shared
+		}
+	}
+
 	globalSkillsDir := filepath.Join(getGlobalConfigDir(), "skills")
 
 	return &ContextBuilder{
@@ -105,6 +117,28 @@ func NewContextBuilder(workspace string) *ContextBuilder {
 		memory:         NewMemoryStore(workspace),
 		promptRegistry: NewPromptRegistry(),
 	}
+}
+
+// siblingWorkspaceSkillsDir returns `<parent>/skills` when workspace looks
+// like `<parent>/agents/<id>/` and that skills directory exists. Returns ""
+// otherwise.
+func siblingWorkspaceSkillsDir(workspace string) string {
+	if workspace == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(workspace)
+	if err != nil {
+		return ""
+	}
+	parent := filepath.Dir(abs)
+	if filepath.Base(parent) != "agents" {
+		return ""
+	}
+	candidate := filepath.Join(filepath.Dir(parent), "skills")
+	if info, err := os.Stat(candidate); err != nil || !info.IsDir() {
+		return ""
+	}
+	return candidate
 }
 
 func (cb *ContextBuilder) RegisterPromptSource(desc PromptSourceDescriptor) error {

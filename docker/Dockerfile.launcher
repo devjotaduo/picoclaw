@@ -55,12 +55,17 @@ RUN CONFIG_PKG=github.com/sipeed/picoclaw/pkg/config && \
 FROM alpine:3.23
 
 # Runtime deps for picoclaw-launcher + dev/operator skills (github, tmux,
-# weather, summarize, skill-creator, agent-browser). The launcher is "light":
-# we ship the agent-browser Node CLI but NOT Chromium — browser automation
-# connects to the shared `browser-sidecar` container over CDP via
-# $BROWSER_CDP_URL (set by the controlplane provisioner). Without that env
-# var the skill exits with a clear message instead of trying to launch a
-# local browser that isn't there.
+# weather, summarize, skill-creator, agent-browser, cli-delegation). The
+# launcher is "light": we ship the agent-browser Node CLI but NOT
+# Chromium — browser automation connects to the shared `browser-sidecar`
+# container over CDP via $BROWSER_CDP_URL (set by the controlplane
+# provisioner). Without that env var the skill exits with a clear message
+# instead of trying to launch a local browser that isn't there.
+#
+# The cli-delegation skill (used by pixel/doc/dev sub-agents) requires
+# the Claude Code CLI and the OpenAI Codex CLI on PATH. Auth still needs
+# env vars at runtime (ANTHROPIC_API_KEY, OPENAI_API_KEY) — without them
+# the skill cascades to the local fallback.
 RUN apk add --no-cache \
   ca-certificates \
   curl \
@@ -72,7 +77,10 @@ RUN apk add --no-cache \
   py3-pip \
   tmux \
   tzdata \
-  && npm install -g --omit=optional agent-browser \
+  && npm install -g --omit=optional \
+       agent-browser \
+       @anthropic-ai/claude-code \
+       @openai/codex \
   && npm cache clean --force
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

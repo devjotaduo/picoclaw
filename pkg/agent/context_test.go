@@ -1,10 +1,45 @@
 package agent
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
+
+func TestSiblingWorkspaceSkillsDir(t *testing.T) {
+	root := t.TempDir()
+	mainWS := filepath.Join(root, "workspace")
+	sharedSkills := filepath.Join(mainWS, "skills")
+	subAgentWS := filepath.Join(mainWS, "agents", "dev-coder")
+	if err := os.MkdirAll(sharedSkills, 0o755); err != nil {
+		t.Fatalf("mkdir shared skills: %v", err)
+	}
+	if err := os.MkdirAll(subAgentWS, 0o755); err != nil {
+		t.Fatalf("mkdir sub-agent ws: %v", err)
+	}
+
+	got := siblingWorkspaceSkillsDir(subAgentWS)
+	want, _ := filepath.Abs(sharedSkills)
+	if got != want {
+		t.Fatalf("siblingWorkspaceSkillsDir(%q) = %q, want %q", subAgentWS, got, want)
+	}
+
+	// Main workspace (not under agents/) should return "".
+	if got := siblingWorkspaceSkillsDir(mainWS); got != "" {
+		t.Fatalf("siblingWorkspaceSkillsDir for main ws = %q, want \"\"", got)
+	}
+
+	// Per-agent path where shared dir doesn't exist should return "".
+	missing := filepath.Join(root, "elsewhere", "agents", "x")
+	if err := os.MkdirAll(missing, 0o755); err != nil {
+		t.Fatalf("mkdir missing: %v", err)
+	}
+	if got := siblingWorkspaceSkillsDir(missing); got != "" {
+		t.Fatalf("siblingWorkspaceSkillsDir without shared dir = %q, want \"\"", got)
+	}
+}
 
 func msg(role, content string) providers.Message {
 	return providers.Message{Role: role, Content: content}
