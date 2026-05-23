@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -42,6 +44,7 @@ const (
 	oauthBrowserFlowTTL    = 10 * time.Minute
 	oauthDeviceCodeFlowTTL = 15 * time.Minute
 	oauthTerminalFlowGC    = 30 * time.Minute
+	oauthGHCLIImportTTL    = 5 * time.Second
 )
 
 var oauthProviderOrder = []string{
@@ -82,6 +85,7 @@ var (
 	oauthSaveConfig                     = config.SaveConfig
 	oauthFetchAntigravityProject        = providers.FetchAntigravityProjectID
 	oauthFetchGoogleUserEmailFunc       = fetchGoogleUserEmail
+	oauthRunGHCLI                       = runGHCLI
 )
 
 type oauthFlow struct {
@@ -1110,39 +1114,88 @@ func importClaudeCodeCredential() (*auth.AuthCredential, error) {
 	}, nil
 }
 
-// importGHCLICredential reads a GitHub OAuth token from the Copilot CLI hosts
-// file (~/.config/github-copilot/hosts.json) or the GitHub CLI hosts file
-// (~/.config/gh/hosts.yml), whichever is found first.
+// importGHCLICredential reads a GitHub OAuth token from Copilot/GitHub CLI
+// config files, then falls back to `gh auth token`. The command fallback is
+// needed on platforms where GitHub CLI stores tokens in the OS keyring instead
+// of hosts.yml.
 func importGHCLICredential() (*auth.AuthCredential, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("finding home dir: %w", err)
 	}
 
-	// Try ~/.config/github-copilot/hosts.json first.
-	copilotPath := filepath.Join(homeDir, ".config", "github-copilot", "hosts.json")
-	if data, readErr := os.ReadFile(copilotPath); readErr == nil {
+	checkedPaths := githubCredentialPaths(homeDir)
+	for _, path := range checkedPaths {
+		cred, readErr := importGitHubCredentialFile(path)
+		if readErr == nil && cred != nil {
+			return cred, nil
+		}
+	}
+
+	cred, commandErr := importGHCLICredentialFromCommand()
+	if commandErr == nil {
+		return cred, nil
+	}
+
+	return nil, fmt.Errorf(
+		"no GitHub credentials found (checked %s; gh auth token failed: %v)",
+		strings.Join(checkedPaths, ", "),
+		commandErr,
+	)
+}
+
+func githubCredentialPaths(homeDir string) []string {
+	paths := []string{
+		filepath.Join(homeDir, ".config", "github-copilot", "hosts.json"),
+		filepath.Join(homeDir, ".config", "gh", "hosts.yml"),
+	}
+	if configDir, err := os.UserConfigDir(); err == nil && configDir != "" {
+		paths = append(paths,
+			filepath.Join(configDir, "github-copilot", "hosts.json"),
+			filepath.Join(configDir, "gh", "hosts.yml"),
+			filepath.Join(configDir, "GitHub CLI", "hosts.yml"),
+		)
+	}
+	if ghConfigDir := strings.TrimSpace(os.Getenv("GH_CONFIG_DIR")); ghConfigDir != "" {
+		paths = append(paths, filepath.Join(ghConfigDir, "hosts.yml"))
+	}
+
+	seen := make(map[string]bool, len(paths))
+	unique := make([]string, 0, len(paths))
+	for _, path := range paths {
+		clean := filepath.Clean(path)
+		if clean == "." || seen[clean] {
+			continue
+		}
+		seen[clean] = true
+		unique = append(unique, clean)
+	}
+	return unique
+}
+
+func importGitHubCredentialFile(path string) (*auth.AuthCredential, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if strings.EqualFold(filepath.Ext(path), ".json") {
 		var hosts map[string]struct {
 			OAuthToken string `json:"oauth_token"`
 			User       string `json:"user"`
 		}
-		if jsonErr := json.Unmarshal(data, &hosts); jsonErr == nil {
-			if gh, ok := hosts["github.com"]; ok && gh.OAuthToken != "" {
-				return &auth.AuthCredential{
-					AccessToken: gh.OAuthToken,
-					AccountID:   gh.User,
-					Provider:    oauthProviderGitHubCopilot,
-					AuthMethod:  oauthMethodGHCLI,
-				}, nil
-			}
+		if err := json.Unmarshal(data, &hosts); err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", path, err)
 		}
-	}
-
-	// Fall back to ~/.config/gh/hosts.yml (GitHub CLI).
-	ghPath := filepath.Join(homeDir, ".config", "gh", "hosts.yml")
-	data, err := os.ReadFile(ghPath)
-	if err != nil {
-		return nil, fmt.Errorf("no GitHub credentials found (checked %s and %s)", copilotPath, ghPath)
+		gh, ok := hosts["github.com"]
+		if !ok || gh.OAuthToken == "" {
+			return nil, fmt.Errorf("no GitHub token found in %s", path)
+		}
+		return &auth.AuthCredential{
+			AccessToken: gh.OAuthToken,
+			AccountID:   gh.User,
+			Provider:    oauthProviderGitHubCopilot,
+			AuthMethod:  oauthMethodGHCLI,
+		}, nil
 	}
 
 	var hosts map[string]struct {
@@ -1150,12 +1203,12 @@ func importGHCLICredential() (*auth.AuthCredential, error) {
 		User       string `yaml:"user"`
 	}
 	if err := yaml.Unmarshal(data, &hosts); err != nil {
-		return nil, fmt.Errorf("parsing gh hosts.yml: %w", err)
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 
 	gh, ok := hosts["github.com"]
 	if !ok || gh.OAuthToken == "" {
-		return nil, fmt.Errorf("no GitHub token found in %s", ghPath)
+		return nil, fmt.Errorf("no GitHub token found in %s", path)
 	}
 
 	return &auth.AuthCredential{
@@ -1164,6 +1217,40 @@ func importGHCLICredential() (*auth.AuthCredential, error) {
 		Provider:    oauthProviderGitHubCopilot,
 		AuthMethod:  oauthMethodGHCLI,
 	}, nil
+}
+
+func importGHCLICredentialFromCommand() (*auth.AuthCredential, error) {
+	token, err := oauthRunGHCLI("auth", "token", "--hostname", "github.com")
+	if err != nil {
+		return nil, err
+	}
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, fmt.Errorf("empty token")
+	}
+
+	accountID, _ := oauthRunGHCLI("api", "user", "--jq", ".login")
+	return &auth.AuthCredential{
+		AccessToken: token,
+		AccountID:   strings.TrimSpace(accountID),
+		Provider:    oauthProviderGitHubCopilot,
+		AuthMethod:  oauthMethodGHCLI,
+	}, nil
+}
+
+func runGHCLI(args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), oauthGHCLIImportTTL)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "gh", args...)
+	out, err := cmd.Output()
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	if err != nil {
+		return "", fmt.Errorf("gh %s: %w", strings.Join(args, " "), err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func fetchGoogleUserEmail(accessToken string) (string, error) {

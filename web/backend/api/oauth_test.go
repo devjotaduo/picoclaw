@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -574,15 +575,63 @@ func TestGitHubCopilotLoginMigratesLegacyGitHubModelsConfig(t *testing.T) {
 	}
 }
 
+func TestImportGHCLICredentialFallsBackToCommand(t *testing.T) {
+	_, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+	resetOAuthHooks(t)
+
+	var calls []string
+	oauthRunGHCLI = func(args ...string) (string, error) {
+		call := strings.Join(args, " ")
+		calls = append(calls, call)
+		switch call {
+		case "auth token --hostname github.com":
+			return "gho-test-token\n", nil
+		case "api user --jq .login":
+			return "devjotaduo\n", nil
+		default:
+			return "", fmt.Errorf("unexpected gh call: %s", call)
+		}
+	}
+
+	got, err := importGHCLICredential()
+	if err != nil {
+		t.Fatalf("importGHCLICredential error: %v", err)
+	}
+	if got.AccessToken != "gho-test-token" {
+		t.Fatalf("access token = %q, want test token", got.AccessToken)
+	}
+	if got.AccountID != "devjotaduo" {
+		t.Fatalf("account id = %q, want devjotaduo", got.AccountID)
+	}
+	if got.Provider != oauthProviderGitHubCopilot {
+		t.Fatalf("provider = %q, want %q", got.Provider, oauthProviderGitHubCopilot)
+	}
+	if got.AuthMethod != oauthMethodGHCLI {
+		t.Fatalf("auth method = %q, want %q", got.AuthMethod, oauthMethodGHCLI)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("gh calls = %v, want token and user calls", calls)
+	}
+}
+
 func setupOAuthTestEnv(t *testing.T) (string, func()) {
 	t.Helper()
 
 	tmp := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
+	oldAppData := os.Getenv("APPDATA")
 	oldPicoHome := os.Getenv("PICOCLAW_HOME")
 
 	if err := os.Setenv("HOME", tmp); err != nil {
 		t.Fatalf("set HOME: %v", err)
+	}
+	if err := os.Setenv("USERPROFILE", tmp); err != nil {
+		t.Fatalf("set USERPROFILE: %v", err)
+	}
+	if err := os.Setenv("APPDATA", filepath.Join(tmp, "AppData", "Roaming")); err != nil {
+		t.Fatalf("set APPDATA: %v", err)
 	}
 	if err := os.Setenv("PICOCLAW_HOME", filepath.Join(tmp, ".picoclaw")); err != nil {
 		t.Fatalf("set PICOCLAW_HOME: %v", err)
@@ -603,6 +652,16 @@ func setupOAuthTestEnv(t *testing.T) (string, func()) {
 
 	cleanup := func() {
 		_ = os.Setenv("HOME", oldHome)
+		if oldUserProfile == "" {
+			_ = os.Unsetenv("USERPROFILE")
+		} else {
+			_ = os.Setenv("USERPROFILE", oldUserProfile)
+		}
+		if oldAppData == "" {
+			_ = os.Unsetenv("APPDATA")
+		} else {
+			_ = os.Setenv("APPDATA", oldAppData)
+		}
 		if oldPicoHome == "" {
 			_ = os.Unsetenv("PICOCLAW_HOME")
 		} else {
@@ -631,6 +690,7 @@ func resetOAuthHooks(t *testing.T) {
 	origSaveConfig := oauthSaveConfig
 	origFetchProject := oauthFetchAntigravityProject
 	origFetchGoogleEmail := oauthFetchGoogleUserEmailFunc
+	origRunGHCLI := oauthRunGHCLI
 
 	t.Cleanup(func() {
 		oauthNow = origNow
@@ -649,5 +709,6 @@ func resetOAuthHooks(t *testing.T) {
 		oauthSaveConfig = origSaveConfig
 		oauthFetchAntigravityProject = origFetchProject
 		oauthFetchGoogleUserEmailFunc = origFetchGoogleEmail
+		oauthRunGHCLI = origRunGHCLI
 	})
 }
