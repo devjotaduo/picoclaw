@@ -223,6 +223,12 @@ services:
       - /srv/saas/tenants:/srv/saas/tenants
       - controlplane_data:/var/lib/picoclaw-saas
       - /srv/picoclaw-workspaces:/srv/picoclaw-workspaces
+      # Static React landing for jotaduo.com apex. Built locally in
+      # web/landing/ and uploaded via scp. Read-only; controlplane reads
+      # at request time so an scp is immediately visible. If the dir is
+      # empty the apex falls through to the SPA admin (safe default).
+      # See web/landing/README.md for the workflow.
+      - /var/lib/picoclaw-landing:/var/lib/picoclaw-landing:ro
     networks:
       - saas_edge
       - saas_llm

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -310,9 +312,38 @@ func (h *Handler) Routes() http.Handler {
 	})
 
 	// SPA fallback — must be last so it catches everything API doesn't.
-	r.Handle("/*", SPAHandler())
+	// Wrapped in LandingMux so the apex domain (jotaduo.com) gets the
+	// static React landing from /var/lib/picoclaw-landing/, while admin.*
+	// and tenant subdomains keep getting the embedded SPA admin. If the
+	// landing dir is missing or has no index.html the wrapper is a no-op
+	// and the apex falls through to the SPA admin too — safe default.
+	landingDir := strings.TrimSpace(os.Getenv("PICOCLAW_LANDING_DIR"))
+	if landingDir == "" {
+		landingDir = "/var/lib/picoclaw-landing"
+	}
+	apexDomains := apexDomainsFromEnv()
+	r.Handle("/*", LandingMux(landingDir, apexDomains, SPAHandler()))
 
 	return h.withTenantGateway(r)
+}
+
+// apexDomainsFromEnv reads SAAS_BASE_DOMAIN (e.g. "jotaduo.com") and
+// PICOCLAW_LANDING_APEX_DOMAINS (comma-separated override for staging or
+// alternative hosts). Returns the union, lowercased and trimmed.
+func apexDomainsFromEnv() []string {
+	out := make([]string, 0, 2)
+	if base := strings.TrimSpace(os.Getenv("SAAS_BASE_DOMAIN")); base != "" {
+		out = append(out, strings.ToLower(base))
+	}
+	if extra := strings.TrimSpace(os.Getenv("PICOCLAW_LANDING_APEX_DOMAINS")); extra != "" {
+		for _, d := range strings.Split(extra, ",") {
+			d = strings.ToLower(strings.TrimSpace(d))
+			if d != "" {
+				out = append(out, d)
+			}
+		}
+	}
+	return out
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

@@ -279,6 +279,10 @@ services:
       # Read-write so the admin file editor can persist edits and the
       # docker-spawned vite build can write to frontend-dist/.
       - /srv/picoclaw-workspaces:/srv/picoclaw-workspaces
+      # Static React landing for jotaduo.com apex (see web/landing/).
+      # Read-only; controlplane reads at request time so scp is visible
+      # without restart. Falls through to SPA admin if dir empty.
+      - /var/lib/picoclaw-landing:/var/lib/picoclaw-landing:ro
     networks:
       - saas_edge
       - saas_llm
