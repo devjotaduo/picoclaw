@@ -79,10 +79,10 @@ func readFile(t *testing.T, path string) string {
 // Layout (a): every entry under home/ prefix.
 func TestExtractWorkspaceZip_HomeStrippedLayout(t *testing.T) {
 	zr := buildZip(t, map[string]string{
-		"home/config.json":         `{"k":"v"}`,
-		"home/workspace/AGENT.md":  "# Agent",
-		"home/workspace/SOUL.md":   "# Soul",
-		"home/.security.yml":       "version: 1",
+		"home/config.json":        `{"k":"v"}`,
+		"home/workspace/AGENT.md": "# Agent",
+		"home/workspace/SOUL.md":  "# Soul",
+		"home/.security.yml":      "version: 1",
 	})
 
 	dst := mustExtract(t, zr)
@@ -102,13 +102,13 @@ func TestExtractWorkspaceZip_HomeStrippedLayout(t *testing.T) {
 	}
 }
 
-// Layout (b): bare entries at root, no recognised top-level dir. Should be
+// Layout (b): bare entries at root, no recognized top-level dir. Should be
 // treated as a home/ payload (backwards-compat).
 func TestExtractWorkspaceZip_BareHomeLayout(t *testing.T) {
 	zr := buildZip(t, map[string]string{
-		"config.json":         `{"bare":true}`,
-		"workspace/AGENT.md":  "# Bare agent",
-		".security.yml":       "version: 1",
+		"config.json":        `{"bare":true}`,
+		"workspace/AGENT.md": "# Bare agent",
+		".security.yml":      "version: 1",
 	})
 
 	dst := mustExtract(t, zr)

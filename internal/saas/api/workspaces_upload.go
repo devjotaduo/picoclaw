@@ -47,7 +47,7 @@ const maxWorkspaceExtractedFiles = 5000
 //  1. "home only" — every entry starts with `home/`. Stripped on extract
 //     so files land at <ws>/home/. The historical shape.
 //
-//  2. "bare home" — no recognised top-level dir prefix. Treated as a
+//  2. "bare home" — no recognized top-level dir prefix. Treated as a
 //     home/ payload too, landing at <ws>/home/. Backwards-compat.
 //
 //  3. "multi-folder" — every entry starts with one of the three known
@@ -128,7 +128,11 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 	// Reject if the slug is already in use on disk — overwriting an existing
 	// workspace via upload would be a foot-gun.
 	if _, err := os.Stat(hostPath); err == nil {
-		writeError(w, http.StatusConflict, "a workspace already exists at "+hostPath+"; pick a different slug or delete it first")
+		writeError(
+			w,
+			http.StatusConflict,
+			"a workspace already exists at "+hostPath+"; pick a different slug or delete it first",
+		)
 		return
 	}
 
@@ -198,7 +202,7 @@ const (
 	// layoutHomeStripped: every entry starts with `home/`. Strip that
 	// prefix on extract; everything lands under <ws>/home/.
 	layoutHomeStripped archiveLayout = iota
-	// layoutBareHome: no recognised top-level dir prefix. Treat as a
+	// layoutBareHome: no recognized top-level dir prefix. Treat as a
 	// raw home payload — entries land at <ws>/home/<entry>. Backwards-
 	// compat with the original single-subtree upload.
 	layoutBareHome
@@ -233,7 +237,7 @@ func detectArchiveLayout(zr *zip.Reader) archiveLayout {
 			// Any unknown top-level name forces the legacy bare-home
 			// interpretation. Mixing 'home/x' with 'random.txt' would
 			// land random.txt at <ws>/home/random.txt — which is the
-			// historical behaviour we don't want to regress.
+			// historical behavior we don't want to regress.
 			return layoutBareHome
 		}
 		seenTops[top] = struct{}{}
