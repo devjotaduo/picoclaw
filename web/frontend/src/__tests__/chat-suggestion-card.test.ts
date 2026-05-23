@@ -78,6 +78,26 @@ Garantir navegacao por teclado.
     ])
   })
 
+  it("extracts long plain choice lists without an explicit cue", () => {
+    const parsed = parseChatSuggestionCard(`
+- Coral
+- Vermelho
+- Bordô
+- Rosa-claro
+- Pink
+- Roxo
+- Lilás
+`)
+
+    expect(parsed?.title).toBe("Escolha uma opção")
+    expect(parsed?.options).toEqual([
+      { title: "Coral", description: "" },
+      { title: "Vermelho", description: "" },
+      { title: "Bordô", description: "" },
+      { title: "Rosa-claro", description: "" },
+    ])
+  })
+
   it("ignores normal bullet lists without a suggestion cue", () => {
     const parsed = parseChatSuggestionCard(`
 Resumo do atendimento:

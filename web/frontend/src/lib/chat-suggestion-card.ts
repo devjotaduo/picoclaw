@@ -21,6 +21,7 @@ const OPTION_LINE_RE = /^\s*(?:[-*•]|\d{1,2}[.)])\s+(.*)$/
 const CHECKBOX_LINE_RE = /^\s*[-*]\s+\[[ xX]\]\s+(.*)$/
 const SUGGESTION_CUE_RE =
   /\b(sugest[aã]o|sugest[oõ]es|op[cç][aã]o|op[cç][oõ]es|escolh|aplicar|melhoria|alternativa|prefere|qual)\b/i
+const MIN_PLAIN_CHOICE_OPTIONS = 4
 
 function cleanInlineMarkdown(value: string): string {
   return value
@@ -112,12 +113,11 @@ export function parseChatSuggestionCard(
   content: string,
   maxOptions = 4,
 ): ChatSuggestionCardData | null {
-  const lines = expandInlineOptions(
-    content
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean),
-  )
+  const rawLines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const lines = expandInlineOptions(rawLines)
 
   if (lines.length < 3) {
     return null
@@ -133,9 +133,15 @@ export function parseChatSuggestionCard(
   }
 
   const firstOptionIndex = optionIndexes[0]
-  const hasSuggestionCue = lines
-    .slice(0, firstOptionIndex + 1)
-    .some((line) => SUGGESTION_CUE_RE.test(cleanInlineMarkdown(line)))
+  const isPlainChoiceList =
+    rawLines.length === lines.length &&
+    optionIndexes.length >= MIN_PLAIN_CHOICE_OPTIONS &&
+    optionIndexes.length === lines.length
+  const hasSuggestionCue =
+    isPlainChoiceList ||
+    lines
+      .slice(0, firstOptionIndex + 1)
+      .some((line) => SUGGESTION_CUE_RE.test(cleanInlineMarkdown(line)))
 
   if (!hasSuggestionCue) {
     return null
@@ -144,7 +150,9 @@ export function parseChatSuggestionCard(
   const title =
     questionIndex >= 0 && questionIndex < firstOptionIndex
       ? cleanInlineMarkdown(lines[questionIndex])
-      : "Qual opção você quer seguir?"
+      : isPlainChoiceList
+        ? "Escolha uma opção"
+        : "Qual opção você quer seguir?"
 
   const options: ChatSuggestionChoice[] = []
   for (
