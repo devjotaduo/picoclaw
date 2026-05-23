@@ -14,6 +14,7 @@ import {
 	savePublicIntake,
 	submitPublicIntake,
 	type CompanyIntake,
+	type SubmittedIntake,
 } from "@/api/company-intakes";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -25,9 +26,11 @@ export type ClaraFinalizeProps = {
 	resumeToken: string;
 	extracted: ClaraExtracted;
 	qualifiedReason?: string;
-	onSubmitted: () => void;
+	onSubmitted: (result: SubmittedIntake | null) => void;
 	onBack: () => void;
 };
+
+const SUBMIT_TIMEOUT_MS = 90_000;
 
 export function ClaraFinalize(props: ClaraFinalizeProps) {
 	const initialEmail = (props.intake.contact_email ?? "").trim();
@@ -103,10 +106,28 @@ export function ClaraFinalize(props: ClaraFinalizeProps) {
 				audio_transcript: props.intake.audio_transcript ?? "",
 			});
 
-			// Retry transient 5xx up to 2 times. 4xx errors get surfaced
-			// immediately because they're contract issues, not network blips.
-			await retryOn5xx(() => submitPublicIntake(props.intake.id, props.resumeToken), 2);
-			props.onSubmitted();
+			const controller = new AbortController();
+			const timeoutId = window.setTimeout(() => controller.abort(), SUBMIT_TIMEOUT_MS);
+			try {
+				// Retry transient 5xx up to 2 times. 4xx errors get surfaced
+				// immediately because they're contract issues, not network blips.
+				const result = await retryOn5xx(
+					() => submitPublicIntake(props.intake.id, props.resumeToken, controller.signal),
+					2,
+				);
+				window.clearTimeout(timeoutId);
+				props.onSubmitted(result);
+			} catch (err) {
+				window.clearTimeout(timeoutId);
+				if (controller.signal.aborted || isAbortError(err)) {
+					setError(
+						"demorou demais — verifica seu email se Sofia chamou",
+					);
+					setSubmitting(false);
+					return;
+				}
+				throw err;
+			}
 		} catch (err) {
 			setError(humanizeSubmitError(err));
 			setSubmitting(false);
@@ -756,6 +777,7 @@ async function retryOn5xx<T>(fn: () => Promise<T>, maxRetries: number): Promise<
 			return await fn();
 		} catch (err) {
 			lastErr = err;
+			if (isAbortError(err)) throw err;
 			const code = errorStatusCode(err);
 			if (code >= 400 && code < 500) throw err; // contract error — don't retry
 			if (attempt === maxRetries) break;
@@ -763,6 +785,13 @@ async function retryOn5xx<T>(fn: () => Promise<T>, maxRetries: number): Promise<
 		}
 	}
 	throw lastErr;
+}
+
+function isAbortError(err: unknown): boolean {
+	if (!err) return false;
+	if (err instanceof DOMException && err.name === "AbortError") return true;
+	if (err instanceof Error && err.name === "AbortError") return true;
+	return false;
 }
 
 function errorStatusCode(err: unknown): number {

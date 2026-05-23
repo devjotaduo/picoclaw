@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   ArrowRight,
   AtSign,
@@ -228,12 +229,12 @@ export function Login() {
                     />
                     Lembrar de mim
                   </label>
-                  <a
-                    href="mailto:dev@jotaduo.com?subject=Recuperar%20acesso%20admin%20Jota%20Duo"
+                  <Link
+                    to="/forgot-password"
                     className="text-sm font-medium text-violet-300 transition-colors hover:text-violet-200"
                   >
                     Esqueci minha senha
-                  </a>
+                  </Link>
                 </div>
 
                 {error ? (

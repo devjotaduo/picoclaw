@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/sipeed/picoclaw/internal/saas/config"
+	"github.com/sipeed/picoclaw/internal/saas/store"
 )
 
 func TestTenantSubdomainWithPort(t *testing.T) {
@@ -43,6 +45,14 @@ func TestTenantSubdomainEmptyBaseDomain(t *testing.T) {
 	h := &Handler{Cfg: &config.Config{TenantBaseDomain: ""}}
 	if _, ok := h.tenantSubdomain("anything.example.com"); ok {
 		t.Fatal("empty base domain must return false")
+	}
+}
+
+func TestTenantProxyTargetDefaultsToDockerDNSName(t *testing.T) {
+	h := &Handler{}
+	target := h.tenantProxyTarget(context.Background(), &store.Tenant{ID: "acme-123"})
+	if got, want := target.String(), "http://tenant-acme-123:18800"; got != want {
+		t.Fatalf("tenantProxyTarget = %q, want %q", got, want)
 	}
 }
 

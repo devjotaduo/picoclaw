@@ -1,8 +1,8 @@
 package api
 
 import (
+	"context"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -75,7 +75,7 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		return
 	}
 
-	target, _ := url.Parse(fmt.Sprintf("http://tenant-%s:18800", t.ID))
+	target := h.tenantProxyTarget(r.Context(), t)
 
 	// New default: the launcher runs in its native "local" auth mode
 	// (dashboardauth.db bcrypt + HttpOnly cookie). The controlplane is a
@@ -134,7 +134,7 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 	// tenant_owner / tenant_admin role, not be silently downgraded to "public"
 	// because a stale magic cookie is still in the jar. Skipping the magic
 	// branch here lets authenticateTenantRequest below pick up the JWT.
-	if !h.hasSupabaseAuthCookieForTenant(r, t) {
+	if !h.hasAnyValidSupabaseAuthCookie(r) {
 		if claims, ok := h.magicLinkClaimsFromCookie(r, t); ok {
 			h.proxyTenantRequest(w, r, target, func(req *http.Request) {
 				h.signMagicVisitorRequest(req, t, claims)
@@ -249,6 +249,21 @@ func (h *Handler) proxyTenantRequest(
 	proxy.ServeHTTP(w, r)
 }
 
+func (h *Handler) tenantProxyTarget(ctx context.Context, t *store.Tenant) *url.URL {
+	host := "tenant-" + t.ID
+	if _, err := net.LookupHost(host); err != nil && h.Provisioner != nil && h.Provisioner.Docker != nil {
+		ref := host
+		if t.ContainerID != nil && strings.TrimSpace(*t.ContainerID) != "" {
+			ref = *t.ContainerID
+		}
+		if ip, ipErr := h.Provisioner.Docker.ContainerAddress(ctx, ref, h.Cfg.TenantNetworkEdge); ipErr == nil && ip != "" {
+			host = ip
+		}
+	}
+	target, _ := url.Parse("http://" + net.JoinHostPort(host, "18800"))
+	return target
+}
+
 // authenticateTenantRequest resolves who is making this request and what
 // their role is on this tenant. Returns canonical (userID, email, role)
 // strings ready to be signed into the trusted_gateway header.
@@ -343,6 +358,20 @@ func (h *Handler) authenticateSupabaseTenant(
 // fall back to the cheap cookie-presence check.
 func (h *Handler) hasSupabaseAuthCookie(r *http.Request) bool {
 	return h.hasSupabaseAuthCookieForTenant(r, nil)
+}
+
+func (h *Handler) hasAnyValidSupabaseAuthCookie(r *http.Request) bool {
+	token := readSupabaseAccessToken(r, h.Cfg.SupabaseProjectRef)
+	if token == "" {
+		return false
+	}
+	if h.Supabase == nil {
+		return false
+	}
+	if _, err := h.Supabase.VerifyAccessToken(token); err != nil {
+		return false
+	}
+	return true
 }
 
 func (h *Handler) hasSupabaseAuthCookieForTenant(r *http.Request, t *store.Tenant) bool {

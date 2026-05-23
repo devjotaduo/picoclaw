@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Workspace-related helpers used by the new provisioning flow.
@@ -103,6 +105,55 @@ func CopyWorkspaceHome(srcWorkspacePath, destDir string) error {
 		}
 		return copyFile(path, target, fi.Mode().Perm())
 	})
+}
+
+// SanitizeTenantSecurityConfig removes legacy .security.yml shapes that are
+// invalid for the launcher security loader. Older workspace baselines used:
+//
+//	channels:
+//	  allowed: []
+//
+// The current loader treats "channels" as channel_list-compatible entries, so
+// "allowed: []" is decoded as a channel and prevents tenant startup. Tenant
+// channel allowlists are already passed through PICOCLAW_ALLOWED_CHANNELS, so
+// dropping this legacy key preserves the intended runtime behavior.
+func SanitizeTenantSecurityConfig(volumePath string) error {
+	path := filepath.Join(volumePath, ".security.yml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("read .security.yml: %w", err)
+	}
+
+	var root map[string]any
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return fmt.Errorf("parse .security.yml: %w", err)
+	}
+	channels, ok := root["channels"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	if _, hasLegacyAllowed := channels["allowed"]; !hasLegacyAllowed {
+		return nil
+	}
+	delete(channels, "allowed")
+	if len(channels) == 0 {
+		delete(root, "channels")
+	} else {
+		root["channels"] = channels
+	}
+
+	out, err := yaml.Marshal(root)
+	if err != nil {
+		return fmt.Errorf("marshal .security.yml: %w", err)
+	}
+	mode := os.FileMode(0o600)
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	return os.WriteFile(path, out, mode)
 }
 
 // placeholderFiles lists relative paths inside the tenant volume that

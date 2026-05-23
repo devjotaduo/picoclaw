@@ -72,7 +72,10 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 	if p.Cfg.TenantImage != "" {
 		t.ContainerImage = p.Cfg.TenantImage
 	}
-	spec := p.buildSpec(t)
+	spec, err := p.buildSpec(ctx, t)
+	if err != nil {
+		return fmt.Errorf("build spec: %w", err)
+	}
 	// Address by container name rather than DB-recorded ID: the row can drift
 	// out of sync if a container was recreated out-of-band (e.g. manual docker
 	// run during incident response), and the name is the stable identity.
@@ -82,6 +85,7 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 	}
 	cid, err := p.Docker.CreateAndStart(ctx, spec)
 	if err != nil {
+		_ = p.Tenants.ClearContainerID(ctx, id)
 		return fmt.Errorf("docker create: %w", err)
 	}
 	if err := p.Tenants.SetContainer(ctx, id, cid); err != nil {
