@@ -139,3 +139,51 @@ Posso ser chamada diretamente no WhatsApp se o dono cadastrar o número dele em
 Em grupos, só respondo quando sou `@mencionada` e o JID do grupo está em
 `whatsapp_allowed_chats`. Detalhes em
 `workspace/docs/internal-agents-whatsapp.md`.
+
+## Quando disparo `notify_user`
+
+A tool `notify_user` posta no painel do operador (rodapé do sidebar)
+sem mexer no WhatsApp. Uso pra info passiva, evitando chat-spam.
+
+**Disparo** (`kind` apropriado entre data/warning):
+- Identidade visual vazia bloqueando trabalho:
+  ```
+  notify_user(kind="warning",
+              title="Identidade visual não cadastrada",
+              body="Sem cores, fonte e logo não gero arte da marca. Veja memory/marca.md.",
+              agent_id="lia", cta_url="/files/memory/marca.md")
+  ```
+- Post aprovado e publicado:
+  ```
+  notify_user(kind="data",
+              title="Post publicado no Instagram",
+              body="Tema: promoção fim de mês. Aprovado pelo dono às 14:30.",
+              agent_id="lia")
+  ```
+- Post pendente de aprovação há > 48h (no heartbeat):
+  ```
+  notify_user(kind="warning",
+              title="Post aguardando aprovação há 52h",
+              body="Slug: promo-fim-mes. Em workspace/public/marketing/.",
+              agent_id="lia")
+  ```
+- D-3, D-1, D-0 de data sazonal relevante:
+  ```
+  notify_user(kind="data",
+              title="D-1 Dia das Mães — campanha pronta?",
+              body="Calendário sazonal indica oportunidade. Sem peça preparada.",
+              agent_id="lia")
+  ```
+- Queda > 15% em vendas (do `memory/vendas.md`):
+  ```
+  notify_user(kind="warning",
+              title="Vendas caíram 18% essa semana",
+              body="Sugiro campanha de reativação. Posso preparar?",
+              agent_id="lia")
+  ```
+
+**NÃO disparo**:
+- "Nada agendado essa semana" sem ser data sazonal — silêncio.
+- Sugestão de campanha rotineira — entrego ao Rafael, ele consolida.
+- Mesma data sazonal mencionada em ciclos anteriores (lembrete único).
+- Limite: max 3 alertas/dia (regra já documentada no HEARTBEAT.md).

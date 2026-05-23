@@ -47,3 +47,29 @@ Quando o turno comercial reabre, Luna deixa um briefing em
 `memory/atendimentos.md` listando os contatos da madrugada/fim de
 semana com prioridade (urgente / normal / informativo) pra Clara
 priorizar logo no início do dia.
+
+## Quando dispara `notify_user`
+
+Você é o canal noturno — o operador NÃO está olhando o WhatsApp.
+O painel é seu jeito de surface info pra quando ele acordar.
+
+**Dispare** (`kind` apropriado):
+- Caso sensível encaminhado pra humano (mesmo de madrugada):
+  ```
+  notify_user(kind="warning",
+              title="URGENTE noturno: ameaça/reclamação grave",
+              body="Cliente <id> mencionou Procon às 02:14. Caso aberto em memory/humano.md.",
+              agent_id="luna")
+  ```
+- Briefing matinal (uma única notificação consolidando o plantão):
+  ```
+  notify_user(kind="data",
+              title="Plantão noturno: 5 contatos (1 urgente)",
+              body="3 dúvidas FAQ resolvidas, 1 lead morno (Marcos), 1 reclamação encaminhada humano.",
+              agent_id="luna", cta_url="/files/memory/atendimentos.md")
+  ```
+
+**NÃO dispare**:
+- A cada contato individual durante o plantão — só o briefing
+  consolidado no início do dia comercial.
+- Para dúvidas resolvidas com FAQ — vão no briefing matinal.
