@@ -23,6 +23,12 @@ export type Tenant = {
   // by Supabase Auth (as opposed to the legacy local sessions table).
   // The "Reenviar credenciais" admin action depends on this being non-null.
   supabase_user_id?: string | null;
+  // auth_backend ("local" | "supabase") + is_public determine which
+  // controlplane auth path the tenant uses and whether the launcher
+  // runs in trusted_gateway or local mode. Surfaced for the tenant
+  // list so operators can spot mismatches at a glance.
+  auth_backend: "local" | "supabase";
+  is_public: boolean;
 };
 
 export type CreateTenantInput = {
@@ -99,6 +105,70 @@ export async function resumeTenant(id: string) {
 
 export async function restartTenant(id: string) {
   return api<void>(`/api/v1/tenants/${id}/restart`, { method: "POST" });
+}
+
+// Recreate stops the tenant container, removes it, and creates a fresh one
+// from the current TENANT_IMAGE / provisioner spec. Preserves the
+// bind-mounted volume. Needed when the launcher image is rebuilt OR when
+// the container's env vars must be refreshed (e.g. PICOCLAW_AUTH_MODE
+// flipped after toggling is_public, ALLOWED_CHANNELS updated).
+export async function recreateTenant(id: string) {
+  return api<void>(`/api/v1/tenants/${encodeURIComponent(id)}/recreate`, { method: "POST" });
+}
+
+// Clone provisions a fresh tenant whose home/ subtree is a raw copy of the
+// source tenant's volume. All secrets / dashboard password / sessions
+// carry over — the new tenant is functionally a twin until the operator
+// rotates credentials. A new LiteLLM virtual key is minted server-side.
+export type CloneTenantInput = {
+  subdomain: string;
+  display_name: string;
+  owner_email: string;
+  monthly_budget_usd?: number;
+  mem_limit_mb?: number;
+  cpu_quota?: number;
+};
+export type CloneTenantResult = {
+  tenant_id: string;
+  url: string;
+  source_tenant_id: string;
+  owner_invite_token: string;
+  sanity_checks: SanityCheck[];
+  info: string;
+};
+export async function cloneTenant(id: string, input: CloneTenantInput) {
+  return api<CloneTenantResult>(
+    `/api/v1/tenants/${encodeURIComponent(id)}/clone`,
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
+export type SanityCheck = {
+  name: string;
+  status: "ok" | "warn" | "fail";
+  message?: string;
+};
+export type TenantSanity = {
+  tenant_id: string;
+  sanity_checks: SanityCheck[];
+};
+export async function getTenantSanity(id: string) {
+  return api<TenantSanity>(`/api/v1/tenants/${encodeURIComponent(id)}/sanity`);
+}
+
+export type MagicLinkSummary = {
+  nonce: string;
+  intake_id?: string | null;
+  created_at: string;
+  expires_at: string;
+  consumed_at?: string | null;
+  summary?: string | null;
+  active: boolean;
+};
+export async function listTenantMagicLinks(id: string) {
+  return api<{ tenant_id: string; links: MagicLinkSummary[] }>(
+    `/api/v1/tenants/${encodeURIComponent(id)}/magic-links`,
+  );
 }
 
 export async function deleteTenant(id: string) {

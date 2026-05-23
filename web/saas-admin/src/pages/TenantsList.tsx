@@ -164,6 +164,7 @@ export function TenantsList() {
               <th className="px-3 py-2 font-medium">Name</th>
               <th className="px-3 py-2 font-medium">Owner</th>
               <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 font-medium">Auth</th>
               <th className="px-3 py-2 font-medium">Budget/mo</th>
               <th className="px-3 py-2 font-medium">Created</th>
               <th className="px-3 py-2 font-medium">Delivered?</th>
@@ -173,11 +174,11 @@ export function TenantsList() {
           <tbody className="divide-y divide-zinc-800/60">
             {q.isLoading && (
               <>
-                <SkeletonRow cols={8} />
-                <SkeletonRow cols={8} />
-                <SkeletonRow cols={8} />
-                <SkeletonRow cols={8} />
-                <SkeletonRow cols={8} />
+                <SkeletonRow cols={9} />
+                <SkeletonRow cols={9} />
+                <SkeletonRow cols={9} />
+                <SkeletonRow cols={9} />
+                <SkeletonRow cols={9} />
               </>
             )}
             {filtered.map((t) => (
@@ -199,6 +200,24 @@ export function TenantsList() {
                 <td className="px-3 py-2 text-zinc-300">{t.display_name || "—"}</td>
                 <td className="px-3 py-2 text-zinc-400">{t.owner_email}</td>
                 <td className="px-3 py-2"><StatusBadge status={t.status} /></td>
+                <td className="px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                    <span
+                      className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono uppercase tracking-wider text-zinc-300"
+                      title={`auth_backend = ${t.auth_backend} (local = launcher bcrypt; supabase = JWT)`}
+                    >
+                      {t.auth_backend}
+                    </span>
+                    {t.is_public && (
+                      <span
+                        className="rounded bg-blue-500/15 px-1.5 py-0.5 font-semibold uppercase tracking-wider text-blue-300"
+                        title="Public tenant: aceita /api/public/chat anônimo. Provisioned em modo trusted_gateway."
+                      >
+                        public
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className="px-3 py-2 text-zinc-400">{formatUSD(t.monthly_budget_usd)}</td>
                 <td className="px-3 py-2 text-zinc-500">{relativeTime(t.created_at)}</td>
                 <td className="px-3 py-2">

@@ -327,7 +327,16 @@ func (h *Handler) consumeMagicLink(w http.ResponseWriter, r *http.Request, t *st
 	// time. If MagicLinks isn't wired (e.g. test harness) we skip this
 	// check and fall through to normal auth.
 	if h.MagicLinks != nil {
-		if row, err := h.MagicLinks.Get(r.Context(), claims.Nonce); err == nil && row.ConsumedAt != nil {
+		row, err := h.MagicLinks.Get(r.Context(), claims.Nonce)
+		if errors.Is(err, store.ErrMagicLinkNotFound) {
+			http.Error(w, "this access link is invalid or has expired", http.StatusUnauthorized)
+			return true
+		}
+		if err != nil {
+			http.Error(w, "magic link lookup failed", http.StatusInternalServerError)
+			return true
+		}
+		if row.ConsumedAt != nil {
 			renderMagicLinkConsumed(w, t, row)
 			return true
 		}
@@ -375,7 +384,11 @@ func (h *Handler) magicLinkClaimsFromCookie(r *http.Request, t *store.Tenant) (m
 		return magicLinkClaims{}, false
 	}
 	if h.MagicLinks != nil {
-		if row, err := h.MagicLinks.Get(r.Context(), claims.Nonce); err == nil && row.ConsumedAt != nil {
+		row, err := h.MagicLinks.Get(r.Context(), claims.Nonce)
+		if err != nil {
+			return magicLinkClaims{}, false
+		}
+		if row.ConsumedAt != nil {
 			return magicLinkClaims{}, false
 		}
 	}
@@ -527,4 +540,65 @@ func (h *Handler) handleConsumeMagicLink(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ── List magic links per tenant ──────────────────────────────────────
+//
+// Admins need visibility into which magic links are outstanding on a
+// tenant so they can spot a leaked or forgotten owner-grade link and
+// revoke it. The signed token itself isn't stored (only its HMAC-bound
+// nonce + metadata), so the admin can't replay an existing link via
+// this API — that's by design. The list is enough to (a) see the
+// inventory at a glance and (b) target the consume endpoint by nonce.
+//
+// Returns at most 50 rows ordered by created_at DESC.
+
+type magicLinkListItem struct {
+	Nonce      string     `json:"nonce"`
+	IntakeID   *string    `json:"intake_id,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+	ConsumedAt *time.Time `json:"consumed_at,omitempty"`
+	Summary    *string    `json:"summary,omitempty"`
+	// Active is true when the link is neither consumed nor expired —
+	// i.e. it would actually let a visitor in right now.
+	Active bool `json:"active"`
+}
+
+type magicLinkListResponse struct {
+	TenantID string              `json:"tenant_id"`
+	Links    []magicLinkListItem `json:"links"`
+}
+
+// handleListMagicLinks returns recent magic links for the tenant.
+// Admin-only (router enforces requirePlatformAdmin).
+func (h *Handler) handleListMagicLinks(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "tenant id required")
+		return
+	}
+	if h.MagicLinks == nil {
+		writeJSON(w, http.StatusOK, magicLinkListResponse{TenantID: id, Links: []magicLinkListItem{}})
+		return
+	}
+	rows, err := h.MagicLinks.ListByTenant(r.Context(), id, 50)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list magic links: "+err.Error())
+		return
+	}
+	now := time.Now()
+	out := make([]magicLinkListItem, 0, len(rows))
+	for _, m := range rows {
+		out = append(out, magicLinkListItem{
+			Nonce:      m.Nonce,
+			IntakeID:   m.IntakeID,
+			CreatedAt:  m.CreatedAt,
+			ExpiresAt:  m.ExpiresAt,
+			ConsumedAt: m.ConsumedAt,
+			Summary:    m.Summary,
+			Active:     m.ConsumedAt == nil && now.Before(m.ExpiresAt),
+		})
+	}
+	writeJSON(w, http.StatusOK, magicLinkListResponse{TenantID: id, Links: out})
 }
