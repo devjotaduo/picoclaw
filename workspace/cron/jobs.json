@@ -5,43 +5,171 @@
       "id": "heartbeat-rafael-daily",
       "name": "HEARTBEAT Rafael — Manhã",
       "enabled": false,
-      "schedule": { "kind": "cron", "expr": "0 8 * * *", "tz": "America/Sao_Paulo" },
-      "payload": { "kind": "message", "message": "HEARTBEAT", "channel": "whatsapp", "to": "[ATUALIZAR — número interno do dono]" }
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 8 * * *",
+        "tz": "America/Sao_Paulo"
+      },
+      "payload": {
+        "kind": "message",
+        "message": "HEARTBEAT",
+        "channel": "whatsapp",
+        "to": "[ATUALIZAR — número interno do dono]"
+      },
+      "state": {},
+      "createdAtMs": 0,
+      "updatedAtMs": 0,
+      "deleteAfterRun": false
     },
     {
       "id": "lia-marketing-daily",
       "name": "Lia — Rotina matinal de marketing",
       "enabled": false,
-      "schedule": { "kind": "cron", "expr": "0 8 * * *", "tz": "America/Sao_Paulo" },
-      "payload": { "kind": "message", "message": "MARKETING_CHECK", "channel": "whatsapp", "to": "[ATUALIZAR — canal interno]" }
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 8 * * *",
+        "tz": "America/Sao_Paulo"
+      },
+      "payload": {
+        "kind": "message",
+        "message": "MARKETING_CHECK",
+        "channel": "whatsapp",
+        "to": "[ATUALIZAR — canal interno]"
+      },
+      "state": {},
+      "createdAtMs": 0,
+      "updatedAtMs": 0,
+      "deleteAfterRun": false
     },
     {
       "id": "analytics-daily-report",
       "name": "Analytics — Relatório diário",
       "enabled": true,
-      "schedule": { "kind": "cron", "expr": "59 23 * * *", "tz": "America/Sao_Paulo" },
-      "payload": { "kind": "command", "command": "analytics.report.daily" }
+      "schedule": {
+        "kind": "cron",
+        "expr": "59 23 * * *",
+        "tz": "America/Sao_Paulo"
+      },
+      "payload": {
+        "kind": "command",
+        "message": "",
+        "command": "analytics.report.daily"
+      },
+      "state": {
+        "nextRunAtMs": 1779591540000,
+        "lastRunAtMs": 1779505140012,
+        "lastStatus": "ok"
+      },
+      "createdAtMs": 0,
+      "updatedAtMs": 1779505140015,
+      "deleteAfterRun": false
     },
     {
       "id": "analytics-pattern-weekly",
       "name": "Analytics — Análise de padrões semanal",
       "enabled": true,
-      "schedule": { "kind": "cron", "expr": "0 6 * * 1", "tz": "America/Sao_Paulo" },
-      "payload": { "kind": "command", "command": "analytics.patterns.weekly" }
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 6 * * 1",
+        "tz": "America/Sao_Paulo"
+      },
+      "payload": {
+        "kind": "command",
+        "message": "",
+        "command": "analytics.patterns.weekly"
+      },
+      "state": {
+        "nextRunAtMs": 1779699600000
+      },
+      "createdAtMs": 0,
+      "updatedAtMs": 0,
+      "deleteAfterRun": false
     },
     {
       "id": "lia-weekly-proposals",
       "name": "Lia — Tendências e propostas semanais",
       "enabled": false,
-      "schedule": { "kind": "cron", "expr": "0 9 * * 1", "tz": "America/Sao_Paulo" },
-      "payload": { "kind": "agent_turn", "message": "Gere tendências da semana, ideias de posts e uma campanha semanal. Salve o resultado como proposta de marketing.", "channel": "cron", "to": "lia-weekly-proposals", "agent_id": "lia" }
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 9 * * 1",
+        "tz": "America/Sao_Paulo"
+      },
+      "payload": {
+        "kind": "agent_turn",
+        "message": "Gere tendências da semana, ideias de posts e uma campanha semanal. Salve o resultado como proposta de marketing.",
+        "channel": "cron",
+        "to": "lia-weekly-proposals",
+        "agent_id": "lia"
+      },
+      "state": {},
+      "createdAtMs": 0,
+      "updatedAtMs": 0,
+      "deleteAfterRun": false
     },
     {
       "id": "lia-monthly-positioning",
       "name": "Lia — Posicionamento mensal da marca",
       "enabled": false,
-      "schedule": { "kind": "cron", "expr": "0 9 1 * *", "tz": "America/Sao_Paulo" },
-      "payload": { "kind": "agent_turn", "message": "Gere um relatório mensal de posicionamento da marca com sugestões de melhoria. Salve o resultado como proposta de marketing.", "channel": "cron", "to": "lia-monthly-positioning", "agent_id": "lia" }
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 9 1 * *",
+        "tz": "America/Sao_Paulo"
+      },
+      "payload": {
+        "kind": "agent_turn",
+        "message": "Gere um relatório mensal de posicionamento da marca com sugestões de melhoria. Salve o resultado como proposta de marketing.",
+        "channel": "cron",
+        "to": "lia-monthly-positioning",
+        "agent_id": "lia"
+      },
+      "state": {},
+      "createdAtMs": 0,
+      "updatedAtMs": 0,
+      "deleteAfterRun": false
+    },
+    {
+      "id": "378cbf0fb61ca746",
+      "name": "marketing-weekly-proposals",
+      "enabled": true,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 9 * * 1"
+      },
+      "payload": {
+        "kind": "agent_turn",
+        "message": "Gere tendencias da semana, ideias de posts e uma campanha semanal. Salve o resultado como proposta de marketing.",
+        "channel": "cron",
+        "to": "marketing-weekly-proposals",
+        "agent_id": "marketing"
+      },
+      "state": {
+        "nextRunAtMs": 1779710400000
+      },
+      "createdAtMs": 1779451017251,
+      "updatedAtMs": 1779451017251,
+      "deleteAfterRun": false
+    },
+    {
+      "id": "37013dba7bc75977",
+      "name": "marketing-monthly-positioning",
+      "enabled": true,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 9 1 * *"
+      },
+      "payload": {
+        "kind": "agent_turn",
+        "message": "Gere um relatorio mensal de posicionamento da marca com sugestoes de melhoria. Salve o resultado como proposta de marketing.",
+        "channel": "cron",
+        "to": "marketing-monthly-positioning",
+        "agent_id": "marketing"
+      },
+      "state": {
+        "nextRunAtMs": 1780315200000
+      },
+      "createdAtMs": 1779451017252,
+      "updatedAtMs": 1779451017252,
+      "deleteAfterRun": false
     }
   ]
 }

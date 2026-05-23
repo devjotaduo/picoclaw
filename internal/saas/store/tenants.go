@@ -258,6 +258,12 @@ func (s *TenantStore) SetContainer(ctx context.Context, id, containerID string) 
 	return err
 }
 
+func (s *TenantStore) ClearContainerID(ctx context.Context, id string) error {
+	const q = `UPDATE tenants SET container_id = NULL WHERE id = $1`
+	_, err := s.DB.Pool.Exec(ctx, q, id)
+	return err
+}
+
 func (s *TenantStore) SetLiteLLMKey(ctx context.Context, id, keyID, keyHash string) error {
 	const q = `UPDATE tenants SET litellm_key_id = $1, litellm_key_hash = $2 WHERE id = $3`
 	_, err := s.DB.Pool.Exec(ctx, q, keyID, keyHash, id)

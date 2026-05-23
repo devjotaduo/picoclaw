@@ -115,10 +115,11 @@ export type SubmittedIntake = CompanyIntake & {
   initial_password?: string;
 };
 
-export async function submitPublicIntake(id: string, resumeToken: string) {
+export async function submitPublicIntake(id: string, resumeToken: string, signal?: AbortSignal) {
   return api<SubmittedIntake>(`/api/v1/public/company-intakes/${encodeURIComponent(id)}/submit`, {
     method: "POST",
     body: JSON.stringify({ resume_token: resumeToken }),
+    signal,
   });
 }
 

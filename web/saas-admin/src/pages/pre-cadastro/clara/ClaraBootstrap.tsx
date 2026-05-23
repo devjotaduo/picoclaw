@@ -17,6 +17,7 @@ import {
 	createPublicIntake,
 	getPublicIntake,
 	type CompanyIntake,
+	type SubmittedIntake,
 } from "@/api/company-intakes";
 
 import { STORAGE_KEY } from "../constants";
@@ -36,11 +37,11 @@ type View =
 			extracted: ClaraExtracted;
 			qualifiedReason: string;
 	  }
-	| { kind: "done"; contactName?: string };
+	| { kind: "done"; contactName?: string; submitted: SubmittedIntake | null };
 
 type BootstrapResult =
 	| { kind: "chat"; intake: CompanyIntake; resumeToken: string }
-	| { kind: "done"; contactName?: string };
+	| { kind: "done"; contactName?: string; submitted: SubmittedIntake | null };
 
 let bootstrapInFlight: Promise<BootstrapResult> | null = null;
 
@@ -98,7 +99,7 @@ export function ClaraBootstrap() {
 	}
 
 	if (view.kind === "done") {
-		return <ClaraDone contactName={view.contactName} />;
+		return <ClaraDone contactName={view.contactName} submitted={view.submitted} />;
 	}
 
 	if (view.kind === "finalize") {
@@ -108,10 +109,11 @@ export function ClaraBootstrap() {
 				resumeToken={view.resumeToken}
 				extracted={view.extracted}
 				qualifiedReason={view.qualifiedReason}
-				onSubmitted={() => {
+				onSubmitted={(result) => {
 					setView({
 						kind: "done",
 						contactName: view.intake.contact_name || view.extracted.contactName,
+						submitted: result,
 					});
 				}}
 				onBack={() => {
@@ -157,7 +159,17 @@ async function bootstrapIntake(): Promise<BootstrapResult> {
 		syncUrl(intake.id, token);
 		// Skip the chat if the intake was already submitted.
 		if (intake.status === "submitted" || intake.status === "reviewed" || intake.status === "linked") {
-			return { kind: "done", contactName: intake.contact_name || undefined };
+			const submitted: SubmittedIntake | null = intake.tenant_url
+				? {
+						...intake,
+						tenant_provisioned: true,
+						url: intake.tenant_url,
+						subdomain: intake.tenant_subdomain,
+						login_mode: "magic_link",
+						check_email: true,
+					}
+				: null;
+			return { kind: "done", contactName: intake.contact_name || undefined, submitted };
 		}
 		return { kind: "chat", intake, resumeToken: token };
 	}

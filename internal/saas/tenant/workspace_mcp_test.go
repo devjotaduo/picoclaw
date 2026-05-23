@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/sipeed/picoclaw/internal/saas/mcp"
@@ -33,7 +34,7 @@ func TestWriteWorkspaceMCPFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Mode().Perm() != 0o600 {
+	if runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 		t.Errorf("env file mode: got %o, want 0600", st.Mode().Perm())
 	}
 	content, _ := os.ReadFile(envPath)

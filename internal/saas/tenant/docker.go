@@ -201,6 +201,34 @@ func (d *DockerClient) Inspect(ctx context.Context, id string) (running bool, er
 	return insp.State != nil && insp.State.Running, nil
 }
 
+// ContainerAddress returns a reachable Docker-network IP for a container.
+// The preferred network is used when present; otherwise the first network
+// with an assigned IPv4 address is returned.
+func (d *DockerClient) ContainerAddress(ctx context.Context, ref, preferredNetwork string) (string, error) {
+	insp, err := d.cli.ContainerInspect(ctx, ref)
+	if err != nil {
+		if isNotFound(err) {
+			return "", ErrContainerNotFound
+		}
+		return "", err
+	}
+	if insp.NetworkSettings == nil || len(insp.NetworkSettings.Networks) == 0 {
+		return "", fmt.Errorf("container has no networks")
+	}
+	preferredNetwork = strings.TrimSpace(preferredNetwork)
+	if preferredNetwork != "" {
+		if endpoint := insp.NetworkSettings.Networks[preferredNetwork]; endpoint != nil && endpoint.IPAddress != "" {
+			return endpoint.IPAddress, nil
+		}
+	}
+	for _, endpoint := range insp.NetworkSettings.Networks {
+		if endpoint != nil && endpoint.IPAddress != "" {
+			return endpoint.IPAddress, nil
+		}
+	}
+	return "", fmt.Errorf("container has no network address")
+}
+
 // ManagedContainer summarizes a container created by Picoclaw SaaS (label
 // picoclaw.saas.managed=true). Used by the reconciler to detect orphans.
 type ManagedContainer struct {

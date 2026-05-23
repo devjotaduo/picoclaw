@@ -125,6 +125,30 @@ func TestSubstituteConfigPlaceholders_MissingFileIsOk(t *testing.T) {
 	}
 }
 
+func TestSanitizeTenantSecurityConfigRemovesLegacyAllowedChannels(t *testing.T) {
+	dst := t.TempDir()
+	path := filepath.Join(dst, ".security.yml")
+	if err := os.WriteFile(path, []byte("channels:\n  allowed: []\ntools:\n  exec:\n    enabled: false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SanitizeTenantSecurityConfig(dst); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(got)
+	if strings.Contains(text, "allowed:") || strings.Contains(text, "channels:") {
+		t.Fatalf("legacy channels block was not removed:\n%s", text)
+	}
+	if !strings.Contains(text, "tools:") {
+		t.Fatalf("unrelated security config was lost:\n%s", text)
+	}
+}
+
 func TestHasBuiltFrontend(t *testing.T) {
 	ws := t.TempDir()
 	if HasBuiltFrontend(ws) {

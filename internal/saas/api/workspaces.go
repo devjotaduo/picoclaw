@@ -300,17 +300,75 @@ func (h *Handler) handleWriteWorkspaceFile(w http.ResponseWriter, r *http.Reques
 		)
 		return
 	}
+	if vErr := validateWorkspaceFileContent(req.Path, req.Content); vErr != nil {
+		writeError(w, http.StatusBadRequest, vErr.Error())
+		return
+	}
 	full, err := resolveWorkspaceFile(ws.HostPath, req.Path)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	// Refuse to overwrite a directory.
+	if info, err := os.Stat(full); err == nil && info.IsDir() {
+		writeError(w, http.StatusBadRequest, "path is a directory")
 		return
 	}
 	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 		writeError(w, http.StatusInternalServerError, "mkdir: "+err.Error())
 		return
 	}
-	if err := os.WriteFile(full, []byte(req.Content), 0o644); err != nil {
-		writeError(w, http.StatusInternalServerError, "write: "+err.Error())
+	// Preserve existing mode bits — config.json / .security.yml are often
+	// 0600 because they hold secrets. New files default to 0600 (secure)
+	// for anything under home/, 0644 for frontend-src/ source code.
+	preserveMode := os.FileMode(0)
+	if info, err := os.Lstat(full); err == nil {
+		preserveMode = info.Mode().Perm()
+	}
+	// Atomic write: create temp in the same dir, write, fsync via Close,
+	// then rename over the target. Prevents readers (provisioner copying
+	// the workspace, container starting up) from seeing a truncated file
+	// mid-write — see the matching pattern in tenants_files.go.
+	parent := filepath.Dir(full)
+	tmp, err := os.CreateTemp(parent, filepath.Base(full)+".tmp-*")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "create temp: "+err.Error())
+		return
+	}
+	tmpPath := tmp.Name()
+	cleanup := func() { _ = os.Remove(tmpPath) }
+	if _, err := io.WriteString(tmp, req.Content); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		writeError(w, http.StatusInternalServerError, "write temp: "+err.Error())
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		writeError(w, http.StatusInternalServerError, "close temp: "+err.Error())
+		return
+	}
+	if err := os.Rename(tmpPath, full); err != nil {
+		cleanup()
+		writeError(w, http.StatusInternalServerError, "rename: "+err.Error())
+		return
+	}
+	// Restore mode bits. CreateTemp gives 0600; widen to 0644 for files
+	// outside home/ when there's no prior mode to preserve. The path has
+	// already been validated by resolveWorkspaceFile, so cleanedRel is one
+	// of the three known subtrees.
+	finalMode := preserveMode
+	if finalMode == 0 {
+		cleanedRel := filepath.Clean(req.Path)
+		homePrefix := tenant.WorkspaceHomeSubdir + string(filepath.Separator)
+		if cleanedRel == tenant.WorkspaceHomeSubdir || strings.HasPrefix(cleanedRel, homePrefix) {
+			finalMode = 0o600
+		} else {
+			finalMode = 0o644
+		}
+	}
+	if err := os.Chmod(full, finalMode); err != nil {
+		writeError(w, http.StatusInternalServerError, "chmod: "+err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -511,4 +569,46 @@ func logTail(s string, n int) string {
 		return s
 	}
 	return s[len(s)-n:]
+}
+
+// validateWorkspaceFileContent applies cheap shape checks to known-schema
+// files before they're written to disk. The goal is to fail at edit time
+// with a clear message instead of letting a malformed template ship to
+// every newly-provisioned tenant and surface as opaque 500s in the
+// launcher console.
+//
+// Today we only catch the `model_list[].api_key` bug (singular instead
+// of plural `api_keys`) — historically the #1 reason auto-provision
+// produced "active" tenants that 500'd on every workspace endpoint. Add
+// more checks here as new template traps surface.
+func validateWorkspaceFileContent(relPath, content string) error {
+	cleanedRel := filepath.Clean(relPath)
+	switch cleanedRel {
+	case filepath.Join(tenant.WorkspaceHomeSubdir, "config.json"):
+		return validateConfigJSON(content)
+	}
+	return nil
+}
+
+func validateConfigJSON(content string) error {
+	var m map[string]any
+	if err := json.Unmarshal([]byte(content), &m); err != nil {
+		return fmt.Errorf("config.json is not valid JSON: %w", err)
+	}
+	list, _ := m["model_list"].([]any)
+	for i, entry := range list {
+		em, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, has := em["api_key"]; has {
+			return fmt.Errorf(
+				"model_list[%d].api_key is rejected by the launcher (unknown field). "+
+					"Rename it to api_keys and wrap the value in an array, e.g. "+
+					`"api_keys": ["${LITELLM_KEY}"]`,
+				i,
+			)
+		}
+	}
+	return nil
 }

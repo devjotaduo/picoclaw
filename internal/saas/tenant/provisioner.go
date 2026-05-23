@@ -17,6 +17,7 @@ import (
 	"github.com/sipeed/picoclaw/internal/saas/config"
 	"github.com/sipeed/picoclaw/internal/saas/litellm"
 	"github.com/sipeed/picoclaw/internal/saas/store"
+	picoclawconfig "github.com/sipeed/picoclaw/pkg/config"
 )
 
 // sharedAuthHostPath is where the operator places auth.json with OAuth
@@ -309,6 +310,17 @@ func (p *Provisioner) runProvision(
 		// 4. RBAC from the workspace's role_policy_json DB column.
 		if err := WriteLauncherPolicy(t.VolumePath, ws.RolePolicy()); err != nil {
 			return fmt.Errorf("write launcher policy: %w", err)
+		}
+
+		// 4b. Static validation of the materialised config.json + .security.yml
+		// against the picoclaw schema. Catches template bugs (e.g. `api_key`
+		// singular instead of `api_keys` plural, malformed channels block in
+		// security.yml) BEFORE the tenant container boots and silently 500s on
+		// every workspace endpoint. The deferred cleanup wipes the partial
+		// volume + revokes the LiteLLM key so retrying after a template fix
+		// starts from a clean slate.
+		if err := picoclawconfig.ValidateBundle(filepath.Join(t.VolumePath, "config.json")); err != nil {
+			return fmt.Errorf("workspace template would break launcher boot: %w", err)
 		}
 	}
 
