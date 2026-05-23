@@ -37,12 +37,8 @@ SHARED_SKILLS=(
   cli-delegation
 )
 
-# Slugs de templates em workspace-seeds/ que recebem este conteúdo
-# compartilhado. Hoje só "default"; se aparecer "premium", "minimal", etc,
-# adicione aqui.
-SEED_SLUGS=(
-  default
-)
+# SEED_SLUGS é auto-descoberto após o cd para REPO_ROOT (ver abaixo).
+# Defina SEED_SLUGS no env para limitar a uma lista explícita.
 
 # Subdiretórios/arquivos que NÃO devem viajar para o seed: são runtime
 # state (memória acumulada, sessões, logs, sqlite). Aplicado após a cópia.
@@ -80,6 +76,20 @@ esac
 # Resolve a raiz do repo a partir do script (funciona se rodar de qualquer cwd).
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+
+# Auto-descobre slugs de workspace-seeds/<slug>/home/workspace/. Cada subdir
+# que tiver essa estrutura recebe o sync. SEED_SLUGS no env override.
+if [ -z "${SEED_SLUGS:-}" ]; then
+  SEED_SLUGS=()
+  for d in workspace-seeds/*/home/workspace; do
+    [ -d "$d" ] || continue
+    SEED_SLUGS+=("$(basename "$(dirname "$(dirname "$d")")")")
+  done
+fi
+if [ "${#SEED_SLUGS[@]}" -eq 0 ]; then
+  echo "ERRO: nenhum seed encontrado em workspace-seeds/*/home/workspace/" >&2
+  exit 1
+fi
 
 SRC_AGENTS="workspace/agents"
 SRC_SKILLS="workspace/skills"
