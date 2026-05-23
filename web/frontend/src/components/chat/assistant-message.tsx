@@ -1,11 +1,9 @@
 import {
-  IconBrain,
   IconCheck,
-  IconChevronDown,
   IconCopy,
   IconDownload,
   IconFileText,
-  IconTool,
+  IconTerminal2,
 } from "@tabler/icons-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -50,6 +48,110 @@ function localizeContextCommandContent(content: string): string {
     .replace(/^Remaining:/gm, "Restante:")
 }
 
+function truncateStatusText(value: string, maxLength = 72): string {
+  const normalized = value.replace(/\s+/g, " ").trim()
+  if (normalized.length <= maxLength) {
+    return normalized
+  }
+
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}…`
+}
+
+function parseToolArguments(
+  rawArguments: string,
+): Record<string, unknown> | null {
+  const trimmed = rawArguments.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed)
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : null
+  } catch {
+    return null
+  }
+}
+
+function firstStringValue(
+  values: Record<string, unknown> | null,
+  keys: string[],
+): string {
+  if (!values) {
+    return ""
+  }
+
+  for (const key of keys) {
+    const value = values[key]
+    if (typeof value === "string" && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ""
+}
+
+function friendlyToolName(toolName: string): string {
+  return toolName
+    .replace(/^functions\./, "")
+    .replace(/^mcp__[^_]+__/, "")
+    .replace(/[_-]+/g, " ")
+    .trim()
+}
+
+function summarizeToolCall(toolCall: ChatToolCall): string {
+  const toolName = toolCall.function?.name?.trim() ?? ""
+  const rawArguments = toolCall.function?.arguments?.trim() ?? ""
+  const parsedArguments = parseToolArguments(rawArguments)
+  const command = firstStringValue(parsedArguments, [
+    "command",
+    "cmd",
+    "script",
+    "query",
+    "q",
+    "url",
+    "path",
+  ])
+  const summary = command || friendlyToolName(toolName) || rawArguments
+
+  return truncateStatusText(summary || "tarefa")
+}
+
+function CompactAssistantStatus({
+  kind,
+  toolCalls,
+}: {
+  kind: AssistantMessageKind
+  toolCalls: ChatToolCall[]
+}) {
+  const { t } = useTranslation()
+  const isToolCalls = kind === "tool_calls"
+  const firstToolCall = toolCalls[0]
+  const status = isToolCalls
+    ? t("chat.executingStatus", {
+        action: firstToolCall ? summarizeToolCall(firstToolCall) : "tarefa",
+      })
+    : t("chat.thinkingStatus")
+
+  return (
+    <div className="text-muted-foreground/75 flex flex-col gap-3 rounded-lg px-1 py-1 text-sm">
+      <div className="flex min-w-0 items-center gap-2">
+        {isToolCalls ? (
+          <IconTerminal2 className="size-4 shrink-0 opacity-80" />
+        ) : null}
+        <span className="truncate">{status}</span>
+      </div>
+      {!isToolCalls ? null : (
+        <div className="text-muted-foreground/70">
+          {t("chat.thinkingStatus")}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AssistantMessage({
   content,
   attachments = [],
@@ -76,7 +178,6 @@ export function AssistantMessage({
   const fileAttachments = attachments.filter(
     (attachment) => attachment.type !== "image" && attachment.type !== "audio",
   )
-  const [isExpanded, setIsExpanded] = useState(true)
   const formattedTimestamp =
     timestamp !== "" ? formatMessageTime(timestamp) : ""
   const messageMeta = [assistantName.trim(), formattedTimestamp].filter(Boolean)
@@ -117,10 +218,6 @@ export function AssistantMessage({
     }
   }
 
-  const collapsedLabel = isThought
-    ? t("chat.reasoningLabel")
-    : t("chat.toolCallsLabel")
-
   return (
     <div className="group flex w-full flex-col gap-1.5">
       {!isCollapsedBlock && messageMeta.length > 0 && (
@@ -136,102 +233,14 @@ export function AssistantMessage({
           className={cn(
             "relative overflow-hidden rounded-xl border",
             isCollapsedBlock
-              ? "border-border/30 bg-muted/20 text-muted-foreground dark:border-border/20 dark:bg-muted/10"
+              ? "border-transparent bg-transparent"
               : "bg-card text-card-foreground border-border/60",
           )}
         >
           {isCollapsedBlock && (
-            <div
-              className="text-muted-foreground/60 hover:text-muted-foreground/80 flex cursor-pointer items-center justify-between px-3 py-2 text-[12px] font-medium transition-colors select-none"
-              onClick={() => setIsExpanded(!isExpanded)}
-            >
-              <div className="flex items-center gap-1.5">
-                {isThought ? (
-                  <IconBrain className="size-3.5" />
-                ) : (
-                  <IconTool className="size-3.5" />
-                )}
-                <span>{collapsedLabel}</span>
-              </div>
-              <IconChevronDown
-                className={cn(
-                  "size-3.5 opacity-0 transition-all duration-200 group-hover:opacity-100",
-                  isExpanded ? "rotate-180" : "",
-                )}
-              />
-            </div>
+            <CompactAssistantStatus kind={kind} toolCalls={toolCalls} />
           )}
-          {(!isCollapsedBlock || isExpanded) && isToolCalls && hasToolCalls && (
-            <div className="space-y-3 px-3 pt-0 pb-3">
-              {toolCalls.map((toolCall, index) => {
-                const explanation =
-                  toolCall.extraContent?.toolFeedbackExplanation?.trim() ?? ""
-                const toolName = toolCall.function?.name?.trim() ?? ""
-                const toolArguments = toolCall.function?.arguments?.trim() ?? ""
-                const hasFunctionSummary = toolName || toolArguments
-
-                if (!explanation && !hasFunctionSummary) {
-                  return null
-                }
-
-                return (
-                  <div
-                    key={toolCall.id ?? `${toolName}-${index}`}
-                    className={cn(
-                      "space-y-3",
-                      index > 0 && "border-border/20 border-t pt-3",
-                    )}
-                  >
-                    {explanation && (
-                      <div className="space-y-1.5">
-                        <div className="text-muted-foreground/55 text-[11px] font-medium tracking-wide uppercase">
-                          {t("chat.toolCallExplanationLabel")}
-                        </div>
-                        <div className="prose dark:prose-invert prose-p:my-1.5 prose-p:whitespace-pre-wrap max-w-none text-[13px] leading-relaxed [overflow-wrap:anywhere] break-words opacity-75">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            rehypePlugins={[
-                              rehypeRaw,
-                              rehypeSanitize,
-                              rehypeHighlight,
-                            ]}
-                          >
-                            {explanation}
-                          </ReactMarkdown>
-                        </div>
-                      </div>
-                    )}
-
-                    {hasFunctionSummary && (
-                      <div
-                        className={cn(
-                          "space-y-1.5",
-                          explanation && "border-border/20 border-t pt-3",
-                        )}
-                      >
-                        <div className="text-muted-foreground/55 text-[11px] font-medium tracking-wide uppercase">
-                          {t("chat.toolCallFunctionLabel")}
-                        </div>
-                        <div className="bg-background/55 border-border/25 space-y-2 rounded-lg border px-3 py-2.5">
-                          {toolName && (
-                            <div className="text-foreground/75 font-mono text-[12px] font-semibold">
-                              {toolName}
-                            </div>
-                          )}
-                          {toolArguments && (
-                            <pre className="text-muted-foreground/75 overflow-x-auto font-mono text-[12px] leading-relaxed break-words whitespace-pre-wrap">
-                              {toolArguments}
-                            </pre>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          {(!isCollapsedBlock || isExpanded) && !isToolCalls && hasText && (
+          {!isCollapsedBlock && !isToolCalls && hasText && (
             <>
               {suggestionCard ? (
                 <SuggestionChoiceCard

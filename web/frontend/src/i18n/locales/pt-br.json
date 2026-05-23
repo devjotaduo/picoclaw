@@ -102,6 +102,8 @@
     "toolCallsLabel": "Chamadas de ferramentas",
     "toolCallExplanationLabel": "Nota da chamada",
     "toolCallFunctionLabel": "Resumo da chamada",
+    "executingStatus": "Executando {{action}}",
+    "thinkingStatus": "Pensando",
     "showAssistantDetails": "Mostrar raciocínio e chamadas de ferramentas",
     "toolLabel": "Ferramenta",
     "history": "Histórico",

@@ -95,6 +95,8 @@
     "toolCallsLabel": "工具调用",
     "toolCallExplanationLabel": "调用提示",
     "toolCallFunctionLabel": "调用摘要",
+    "executingStatus": "正在执行 {{action}}",
+    "thinkingStatus": "思考中",
     "showAssistantDetails": "展示思考过程与工具调用",
     "toolLabel": "工具",
     "history": "历史记录",
