@@ -1,12 +1,16 @@
 import { useQuery } from "@tanstack/react-query"
-import { useCallback, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import type { LauncherPolicyResponse } from "@/api/launcher-policy"
 import {
   DEFAULT_UI_VISIBILITY_POLICY,
   getLocalUIVisibilityPolicy,
+  getUIVisibilityProfileOverride,
   isUIElementVisible,
   resolveUIVisibilityProfile,
+  setUIVisibilityProfileOverride,
+  UI_VISIBILITY_OVERRIDE_STORAGE_KEY,
+  type UIVisibilityProfile,
 } from "@/api/ui-visibility"
 
 export function useUIVisibility(
@@ -19,10 +23,28 @@ export function useUIVisibility(
     staleTime: 10_000,
   })
 
+  // Subscribe to the storage event so the selector flipping the override
+  // re-resolves the profile across all consumers (sidebar, header, chat).
+  // The setter dispatches a synthetic StorageEvent in the same tab too.
+  const [override, setOverride] = useState<UIVisibilityProfile | null>(() =>
+    getUIVisibilityProfileOverride(),
+  )
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const handler = (event: StorageEvent) => {
+      if (event.key && event.key !== UI_VISIBILITY_OVERRIDE_STORAGE_KEY) return
+      setOverride(getUIVisibilityProfileOverride())
+    }
+    window.addEventListener("storage", handler)
+    return () => window.removeEventListener("storage", handler)
+  }, [])
+
   const policy = query.data ?? DEFAULT_UI_VISIBILITY_POLICY
   const profile = useMemo(
     () => resolveUIVisibilityProfile(policy, launcherPolicy),
-    [launcherPolicy, policy],
+    // override is in deps via the storage subscriber — recomputes when it changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [launcherPolicy, policy, override],
   )
   const visible = useCallback(
     (element: string, fallback?: boolean) =>
@@ -30,9 +52,18 @@ export function useUIVisibility(
     [policy, profile],
   )
 
+  const setProfileOverride = useCallback(
+    (next: UIVisibilityProfile | null) => {
+      setUIVisibilityProfileOverride(next)
+    },
+    [],
+  )
+
   return {
     policy,
     profile,
+    override,
+    setProfileOverride,
     visible,
     isLoading: query.isLoading,
     isError: query.isError,

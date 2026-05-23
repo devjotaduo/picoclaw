@@ -593,6 +593,7 @@ func main() {
 	apiHandler.SetServerOptions(portNum, effectivePublic, explicitPublic, launcherCfg.AllowedCIDRs)
 	apiHandler.SetServerBindHost(hostInput, hostOverrideActive)
 	apiHandler.RegisterRoutes(mux)
+	apiHandler.StartOAuthAutoRefresh()
 
 	// Frontend Embedded Assets
 	registerEmbedRoutes(mux)

@@ -23,6 +23,9 @@ import { PublicPreCadastro } from "@/pages/PublicPreCadastro";
 import { CompanyIntakes } from "@/pages/CompanyIntakes";
 import { ServerHealth } from "@/pages/ServerHealth";
 import { ChangePassword } from "@/pages/ChangePassword";
+import { Shortlinks } from "@/pages/Shortlinks";
+import { ForgotPassword } from "@/pages/ForgotPassword";
+import { ResetPassword } from "@/pages/ResetPassword";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { status } = useAuth();
@@ -52,6 +55,8 @@ export default function App() {
         element={status.state === "authenticated" ? <Navigate to="/tenants" replace /> : <Login />}
       />
       <Route path="/accept-invite" element={<AcceptInvite />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/pre-cadastro" element={<PublicPreCadastro />} />
       <Route
         element={
@@ -76,6 +81,7 @@ export default function App() {
         <Route path="/users" element={<RequirePlatform><UserManagement /></RequirePlatform>} />
         <Route path="/dashboard" element={<RequirePlatform><PlatformDashboard /></RequirePlatform>} />
         <Route path="/server-health" element={<RequirePlatform><ServerHealth /></RequirePlatform>} />
+        <Route path="/shortlinks" element={<RequirePlatform><Shortlinks /></RequirePlatform>} />
         <Route path="/account/password" element={<ChangePassword />} />
         <Route path="/intakes" element={<RequirePlatform><CompanyIntakes /></RequirePlatform>} />
         <Route path="/crm" element={<RequirePlatform><Navigate to="/crm/contacts" replace /></RequirePlatform>} />

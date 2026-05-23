@@ -2,7 +2,9 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -237,6 +239,185 @@ func TestOAuthProvidersAutoRefreshesAnthropicCredential(t *testing.T) {
 	}
 	if stored == nil || stored.AccessToken != "fresh-anthropic-token" {
 		t.Fatalf("stored credential = %+v, want refreshed token", stored)
+	}
+}
+
+func TestRefreshOAuthCredentialsOnceRefreshesBeforeExpiry(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+	resetOAuthHooks(t)
+
+	now := time.Now().Truncate(time.Second)
+	if err := auth.SetCredential(oauthProviderOpenAI, &auth.AuthCredential{
+		AccessToken:  "soon-expiring-openai-token",
+		RefreshToken: "openai-refresh-token",
+		AccountID:    "acct_123",
+		Email:        "user@example.com",
+		ExpiresAt:    now.Add(9 * time.Minute),
+		Provider:     oauthProviderOpenAI,
+		AuthMethod:   oauthMethodCodexCLI,
+	}); err != nil {
+		t.Fatalf("SetCredential: %v", err)
+	}
+
+	refreshCalls := 0
+	refreshedExpiresAt := now.Add(time.Hour)
+	oauthRefreshAccessToken = func(
+		cred *auth.AuthCredential,
+		cfg auth.OAuthProviderConfig,
+	) (*auth.AuthCredential, error) {
+		refreshCalls++
+		if cfg.ClientID != auth.OpenAIOAuthConfig().ClientID {
+			t.Fatalf("ClientID = %q, want OpenAI OAuth client", cfg.ClientID)
+		}
+		if cred.RefreshToken != "openai-refresh-token" {
+			t.Fatalf("RefreshToken = %q, want openai-refresh-token", cred.RefreshToken)
+		}
+		return &auth.AuthCredential{
+			AccessToken: "fresh-openai-token",
+			ExpiresAt:   refreshedExpiresAt,
+			Provider:    oauthProviderOpenAI,
+		}, nil
+	}
+
+	h := NewHandler(configPath)
+	h.refreshOAuthCredentialsOnce(now, 10*time.Minute)
+
+	if refreshCalls != 1 {
+		t.Fatalf("refresh calls = %d, want 1", refreshCalls)
+	}
+
+	stored, err := auth.GetCredential(oauthProviderOpenAI)
+	if err != nil {
+		t.Fatalf("GetCredential: %v", err)
+	}
+	if stored == nil {
+		t.Fatal("stored credential missing")
+	}
+	if stored.AccessToken != "fresh-openai-token" {
+		t.Fatalf("access token = %q, want fresh-openai-token", stored.AccessToken)
+	}
+	if stored.RefreshToken != "openai-refresh-token" {
+		t.Fatalf("refresh token = %q, want preserved refresh token", stored.RefreshToken)
+	}
+	if stored.AuthMethod != oauthMethodCodexCLI {
+		t.Fatalf("auth method = %q, want %q", stored.AuthMethod, oauthMethodCodexCLI)
+	}
+	if stored.AccountID != "acct_123" || stored.Email != "user@example.com" {
+		t.Fatalf("stored identity = account %q email %q, want preserved identity", stored.AccountID, stored.Email)
+	}
+	if !stored.ExpiresAt.Equal(refreshedExpiresAt) {
+		t.Fatalf("expires at = %s, want %s", stored.ExpiresAt, refreshedExpiresAt)
+	}
+}
+
+func TestImportClaudeCodeCredentialRefreshesExpiredToken(t *testing.T) {
+	_, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+	resetOAuthHooks(t)
+
+	claudeDir := filepath.Join(os.Getenv("HOME"), ".claude")
+	if err := os.MkdirAll(claudeDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	expired := time.Now().Add(-time.Minute).UnixMilli()
+	credFile := filepath.Join(claudeDir, ".credentials.json")
+	if err := os.WriteFile(
+		credFile,
+		[]byte(fmt.Sprintf(`{"claudeAiOauth":{"accessToken":"expired-token","refreshToken":"refresh-token","expiresAt":%d}}`, expired)),
+		0o600,
+	); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	refreshedExpiresAt := time.Now().Add(time.Hour).Truncate(time.Second)
+	refreshCalls := 0
+	oauthRefreshAccessToken = func(
+		cred *auth.AuthCredential,
+		cfg auth.OAuthProviderConfig,
+	) (*auth.AuthCredential, error) {
+		refreshCalls++
+		if cred.AccessToken != "expired-token" {
+			t.Fatalf("access token = %q, want expired-token", cred.AccessToken)
+		}
+		if cred.RefreshToken != "refresh-token" {
+			t.Fatalf("refresh token = %q, want refresh-token", cred.RefreshToken)
+		}
+		if cfg.TokenURL != "https://console.anthropic.com/v1/oauth/token" {
+			t.Fatalf("TokenURL = %q, want Anthropic token endpoint", cfg.TokenURL)
+		}
+		return &auth.AuthCredential{
+			AccessToken:  "fresh-token",
+			RefreshToken: "fresh-refresh-token",
+			ExpiresAt:    refreshedExpiresAt,
+		}, nil
+	}
+
+	got, err := importClaudeCodeCredential()
+	if err != nil {
+		t.Fatalf("importClaudeCodeCredential error: %v", err)
+	}
+	if refreshCalls != 1 {
+		t.Fatalf("refresh calls = %d, want 1", refreshCalls)
+	}
+	if got.AccessToken != "fresh-token" {
+		t.Fatalf("access token = %q, want fresh-token", got.AccessToken)
+	}
+	if got.RefreshToken != "fresh-refresh-token" {
+		t.Fatalf("refresh token = %q, want fresh-refresh-token", got.RefreshToken)
+	}
+	if !got.ExpiresAt.Equal(refreshedExpiresAt) {
+		t.Fatalf("expires at = %s, want %s", got.ExpiresAt, refreshedExpiresAt)
+	}
+	if got.Provider != oauthProviderAnthropic {
+		t.Fatalf("provider = %q, want %q", got.Provider, oauthProviderAnthropic)
+	}
+	if got.AuthMethod != oauthMethodClaudeCode {
+		t.Fatalf("auth method = %q, want %q", got.AuthMethod, oauthMethodClaudeCode)
+	}
+}
+
+func TestImportCodexCLICredentialReadsAuthJSON(t *testing.T) {
+	_, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+	resetOAuthHooks(t)
+
+	codexDir := filepath.Join(os.Getenv("HOME"), ".codex")
+	if err := os.MkdirAll(codexDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	expiresAt := time.Now().Add(time.Hour).Unix()
+	accessToken := testJWTWithExpiry(t, expiresAt)
+	credFile := filepath.Join(codexDir, "auth.json")
+	if err := os.WriteFile(
+		credFile,
+		[]byte(fmt.Sprintf(`{"auth_mode":"chatgpt","tokens":{"access_token":%q,"refresh_token":"refresh-token","account_id":"acct_123"}}`, accessToken)),
+		0o600,
+	); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	got, err := importCodexCLICredential()
+	if err != nil {
+		t.Fatalf("importCodexCLICredential error: %v", err)
+	}
+	if got.AccessToken != accessToken {
+		t.Fatalf("access token mismatch")
+	}
+	if got.RefreshToken != "refresh-token" {
+		t.Fatalf("refresh token = %q, want refresh-token", got.RefreshToken)
+	}
+	if got.AccountID != "acct_123" {
+		t.Fatalf("account id = %q, want acct_123", got.AccountID)
+	}
+	if got.Provider != oauthProviderOpenAI {
+		t.Fatalf("provider = %q, want %q", got.Provider, oauthProviderOpenAI)
+	}
+	if got.AuthMethod != oauthMethodCodexCLI {
+		t.Fatalf("auth method = %q, want %q", got.AuthMethod, oauthMethodCodexCLI)
+	}
+	if got.ExpiresAt.Unix() != expiresAt {
+		t.Fatalf("expires at = %d, want %d", got.ExpiresAt.Unix(), expiresAt)
 	}
 }
 
@@ -574,15 +755,63 @@ func TestGitHubCopilotLoginMigratesLegacyGitHubModelsConfig(t *testing.T) {
 	}
 }
 
+func TestImportGHCLICredentialFallsBackToCommand(t *testing.T) {
+	_, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+	resetOAuthHooks(t)
+
+	var calls []string
+	oauthRunGHCLI = func(args ...string) (string, error) {
+		call := strings.Join(args, " ")
+		calls = append(calls, call)
+		switch call {
+		case "auth token --hostname github.com":
+			return "gho-test-token\n", nil
+		case "api user --jq .login":
+			return "devjotaduo\n", nil
+		default:
+			return "", fmt.Errorf("unexpected gh call: %s", call)
+		}
+	}
+
+	got, err := importGHCLICredential()
+	if err != nil {
+		t.Fatalf("importGHCLICredential error: %v", err)
+	}
+	if got.AccessToken != "gho-test-token" {
+		t.Fatalf("access token = %q, want test token", got.AccessToken)
+	}
+	if got.AccountID != "devjotaduo" {
+		t.Fatalf("account id = %q, want devjotaduo", got.AccountID)
+	}
+	if got.Provider != oauthProviderGitHubCopilot {
+		t.Fatalf("provider = %q, want %q", got.Provider, oauthProviderGitHubCopilot)
+	}
+	if got.AuthMethod != oauthMethodGHCLI {
+		t.Fatalf("auth method = %q, want %q", got.AuthMethod, oauthMethodGHCLI)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("gh calls = %v, want token and user calls", calls)
+	}
+}
+
 func setupOAuthTestEnv(t *testing.T) (string, func()) {
 	t.Helper()
 
 	tmp := t.TempDir()
 	oldHome := os.Getenv("HOME")
+	oldUserProfile := os.Getenv("USERPROFILE")
+	oldAppData := os.Getenv("APPDATA")
 	oldPicoHome := os.Getenv("PICOCLAW_HOME")
 
 	if err := os.Setenv("HOME", tmp); err != nil {
 		t.Fatalf("set HOME: %v", err)
+	}
+	if err := os.Setenv("USERPROFILE", tmp); err != nil {
+		t.Fatalf("set USERPROFILE: %v", err)
+	}
+	if err := os.Setenv("APPDATA", filepath.Join(tmp, "AppData", "Roaming")); err != nil {
+		t.Fatalf("set APPDATA: %v", err)
 	}
 	if err := os.Setenv("PICOCLAW_HOME", filepath.Join(tmp, ".picoclaw")); err != nil {
 		t.Fatalf("set PICOCLAW_HOME: %v", err)
@@ -603,6 +832,16 @@ func setupOAuthTestEnv(t *testing.T) (string, func()) {
 
 	cleanup := func() {
 		_ = os.Setenv("HOME", oldHome)
+		if oldUserProfile == "" {
+			_ = os.Unsetenv("USERPROFILE")
+		} else {
+			_ = os.Setenv("USERPROFILE", oldUserProfile)
+		}
+		if oldAppData == "" {
+			_ = os.Unsetenv("APPDATA")
+		} else {
+			_ = os.Setenv("APPDATA", oldAppData)
+		}
 		if oldPicoHome == "" {
 			_ = os.Unsetenv("PICOCLAW_HOME")
 		} else {
@@ -631,6 +870,7 @@ func resetOAuthHooks(t *testing.T) {
 	origSaveConfig := oauthSaveConfig
 	origFetchProject := oauthFetchAntigravityProject
 	origFetchGoogleEmail := oauthFetchGoogleUserEmailFunc
+	origRunGHCLI := oauthRunGHCLI
 
 	t.Cleanup(func() {
 		oauthNow = origNow
@@ -649,5 +889,13 @@ func resetOAuthHooks(t *testing.T) {
 		oauthSaveConfig = origSaveConfig
 		oauthFetchAntigravityProject = origFetchProject
 		oauthFetchGoogleUserEmailFunc = origFetchGoogleEmail
+		oauthRunGHCLI = origRunGHCLI
 	})
+}
+
+func testJWTWithExpiry(t *testing.T, exp int64) string {
+	t.Helper()
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"exp":%d}`, exp)))
+	return header + "." + payload + ".signature"
 }

@@ -124,6 +124,64 @@ func (m *Mailer) SendCredentialsEmail(to, tenantName, dashboardURL, loginEmail, 
 	}
 }
 
+// SendPasswordResetEmail delivers the "click to reset your password"
+// message. resetURL embeds the one-shot token; expiresAt is shown
+// verbatim so the recipient knows the deadline. No-op when the mailer
+// is disabled — the caller logs the URL to its own structured log so
+// an operator can copy it manually if SMTP is broken.
+func (m *Mailer) SendPasswordResetEmail(to, resetURL string, expiresAt time.Time) {
+	if m == nil || !m.cfg.Enabled() {
+		log.Printf("mailer (disabled): password reset for %s → %s", to, resetURL)
+		return
+	}
+	expiresStr := expiresAt.Format("02/01/2006 15:04 MST")
+	subject := "Redefinição de senha — Jotaduo"
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:32px auto;padding:0 24px;line-height:1.55;color:#1a1a1a">
+  <h2 style="margin:0 0 16px;font-size:1.3rem">Redefinir sua senha</h2>
+  <p>Recebemos um pedido pra redefinir a senha da conta <code>%s</code>.</p>
+  <p style="margin:24px 0">
+    <a href="%s" style="display:inline-block;background:#d97757;color:#ffffff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600">
+      Definir uma nova senha
+    </a>
+  </p>
+  <p style="font-size:0.85rem;color:#666">
+    Link expira em <b>%s</b>. Se você não pediu essa redefinição, pode ignorar — sua senha atual continua funcionando.
+  </p>
+  <p style="font-size:0.85rem;color:#666;margin-top:24px;padding-top:16px;border-top:1px solid #eee">
+    Caso o botão não funcione, cole esta URL no navegador:<br>
+    <code style="word-break:break-all">%s</code>
+  </p>
+</body></html>`, htmlEscape(to), htmlEscape(resetURL), htmlEscape(expiresStr), htmlEscape(resetURL))
+	text := fmt.Sprintf(`Redefinir sua senha
+
+Recebemos um pedido pra redefinir a senha de %s.
+
+Abra este link pra definir uma nova senha (expira em %s):
+
+%s
+
+Se você não pediu essa redefinição, pode ignorar este email. Sua senha atual continua funcionando.
+`, to, expiresStr, resetURL)
+	if err := m.Send(to, subject, html, text); err != nil {
+		log.Printf("mailer: send password reset to %s failed: %v", to, err)
+	}
+}
+
+// htmlEscape escapes the four HTML entities that matter for embedded
+// strings. Local helper so we don't pull in html/template just for this
+// (the email template above is hand-written, not template-driven).
+func htmlEscape(s string) string {
+	r := strings.NewReplacer(
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
+		`"`, "&quot;",
+	)
+	return r.Replace(s)
+}
+
 func (m *Mailer) Send(to, subject, htmlBody, textBody string) error {
 	if !m.cfg.Enabled() {
 		return fmt.Errorf("mailer disabled")

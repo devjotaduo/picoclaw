@@ -10,23 +10,27 @@ import (
 
 // Handler serves HTTP API requests.
 type Handler struct {
-	configPath           string
-	serverPort           int
-	serverPublic         bool
-	serverPublicExplicit bool
-	serverHostInput      string
-	serverHostExplicit   bool
-	serverCIDRs          []string
-	debug                bool
-	oauthMu              sync.Mutex
-	oauthFlows           map[string]*oauthFlow
-	oauthState           map[string]string
-	weixinMu             sync.Mutex
-	weixinFlows          map[string]*weixinFlow
-	wecomMu              sync.Mutex
-	wecomFlows           map[string]*wecomFlow
-	agentTemplateMu      sync.Mutex
-	templateOverridesMu  sync.Mutex
+	configPath               string
+	serverPort               int
+	serverPublic             bool
+	serverPublicExplicit     bool
+	serverHostInput          string
+	serverHostExplicit       bool
+	serverCIDRs              []string
+	debug                    bool
+	oauthMu                  sync.Mutex
+	oauthCredentialMu        sync.Mutex
+	oauthAutoRefreshOnce     sync.Once
+	oauthAutoRefreshStopOnce sync.Once
+	oauthAutoRefreshStop     chan struct{}
+	oauthFlows               map[string]*oauthFlow
+	oauthState               map[string]string
+	weixinMu                 sync.Mutex
+	weixinFlows              map[string]*weixinFlow
+	wecomMu                  sync.Mutex
+	wecomFlows               map[string]*wecomFlow
+	agentTemplateMu          sync.Mutex
+	templateOverridesMu      sync.Mutex
 }
 
 // NewHandler creates an instance of the API handler.
@@ -171,5 +175,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 // Shutdown gracefully shuts down the handler, stopping the gateway if it was started by this handler.
 func (h *Handler) Shutdown() {
+	h.stopOAuthAutoRefresh()
 	h.StopGateway()
 }

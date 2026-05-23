@@ -198,6 +198,24 @@ func isLikelyGatewayProcess(pid int) (bool, bool) {
 		return false, true
 	}
 
+	// Kernel-level liveness check first. Signal 0 doesn't actually deliver a
+	// signal — the kernel just verifies the pid exists and we have permission
+	// to signal it. ESRCH means the process is gone, full stop: that's a
+	// decisive "no gateway here" so the caller can remove the stale pid file
+	// instead of waiting for the health probe to time out indefinitely.
+	// Without this, a crashed gateway leaves a pid file the launcher refuses
+	// to overwrite, blocking every subsequent auto-start.
+	if proc, err := os.FindProcess(pid); err == nil {
+		if sigErr := proc.Signal(syscall.Signal(0)); sigErr != nil {
+			if errors.Is(sigErr, syscall.ESRCH) ||
+				strings.Contains(strings.ToLower(sigErr.Error()), "no such process") {
+				return false, true
+			}
+			// EPERM / other: fall through to ps, which may still succeed
+			// under different privileges or give a clearer answer.
+		}
+	}
+
 	out, err := launcherExecCommand("ps", "-o", "command=", "-p", strconv.Itoa(pid)).Output()
 	if err != nil {
 		return false, false

@@ -430,9 +430,10 @@ func DefaultConfig() *Config {
 				ToolConfig: ToolConfig{
 					Enabled: false,
 				},
-				APIBase: "https://api.openai.com/v1",
-				Model:   "gpt-image-1",
-				Size:    "1024x1024",
+				APIBase:   "https://openrouter.ai/api/v1",
+				Model:     "google/gemini-2.5-flash-image",
+				Size:      "1024x1024",
+				OutputDir: "public/marketing",
 			},
 			AppendFile: ToolConfig{
 				Enabled: true,

@@ -7,6 +7,7 @@ import {
   type OAuthProviderStatus,
   getOAuthFlow,
   getOAuthProviders,
+  importCodexCLI,
   importClaudeCode,
   importGHCLI,
   loginOAuth,
@@ -363,6 +364,23 @@ export function useCredentialsPage() {
     }
   }, [loadProviders, t])
 
+  const importFromCodexCLI = useCallback(async () => {
+    setActiveAction("openai:codex_cli")
+    setError("")
+    try {
+      await importCodexCLI()
+      await loadProviders()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("credentials.errors.loginFailed"),
+      )
+    } finally {
+      setActiveAction("")
+    }
+  }, [loadProviders, t])
+
   const importFromGHCLI = useCallback(async () => {
     setActiveAction("github-copilot:gh_cli")
     setError("")
@@ -558,6 +576,7 @@ export function useCredentialsPage() {
     setCopilotToken,
     startBrowserOAuth,
     startOpenAIDeviceCode,
+    importFromCodexCLI,
     importFromClaudeCode,
     importFromGHCLI,
     stopLoading,

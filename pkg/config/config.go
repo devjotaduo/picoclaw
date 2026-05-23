@@ -1145,7 +1145,7 @@ type ToolsConfig struct {
 	Skills                SkillsToolsConfig          `json:"skills"            yaml:"skills,omitempty"`
 	MediaCleanup          MediaCleanupConfig         `json:"media_cleanup"     yaml:"-"`
 	MCP                   MCPConfig                  `json:"mcp"               yaml:"-"`
-	ImageGeneration       ImageGenerationToolsConfig `json:"image_generation" yaml:"-" envPrefix:"PICOCLAW_TOOLS_IMAGE_GENERATION_"`
+	ImageGeneration       ImageGenerationToolsConfig `json:"image_generation" yaml:"image_generation,omitempty" envPrefix:"PICOCLAW_TOOLS_IMAGE_GENERATION_"`
 	AppendFile            ToolConfig                 `json:"append_file"       yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_APPEND_FILE_"`
 	EditFile              ToolConfig                 `json:"edit_file"         yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_EDIT_FILE_"`
 	FindSkills            ToolConfig                 `json:"find_skills"       yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_FIND_SKILLS_"`

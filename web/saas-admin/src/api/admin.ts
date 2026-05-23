@@ -42,3 +42,23 @@ export async function changePassword(currentPassword: string, newPassword: strin
     }),
   });
 }
+
+// requestPasswordReset always returns 204 — the server doesn't reveal
+// whether the email corresponds to a known account. The UI shows a
+// friendly "check your email" message regardless.
+export async function requestPasswordReset(email: string) {
+  return api<void>("/api/v1/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+// submitPasswordReset consumes a one-shot token from the email link.
+// Returns 401 if the token is invalid / expired / already used; the UI
+// surfaces that as a single generic error.
+export async function submitPasswordReset(token: string, password: string) {
+  return api<void>("/api/v1/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, password }),
+  });
+}

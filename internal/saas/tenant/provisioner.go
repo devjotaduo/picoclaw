@@ -17,6 +17,7 @@ import (
 	"github.com/sipeed/picoclaw/internal/saas/config"
 	"github.com/sipeed/picoclaw/internal/saas/litellm"
 	"github.com/sipeed/picoclaw/internal/saas/store"
+	picoclawconfig "github.com/sipeed/picoclaw/pkg/config"
 )
 
 // sharedAuthHostPath is where the operator places auth.json with OAuth
@@ -217,14 +218,36 @@ func (p *Provisioner) runProvision(
 	password string,
 	ws *store.Workspace,
 	skipDashboardPassword bool,
-) error {
+) (err error) {
+	success := false
+	volumeCreated := false
+	litellmKeyCreated := false
+	defer func() {
+		if success {
+			return
+		}
+		if p.Docker != nil {
+			_ = p.Docker.RemoveTenantContainers(context.Background(), t.ID)
+		}
+		if litellmKeyCreated && p.LiteLLM != nil {
+			_ = p.LiteLLM.DeleteKey(context.Background(), t.ID)
+		}
+		if volumeCreated && t.VolumePath != "" {
+			_ = os.RemoveAll(t.VolumePath)
+		}
+	}()
+
 	if err := os.MkdirAll(t.VolumePath, 0o755); err != nil {
 		return fmt.Errorf("mkdir volume: %w", err)
 	}
+	volumeCreated = true
 
 	// 1. Workspace home → tenant volume. Single authoritative copy step.
 	if err := CopyWorkspaceHome(ws.HostPath, t.VolumePath); err != nil {
 		return fmt.Errorf("copy workspace home: %w", err)
+	}
+	if err := SanitizeTenantSecurityConfig(t.VolumePath); err != nil {
+		return fmt.Errorf("sanitize security config: %w", err)
 	}
 
 	// 1b. Shared OAuth credentials. If the operator has authenticated against
@@ -270,9 +293,9 @@ func (p *Provisioner) runProvision(
 			if err != nil {
 				return fmt.Errorf("litellm key: %w", err)
 			}
+			litellmKeyCreated = true
 			h := sha256.Sum256([]byte(out.Key))
 			if err := p.Tenants.SetLiteLLMKey(ctx, t.ID, out.KeyName, hex.EncodeToString(h[:])); err != nil {
-				_ = p.LiteLLM.DeleteKey(ctx, t.ID)
 				return fmt.Errorf("save litellm key: %w", err)
 			}
 			if err := SubstituteConfigPlaceholders(t.VolumePath, map[string]string{
@@ -288,13 +311,27 @@ func (p *Provisioner) runProvision(
 		if err := WriteLauncherPolicy(t.VolumePath, ws.RolePolicy()); err != nil {
 			return fmt.Errorf("write launcher policy: %w", err)
 		}
+
+		// 4b. Static validation of the materialised config.json + .security.yml
+		// against the picoclaw schema. Catches template bugs (e.g. `api_key`
+		// singular instead of `api_keys` plural, malformed channels block in
+		// security.yml) BEFORE the tenant container boots and silently 500s on
+		// every workspace endpoint. The deferred cleanup wipes the partial
+		// volume + revokes the LiteLLM key so retrying after a template fix
+		// starts from a clean slate.
+		if err := picoclawconfig.ValidateBundle(filepath.Join(t.VolumePath, "config.json")); err != nil {
+			return fmt.Errorf("workspace template would break launcher boot: %w", err)
+		}
 	}
 
 	// 5. Container with two binds (home + optional frontend-dist). The
 	// frontend-dist bind is attached by buildSpec when t.WorkspaceID is set
 	// and the workspace has a compiled build — so Recreate/lifecycle.Restart
 	// inherit the same mount automatically without re-running this path.
-	spec := p.buildSpec(t)
+	spec, err := p.buildSpec(ctx, t)
+	if err != nil {
+		return fmt.Errorf("build spec: %w", err)
+	}
 
 	containerID, err := p.Docker.CreateAndStart(ctx, spec)
 	if err != nil {
@@ -304,11 +341,13 @@ func (p *Provisioner) runProvision(
 		return fmt.Errorf("set container: %w", err)
 	}
 	if err := p.Docker.WaitRunning(ctx, containerID, 60*time.Second); err != nil {
+		_ = p.Docker.Remove(context.Background(), spec.Name)
 		return fmt.Errorf("wait running: %w", err)
 	}
 	if err := p.Tenants.SetStatus(ctx, t.ID, store.StatusActive, nil); err != nil {
 		return fmt.Errorf("set active: %w", err)
 	}
+	success = true
 	return nil
 }
 
@@ -410,10 +449,29 @@ func (p *Provisioner) CloneFromTenant(ctx context.Context, in CloneInput) (*Crea
 	}, nil
 }
 
-func (p *Provisioner) runProvisionClone(ctx context.Context, t *store.Tenant, src *store.Tenant) error {
+func (p *Provisioner) runProvisionClone(ctx context.Context, t *store.Tenant, src *store.Tenant) (err error) {
+	success := false
+	volumeCreated := false
+	litellmKeyCreated := false
+	defer func() {
+		if success {
+			return
+		}
+		if p.Docker != nil {
+			_ = p.Docker.RemoveTenantContainers(context.Background(), t.ID)
+		}
+		if litellmKeyCreated && p.LiteLLM != nil {
+			_ = p.LiteLLM.DeleteKey(context.Background(), t.ID)
+		}
+		if volumeCreated && t.VolumePath != "" {
+			_ = os.RemoveAll(t.VolumePath)
+		}
+	}()
+
 	if err := os.MkdirAll(t.VolumePath, 0o755); err != nil {
 		return fmt.Errorf("mkdir volume: %w", err)
 	}
+	volumeCreated = true
 	if err := CopyVolumeRaw(src.VolumePath, t.VolumePath); err != nil {
 		return fmt.Errorf("copy volume raw: %w", err)
 	}
@@ -439,9 +497,9 @@ func (p *Provisioner) runProvisionClone(ctx context.Context, t *store.Tenant, sr
 		if err != nil {
 			return fmt.Errorf("litellm key: %w", err)
 		}
+		litellmKeyCreated = true
 		h := sha256.Sum256([]byte(out.Key))
 		if err := p.Tenants.SetLiteLLMKey(ctx, t.ID, out.KeyName, hex.EncodeToString(h[:])); err != nil {
-			_ = p.LiteLLM.DeleteKey(ctx, t.ID)
 			return fmt.Errorf("save litellm key: %w", err)
 		}
 		if err := RewriteConfigLiteLLMKey(t.VolumePath, out.Key); err != nil {
@@ -449,7 +507,10 @@ func (p *Provisioner) runProvisionClone(ctx context.Context, t *store.Tenant, sr
 		}
 	}
 
-	spec := p.buildSpec(t)
+	spec, err := p.buildSpec(ctx, t)
+	if err != nil {
+		return fmt.Errorf("build spec: %w", err)
+	}
 	containerID, err := p.Docker.CreateAndStart(ctx, spec)
 	if err != nil {
 		return fmt.Errorf("docker create: %w", err)
@@ -458,15 +519,17 @@ func (p *Provisioner) runProvisionClone(ctx context.Context, t *store.Tenant, sr
 		return fmt.Errorf("set container: %w", err)
 	}
 	if err := p.Docker.WaitRunning(ctx, containerID, 60*time.Second); err != nil {
+		_ = p.Docker.Remove(context.Background(), spec.Name)
 		return fmt.Errorf("wait running: %w", err)
 	}
 	if err := p.Tenants.SetStatus(ctx, t.ID, store.StatusActive, nil); err != nil {
 		return fmt.Errorf("set active: %w", err)
 	}
+	success = true
 	return nil
 }
 
-func (p *Provisioner) buildSpec(t *store.Tenant) ContainerSpec {
+func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (ContainerSpec, error) {
 	labels := map[string]string{
 		"traefik.enable":          "false",
 		"picoclaw.saas.tenant_id": t.ID,
@@ -494,7 +557,13 @@ func (p *Provisioner) buildSpec(t *store.Tenant) ContainerSpec {
 		"PICOCLAW_GATEWAY_HOST":           "0.0.0.0",
 		"PICOCLAW_AUTH_MODE":              authMode,
 		"PICOCLAW_TRUSTED_GATEWAY_SECRET": p.Cfg.GatewaySharedSecret,
-		"PICOCLAW_ALLOWED_CHANNELS":       "whatsapp_native",
+		// pico powers the in-browser WebSocket chat — required for the
+		// launcher's local-mode dashboard. Without it EnsurePicoChannel
+		// auto-disables the channel on every startup (via
+		// enforceAllowedChannelsConfig), which 404s /pico/ws because the
+		// gateway never registers the pico routes. whatsapp_native stays
+		// in the list as the legacy default for outbound messaging.
+		"PICOCLAW_ALLOWED_CHANNELS": "whatsapp_native,pico",
 	}
 
 	// Browser automation: every tenant gets the CDP endpoint of the shared
@@ -543,9 +612,9 @@ func (p *Provisioner) buildSpec(t *store.Tenant) ContainerSpec {
 	// automatically (instead of falling back to the embedded dist whenever
 	// the container is recreated outside the initial provision flow).
 	if t.WorkspaceID != nil && *t.WorkspaceID != "" && p.Workspaces != nil {
-		// Best-effort lookup — if the workspace was deleted out-of-band the
-		// container still boots, just without the custom frontend.
-		if ws, err := p.Workspaces.Get(context.Background(), *t.WorkspaceID); err == nil {
+		ws, err := p.Workspaces.Get(ctx, *t.WorkspaceID)
+		switch {
+		case err == nil:
 			if HasBuiltFrontend(ws.HostPath) {
 				spec.ExtraMounts = append(spec.ExtraMounts, ContainerMount{
 					Source:   WorkspaceFrontendDistPath(ws.HostPath),
@@ -554,8 +623,12 @@ func (p *Provisioner) buildSpec(t *store.Tenant) ContainerSpec {
 				})
 				spec.Env["PICOCLAW_FRONTEND_DIST_DIR"] = WorkspaceFrontendMountTarget
 			}
+		case errors.Is(err, store.ErrWorkspaceNotFound):
+			log.Printf("WARN: provisioner: tenant %s references missing workspace %s; omitting frontend bind", t.ID, *t.WorkspaceID)
+		default:
+			return ContainerSpec{}, fmt.Errorf("lookup workspace %s: %w", *t.WorkspaceID, err)
 		}
 	}
 
-	return spec
+	return spec, nil
 }

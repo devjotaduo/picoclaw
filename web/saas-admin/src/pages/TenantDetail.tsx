@@ -15,7 +15,12 @@ import {
   generateTenantMagicLink,
   consumeMagicLink,
   resendCredentials,
+  recreateTenant,
+  cloneTenant,
+  getTenantSanity,
+  listTenantMagicLinks,
   type MagicLinkRole,
+  type SanityCheck,
 } from "@/api/tenants";
 import {
   getCRMContact,
@@ -26,6 +31,7 @@ import {
   STAGE_COLOR,
 } from "@/api/crm";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
@@ -119,6 +125,73 @@ export function TenantDetail() {
     mutationFn: () => rotatePassword(id),
     onSuccess: (r) => setRotatedPwd(r.initial_password),
     onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to rotate password." }),
+  });
+  // Recreate: stops the docker container, removes it, creates a fresh one.
+  // Preserves the bind-mounted volume so per-tenant state (sessions,
+  // launcher-auth.db, etc.) survives. Needed after image rebuilds OR
+  // when env vars (PICOCLAW_AUTH_MODE, ALLOWED_CHANNELS) must refresh.
+  const recreateM = useMutation({
+    mutationFn: () => recreateTenant(id),
+    onSuccess: () => {
+      invalidate();
+      sanityQuery.refetch();
+      toast({ type: "success", message: "Tenant recreated. Container env atualizado." });
+    },
+    onError: (e: { error?: string }) =>
+      toast({ type: "error", message: e?.error ?? "Failed to recreate." }),
+  });
+  // Clone: raw volume copy + new LiteLLM key. The cloned launcher-auth.db
+  // and all secrets carry over — the new tenant is functionally a twin
+  // until the operator rotates credentials.
+  const [cloneOpen, setCloneOpen] = useState(false);
+  const [cloneSubdomain, setCloneSubdomain] = useState("");
+  const [cloneDisplayName, setCloneDisplayName] = useState("");
+  const [cloneOwnerEmail, setCloneOwnerEmail] = useState("");
+  const [cloneError, setCloneError] = useState("");
+  const cloneM = useMutation({
+    mutationFn: () =>
+      cloneTenant(id, {
+        subdomain: cloneSubdomain.trim().toLowerCase(),
+        display_name: cloneDisplayName.trim(),
+        owner_email: cloneOwnerEmail.trim().toLowerCase(),
+      }),
+    onSuccess: (r) => {
+      setCloneOpen(false);
+      setCloneSubdomain("");
+      setCloneDisplayName("");
+      setCloneOwnerEmail("");
+      setCloneError("");
+      toast({ type: "success", message: `Cloned → ${r.tenant_id}` });
+      nav(`/tenants/${r.tenant_id}`);
+    },
+    onError: (e: { error?: string }) =>
+      setCloneError(e?.error ?? "Failed to clone tenant."),
+  });
+  // Sanity check + magic links list polled in the background. Both are
+  // platform-admin-only endpoints; the queries no-op when the user lacks
+  // the role (RequirePlatform on the route prevents this page rendering
+  // for non-admins anyway).
+  const sanityQuery = useQuery({
+    queryKey: ["tenant-sanity", id],
+    queryFn: () => getTenantSanity(id),
+    enabled: !!t.data,
+    staleTime: 30_000,
+    retry: false,
+  });
+  const magicLinksQuery = useQuery({
+    queryKey: ["tenant-magic-links", id],
+    queryFn: () => listTenantMagicLinks(id),
+    enabled: !!t.data,
+    refetchInterval: 30_000,
+  });
+  const revokeMagicM = useMutation({
+    mutationFn: (nonce: string) => consumeMagicLink(nonce, "Revogado pelo admin."),
+    onSuccess: () => {
+      magicLinksQuery.refetch();
+      toast({ type: "success", message: "Magic link revogado." });
+    },
+    onError: (e: { error?: string }) =>
+      toast({ type: "error", message: e?.error ?? "Falha ao revogar." }),
   });
   const magicLinkM = useMutation({
     mutationFn: (roleOverride?: MagicLinkRole) =>
@@ -353,6 +426,45 @@ export function TenantDetail() {
             </Button>
           )}
           {isPlatformAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (
+                  confirm(
+                    "Recreate vai derrubar e recriar o container do tenant a partir da imagem atual.\n\n" +
+                      "✓ Preserva o volume bind-mounted (sessions, launcher-auth.db, workspace/)\n" +
+                      "✓ Aplica env vars novas (auth_mode, allowed_channels, etc.)\n" +
+                      "✗ Encerra conexões WebSocket abertas (~30s downtime)\n\n" +
+                      "Continuar?",
+                  )
+                ) {
+                  recreateM.mutate();
+                }
+              }}
+              disabled={recreateM.isPending}
+              title="Stop + remove + recreate container preservando volume"
+            >
+              {recreateM.isPending ? "Recriando..." : "Recreate"}
+            </Button>
+          )}
+          {isPlatformAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCloneSubdomain("");
+                setCloneDisplayName(tenant.display_name + " (clone)");
+                setCloneOwnerEmail(tenant.owner_email);
+                setCloneError("");
+                setCloneOpen(true);
+              }}
+              title="Clone: cópia raw do volume + nova LiteLLM key. Senha e segredos viajam junto."
+            >
+              Clone
+            </Button>
+          )}
+          {isPlatformAdmin && (
             <>
               <Button variant="secondary" size="sm" onClick={() => rotateM.mutate()} disabled={rotateM.isPending}>
                 Rotate password
@@ -371,6 +483,46 @@ export function TenantDetail() {
           )}
         </div>
       </header>
+
+      {/* Sanity widget: lista verificações pós-clone / pós-recreate. Falha
+          ou warn aparece em destaque pra operador agir antes do dono usar. */}
+      {isPlatformAdmin && sanityQuery.data && (
+        <div className="mb-4 rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              Sanity check
+              <button
+                onClick={() => sanityQuery.refetch()}
+                className="ml-2 text-zinc-500 underline-offset-2 hover:text-zinc-200 hover:underline"
+                disabled={sanityQuery.isFetching}
+              >
+                {sanityQuery.isFetching ? "checando..." : "atualizar"}
+              </button>
+            </div>
+            <div className="text-[10px] text-zinc-500">
+              {sanityQuery.data.sanity_checks.length} verificações
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {sanityQuery.data.sanity_checks.map((c: SanityCheck) => (
+              <span
+                key={c.name}
+                title={c.message || c.status}
+                className={
+                  "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium " +
+                  (c.status === "ok"
+                    ? "bg-emerald-500/15 text-emerald-300"
+                    : c.status === "warn"
+                      ? "bg-amber-500/15 text-amber-300"
+                      : "bg-red-500/15 text-red-300")
+                }
+              >
+                {c.status === "ok" ? "✓" : c.status === "warn" ? "!" : "✗"} {c.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {tenant.status === "error" && tenant.last_error && (
         <div className="mb-4 rounded-lg border border-red-800 bg-red-950/30 p-3 text-xs text-red-300">
@@ -466,6 +618,96 @@ export function TenantDetail() {
 
       {/* Members section */}
       <MembersSection tenantId={id} canManage={isPlatformAdmin || role === "tenant_owner"} />
+
+      {/* Magic links list: every active link visible at a glance + revoke
+          per row. Critical for spotting a leaked owner-grade link, which
+          today the operator would only know about by tail'ing audit_logs. */}
+      {isPlatformAdmin && magicLinksQuery.data && magicLinksQuery.data.links.length > 0 && (
+        <div className="mt-6">
+          <h2 className="mb-2 text-sm font-semibold text-zinc-300">
+            Magic links
+            <span className="ml-2 text-xs font-normal text-zinc-500">
+              ({magicLinksQuery.data.links.filter((l) => l.active).length} ativos /{" "}
+              {magicLinksQuery.data.links.length} total)
+            </span>
+          </h2>
+          <div className="overflow-hidden rounded-lg border border-zinc-800">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-900/80 text-left text-[11px] uppercase tracking-wide text-zinc-500">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Nonce</th>
+                  <th className="px-3 py-2 font-medium">Origem</th>
+                  <th className="px-3 py-2 font-medium">Criado</th>
+                  <th className="px-3 py-2 font-medium">Expira</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 text-right font-medium">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60">
+                {magicLinksQuery.data.links.map((m) => (
+                  <tr key={m.nonce} className={m.active ? "" : "opacity-60"}>
+                    <td className="px-3 py-2 font-mono text-[11px] text-zinc-300">{m.nonce}</td>
+                    <td className="px-3 py-2 text-xs text-zinc-500">
+                      {m.intake_id ? (
+                        <span title="Vinculado a um intake (lead Clara). Auto-revogado ao submit_intake.">
+                          intake
+                        </span>
+                      ) : (
+                        <span title="Gerado manualmente pelo admin (não vinculado a intake).">admin</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-zinc-500" title={formatDate(m.created_at)}>
+                      {relativeTime(m.created_at)}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-zinc-500" title={formatDate(m.expires_at)}>
+                      {relativeTime(m.expires_at)}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      {m.active ? (
+                        <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-emerald-300">
+                          ativo
+                        </span>
+                      ) : m.consumed_at ? (
+                        <span
+                          className="rounded bg-zinc-700/40 px-1.5 py-0.5 text-zinc-400"
+                          title={`Consumido ${formatDate(m.consumed_at)}`}
+                        >
+                          consumido
+                        </span>
+                      ) : (
+                        <span className="rounded bg-zinc-700/40 px-1.5 py-0.5 text-zinc-400">
+                          expirado
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {m.active && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (
+                              confirm(
+                                "Revogar este magic link?\n\nQuem clicar depois disso vai ver a página 'Obrigado' em vez do dashboard.",
+                              )
+                            ) {
+                              revokeMagicM.mutate(m.nonce);
+                            }
+                          }}
+                          disabled={revokeMagicM.isPending}
+                          className="text-xs text-amber-300 hover:text-amber-200"
+                        >
+                          Revogar
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Recent usage */}
       <div className="mt-6">
@@ -648,6 +890,80 @@ export function TenantDetail() {
             <Button variant="outline" onClick={() => setMagicLinkOpen(false)}>Fechar</Button>
             <Button onClick={() => magicLinkM.mutate(undefined)} disabled={magicLinkM.isPending}>
               {magicLinkM.isPending ? "Gerando..." : "Gerar outro"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Clone tenant dialog: minta um clone raw da volume + nova LiteLLM key.
+          Senha, segredos e dashboard auth carregam junto — operador rotaciona
+          se quiser separar o clone do original. */}
+      <Dialog
+        open={cloneOpen}
+        onClose={() => setCloneOpen(false)}
+        title={`Clone de ${tenant.subdomain}`}
+        size="md"
+      >
+        <div className="space-y-4 text-sm">
+          <div className="rounded-md border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200">
+            <div className="mb-1 font-semibold">⚠️ Clone raw</div>
+            O volume do tenant é copiado bit-a-bit: <b>senha do dashboard</b>, sessões,
+            tokens OAuth, banco da launcher-auth.db — tudo viaja. Apenas a chave LiteLLM
+            é renovada (pra não compartilhar budget). Rotacione a senha do clone depois
+            se o dono final for diferente.
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-500">
+              Subdomain do clone
+            </label>
+            <Input
+              value={cloneSubdomain}
+              onChange={(e) => setCloneSubdomain(e.target.value)}
+              placeholder="cliente-clone"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-500">
+              Display name
+            </label>
+            <Input
+              value={cloneDisplayName}
+              onChange={(e) => setCloneDisplayName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-500">
+              Owner email
+            </label>
+            <Input
+              value={cloneOwnerEmail}
+              onChange={(e) => setCloneOwnerEmail(e.target.value)}
+              placeholder="dono@empresa.com"
+            />
+          </div>
+          {cloneError && (
+            <div className="rounded border border-red-800 bg-red-950/50 px-3 py-2 text-xs text-red-300">
+              {cloneError}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 border-t border-zinc-800 pt-3">
+            <Button variant="outline" onClick={() => setCloneOpen(false)} disabled={cloneM.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                setCloneError("");
+                cloneM.mutate();
+              }}
+              disabled={
+                cloneM.isPending ||
+                !cloneSubdomain.trim() ||
+                !cloneDisplayName.trim() ||
+                !cloneOwnerEmail.trim()
+              }
+            >
+              {cloneM.isPending ? "Clonando..." : "Clonar tenant"}
             </Button>
           </div>
         </div>

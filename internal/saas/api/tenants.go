@@ -418,5 +418,11 @@ func summarizeTenant(t *store.Tenant) map[string]any {
 		// "Reenviar credenciais" button (only works for supabase-backed
 		// tenants; legacy local-auth tenants don't have a user to update).
 		"supabase_user_id": t.SupabaseUserID,
+		// auth_backend + is_public surfaced so the admin tenant list
+		// can show how the tenant authenticates and whether it accepts
+		// anonymous public-chat traffic. These two together determine
+		// whether the launcher runs in trusted_gateway vs local mode.
+		"auth_backend": t.AuthBackend,
+		"is_public":    t.IsPublic,
 	}
 }

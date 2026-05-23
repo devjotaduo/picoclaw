@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/sipeed/picoclaw/pkg/config"
@@ -69,6 +70,9 @@ func TestHandleListTools(t *testing.T) {
 	}
 	if gotTools["find_skills"].Status != "enabled" {
 		t.Fatalf("find_skills status = %q, want enabled", gotTools["find_skills"].Status)
+	}
+	if gotTools["generate_image"].Status != "disabled" {
+		t.Fatalf("generate_image status = %q, want disabled", gotTools["generate_image"].Status)
 	}
 	if gotTools["tool_search_tool_regex"].Status != "enabled" {
 		t.Fatalf("tool_search_tool_regex status = %q, want enabled", gotTools["tool_search_tool_regex"].Status)
@@ -314,6 +318,48 @@ func TestHandleListTools_ReportsWebSearchEnabledWhenToolIsOn(t *testing.T) {
 	}
 }
 
+func TestHandleListTools_BlocksImageGenerationWithoutAPIKey(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	cfg.Tools.ImageGeneration.Enabled = true
+	cfg.Tools.ImageGeneration.APIKey = *config.NewSecureString("")
+	if err := config.SaveConfig(configPath, cfg); err != nil {
+		t.Fatalf("SaveConfig() error = %v", err)
+	}
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/tools", nil)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp toolSupportResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	for _, tool := range resp.Tools {
+		if tool.Name != "generate_image" {
+			continue
+		}
+		if tool.Status != "blocked" || tool.ReasonCode != "missing_api_key" {
+			t.Fatalf("generate_image = %#v, want blocked/missing_api_key", tool)
+		}
+		return
+	}
+	t.Fatal("expected generate_image in response")
+}
+
 func TestHandleGetWebSearchConfig(t *testing.T) {
 	configPath, cleanup := setupOAuthTestEnv(t)
 	defer cleanup()
@@ -356,6 +402,103 @@ func TestHandleGetWebSearchConfig(t *testing.T) {
 	}
 	if !resp.Settings["brave"].APIKeySet {
 		t.Fatalf("brave api_key_set should be true: %#v", resp.Settings["brave"])
+	}
+}
+
+func TestHandleGetImageGenerationConfigDefaultsToOpenRouter(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/tools/image-generation-config", nil)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp imageGenerationConfigResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if resp.APIBase != recommendedImageAPIBase {
+		t.Fatalf("api_base = %q, want %q", resp.APIBase, recommendedImageAPIBase)
+	}
+	if resp.Model != recommendedImageModel {
+		t.Fatalf("model = %q, want %q", resp.Model, recommendedImageModel)
+	}
+	if resp.OutputDir != recommendedImageOutputDir {
+		t.Fatalf("output_dir = %q, want %q", resp.OutputDir, recommendedImageOutputDir)
+	}
+	if resp.APIKeySet || resp.APIKeyMasked != "" {
+		t.Fatalf("key should not be reported as configured: %#v", resp)
+	}
+}
+
+func TestHandleUpdateImageGenerationConfigPersistsOpenRouterSettings(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/api/tools/image-generation-config",
+		bytes.NewBufferString(`{
+			"enabled":true,
+			"api_base":"https://openrouter.ai/api/v1",
+			"model":"google/gemini-2.5-flash-image",
+			"size":"1080x1080",
+			"output_dir":"public/marketing",
+			"api_key":"sk-or-v1-test-secret"
+		}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp imageGenerationConfigResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if !resp.Enabled || !resp.APIKeySet {
+		t.Fatalf("enabled/key state not reflected: %#v", resp)
+	}
+	if strings.Contains(rec.Body.String(), "sk-or-v1-test-secret") {
+		t.Fatalf("response leaked raw api key: %s", rec.Body.String())
+	}
+
+	updated, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if !updated.Tools.ImageGeneration.Enabled {
+		t.Fatal("image generation should be enabled")
+	}
+	if updated.Tools.ImageGeneration.APIBase != recommendedImageAPIBase {
+		t.Fatalf("api_base = %q", updated.Tools.ImageGeneration.APIBase)
+	}
+	if updated.Tools.ImageGeneration.Model != recommendedImageModel {
+		t.Fatalf("model = %q", updated.Tools.ImageGeneration.Model)
+	}
+	if updated.Tools.ImageGeneration.Size != "1080x1080" {
+		t.Fatalf("size = %q", updated.Tools.ImageGeneration.Size)
+	}
+	if updated.Tools.ImageGeneration.OutputDir != recommendedImageOutputDir {
+		t.Fatalf("output_dir = %q", updated.Tools.ImageGeneration.OutputDir)
+	}
+	if updated.Tools.ImageGeneration.APIKey.String() != "sk-or-v1-test-secret" {
+		t.Fatal("api key was not persisted")
 	}
 }
 

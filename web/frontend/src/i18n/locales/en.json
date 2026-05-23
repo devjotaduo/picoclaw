@@ -78,6 +78,7 @@
     },
     "placeholder": "Request additional changes",
     "supportWhatsapp": "Talk to support",
+    "testAttendance": "Test attendance",
     "disabledPlaceholder": {
       "gatewayUnknown": "Não é possível conversar: o status do Gateway ainda está sendo verificado. Aguarde e atualize a página ou reinicie o Launcher se necessário.",
       "gatewayStarting": "Não é possível conversar: o Gateway está iniciando. Aguarde a inicialização concluir e tente novamente.",
@@ -102,6 +103,8 @@
     "toolCallsLabel": "Chamadas de ferramentas",
     "toolCallExplanationLabel": "Nota da chamada",
     "toolCallFunctionLabel": "Resumo da chamada",
+    "executingStatus": "Running {{action}}",
+    "thinkingStatus": "Thinking",
     "showAssistantDetails": "Mostrar raciocínio e chamadas de ferramentas",
     "toolLabel": "Ferramenta",
     "history": "Histórico",
@@ -121,6 +124,13 @@
       "noModel": "Nenhum modelo padrão configurado. Vá para a página de Modelos para definir um."
     },
     "sendMessage": "Enviar mensagem",
+    "suggestionChoice": {
+      "dismiss": "Close suggestion",
+      "other": "Other",
+      "placeholder": "Type your own answer here",
+      "skip": "Skip",
+      "send": "Send"
+    },
     "sendHint": "Pressione Enter para enviar\nShift + Enter para nova linha",
     "contextTitle": "Contexto",
     "contextDetail": "Ver Detalhes",
@@ -232,6 +242,22 @@
       },
       "copilot": {
         "description": "Import your GitHub token from the gh CLI or enter it manually."
+      },
+      "imageGeneration": {
+        "title": "Image generation",
+        "description": "Uses OpenRouter to generate real images through agents.",
+        "enabled": "Enable",
+        "apiBase": "API base",
+        "model": "Model",
+        "size": "Size",
+        "outputDir": "Directory",
+        "key": "Key",
+        "notConfigured": "pending",
+        "expiration": "Expiration",
+        "noExpiration": "not provided",
+        "recommended": "Recommended",
+        "saveSuccess": "Image configuration saved.",
+        "saveError": "Failed to save image generation."
       }
     },
     "status": {
@@ -246,6 +272,7 @@
       "stopLoading": "Parar Carregamento",
       "saveToken": "Salvar",
       "logout": "Sair",
+      "importCodexCLI": "Import from Codex CLI",
       "importClaudeCode": "Import from Claude Code",
       "importGHCLI": "Import from GitHub CLI"
     },
@@ -261,7 +288,10 @@
     "labels": {
       "account": "Conta",
       "email": "Email",
-      "project": "Projeto"
+      "project": "Projeto",
+      "identifier": "Identificador",
+      "token": "Token",
+      "expires": "Expira em"
     },
     "errors": {
       "loadFailed": "Falha ao carregar credenciais",
@@ -1133,6 +1163,7 @@
           "filesystem": "Sistema de Arquivos",
           "web": "Web",
           "communication": "Comunicação",
+          "marketing": "Marketing",
           "skills": "Skills",
           "agents": "Agentes",
           "hardware": "Hardware",
@@ -1144,6 +1175,7 @@
           "requires_skills": "Habilite `tools.skills` antes que esta ferramenta de skill-registry possa ser usada.",
           "requires_subagent": "Habilite `tools.subagent` antes que a ferramenta de spawn possa delegar trabalho.",
           "requires_mcp_discovery": "Habilite `tools.mcp.discovery` antes que as ferramentas de descoberta MCP fiquem disponíveis.",
+          "missing_api_key": "Configure a API key before using this tool.",
           "requires_web_search_provider": "Configure ao menos um provedor externo de pesquisa web pronto para uso."
         }
       }

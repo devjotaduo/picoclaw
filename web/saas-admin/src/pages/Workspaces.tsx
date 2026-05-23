@@ -193,7 +193,17 @@ export function Workspaces() {
                         : "text-zinc-400 hover:bg-zinc-900"
                     }`}
                   >
-                    <div className="font-medium">{ws.name}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">{ws.name}</span>
+                      {ws.is_raw && (
+                        <span
+                          title="Raw: provisioner copia arquivos verbatim (sem seed de senha, sem LiteLLM, sem launcher_policy)"
+                          className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
+                        >
+                          raw
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[11px] text-zinc-500">
                       v{ws.version}
                       {ws.is_default_auto ? " · auto" : ""}

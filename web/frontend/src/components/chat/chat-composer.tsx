@@ -1,15 +1,15 @@
 import {
   IconArrowUp,
+  IconBrain,
   IconChevronDown,
   IconFileText,
   IconMicrophone,
   IconPlayerStopFilled,
   IconPlus,
-  IconShieldCheck,
   IconUserCheck,
   IconX,
 } from "@tabler/icons-react"
-import type { KeyboardEvent } from "react"
+import type { KeyboardEvent, ReactNode } from "react"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import TextareaAutosize from "react-textarea-autosize"
@@ -50,18 +50,18 @@ interface ChatComposerProps {
   inputDisabledReason: ChatInputDisabledReason | null
   canSend: boolean
   contextUsage?: ContextUsage
+  modelSelector?: ReactNode
+  showAssistantDetailsToggle?: boolean
+  assistantDetailsEnabled?: boolean
+  onAssistantDetailsChange?: (enabled: boolean) => void
   attendantTestActive?: boolean
   onToggleAttendantTest?: () => void
   showQualityIndicator?: boolean
-  supportWhatsappUrl?: string
 }
 
 // Max audio recording length in seconds. Anything longer is auto-stopped to
 // keep the base64 payload under the DefaultMaxMediaSize budget on the server.
 const MAX_AUDIO_RECORDING_SECONDS = 120
-const DEFAULT_SUPPORT_WHATSAPP_URL =
-  "https://wa.me/85101035712601?text=Preciso%20de%20suporte%20no%20Jota%20Duo"
-
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -100,10 +100,13 @@ export function ChatComposer({
   inputDisabledReason,
   canSend,
   contextUsage,
+  modelSelector,
+  showAssistantDetailsToggle,
+  assistantDetailsEnabled,
+  onAssistantDetailsChange,
   attendantTestActive,
   onToggleAttendantTest,
   showQualityIndicator = true,
-  supportWhatsappUrl = DEFAULT_SUPPORT_WHATSAPP_URL,
 }: ChatComposerProps) {
   const { t } = useTranslation()
   const canInput = inputDisabledReason === null
@@ -360,26 +363,31 @@ export function ChatComposer({
             >
               <IconPlus className="size-5 stroke-[1.8]" />
             </Button>
-            <Button
-              asChild
-              variant="ghost"
-              size="sm"
-              className="h-8 rounded-full px-2.5 text-xs font-medium whitespace-nowrap text-orange-500 hover:bg-orange-500/10 hover:text-orange-400 dark:text-orange-300 dark:hover:text-orange-200"
-            >
-              <a
-                href={supportWhatsappUrl}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={t("chat.supportWhatsapp", "Falar com o suporte")}
+            {onToggleAttendantTest ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-8 rounded-full px-2.5 text-xs font-medium whitespace-nowrap text-orange-500 hover:bg-orange-500/10 hover:text-orange-400 dark:text-orange-300 dark:hover:text-orange-200",
+                  attendantTestActive &&
+                    "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/20 hover:text-emerald-200",
+                )}
+                onClick={onToggleAttendantTest}
+                disabled={isRecording}
+                aria-pressed={attendantTestActive}
+                aria-label={t("chat.testAttendance", "Testar o atendimento")}
               >
-                <IconShieldCheck className="size-3.5" />
-                {t("chat.supportWhatsapp", "Falar com o suporte")}
-              </a>
-            </Button>
+                <IconUserCheck className="size-3.5" />
+                {t("chat.testAttendance", "Testar o atendimento")}
+              </Button>
+            ) : null}
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
-            {showQualityIndicator ? (
+            {modelSelector ? (
+              <div className="min-w-0 max-w-[190px]">{modelSelector}</div>
+            ) : showQualityIndicator ? (
               <Button
                 type="button"
                 variant="ghost"
@@ -393,6 +401,31 @@ export function ChatComposer({
                 <span>{t("chat.qualityHigh", "Altíssimo")}</span>
                 <IconChevronDown className="size-3.5 opacity-70" />
               </Button>
+            ) : null}
+            {showAssistantDetailsToggle && onAssistantDetailsChange ? (
+              <Tooltip delayDuration={500}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={assistantDetailsEnabled ? "secondary" : "ghost"}
+                    size="icon"
+                    className={cn(
+                      "h-8 w-8 rounded-full",
+                      assistantDetailsEnabled
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:bg-muted/55 hover:text-foreground",
+                    )}
+                    onClick={() =>
+                      onAssistantDetailsChange(!assistantDetailsEnabled)
+                    }
+                    aria-pressed={assistantDetailsEnabled}
+                    aria-label={t("chat.showAssistantDetails")}
+                  >
+                    <IconBrain className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("chat.showAssistantDetails")}</TooltipContent>
+              </Tooltip>
             ) : null}
             <Button
               type="button"
@@ -419,25 +452,6 @@ export function ChatComposer({
                 <IconMicrophone className="size-4" />
               )}
             </Button>
-            {onToggleAttendantTest && (
-              <Button
-                type="button"
-                variant={attendantTestActive ? "default" : "outline"}
-                size="sm"
-                className={cn(
-                  "h-8 rounded-full px-3 text-xs whitespace-nowrap",
-                  attendantTestActive
-                    ? "bg-emerald-500 text-white hover:bg-emerald-600"
-                    : "border-border/70 bg-background/60 text-foreground hover:bg-muted",
-                )}
-                onClick={onToggleAttendantTest}
-                disabled={isRecording}
-                aria-pressed={attendantTestActive}
-              >
-                <IconUserCheck className="size-3.5" />
-                Testar atendente
-              </Button>
-            )}
             {contextUsage && (
               <ContextUsageRing
                 usage={contextUsage}

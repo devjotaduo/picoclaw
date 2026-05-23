@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator.tsx"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { TemplateSelector } from "@/components/template-selector"
 import {
   Tooltip,
   TooltipContent,
@@ -55,11 +56,16 @@ export function AppHeader() {
     staleTime: 30_000,
   })
   const { visible: isVisible } = useUIVisibility(launcherPolicyQ.data)
-  const showSidebarToggle = false
-  const showConnectionStatus = false
-  const showHeaderActions = true
+  const showSidebarToggle = isVisible("header.sidebar_toggle", false)
+  const showConnectionStatus = isVisible("header.connection_status", false)
+  const showHeaderActions = isVisible("header.actions")
   const showHeaderSettings = isVisible("header.settings")
   const showHeaderLogout = isVisible("header.logout")
+  const showGatewayRestart = isVisible("header.gateway_restart")
+  const showGatewayStatus = isVisible("header.gateway_status")
+  const showGatewayStartStop = isVisible("header.gateway_start_stop")
+  const showHeaderThemeToggle = isVisible("header.theme_toggle")
+  const showGatewayStopMenu = isVisible("header.gateway_stop_menu")
   const {
     state: gwState,
     loading: gwLoading,
@@ -192,7 +198,11 @@ export function AppHeader() {
           showHeaderActions ? "flex" : "hidden"
         } items-center gap-1 text-sm font-medium md:gap-2`}
       >
-        {restartRequired && (
+        {/* Runtime persona/template switcher — overrides ui-visibility profile
+            resolution via localStorage. See components/template-selector.tsx. */}
+        <TemplateSelector compact />
+
+        {restartRequired && showGatewayRestart && (
           <Tooltip delayDuration={700}>
             <TooltipTrigger asChild>
               <Button
@@ -213,7 +223,7 @@ export function AppHeader() {
         )}
 
         {/* Gateway Start/Stop — quando ativo, fica no menu Configurações */}
-        {isRunning ? (
+        {showGatewayStatus && isRunning ? (
           <Tooltip delayDuration={700}>
             <TooltipTrigger asChild>
               <span
@@ -231,7 +241,7 @@ export function AppHeader() {
                 t("header.gateway.action.running", "Serviço conectado")}
             </TooltipContent>
           </Tooltip>
-        ) : (
+        ) : showGatewayStartStop ? (
           <Tooltip
             delayDuration={gwError || (!canStart && startReason) ? 0 : 700}
           >
@@ -286,7 +296,7 @@ export function AppHeader() {
               <TooltipContent>{gwError ?? startReason}</TooltipContent>
             ) : null}
           </Tooltip>
-        )}
+        ) : null}
 
         {showHeaderSettings || showHeaderLogout ? (
           <Separator
@@ -310,20 +320,24 @@ export function AppHeader() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel className="text-[10px] tracking-wide uppercase">
-                  {t("header.settings.appearance", "Aparência")}
-                </DropdownMenuLabel>
-                <DropdownMenuItem onClick={toggleTheme}>
-                  {theme === "dark" ? (
-                    <IconSun className="size-3.5" />
-                  ) : (
-                    <IconMoon className="size-3.5" />
-                  )}
-                  {theme === "dark"
-                    ? t("header.theme.light", "Modo claro")
-                    : t("header.theme.dark", "Modo escuro")}
-                </DropdownMenuItem>
-                {isRunning && (
+                {showHeaderThemeToggle ? (
+                  <>
+                    <DropdownMenuLabel className="text-[10px] tracking-wide uppercase">
+                      {t("header.settings.appearance", "Aparência")}
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem onClick={toggleTheme}>
+                      {theme === "dark" ? (
+                        <IconSun className="size-3.5" />
+                      ) : (
+                        <IconMoon className="size-3.5" />
+                      )}
+                      {theme === "dark"
+                        ? t("header.theme.light", "Modo claro")
+                        : t("header.theme.dark", "Modo escuro")}
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+                {isRunning && showGatewayStopMenu && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel className="text-[10px] tracking-wide uppercase">

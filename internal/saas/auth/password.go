@@ -35,3 +35,19 @@ func GeneratePassword() (string, error) {
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
+
+// RandomToken returns a URL-safe random string with the requested byte length.
+// 32 bytes → 43-char token = ~256 bits of entropy — appropriate for
+// short-lived one-shot tokens (password resets, magic-link nonces, etc.).
+// The output is always base64 RawURLEncoding (no padding) so it survives
+// embedding in URL paths and query strings without escaping.
+func RandomToken(byteLen int) (string, error) {
+	if byteLen <= 0 {
+		byteLen = 32
+	}
+	b := make([]byte, byteLen)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}

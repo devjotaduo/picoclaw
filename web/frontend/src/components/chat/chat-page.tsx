@@ -7,6 +7,10 @@ import { toast } from "sonner"
 
 import { type AgentSummary, getInternalAgents } from "@/api/internal-agents"
 import { getLauncherPolicy } from "@/api/launcher-policy"
+import {
+  Conversation,
+  ConversationContent,
+} from "@/components/ai-elements/conversation"
 import type { AuraPalette } from "@/components/chat/ai-orb-avatar"
 import { AssistantMessage } from "@/components/chat/assistant-message"
 import {
@@ -21,12 +25,15 @@ import { TypingIndicator } from "@/components/chat/typing-indicator"
 import { UserMessage } from "@/components/chat/user-message"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { useChatModels } from "@/hooks/use-chat-models"
 import { useGateway } from "@/hooks/use-gateway"
 import { usePicoChat } from "@/hooks/use-pico-chat"
 import { useSessionHistory } from "@/hooks/use-session-history"
 import { useUIVisibility } from "@/hooks/use-ui-visibility"
+import {
+  groupChatSuggestionMessages,
+  parseChatSuggestionCard,
+} from "@/lib/chat-suggestion-card"
 import type { ConnectionState } from "@/store/chat"
 import type { ChatAttachment } from "@/store/chat"
 import { showAssistantDetailsAtom } from "@/store/chat"
@@ -278,6 +285,31 @@ export function ChatPage() {
     switchSession,
     newChat,
   } = usePicoChat()
+  const displayMessages = useMemo(
+    () => groupChatSuggestionMessages(messages),
+    [messages],
+  )
+  const activeSuggestionMessageId = useMemo(() => {
+    for (let index = displayMessages.length - 1; index >= 0; index -= 1) {
+      const message = displayMessages[index]
+      if (message.role === "user") {
+        return null
+      }
+
+      const isPlainAssistantMessage =
+        message.role === "assistant" &&
+        (message.kind === undefined || message.kind === "normal") &&
+        (message.attachments?.length ?? 0) === 0 &&
+        (message.toolCalls?.length ?? 0) === 0 &&
+        message.content.trim().length > 0
+
+      if (isPlainAssistantMessage && parseChatSuggestionCard(message.content)) {
+        return message.id
+      }
+    }
+
+    return null
+  }, [displayMessages])
 
   const publicAttendantAgent = useMemo(
     () => findPublicAttendantAgent(agents),
@@ -311,13 +343,14 @@ export function ChatPage() {
     apiKeyModels.length > 0 || oauthModels.length > 0 || localModels.length > 0
   const assistantDetailsPolicyReady = launcherPolicyQ.isSuccess
   const canShowReasoning =
+    isVisible("chat.reasoning_messages") &&
     assistantDetailsPolicyReady &&
     launcherPolicyQ.data.ui?.show_reasoning !== false
   const canShowToolCalls =
+    isVisible("chat.tool_call_messages") &&
     assistantDetailsPolicyReady &&
     launcherPolicyQ.data.ui?.show_tool_calls !== false
   const canToggleAssistantDetails = canShowReasoning || canShowToolCalls
-  const showChatTitleExtra = isVisible("chat.title_extra", false)
   const showModelSelector = isVisible("chat.model_selector", false)
   const showAssistantDetailsToggle = isVisible(
     "chat.assistant_details_toggle",
@@ -328,18 +361,17 @@ export function ChatPage() {
   const showAttendantTestButton = isVisible("chat.test_attendant")
   const showPendingHandoffsSidebar = isVisible("chat.pending_handoffs_sidebar")
   const showQualityIndicator = isVisible("chat.quality_indicator")
+  const showContextUsage = isVisible("chat.context_usage")
+  const showQuickTasks = isVisible("chat.quick_tasks")
   const canShowModelSelector =
     launcherPolicyQ.isSuccess &&
     launcherPolicyQ.data.ui?.show_model_selector !== false
   const chatIntro = launcherPolicyQ.data?.ui?.chat_intro?.trim() || ""
-  const quickTasks = (launcherPolicyQ.data?.ui?.quick_tasks ?? []).filter(
-    (task) => task.label.trim() && task.prompt.trim(),
-  )
-  const hasChatHeaderControls =
-    showChatTitleExtra &&
-    showModelSelector &&
-    canChooseModel &&
-    canShowModelSelector
+  const quickTasks = showQuickTasks
+    ? (launcherPolicyQ.data?.ui?.quick_tasks ?? []).filter(
+        (task) => task.label.trim() && task.prompt.trim(),
+      )
+    : []
   const inputDisabledReason = resolveChatInputDisabledReason({
     hasDefaultModel,
     connectionState,
@@ -425,6 +457,20 @@ export function ChatPage() {
     }
   }
 
+  const handleSuggestionReply = (content: string) => {
+    if (!content.trim() || !canInput) return
+    if (
+      sendMessage({
+        content,
+        attachments: [],
+        agentID: selectedAgentID,
+      })
+    ) {
+      setInput("")
+      setAttachments([])
+    }
+  }
+
   const handleAddAttachments = () => {
     if (!canInput) return
     fileInputRef.current?.click()
@@ -501,43 +547,18 @@ export function ChatPage() {
           className={`transition-shadow ${
             hasScrolled ? "shadow-xs" : "shadow-none"
           }`}
-          titleExtra={
-            hasChatHeaderControls ? (
-              <div className="flex min-w-0 items-center gap-2">
-                <ModelSelector
-                  defaultModelName={defaultModelName}
-                  apiKeyModels={apiKeyModels}
-                  oauthModels={oauthModels}
-                  localModels={localModels}
-                  onValueChange={handleSetDefault}
-                />
-              </div>
-            ) : null
-          }
+          titleExtra={null}
         >
-          {showAssistantDetailsToggle && canToggleAssistantDetails && (
-            <div className="border-border/60 hidden items-center gap-2 rounded-lg border px-3 py-1.5 sm:flex">
-              <span className="text-muted-foreground text-sm">
-                {t("chat.showAssistantDetails")}
-              </span>
-              <Switch
-                checked={showAssistantDetails}
-                onCheckedChange={setShowAssistantDetails}
-                aria-label={t("chat.showAssistantDetails")}
-                size="sm"
-              />
-            </div>
-          )}
-
           {showNewChatButton && (
             <Button
               variant="secondary"
-              size="sm"
+              size="icon"
               onClick={newChat}
-              className="h-9 gap-2"
+              className="h-9 w-9"
+              aria-label={t("chat.newChat")}
+              title={t("chat.newChat")}
             >
               <IconPlus className="size-4" />
-              <span className="hidden sm:inline">{t("chat.newChat")}</span>
             </Button>
           )}
 
@@ -560,12 +581,12 @@ export function ChatPage() {
           )}
         </PageHeader>
 
-        <div
+        <Conversation
           ref={scrollRef}
           onScroll={handleScroll}
-          className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto px-4 py-6 md:px-8 lg:px-24 xl:px-48"
+          className="px-4 py-6 md:px-8 lg:px-24 xl:px-48"
         >
-          <div className="mx-auto flex w-full max-w-250 flex-col gap-8 pb-8">
+          <ConversationContent className="max-w-250 pb-8">
             {messages.length === 0 && !isTyping && (
               <ChatEmptyState
                 hasAvailableModels={hasAvailableModels}
@@ -601,16 +622,41 @@ export function ChatPage() {
               />
             )}
 
-            {messages.map((msg) => {
+            {displayMessages.map((msg, index) => {
+              const isAssistantReasoning = msg.kind === "thought"
+              const isAssistantToolCall = msg.kind === "tool_calls"
+              const showAssistantDetailContent =
+                (isAssistantReasoning &&
+                  showAssistantDetails &&
+                  canShowReasoning) ||
+                (isAssistantToolCall &&
+                  showAssistantDetails &&
+                  canShowToolCalls) ||
+                (!isAssistantReasoning && !isAssistantToolCall)
+              const isAssistantInternalMessage =
+                msg.role === "assistant" &&
+                (isAssistantReasoning || isAssistantToolCall)
+              const hasLaterAssistantResponse = displayMessages
+                .slice(index + 1)
+                .some(
+                  (nextMsg) =>
+                    nextMsg.role === "assistant" &&
+                    (nextMsg.kind === undefined || nextMsg.kind === "normal") &&
+                    nextMsg.content.trim().length > 0,
+                )
+              const hasLaterInternalProgress = displayMessages
+                .slice(index + 1)
+                .some(
+                  (nextMsg) =>
+                    nextMsg.role === "assistant" &&
+                    (nextMsg.kind === "thought" ||
+                      nextMsg.kind === "tool_calls"),
+                )
+
               if (
-                msg.kind === "thought" &&
-                (!showAssistantDetails || !canShowReasoning)
-              ) {
-                return null
-              }
-              if (
-                msg.kind === "tool_calls" &&
-                (!showAssistantDetails || !canShowToolCalls)
+                isAssistantInternalMessage &&
+                !showAssistantDetailContent &&
+                (hasLaterAssistantResponse || hasLaterInternalProgress)
               ) {
                 return null
               }
@@ -625,6 +671,9 @@ export function ChatPage() {
                       kind={msg.kind}
                       toolCalls={msg.toolCalls}
                       timestamp={msg.timestamp}
+                      onSuggestionReply={handleSuggestionReply}
+                      showAssistantDetailContent={showAssistantDetailContent}
+                      allowSuggestionCard={msg.id === activeSuggestionMessageId}
                     />
                   ) : (
                     <UserMessage
@@ -637,8 +686,8 @@ export function ChatPage() {
             })}
 
             {isTyping && <TypingIndicator />}
-          </div>
-        </div>
+          </ConversationContent>
+        </Conversation>
 
         <input
           ref={fileInputRef}
@@ -669,7 +718,23 @@ export function ChatPage() {
           }}
           inputDisabledReason={inputDisabledReason}
           canSend={canSubmit}
-          contextUsage={contextUsage}
+          contextUsage={showContextUsage ? contextUsage : undefined}
+          modelSelector={
+            showModelSelector && canChooseModel && canShowModelSelector ? (
+              <ModelSelector
+                defaultModelName={defaultModelName}
+                apiKeyModels={apiKeyModels}
+                oauthModels={oauthModels}
+                localModels={localModels}
+                onValueChange={handleSetDefault}
+              />
+            ) : undefined
+          }
+          showAssistantDetailsToggle={
+            showAssistantDetailsToggle && canToggleAssistantDetails
+          }
+          assistantDetailsEnabled={showAssistantDetails}
+          onAssistantDetailsChange={setShowAssistantDetails}
           showQualityIndicator={showQualityIndicator}
           attendantTestActive={
             showAttendantTestButton && testingPublicAttendant

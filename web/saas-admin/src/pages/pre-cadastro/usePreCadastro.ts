@@ -8,6 +8,7 @@ import {
   submitPublicIntake,
   uploadPublicIntakeAttachment,
   type CompanyIntake,
+  type SubmittedIntake,
 } from "@/api/company-intakes";
 import { STEP_ORDER, STORAGE_KEY, type StepKey } from "./constants";
 import {
@@ -68,12 +69,14 @@ export type UsePreCadastroResult = {
   upload: (file: File | null) => void;
   startSpeech: () => void;
   submitted: boolean;
+  submittedIntake: SubmittedIntake | null;
   hasSummary: boolean;
   previewSummary: SummaryPreview;
 };
 
 export function usePreCadastro(): UsePreCadastroResult {
   const [intake, setIntake] = useState<CompanyIntake | null>(null);
+  const [submittedIntake, setSubmittedIntake] = useState<SubmittedIntake | null>(null);
   const [resumeToken, setResumeToken] = useState("");
   const [step, setStep] = useState<StepKey>("identity");
   const [furthestStepIndex, setFurthestStepIndex] = useState(0);
@@ -314,6 +317,7 @@ export function usePreCadastro(): UsePreCadastroResult {
         const { intake: current, token } = await ensureIntake();
         const done = await submitPublicIntake(current.id, token);
         setIntake(done);
+        setSubmittedIntake(done);
       } catch (e) {
         setNotice({ tone: "warning", message: errorMessage(e) });
       } finally {
@@ -435,6 +439,7 @@ export function usePreCadastro(): UsePreCadastroResult {
     upload,
     startSpeech,
     submitted,
+    submittedIntake,
     hasSummary,
     previewSummary,
   };

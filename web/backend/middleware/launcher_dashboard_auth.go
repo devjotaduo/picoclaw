@@ -145,6 +145,14 @@ func ClearLauncherDashboardSessionCookie(w http.ResponseWriter, r *http.Request,
 
 // LauncherDashboardAuth requires a valid session cookie before calling next.
 // Public paths are login/setup pages and /api/auth/* handlers.
+//
+// In local mode the launcher also accepts trusted-gateway HMAC headers as
+// a SECONDARY credential when TrustedGatewaySecret is configured. This is
+// what makes controlplane-issued magic links work on local-mode tenants:
+// the controlplane signs the request with the shared HMAC secret, and the
+// launcher honors it just like a normal session cookie. The local-cookie
+// path is tried FIRST (so a real interactive owner's cookie always wins),
+// HMAC is the fallback for the magic-link visitor flow.
 func LauncherDashboardAuth(cfg LauncherDashboardAuthConfig, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := canonicalAuthPath(r.URL.Path)
@@ -166,12 +174,37 @@ func LauncherDashboardAuth(cfg LauncherDashboardAuthConfig, next http.Handler) h
 			return
 		}
 		if isPublicLauncherDashboardPath(r.Method, p) {
+			// Public paths bypass the auth check, but if signed
+			// trusted-gateway headers ARE present we still annotate the
+			// context with the verified claims so handlers (notably
+			// /api/auth/status) can short-circuit any "not initialized"
+			// state for HMAC-authenticated callers. The local-cookie
+			// case stays a no-op pass-through.
+			if strings.TrimSpace(cfg.TrustedGatewaySecret) != "" {
+				if claims, ok := validTrustedGatewayAuth(r, cfg); ok {
+					ctx := context.WithValue(r.Context(), trustedGatewayClaimsContextKey{}, claims)
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
 		if validLauncherDashboardAuth(r, cfg) {
 			next.ServeHTTP(w, r)
 			return
+		}
+		// Local-mode fallback: signed trusted-gateway headers from the
+		// controlplane are accepted even without a session cookie. The
+		// HMAC shared secret env (PICOCLAW_TRUSTED_GATEWAY_SECRET) ties
+		// these to controlplane origin — same trust root used by the
+		// trusted_gateway mode above. Magic-link visitors land here.
+		if strings.TrimSpace(cfg.TrustedGatewaySecret) != "" {
+			if claims, ok := validTrustedGatewayAuth(r, cfg); ok {
+				ctx := context.WithValue(r.Context(), trustedGatewayClaimsContextKey{}, claims)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
 		}
 		rejectLauncherDashboardAuth(w, r, p)
 	})

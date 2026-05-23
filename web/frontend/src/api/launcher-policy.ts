@@ -22,8 +22,8 @@ export interface LauncherPolicyResponse {
   /**
    * True when the launcher is configured to act as a SaaS admin (env vars
    * PICOCLAW_SAAS_ADMIN_MODE=true + BASE_URL + EMAIL + PASSWORD all set, and
-   * the requesting role is platform_admin). Drives the /admin/* sidebar
-   * group + routes.
+   * the requesting role is platform_admin). Kept as backend capability state;
+   * frontend page rendering no longer blocks on this flag.
    */
   is_saas_admin?: boolean
 }

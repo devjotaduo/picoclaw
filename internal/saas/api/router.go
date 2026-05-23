@@ -29,6 +29,7 @@ type Handler struct {
 	Workspaces     *store.WorkspaceStore
 	CompanyIntakes *store.CompanyIntakeStore
 	MagicLinks     *store.MagicLinkStore
+	PasswordResets *store.PasswordResetStore
 	Shortlinks     *store.ShortlinkStore
 	Usage          *store.UsageStore
 	MCP            *store.WorkspaceMCPStore
@@ -77,6 +78,7 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		Workspaces:     &store.WorkspaceStore{DB: db},
 		CompanyIntakes: &store.CompanyIntakeStore{DB: db},
 		MagicLinks:     &store.MagicLinkStore{DB: db},
+		PasswordResets: &store.PasswordResetStore{DB: db},
 		Shortlinks:     &store.ShortlinkStore{DB: db},
 		Usage:          &store.UsageStore{DB: db},
 		MCP:            &store.WorkspaceMCPStore{DB: db},
@@ -184,6 +186,8 @@ func (h *Handler) Routes() http.Handler {
 		r.Use(h.tenantCORS)
 		r.Post("/auth/login", h.handleLogin)
 		r.Post("/auth/accept-invite", h.handleAcceptInvite)
+		r.Post("/auth/forgot-password", h.handleForgotPassword)
+		r.Post("/auth/reset-password", h.handleResetPassword)
 		r.Post("/admin/login", h.handleLogin)
 		r.Post("/public/company-intakes", h.handleCreateCompanyIntake)
 		r.Get("/public/company-intakes/{id}", h.handleGetPublicCompanyIntake)
@@ -246,6 +250,7 @@ func (h *Handler) Routes() http.Handler {
 				r.Post("/tenants/{id}/recreate", h.handleRecreateTenant)
 				r.Post("/tenants/{id}/rotate-password", h.handleRotatePassword)
 				r.Post("/tenants/{id}/magic-link", h.handleGenerateMagicLink)
+				r.Get("/tenants/{id}/magic-links", h.handleListMagicLinks)
 				r.Post("/tenants/{id}/resend-credentials", h.handleResendCredentials)
 				r.Post("/magic-links/{nonce}/consume", h.handleConsumeMagicLink)
 				// Shortlinks: admin-only CRUD. The public resolver

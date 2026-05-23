@@ -1,19 +1,27 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/inter";
 
+@custom-variant dark (&:is(.dark *));
+
+/* Brand palette mirrors web/frontend: clay (Anthropic-style) as the
+   primary accent, retained "brand" prefix so existing classes referencing
+   bg-brand-500/700 keep rendering — they now map to terracotta-clay
+   instead of cyan/teal, unifying the admin with the launcher SPA. */
 @theme {
-  --color-brand-50: #f0f9ff;
-  --color-brand-100: #cffafe;
-  --color-brand-200: #a5f3fc;
-  --color-brand-300: #67e8f9;
-  --color-brand-400: #22d3ee;
-  --color-brand-500: #06b6d4;
-  --color-brand-600: #0891b2;
-  --color-brand-700: #0e7490;
-  --color-brand-800: #155e75;
+  --color-brand-50: #fdf3ef;
+  --color-brand-100: #f7d9ca;
+  --color-brand-200: #f0b8a0;
+  --color-brand-300: #e69676;
+  --color-brand-400: #de7e5f;
+  --color-brand-500: #d97757;
+  --color-brand-600: #c6613f;
+  --color-brand-700: #a64a2f;
+  --color-brand-800: #823923;
 
   /* Sofia public-onboarding palette — Brazilian editorial paper aesthetic.
-     Cream paper background, ink text, forest-green for the agent rule,
-     warm amber for visitor notes, terracotta for accent, gold for highlights. */
+     Used ONLY in the /pre-cadastro pages; the rest of the admin uses the
+     shadcn semantic tokens below. */
   --color-paper: #faf6ee;
   --color-paper-deep: #f3ecdb;
   --color-paper-edge: #e6dcc4;
@@ -27,17 +35,126 @@
   --color-terracotta: #b5462d;
   --color-gold: #d4a24c;
 
-  --font-display: "Fraunces", "Georgia", "Times New Roman", serif;
-  --font-body: "Manrope", "Inter", system-ui, sans-serif;
+  /* Tailwind 4 theme-inline shadcn shim. Lets utilities like bg-card and
+     text-muted-foreground resolve to the CSS variables defined under :root
+     / .dark further down. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-display: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ─── shadcn token sets — mirror of web/frontend so both UIs read the
+     same colors / radius / typography. Default state is `.dark` because
+     the admin has always been a dark-mode-first surface. */
+:root {
+  --radius: 0.625rem;
+  --background: #20201f;
+  --foreground: #f9f9f7;
+  --card: #2c2c2a;
+  --card-foreground: #f9f9f7;
+  --popover: #2c2c2a;
+  --popover-foreground: #f9f9f7;
+  --primary: #d97757;
+  --primary-foreground: #f9f9f7;
+  --secondary: #383835;
+  --secondary-foreground: #f9f9f7;
+  --muted: #383835;
+  --muted-foreground: #97958d;
+  --accent: #383835;
+  --accent-foreground: #f9f9f7;
+  --destructive: #e34948;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: #d97757;
+  --chart-1: #3987e5;
+  --chart-2: #0ca30c;
+  --chart-3: #b77700;
+  --chart-4: #8173e3;
+  --chart-5: #d55181;
+  --sidebar: #181817;
+  --sidebar-foreground: #f9f9f7;
+  --sidebar-primary: #d97757;
+  --sidebar-primary-foreground: #f9f9f7;
+  --sidebar-accent: #383835;
+  --sidebar-accent-foreground: #f9f9f7;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #d97757;
+}
+
+.dark {
+  --background: #20201f;
+  --foreground: #f9f9f7;
+  --card: #2c2c2a;
+  --card-foreground: #f9f9f7;
+  --popover: #2c2c2a;
+  --popover-foreground: #f9f9f7;
+  --primary: #d97757;
+  --primary-foreground: #f9f9f7;
+  --secondary: #383835;
+  --secondary-foreground: #f9f9f7;
+  --muted: #383835;
+  --muted-foreground: #97958d;
+  --accent: #383835;
+  --accent-foreground: #f9f9f7;
+  --destructive: #e34948;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: #d97757;
+  --chart-1: #3987e5;
+  --chart-2: #0ca30c;
+  --chart-3: #b77700;
+  --chart-4: #8173e3;
+  --chart-5: #d55181;
+  --sidebar: #181817;
+  --sidebar-foreground: #f9f9f7;
+  --sidebar-primary: #d97757;
+  --sidebar-primary-foreground: #f9f9f7;
+  --sidebar-accent: #383835;
+  --sidebar-accent-foreground: #f9f9f7;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #d97757;
 }
 
 html, body, #root {
   height: 100%;
 }
 
+body {
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
+}
+
 /* shadcn-style ring focus, kept inline so we don't ship Radix */
 :focus-visible {
-  outline: 2px solid var(--color-brand-500);
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 

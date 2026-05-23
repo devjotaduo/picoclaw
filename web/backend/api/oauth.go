@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -9,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -30,6 +33,7 @@ const (
 	oauthMethodDeviceCode = "device_code"
 	oauthMethodToken      = "token"
 	oauthMethodClaudeCode = "claude_code"
+	oauthMethodCodexCLI   = "codex_cli"
 	oauthMethodGHCLI      = "gh_cli"
 
 	oauthFlowPending = "pending"
@@ -39,9 +43,13 @@ const (
 )
 
 const (
-	oauthBrowserFlowTTL    = 10 * time.Minute
-	oauthDeviceCodeFlowTTL = 15 * time.Minute
-	oauthTerminalFlowGC    = 30 * time.Minute
+	oauthBrowserFlowTTL      = 10 * time.Minute
+	oauthDeviceCodeFlowTTL   = 15 * time.Minute
+	oauthTerminalFlowGC      = 30 * time.Minute
+	oauthGHCLIImportTTL      = 5 * time.Second
+	oauthAutoRefreshEvery    = time.Minute
+	oauthAutoRefreshBefore   = 10 * time.Minute
+	oauthStatusRefreshBefore = 5 * time.Minute
 )
 
 var oauthProviderOrder = []string{
@@ -52,7 +60,7 @@ var oauthProviderOrder = []string{
 }
 
 var oauthProviderMethods = map[string][]string{
-	oauthProviderOpenAI:            {oauthMethodBrowser, oauthMethodDeviceCode, oauthMethodToken},
+	oauthProviderOpenAI:            {oauthMethodBrowser, oauthMethodDeviceCode, oauthMethodCodexCLI, oauthMethodToken},
 	oauthProviderAnthropic:         {oauthMethodBrowser, oauthMethodToken, oauthMethodClaudeCode},
 	oauthProviderGoogleAntigravity: {oauthMethodBrowser},
 	oauthProviderGitHubCopilot:     {oauthMethodGHCLI, oauthMethodToken},
@@ -82,6 +90,7 @@ var (
 	oauthSaveConfig                     = config.SaveConfig
 	oauthFetchAntigravityProject        = providers.FetchAntigravityProjectID
 	oauthFetchGoogleUserEmailFunc       = fetchGoogleUserEmail
+	oauthRunGHCLI                       = runGHCLI
 )
 
 type oauthFlow struct {
@@ -106,16 +115,18 @@ type oauthFlow struct {
 }
 
 type oauthProviderStatus struct {
-	Provider    string   `json:"provider"`
-	DisplayName string   `json:"display_name"`
-	Methods     []string `json:"methods"`
-	LoggedIn    bool     `json:"logged_in"`
-	Status      string   `json:"status"`
-	AuthMethod  string   `json:"auth_method,omitempty"`
-	ExpiresAt   string   `json:"expires_at,omitempty"`
-	AccountID   string   `json:"account_id,omitempty"`
-	Email       string   `json:"email,omitempty"`
-	ProjectID   string   `json:"project_id,omitempty"`
+	Provider     string   `json:"provider"`
+	DisplayName  string   `json:"display_name"`
+	Methods      []string `json:"methods"`
+	LoggedIn     bool     `json:"logged_in"`
+	Status       string   `json:"status"`
+	AuthMethod   string   `json:"auth_method,omitempty"`
+	ExpiresAt    string   `json:"expires_at,omitempty"`
+	ExpiresIn    int64    `json:"expires_in_seconds,omitempty"`
+	TokenPreview string   `json:"token_preview,omitempty"`
+	AccountID    string   `json:"account_id,omitempty"`
+	Email        string   `json:"email,omitempty"`
+	ProjectID    string   `json:"project_id,omitempty"`
 }
 
 type oauthFlowResponse struct {
@@ -165,8 +176,10 @@ func (h *Handler) handleListOAuthProviders(w http.ResponseWriter, r *http.Reques
 			item.AccountID = cred.AccountID
 			item.Email = cred.Email
 			item.ProjectID = cred.ProjectID
+			item.TokenPreview = maskCredentialToken(cred.AccessToken)
 			if !cred.ExpiresAt.IsZero() {
 				item.ExpiresAt = cred.ExpiresAt.Format(time.RFC3339)
+				item.ExpiresIn = int64(time.Until(cred.ExpiresAt).Seconds())
 			}
 			switch {
 			case cred.IsExpired():
@@ -188,12 +201,76 @@ func (h *Handler) handleListOAuthProviders(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *Handler) refreshOAuthCredentialForStatus(provider string, cred *auth.AuthCredential) *auth.AuthCredential {
-	if cred == nil || !cred.NeedsRefresh() || strings.TrimSpace(cred.RefreshToken) == "" {
+	return h.refreshOAuthCredentialIfDue(provider, cred, oauthNow(), oauthStatusRefreshBefore)
+}
+
+// StartOAuthAutoRefresh keeps OAuth credentials fresh even when the credentials
+// page is not open.
+func (h *Handler) StartOAuthAutoRefresh() {
+	h.oauthAutoRefreshOnce.Do(func() {
+		stop := make(chan struct{})
+		h.oauthAutoRefreshStop = stop
+		go h.runOAuthAutoRefresh(stop)
+	})
+}
+
+func (h *Handler) stopOAuthAutoRefresh() {
+	h.oauthAutoRefreshStopOnce.Do(func() {
+		if h.oauthAutoRefreshStop != nil {
+			close(h.oauthAutoRefreshStop)
+		}
+	})
+}
+
+func (h *Handler) runOAuthAutoRefresh(stop <-chan struct{}) {
+	h.refreshOAuthCredentialsOnce(oauthNow(), oauthAutoRefreshBefore)
+
+	ticker := time.NewTicker(oauthAutoRefreshEvery)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			h.refreshOAuthCredentialsOnce(oauthNow(), oauthAutoRefreshBefore)
+		case <-stop:
+			return
+		}
+	}
+}
+
+func (h *Handler) refreshOAuthCredentialsOnce(now time.Time, refreshBefore time.Duration) {
+	for _, provider := range oauthProviderOrder {
+		cred, err := oauthGetCredential(provider)
+		if err != nil {
+			logger.ErrorC("oauth", fmt.Sprintf("oauth warning: could not load %s credentials for refresh: %v", provider, err))
+			continue
+		}
+		h.refreshOAuthCredentialIfDue(provider, cred, now, refreshBefore)
+	}
+}
+
+func (h *Handler) refreshOAuthCredentialIfDue(provider string, cred *auth.AuthCredential, now time.Time, refreshBefore time.Duration) *auth.AuthCredential {
+	if cred == nil || !oauthCredentialRefreshDue(cred, now, refreshBefore) || strings.TrimSpace(cred.RefreshToken) == "" {
 		return cred
 	}
 
 	cfg, err := oauthConfigForProvider(provider)
 	if err != nil {
+		return cred
+	}
+
+	h.oauthCredentialMu.Lock()
+	defer h.oauthCredentialMu.Unlock()
+
+	current, err := oauthGetCredential(provider)
+	if err != nil {
+		logger.ErrorC("oauth", fmt.Sprintf("oauth warning: could not reload %s credentials before refresh: %v", provider, err))
+		return cred
+	}
+	if current != nil {
+		cred = current
+	}
+	if cred == nil || !oauthCredentialRefreshDue(cred, now, refreshBefore) || strings.TrimSpace(cred.RefreshToken) == "" {
 		return cred
 	}
 
@@ -232,6 +309,16 @@ func (h *Handler) refreshOAuthCredentialForStatus(provider string, cred *auth.Au
 		return cred
 	}
 	return &cp
+}
+
+func oauthCredentialRefreshDue(cred *auth.AuthCredential, now time.Time, refreshBefore time.Duration) bool {
+	if cred == nil || cred.ExpiresAt.IsZero() {
+		return false
+	}
+	if refreshBefore < 0 {
+		refreshBefore = 0
+	}
+	return !now.Add(refreshBefore).Before(cred.ExpiresAt)
 }
 
 func (h *Handler) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
@@ -420,6 +507,24 @@ func (h *Handler) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
 			"status":   "ok",
 			"provider": provider,
 			"method":   oauthMethodClaudeCode,
+		})
+		return
+
+	case oauthMethodCodexCLI:
+		cred, err := importCodexCLICredential()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to import Codex CLI credential: %v", err), http.StatusInternalServerError)
+			return
+		}
+		if err := h.persistCredentialAndConfig(provider, oauthMethodCodexCLI, cred); err != nil {
+			http.Error(w, fmt.Sprintf("failed to save credential: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":   "ok",
+			"provider": provider,
+			"method":   oauthMethodCodexCLI,
 		})
 		return
 
@@ -1072,6 +1177,114 @@ func defaultModelConfigForProvider(provider, authMethod string) *config.ModelCon
 	}
 }
 
+func maskCredentialToken(token string) string {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return ""
+	}
+	if len(token) <= 4 {
+		return "••••"
+	}
+	return "•••• •••• •••• " + token[len(token)-4:]
+}
+
+func importCodexCLICredential() (*auth.AuthCredential, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("finding home dir: %w", err)
+	}
+	checkedPaths := codexCredentialPaths(homeDir)
+	for _, path := range checkedPaths {
+		cred, readErr := importCodexCredentialFile(path)
+		if readErr == nil && cred != nil {
+			return cred, nil
+		}
+	}
+	return nil, fmt.Errorf("no Codex CLI credentials found (checked %s)", strings.Join(checkedPaths, ", "))
+}
+
+func codexCredentialPaths(homeDir string) []string {
+	paths := []string{filepath.Join(homeDir, ".codex", "auth.json")}
+	if codexHome := strings.TrimSpace(os.Getenv("CODEX_HOME")); codexHome != "" {
+		paths = append(paths, filepath.Join(codexHome, "auth.json"))
+	}
+	if configDir, err := os.UserConfigDir(); err == nil && configDir != "" {
+		paths = append(paths,
+			filepath.Join(configDir, "codex", "auth.json"),
+			filepath.Join(configDir, "Codex", "auth.json"),
+		)
+	}
+	return uniqueCleanPaths(paths)
+}
+
+func importCodexCredentialFile(path string) (*auth.AuthCredential, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var raw struct {
+		AuthMode string `json:"auth_mode"`
+		APIKey   string `json:"OPENAI_API_KEY"`
+		Tokens   struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+			AccountID    string `json:"account_id"`
+			IDToken      string `json:"id_token"`
+		} `json:"tokens"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+
+	accessToken := strings.TrimSpace(raw.Tokens.AccessToken)
+	if accessToken == "" {
+		accessToken = strings.TrimSpace(raw.APIKey)
+	}
+	if accessToken == "" {
+		return nil, fmt.Errorf("no OpenAI token found in %s", path)
+	}
+
+	cred := &auth.AuthCredential{
+		AccessToken:  accessToken,
+		RefreshToken: strings.TrimSpace(raw.Tokens.RefreshToken),
+		AccountID:    strings.TrimSpace(raw.Tokens.AccountID),
+		ExpiresAt:    jwtExpiresAt(accessToken),
+		Provider:     oauthProviderOpenAI,
+		AuthMethod:   oauthMethodCodexCLI,
+	}
+	if cred.ExpiresAt.IsZero() && raw.Tokens.IDToken != "" {
+		cred.ExpiresAt = jwtExpiresAt(raw.Tokens.IDToken)
+	}
+	if cred.NeedsRefresh() && cred.RefreshToken != "" {
+		refreshed, refreshErr := oauthRefreshAccessToken(cred, auth.OpenAIOAuthConfig())
+		if refreshErr != nil {
+			return nil, fmt.Errorf("refreshing Codex CLI credentials: %w", refreshErr)
+		}
+		refreshed.Provider = oauthProviderOpenAI
+		refreshed.AuthMethod = oauthMethodCodexCLI
+		return refreshed, nil
+	}
+	return cred, nil
+}
+
+func jwtExpiresAt(token string) time.Time {
+	parts := strings.Split(token, ".")
+	if len(parts) < 2 {
+		return time.Time{}
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return time.Time{}
+	}
+	var claims struct {
+		Exp int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil || claims.Exp <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(claims.Exp, 0)
+}
+
 // importClaudeCodeCredential reads the Anthropic OAuth token stored by the
 // Claude Code CLI from ~/.claude/.credentials.json.
 func importClaudeCodeCredential() (*auth.AuthCredential, error) {
@@ -1079,7 +1292,35 @@ func importClaudeCodeCredential() (*auth.AuthCredential, error) {
 	if err != nil {
 		return nil, fmt.Errorf("finding home dir: %w", err)
 	}
-	credPath := filepath.Join(homeDir, ".claude", ".credentials.json")
+	checkedPaths := claudeCredentialPaths(homeDir)
+	var lastErr error
+	for _, credPath := range checkedPaths {
+		cred, readErr := importClaudeCodeCredentialFile(credPath)
+		if readErr == nil {
+			return cred, nil
+		}
+		lastErr = readErr
+	}
+	return nil, fmt.Errorf("no Claude Code credentials found (checked %s): %w", strings.Join(checkedPaths, ", "), lastErr)
+}
+
+func claudeCredentialPaths(homeDir string) []string {
+	paths := []string{filepath.Join(homeDir, ".claude", ".credentials.json")}
+	if claudeConfigDir := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); claudeConfigDir != "" {
+		paths = append(paths, filepath.Join(claudeConfigDir, ".credentials.json"))
+	}
+	if configDir, err := os.UserConfigDir(); err == nil && configDir != "" {
+		paths = append(paths,
+			filepath.Join(configDir, "Claude", ".credentials.json"),
+			filepath.Join(configDir, "claude", ".credentials.json"),
+			filepath.Join(configDir, "Claude Code", ".credentials.json"),
+			filepath.Join(configDir, "claude-code", ".credentials.json"),
+		)
+	}
+	return uniqueCleanPaths(paths)
+}
+
+func importClaudeCodeCredentialFile(credPath string) (*auth.AuthCredential, error) {
 	data, err := os.ReadFile(credPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading Claude Code credentials (%s): %w", credPath, err)
@@ -1101,48 +1342,111 @@ func importClaudeCodeCredential() (*auth.AuthCredential, error) {
 	if raw.ClaudeAiOauth.ExpiresAt > 0 {
 		expiresAt = time.UnixMilli(raw.ClaudeAiOauth.ExpiresAt)
 	}
-	return &auth.AuthCredential{
+	cred := &auth.AuthCredential{
 		AccessToken:  raw.ClaudeAiOauth.AccessToken,
 		RefreshToken: raw.ClaudeAiOauth.RefreshToken,
 		ExpiresAt:    expiresAt,
 		Provider:     oauthProviderAnthropic,
 		AuthMethod:   oauthMethodClaudeCode,
-	}, nil
+	}
+	if cred.NeedsRefresh() && cred.RefreshToken != "" {
+		refreshed, refreshErr := oauthRefreshAccessToken(cred, auth.AnthropicOAuthConfig())
+		if refreshErr != nil {
+			return nil, fmt.Errorf("refreshing Claude Code credentials: %w", refreshErr)
+		}
+		refreshed.Provider = oauthProviderAnthropic
+		refreshed.AuthMethod = oauthMethodClaudeCode
+		return refreshed, nil
+	}
+	return cred, nil
 }
 
-// importGHCLICredential reads a GitHub OAuth token from the Copilot CLI hosts
-// file (~/.config/github-copilot/hosts.json) or the GitHub CLI hosts file
-// (~/.config/gh/hosts.yml), whichever is found first.
+// importGHCLICredential reads a GitHub OAuth token from Copilot/GitHub CLI
+// config files, then falls back to `gh auth token`. The command fallback is
+// needed on platforms where GitHub CLI stores tokens in the OS keyring instead
+// of hosts.yml.
 func importGHCLICredential() (*auth.AuthCredential, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("finding home dir: %w", err)
 	}
 
-	// Try ~/.config/github-copilot/hosts.json first.
-	copilotPath := filepath.Join(homeDir, ".config", "github-copilot", "hosts.json")
-	if data, readErr := os.ReadFile(copilotPath); readErr == nil {
+	checkedPaths := githubCredentialPaths(homeDir)
+	for _, path := range checkedPaths {
+		cred, readErr := importGitHubCredentialFile(path)
+		if readErr == nil && cred != nil {
+			return cred, nil
+		}
+	}
+
+	cred, commandErr := importGHCLICredentialFromCommand()
+	if commandErr == nil {
+		return cred, nil
+	}
+
+	return nil, fmt.Errorf(
+		"no GitHub credentials found (checked %s; gh auth token failed: %v)",
+		strings.Join(checkedPaths, ", "),
+		commandErr,
+	)
+}
+
+func githubCredentialPaths(homeDir string) []string {
+	paths := []string{
+		filepath.Join(homeDir, ".config", "github-copilot", "hosts.json"),
+		filepath.Join(homeDir, ".config", "gh", "hosts.yml"),
+	}
+	if configDir, err := os.UserConfigDir(); err == nil && configDir != "" {
+		paths = append(paths,
+			filepath.Join(configDir, "github-copilot", "hosts.json"),
+			filepath.Join(configDir, "gh", "hosts.yml"),
+			filepath.Join(configDir, "GitHub CLI", "hosts.yml"),
+		)
+	}
+	if ghConfigDir := strings.TrimSpace(os.Getenv("GH_CONFIG_DIR")); ghConfigDir != "" {
+		paths = append(paths, filepath.Join(ghConfigDir, "hosts.yml"))
+	}
+
+	return uniqueCleanPaths(paths)
+}
+
+func uniqueCleanPaths(paths []string) []string {
+	seen := make(map[string]bool, len(paths))
+	unique := make([]string, 0, len(paths))
+	for _, path := range paths {
+		clean := filepath.Clean(path)
+		if clean == "." || seen[clean] {
+			continue
+		}
+		seen[clean] = true
+		unique = append(unique, clean)
+	}
+	return unique
+}
+
+func importGitHubCredentialFile(path string) (*auth.AuthCredential, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if strings.EqualFold(filepath.Ext(path), ".json") {
 		var hosts map[string]struct {
 			OAuthToken string `json:"oauth_token"`
 			User       string `json:"user"`
 		}
-		if jsonErr := json.Unmarshal(data, &hosts); jsonErr == nil {
-			if gh, ok := hosts["github.com"]; ok && gh.OAuthToken != "" {
-				return &auth.AuthCredential{
-					AccessToken: gh.OAuthToken,
-					AccountID:   gh.User,
-					Provider:    oauthProviderGitHubCopilot,
-					AuthMethod:  oauthMethodGHCLI,
-				}, nil
-			}
+		if err := json.Unmarshal(data, &hosts); err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", path, err)
 		}
-	}
-
-	// Fall back to ~/.config/gh/hosts.yml (GitHub CLI).
-	ghPath := filepath.Join(homeDir, ".config", "gh", "hosts.yml")
-	data, err := os.ReadFile(ghPath)
-	if err != nil {
-		return nil, fmt.Errorf("no GitHub credentials found (checked %s and %s)", copilotPath, ghPath)
+		gh, ok := hosts["github.com"]
+		if !ok || gh.OAuthToken == "" {
+			return nil, fmt.Errorf("no GitHub token found in %s", path)
+		}
+		return &auth.AuthCredential{
+			AccessToken: gh.OAuthToken,
+			AccountID:   gh.User,
+			Provider:    oauthProviderGitHubCopilot,
+			AuthMethod:  oauthMethodGHCLI,
+		}, nil
 	}
 
 	var hosts map[string]struct {
@@ -1150,12 +1454,12 @@ func importGHCLICredential() (*auth.AuthCredential, error) {
 		User       string `yaml:"user"`
 	}
 	if err := yaml.Unmarshal(data, &hosts); err != nil {
-		return nil, fmt.Errorf("parsing gh hosts.yml: %w", err)
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 
 	gh, ok := hosts["github.com"]
 	if !ok || gh.OAuthToken == "" {
-		return nil, fmt.Errorf("no GitHub token found in %s", ghPath)
+		return nil, fmt.Errorf("no GitHub token found in %s", path)
 	}
 
 	return &auth.AuthCredential{
@@ -1164,6 +1468,40 @@ func importGHCLICredential() (*auth.AuthCredential, error) {
 		Provider:    oauthProviderGitHubCopilot,
 		AuthMethod:  oauthMethodGHCLI,
 	}, nil
+}
+
+func importGHCLICredentialFromCommand() (*auth.AuthCredential, error) {
+	token, err := oauthRunGHCLI("auth", "token", "--hostname", "github.com")
+	if err != nil {
+		return nil, err
+	}
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, fmt.Errorf("empty token")
+	}
+
+	accountID, _ := oauthRunGHCLI("api", "user", "--jq", ".login")
+	return &auth.AuthCredential{
+		AccessToken: token,
+		AccountID:   strings.TrimSpace(accountID),
+		Provider:    oauthProviderGitHubCopilot,
+		AuthMethod:  oauthMethodGHCLI,
+	}, nil
+}
+
+func runGHCLI(args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), oauthGHCLIImportTTL)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "gh", args...)
+	out, err := cmd.Output()
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	if err != nil {
+		return "", fmt.Errorf("gh %s: %w", strings.Join(args, " "), err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func fetchGoogleUserEmail(accessToken string) (string, error) {

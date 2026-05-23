@@ -5,10 +5,9 @@
  * the controlplane session lives entirely server-side. No cross-subdomain
  * cookie, no CORS, no separate /admin/login.
  *
- * Gating: the sidebar group and the /admin/* routes only show when
- * `/api/launcher/policy` returns `is_saas_admin: true`. That flag flips on
- * when the launcher process has PICOCLAW_SAAS_ADMIN_MODE=true plus the four
- * required env vars (see web/backend/api/saas_client.go).
+ * Access is enforced by the launcher/controlplane APIs. The frontend renders
+ * these pages according to the local visibility profile and lets backend
+ * responses surface any real permission or proxy errors.
  */
 import { launcherFetch } from "@/api/http"
 

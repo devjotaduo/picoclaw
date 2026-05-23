@@ -29,8 +29,16 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
     tenant: {
       visibility: {
         "layout.sidebar_trigger": true,
+        "header.actions": true,
+        "header.sidebar_toggle": false,
+        "header.connection_status": false,
         "header.settings": true,
         "header.logout": true,
+        "header.gateway_restart": true,
+        "header.gateway_status": true,
+        "header.gateway_start_stop": true,
+        "header.theme_toggle": true,
+        "header.gateway_stop_menu": true,
         "sidebar.navigation": true,
         "sidebar.pending_requests": true,
         "sidebar.models": false,
@@ -48,14 +56,27 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "chat.session_history": false,
         "chat.test_attendant": true,
         "chat.quality_indicator": true,
+        "chat.context_usage": true,
+        "chat.quick_tasks": true,
+        "chat.reasoning_messages": true,
+        "chat.tool_call_messages": true,
+        "agent_editor.create_agents": true,
         "chat.pending_handoffs_sidebar": true,
       },
     },
     public: {
       visibility: {
         "layout.sidebar_trigger": false,
+        "header.actions": true,
+        "header.sidebar_toggle": false,
+        "header.connection_status": false,
         "header.settings": false,
         "header.logout": false,
+        "header.gateway_restart": false,
+        "header.gateway_status": true,
+        "header.gateway_start_stop": false,
+        "header.theme_toggle": false,
+        "header.gateway_stop_menu": false,
         "sidebar.navigation": false,
         "sidebar.pending_requests": false,
         "sidebar.chat": false,
@@ -87,6 +108,11 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "chat.session_history": false,
         "chat.test_attendant": false,
         "chat.quality_indicator": false,
+        "chat.context_usage": false,
+        "chat.quick_tasks": false,
+        "chat.reasoning_messages": false,
+        "chat.tool_call_messages": false,
+        "agent_editor.create_agents": false,
         "chat.pending_handoffs_sidebar": false,
       },
     },
@@ -103,10 +129,56 @@ export async function getLocalUIVisibilityPolicy(): Promise<UIVisibilityPolicy> 
   return normalizeUIVisibilityPolicy(await res.json())
 }
 
+// localStorage key used by the runtime template selector to override
+// auto-resolution. Set via setUIVisibilityProfileOverride(); cleared by
+// passing null. Other tabs / hooks observe changes via the "storage" event.
+export const UI_VISIBILITY_OVERRIDE_STORAGE_KEY = "picoclaw.ui-visibility.override"
+
+export function getUIVisibilityProfileOverride(): UIVisibilityProfile | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(UI_VISIBILITY_OVERRIDE_STORAGE_KEY)
+    return isUIVisibilityProfile(raw) ? raw : null
+  } catch {
+    return null
+  }
+}
+
+export function setUIVisibilityProfileOverride(
+  profile: UIVisibilityProfile | null,
+): void {
+  if (typeof window === "undefined") return
+  try {
+    if (profile) {
+      window.localStorage.setItem(UI_VISIBILITY_OVERRIDE_STORAGE_KEY, profile)
+    } else {
+      window.localStorage.removeItem(UI_VISIBILITY_OVERRIDE_STORAGE_KEY)
+    }
+    // Notify same-tab listeners (the native "storage" event only fires
+    // across tabs/windows, not within the tab that performed the write).
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: UI_VISIBILITY_OVERRIDE_STORAGE_KEY,
+        newValue: profile,
+      }),
+    )
+  } catch {
+    // best-effort — Safari private mode etc. just won't persist
+  }
+}
+
 export function resolveUIVisibilityProfile(
   policy: UIVisibilityPolicy,
   launcherPolicy?: Pick<LauncherPolicyResponse, "role" | "is_saas_admin">,
 ): UIVisibilityProfile {
+  // Runtime override from the template selector takes precedence over
+  // both the JSON's `active_profile` field and the role-based resolution.
+  // This is the dev/admin "preview as ..." switch.
+  const override = getUIVisibilityProfileOverride()
+  if (override) {
+    return override
+  }
+
   if (policy.active_profile) {
     return policy.active_profile
   }

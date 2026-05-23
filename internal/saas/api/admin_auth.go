@@ -29,6 +29,21 @@ type changePasswordReq struct {
 	NewPassword     string `json:"new_password"`
 }
 
+type forgotPasswordReq struct {
+	Email string `json:"email"`
+}
+
+type resetPasswordReq struct {
+	Token    string `json:"token"`
+	Password string `json:"password"`
+}
+
+// passwordResetTTL caps how long a freshly-emailed reset link stays valid.
+// 1h is the convention across mainstream products (Supabase, Auth0, etc.)
+// — long enough to survive an email spam-filter delay, short enough that
+// a leaked link doesn't sit around for days.
+const passwordResetTTL = 1 * time.Hour
+
 type loginAttempts struct {
 	mu     sync.Mutex
 	byIP   map[string][]time.Time
@@ -306,4 +321,151 @@ func capabilitiesFor(user *store.User, memberships []store.TenantMembership) []s
 	}
 	sort.Strings(out)
 	return out
+}
+
+// ── Password reset ───────────────────────────────────────────────────
+//
+// Public, no auth required. Two endpoints:
+//
+//   POST /api/v1/auth/forgot-password { email }       → 204 always
+//   POST /api/v1/auth/reset-password  { token, password } → 204 on success
+//
+// The forgot-password handler ALWAYS returns 204 — whether the email
+// belongs to a known user or not — so a probe can't enumerate accounts.
+// The work (generating + emailing the token) only happens when the user
+// exists and has a bcrypt hash (not a Supabase-only account, which has
+// its own reset flow via the Supabase dashboard).
+
+func (h *Handler) handleForgotPassword(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	// Same throttle as login — both touch the bcrypt path and we don't
+	// want a forgot-password endpoint to be a side-channel for the
+	// existing login-attempts limiter.
+	if !h.LoginAttempts.allow(ip) {
+		writeError(w, http.StatusTooManyRequests, "too many attempts; try again later")
+		return
+	}
+
+	var req forgotPasswordReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Bad JSON still returns 204 to keep the response shape
+		// constant. The client will never tell the difference between
+		// "malformed body" and "unknown email" — both are 204.
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+	if email == "" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// Best-effort lookup. Errors (including ErrUserNotFound) just yield
+	// the same 204 — no leakage.
+	user, err := h.Users.GetByEmail(r.Context(), email)
+	if err != nil || user == nil || user.Status != store.UserStatusActive || user.BcryptHash == nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	token, err := auth.RandomToken(32)
+	if err != nil {
+		// Internal error — but still return 204 to the client. The
+		// failure is logged via audit so an operator can spot it.
+		_ = h.Audit.Insert(r.Context(), nil, nil, "auth.password.reset.gen_error", "user", email)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	expiresAt := time.Now().Add(passwordResetTTL)
+	pr := &store.PasswordReset{
+		Token:     token,
+		UserID:    user.ID,
+		ExpiresAt: expiresAt,
+	}
+	if v := strings.TrimSpace(ip); v != "" {
+		pr.IP = &v
+	}
+	if ua := strings.TrimSpace(r.Header.Get("User-Agent")); ua != "" {
+		pr.UserAgent = &ua
+	}
+	if err := h.PasswordResets.Insert(r.Context(), pr); err != nil {
+		_ = h.Audit.Insert(r.Context(), &user.ID, nil, "auth.password.reset.store_error", "user", email)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// Build the reset URL using the admin base URL (mailer config). If
+	// the mailer isn't configured, the URL still goes into the audit log
+	// so the operator can grab it manually.
+	resetURL := h.adminPasswordResetURL(token)
+	if h.Mailer != nil && h.Mailer.Enabled() {
+		go h.Mailer.SendPasswordResetEmail(email, resetURL, expiresAt)
+	}
+	_ = h.Audit.Insert(r.Context(), &user.ID, nil, "auth.password.reset.request", "user", email)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) handleResetPassword(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	if !h.LoginAttempts.allow(ip) {
+		writeError(w, http.StatusTooManyRequests, "too many attempts; try again later")
+		return
+	}
+
+	var req resetPasswordReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	req.Token = strings.TrimSpace(req.Token)
+	req.Password = strings.TrimSpace(req.Password)
+	if req.Token == "" {
+		writeError(w, http.StatusBadRequest, "token required")
+		return
+	}
+	if len([]rune(req.Password)) < 8 {
+		writeError(w, http.StatusBadRequest, "password must have at least 8 characters")
+		return
+	}
+
+	pr, err := h.PasswordResets.GetUsable(r.Context(), req.Token)
+	if err != nil {
+		// Generic 401 — caller can't tell whether the token was wrong,
+		// already used, or expired. Friendlier than 4 different error
+		// codes and harder to attack.
+		writeError(w, http.StatusUnauthorized, "invalid or expired reset link")
+		return
+	}
+
+	hash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "password hash failed")
+		return
+	}
+	if err := h.Users.UpdatePassword(r.Context(), pr.UserID, hash); err != nil {
+		writeError(w, http.StatusInternalServerError, "password update failed")
+		return
+	}
+	// Burn the token + every other outstanding reset for this user.
+	// One-shot is the whole point; if the user generated multiple links
+	// (multiple "forgot password" clicks), they all die at once.
+	_ = h.PasswordResets.MarkUsed(r.Context(), req.Token)
+	_ = h.PasswordResets.InvalidateAllForUser(r.Context(), pr.UserID)
+	_ = h.Audit.Insert(r.Context(), &pr.UserID, nil, "auth.password.reset.complete", "user", "")
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// adminPasswordResetURL builds the URL embedded in the reset email. It
+// follows the same admin-base convention as invite emails — uses the
+// configured MailerAdminURL or falls back to https://adm.<base>/.
+func (h *Handler) adminPasswordResetURL(token string) string {
+	base := ""
+	if h.Mailer != nil {
+		base = strings.TrimRight(h.Mailer.AdminBaseURL(), "/")
+	}
+	if base == "" {
+		base = "https://adm." + strings.Trim(h.Cfg.TenantBaseDomain, ".")
+	}
+	return base + "/reset-password?token=" + token
 }

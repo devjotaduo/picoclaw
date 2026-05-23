@@ -95,6 +95,8 @@
     "toolCallsLabel": "工具调用",
     "toolCallExplanationLabel": "调用提示",
     "toolCallFunctionLabel": "调用摘要",
+    "executingStatus": "正在执行 {{action}}",
+    "thinkingStatus": "思考中",
     "showAssistantDetails": "展示思考过程与工具调用",
     "toolLabel": "工具",
     "history": "历史记录",
@@ -110,6 +112,13 @@
       "noModel": "未设置默认模型，请前往模型页面进行配置。"
     },
     "sendMessage": "发送消息",
+    "suggestionChoice": {
+      "dismiss": "关闭建议",
+      "other": "其他",
+      "placeholder": "在这里输入自己的回答",
+      "skip": "跳过",
+      "send": "发送"
+    },
     "sendHint": "按 Enter 发送\nShift + Enter 换行",
     "contextTitle": "上下文",
     "contextDetail": "查看详情",
@@ -211,6 +220,22 @@
       },
       "antigravity": {
         "description": "使用浏览器 OAuth 登录 Google Cloud Code Assist。"
+      },
+      "imageGeneration": {
+        "title": "图像生成",
+        "description": "通过 OpenRouter 让代理生成真实图像。",
+        "enabled": "启用",
+        "apiBase": "API base",
+        "model": "模型",
+        "size": "尺寸",
+        "outputDir": "目录",
+        "key": "密钥",
+        "notConfigured": "待配置",
+        "expiration": "过期时间",
+        "noExpiration": "未提供",
+        "recommended": "推荐",
+        "saveSuccess": "图像配置已保存。",
+        "saveError": "保存图像生成配置失败。"
       }
     },
     "status": {
@@ -224,7 +249,10 @@
       "deviceCode": "设备码",
       "stopLoading": "停止加载",
       "saveToken": "保存",
-      "logout": "退出登录"
+      "logout": "退出登录",
+      "importCodexCLI": "从 Codex CLI 导入",
+      "importClaudeCode": "从 Claude Code 导入",
+      "importGHCLI": "从 GitHub CLI 导入"
     },
     "logoutDialog": {
       "title": "确认退出登录？",
@@ -232,12 +260,16 @@
     },
     "fields": {
       "openaiToken": "OpenAI Token",
-      "anthropicToken": "Anthropic Token"
+      "anthropicToken": "Anthropic Token",
+      "githubToken": "GitHub Token"
     },
     "labels": {
       "account": "账号",
       "email": "邮箱",
-      "project": "项目"
+      "project": "项目",
+      "identifier": "标识符",
+      "token": "Token",
+      "expires": "剩余"
     },
     "errors": {
       "loadFailed": "加载凭据失败",
@@ -1105,6 +1137,7 @@
           "filesystem": "文件系统",
           "web": "网页",
           "communication": "通信",
+          "marketing": "营销",
           "skills": "技能",
           "agents": "Agent",
           "hardware": "硬件",
@@ -1116,6 +1149,7 @@
           "requires_skills": "需要先启用 `tools.skills`，该技能注册表工具才能使用。",
           "requires_subagent": "需要先启用 `tools.subagent`，`spawn` 才能委派任务。",
           "requires_mcp_discovery": "需要先启用 `tools.mcp.discovery`，MCP 发现工具才会可用。",
+          "missing_api_key": "使用该工具前需要先配置 API 密钥。",
           "requires_web_search_provider": "请至少配置一个可用的外部网络搜索 provider。"
         }
       }

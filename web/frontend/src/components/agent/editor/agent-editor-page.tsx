@@ -96,6 +96,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useUIVisibility } from "@/hooks/use-ui-visibility"
 import { cn } from "@/lib/utils"
 import type { SaveState } from "@/store/agent-editor"
 
@@ -1052,9 +1053,11 @@ export function AgentEditorPage() {
     queryKey: ["launcher-policy"],
     queryFn: getLauncherPolicy,
   })
+  const { visible: isVisible } = useUIVisibility(launcherPolicyQuery.data)
   const canCreateAgents =
-    launcherPolicyQuery.data?.features.agent_creation === "write" ||
-    launcherPolicyQuery.isError
+    isVisible("agent_editor.create_agents") &&
+    (launcherPolicyQuery.data?.features.agent_creation === "write" ||
+      launcherPolicyQuery.isError)
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<TemplateApplyPayload | null>(null)
