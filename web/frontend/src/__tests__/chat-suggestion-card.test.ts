@@ -44,6 +44,37 @@ Garantir navegacao por teclado.
     ])
   })
 
+  it("extracts compact option prompts from the assistant follow-up format", () => {
+    const parsed = parseChatSuggestionCard(`
+- 3 opções mais chiques - 3 mais populares - 3 para moda feminina - 3 para moda masculina - 3 para streetwear ou fitness
+`)
+
+    expect(parsed?.title).toBe("Qual opção você quer seguir?")
+    expect(parsed?.options).toEqual([
+      { title: "3 opções mais chiques", description: "" },
+      { title: "3 mais populares", description: "" },
+      { title: "3 para moda feminina", description: "" },
+      { title: "3 para moda masculina", description: "" },
+    ])
+  })
+
+  it("extracts nested-looking option prompts from one markdown list item", () => {
+    const parsed = parseChatSuggestionCard(`
+- 3 opções mais chiques
+  - 3 mais populares
+  - 3 para moda feminina
+  - 3 para moda masculina
+  - 3 para streetwear ou fitness
+`)
+
+    expect(parsed?.options.map((option) => option.title)).toEqual([
+      "3 opções mais chiques",
+      "3 mais populares",
+      "3 para moda feminina",
+      "3 para moda masculina",
+    ])
+  })
+
   it("ignores normal bullet lists without a suggestion cue", () => {
     const parsed = parseChatSuggestionCard(`
 Resumo do atendimento:

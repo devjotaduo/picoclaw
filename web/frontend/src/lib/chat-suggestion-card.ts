@@ -8,7 +8,7 @@ export interface ChatSuggestionCardData {
   options: ChatSuggestionChoice[]
 }
 
-const OPTION_LINE_RE = /^\s*(?:[-*]|\d{1,2}[.)])\s+(.*)$/
+const OPTION_LINE_RE = /^\s*(?:[-*•]|\d{1,2}[.)])\s+(.*)$/
 const CHECKBOX_LINE_RE = /^\s*[-*]\s+\[[ xX]\]\s+(.*)$/
 const SUGGESTION_CUE_RE =
   /\b(sugest[aã]o|sugest[oõ]es|op[cç][aã]o|op[cç][oõ]es|escolh|aplicar|melhoria|alternativa|prefere|qual)\b/i
@@ -59,14 +59,36 @@ function isOtherOption(value: string): boolean {
   return /^outro\b/i.test(cleanInlineMarkdown(value))
 }
 
+function expandInlineOptions(lines: string[]): string[] {
+  return lines.flatMap((line) => {
+    const optionText = matchOptionLine(line)
+    const candidate = optionText ?? line
+    const segments = candidate
+      .split(/\s+-\s+/)
+      .map(cleanInlineMarkdown)
+      .filter(Boolean)
+
+    if (
+      segments.length >= 3 &&
+      segments.some((segment) => SUGGESTION_CUE_RE.test(segment))
+    ) {
+      return segments.map((segment) => `- ${segment}`)
+    }
+
+    return [line]
+  })
+}
+
 export function parseChatSuggestionCard(
   content: string,
   maxOptions = 4,
 ): ChatSuggestionCardData | null {
-  const lines = content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
+  const lines = expandInlineOptions(
+    content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean),
+  )
 
   if (lines.length < 3) {
     return null
@@ -93,7 +115,7 @@ export function parseChatSuggestionCard(
   const title =
     questionIndex >= 0 && questionIndex < firstOptionIndex
       ? cleanInlineMarkdown(lines[questionIndex])
-      : "Qual opcao voce quer seguir?"
+      : "Qual opção você quer seguir?"
 
   const options: ChatSuggestionChoice[] = []
   for (
