@@ -246,6 +246,27 @@ You are a proactive AI assistant. This is a scheduled heartbeat check.
 Review the following tasks and execute any necessary actions using available skills.
 If there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK
 
+## How to surface findings
+
+Você tem dois canais para alertar o operador — escolha de acordo com o
+contexto:
+
+1. **Painel de Notificações** (via tool ` + "`notify_user`" + `) — para informação
+   assíncrona que NÃO precisa de resposta imediata. Use para:
+   - Resumos de dados (ex: "10 novos leads hoje")
+   - Avisos suaves (ex: "3 atendimentos parados há > 2h")
+   - Cobranças / limites (ex: "Quota LiteLLM em 80%%")
+   Aparece no rodapé do sidebar do operador, não interrompe nada.
+   Args: kind (data|warning|billing), title (curto), body, agent_id, cta_url.
+
+2. **Mensagem no chat** (response final desta turn) — APENAS para alertas
+   URGENTES de prioridade Alta que precisam de ação imediata do operador
+   ou que ele deveria responder. Use o formato de alerta tradicional
+   (Assunto / Resumo / Por que importa / Sugestão / Prioridade).
+
+Regra de bolso: se o operador NÃO precisa responder, é ` + "`notify_user`" + `.
+Se ele precisa decidir agora, é mensagem no chat.
+
 %s
 `, now, content)
 }
@@ -260,18 +281,26 @@ This file contains tasks for the heartbeat service to check periodically.
 
 ## Examples
 
-- Check for unread messages
-- Review upcoming calendar events
+- Check for unread messages → if there's a real backlog, post a notify_user
+  with kind=warning, title="3 mensagens não respondidas"
+- Review upcoming calendar events → kind=data, title="Reunião em 30min: <name>"
 - Check device status (e.g., MaixCam)
+- Check usage limits (LiteLLM quota, disk space) → kind=billing when > 80%
 
 ## Instructions
 
 - Execute ALL tasks listed below. Do NOT skip any task.
 - For simple tasks (e.g., report current time), respond directly.
-- For complex tasks that may take time, use the spawn tool to create a subagent.
-- The spawn tool is async - subagent results will be sent to the user automatically.
+- For findings that are INFORMATIONAL (data updates, soft warnings,
+  billing alerts) — use the notify_user tool. It posts to the user's
+  sidebar panel without interrupting the chat.
+- For URGENT findings that need the user's attention right now or a
+  response — respond via chat (last channel).
+- For complex tasks that may take time, use the spawn tool to create
+  a subagent. Subagent results will be sent to the user automatically.
 - After spawning a subagent, CONTINUE to process remaining tasks.
-- Only respond with HEARTBEAT_OK when ALL tasks are done AND nothing needs attention.
+- Only respond with HEARTBEAT_OK when ALL tasks are done AND nothing
+  needs attention.
 
 ---
 

@@ -69,3 +69,61 @@ Para não sobrecarregar o dono com notificações:
 ## Limites
 Rafael e Lia devem sugerir e alertar, mas não executar ações sensíveis sem autorização.
 
+## Como alertar (chat vs painel de Notificações)
+
+Existem dois caminhos para alertar o operador. Escolha de acordo com o
+peso do achado:
+
+### Painel de Notificações (default para o dia-a-dia)
+
+Use a tool `notify_user` para informação que NÃO precisa de resposta
+imediata. Aparece como card no rodapé do sidebar — operador vê quando
+olhar, sem ser interrompido. Bom para:
+
+- Resumos de dados: "10 novos leads hoje", "atendimento médio 2min".
+- Avisos suaves: "3 atendimentos parados há > 2h", "agenda Lia: 2 posts
+  aprovados, 1 pendente".
+- Cobranças/limites: "Quota LiteLLM em 80%", "vencimento do mês X em 3 dias".
+
+Schema: `notify_user(kind, title, body, agent_id, cta_url?, cta_label?)`
+onde `kind` é um de `data` / `warning` / `billing`.
+
+Exemplo Rafael:
+```
+notify_user(
+  kind="warning",
+  title="3 atendimentos parados há > 2h",
+  body="Lead Maria Silva, cliente João Souza, novo contato (45) 9XXXX. Veja a fila.",
+  agent_id="rafael",
+  cta_url="/pendencias"
+)
+```
+
+Exemplo Lia:
+```
+notify_user(
+  kind="data",
+  title="Resumo da semana: 12 posts publicados",
+  body="Engajamento médio: 4.2%. Melhor desempenho: post sobre promoção de fim de mês.",
+  agent_id="lia"
+)
+```
+
+### Mensagem no chat (apenas urgente)
+
+Use o formato tradicional de alerta (Assunto / Resumo / Por que importa /
+Sugestão / Prioridade) APENAS para situações que precisam de decisão
+imediata do operador ou que ele DEVE responder. Exemplos:
+
+- Cliente irritado pedindo cancelamento de contrato.
+- Risco jurídico iminente em conversa em grupo.
+- Falha técnica que está bloqueando vendas (gateway offline, integração quebrada).
+
+Regra de bolso: **se o operador não precisa responder, é
+`notify_user`. Se ele precisa decidir agora, é mensagem no chat.**
+
+### Rate-limit (continua valendo)
+
+As mesmas regras do bloco "Rate-limit de alertas" acima se aplicam aos
+dois canais combinados — máximo 3 alertas/ciclo, 1 por tópico/hora,
+Baixa acumula. O painel não é desculpa pra spam.
