@@ -34,6 +34,7 @@ import {
   getLauncherPolicy,
 } from "@/api/launcher-policy"
 import { type WorkspaceAgent, getWorkspaceAgents } from "@/api/workspace-agents"
+import { NotificationPanel } from "@/components/notifications/notification-panel"
 import {
   Sidebar,
   SidebarContent,
@@ -417,7 +418,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             feature: "tools",
             elementId: "sidebar.tools",
             translateTitle: true,
-            adminOnly: true,
+            // Removido adminOnly: agora visível para tenant também, gated
+            // apenas pelo sidebar.tools visibility flag.
           },
           {
             title: "navigation.config",
@@ -489,8 +491,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const showSidebarNavigation = isVisible("sidebar.navigation")
   const showSidebarPendingRequests = isVisible("sidebar.pending_requests")
+  const showSidebarNotifications = isVisible("sidebar.notifications")
 
-  if (!showSidebarNavigation && !showSidebarPendingRequests) {
+  if (
+    !showSidebarNavigation &&
+    !showSidebarPendingRequests &&
+    !showSidebarNotifications
+  ) {
     return null
   }
 
@@ -575,6 +582,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </SidebarGroup>
             )
           })}
+          {/* Notifications panel — preenche o espaço inferior do sidebar
+              quando o tenant não tem o pending-requests footer. Visibilidade
+              controlada pela flag sidebar.notifications em ui-visibility.json
+              (default: true em admin+tenant, false em public). */}
+          {showSidebarNotifications && <NotificationPanel />}
         </SidebarContent>
       ) : null}
       {showSidebarPendingRequests ? (

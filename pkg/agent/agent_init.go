@@ -304,6 +304,14 @@ func registerSharedTools(
 		if cfg.Tools.IsToolEnabled("product_lookup") {
 			agent.Tools.Register(tools.NewProductLookupTool(agent.Workspace))
 		}
+		// notify_user: posta no painel de notificações do sidebar. Habilitado
+		// por default (sem flag explícita no config) porque é cheap e útil pra
+		// todos os agentes — main dispara updates do negócio, pixel/doc/dev
+		// avisam quando uma tarefa terminou. URL do launcher é resolvida do
+		// env PICOCLAW_LAUNCHER_BASE_URL (default http://127.0.0.1:18800).
+		if cfg.Tools.IsToolEnabled("notify_user") {
+			agent.Tools.Register(tools.NewNotifyUserTool(""))
+		}
 
 		if ttsProvider != nil {
 			agent.Tools.Register(tools.NewSendTTSTool(ttsProvider, nil))
