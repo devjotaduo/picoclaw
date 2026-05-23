@@ -105,7 +105,7 @@ fi
 
 # -------- 2. selective validations --------
 declare -A SUITES
-for p in "${TO_STAGE[@]:-}"; do
+for p in "${TO_STAGE[@]}"; do
   case "$p" in
     *.go) SUITES[go]=1 ;;
     go.mod|go.sum) SUITES[go]=1 ;;
@@ -123,7 +123,7 @@ if [[ -n "${SUITES[go]:-}" ]]; then
   if command -v go >/dev/null 2>&1; then
     # Vet only the packages that actually contain touched files, to keep it fast.
     declare -A PKGS=()
-    for p in "${TO_STAGE[@]:-}"; do
+    for p in "${TO_STAGE[@]}"; do
       [[ "$p" == *.go ]] || continue
       d="$(dirname "$p")"
       PKGS["./$d"]=1
@@ -143,7 +143,7 @@ if [[ -n "${SUITES[md]:-}" ]]; then
 fi
 
 if [[ -n "${SUITES[json]:-}" ]]; then
-  for p in "${TO_STAGE[@]:-}"; do
+  for p in "${TO_STAGE[@]}"; do
     [[ "$p" == *.json ]] || continue
     [[ -f "$p" ]] || continue
     if command -v python >/dev/null 2>&1; then
@@ -209,7 +209,7 @@ else
     is_ignored "$p" || TO_STAGE2+=("$p")
   done
 fi
-TO_STAGE=("${TO_STAGE2[@]:-}")
+TO_STAGE=("${TO_STAGE2[@]}")
 
 if [[ ${#TO_STAGE[@]} -eq 0 && $AMEND -eq 0 ]]; then
   log "nothing in scope to commit."
