@@ -4,14 +4,15 @@ import { cjk } from "@streamdown/cjk"
 import { code } from "@streamdown/code"
 import { math } from "@streamdown/math"
 import { mermaid } from "@streamdown/mermaid"
-import type { UIMessage } from "ai"
 import { memo, type ComponentProps, type HTMLAttributes } from "react"
 import { Streamdown } from "streamdown"
 
 import { cn } from "@/lib/utils"
 
+type VisualMessageRole = "system" | "user" | "assistant" | "data"
+
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
-  from: UIMessage["role"]
+  from: VisualMessageRole
 }
 
 export function Message({ className, from, ...props }: MessageProps) {
