@@ -358,6 +358,27 @@ func shouldHideTenantPath(rel string, isDir bool) bool {
 	return false
 }
 
+// shouldDropOnRawUpload is the much smaller filter used when the operator
+// uploads a workspace flagged is_raw=true. It only drops TRULY junk runtime
+// state — pid files, OS-process locks, node_modules, vcs/cache dirs — so the
+// uploaded zip can carry an existing tenant's launcher-auth.db, sessions/,
+// launcher_policy.json, etc. verbatim. The operator owns the full boot state.
+func shouldDropOnRawUpload(rel string, isDir bool) bool {
+	rel = filepath.ToSlash(rel)
+	base := filepath.Base(rel)
+	if base == ".picoclaw.pid" {
+		return true
+	}
+	junkPrefixes := []string{"node_modules", ".cache", ".git", "backups"}
+	for _, p := range junkPrefixes {
+		if rel == p || strings.HasPrefix(rel, p+"/") {
+			return true
+		}
+	}
+	_ = isDir
+	return false
+}
+
 // shouldBlockTenantWrite is the writer-side gate (defence in depth: the tree
 // already hides these, but a hand-crafted PUT shouldn't be able to corrupt
 // runtime state).

@@ -95,6 +95,7 @@ export function Workspaces() {
   const [uploadSlug, setUploadSlug] = useState("");
   const [uploadDescription, setUploadDescription] = useState("");
   const [uploadDefaultAuto, setUploadDefaultAuto] = useState(false);
+  const [uploadRaw, setUploadRaw] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string>("");
 
@@ -108,6 +109,7 @@ export function Workspaces() {
         description: uploadDescription.trim() || undefined,
         is_default_auto: uploadDefaultAuto,
         is_available_manual: true,
+        is_raw: uploadRaw,
         archive: uploadFile,
       });
     },
@@ -119,6 +121,7 @@ export function Workspaces() {
       setUploadSlug("");
       setUploadDescription("");
       setUploadDefaultAuto(false);
+      setUploadRaw(false);
       setUploadFile(null);
       setUploadError("");
     },
@@ -156,6 +159,8 @@ export function Workspaces() {
           setDescription={setUploadDescription}
           defaultAuto={uploadDefaultAuto}
           setDefaultAuto={setUploadDefaultAuto}
+          raw={uploadRaw}
+          setRaw={setUploadRaw}
           file={uploadFile}
           setFile={setUploadFile}
           error={uploadError}
@@ -614,6 +619,8 @@ function UploadWorkspaceDialog(props: {
   setDescription: (v: string) => void;
   defaultAuto: boolean;
   setDefaultAuto: (v: boolean) => void;
+  raw: boolean;
+  setRaw: (v: boolean) => void;
   file: File | null;
   setFile: (f: File | null) => void;
   error: string;
@@ -727,6 +734,25 @@ function UploadWorkspaceDialog(props: {
             />
             Marcar como workspace padrão pro auto-provisionamento
             <span className="text-zinc-500">(só um workspace pode ter esse flag)</span>
+          </label>
+
+          <label className="flex items-start gap-2 text-xs text-zinc-300">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={props.raw}
+              onChange={(e) => props.setRaw(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium">Raw — não tratar arquivos</span>{" "}
+              <span className="text-zinc-500">
+                (provisioner copia o zip verbatim e pula seed de senha, geração
+                de chave LiteLLM, substituição de <code>${"${LITELLM_KEY}"}</code>{" "}
+                em <code>config.json</code> e escrita de{" "}
+                <code>launcher_policy.json</code>. Os arquivos que você subir
+                viram a verdade absoluta — você é responsável por auth + modelos.)
+              </span>
+            </span>
           </label>
         </div>
 

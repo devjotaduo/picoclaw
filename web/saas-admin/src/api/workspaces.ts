@@ -14,6 +14,11 @@ export type Workspace = {
   host_path: string;
   is_default_auto: boolean;
   is_available_manual: boolean;
+  // When true the provisioner copies the workspace home verbatim and skips
+  // its post-copy steps (password seeding, LiteLLM key + placeholder
+  // substitution, launcher policy override). The operator owns the boot
+  // state — useful when re-bundling an existing tenant volume.
+  is_raw: boolean;
   role_policy: RolePolicy;
   frontend_built_at: string | null;
   version: number;
@@ -27,6 +32,7 @@ export type WorkspaceInput = {
   description?: string;
   is_default_auto?: boolean;
   is_available_manual?: boolean;
+  is_raw?: boolean;
   role_policy?: RolePolicy;
 };
 
@@ -163,6 +169,7 @@ export async function uploadWorkspace(input: {
   description?: string;
   is_default_auto?: boolean;
   is_available_manual?: boolean;
+  is_raw?: boolean;
   archive: File;
 }) {
   const fd = new FormData();
@@ -171,6 +178,7 @@ export async function uploadWorkspace(input: {
   if (input.description) fd.set("description", input.description);
   if (input.is_default_auto !== undefined) fd.set("is_default_auto", String(input.is_default_auto));
   if (input.is_available_manual !== undefined) fd.set("is_available_manual", String(input.is_available_manual));
+  if (input.is_raw !== undefined) fd.set("is_raw", String(input.is_raw));
   fd.set("archive", input.archive);
 
   // Note: don't set Content-Type header — the browser adds the boundary

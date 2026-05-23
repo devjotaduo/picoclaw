@@ -68,6 +68,7 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 	description := strings.TrimSpace(r.FormValue("description"))
 	isDefaultAuto := r.FormValue("is_default_auto") == "true"
 	isAvailableManual := r.FormValue("is_available_manual") != "false" // default true
+	isRaw := r.FormValue("is_raw") == "true"                            // default false — opt in
 
 	file, fileHeader, err := r.FormFile("archive")
 	if err != nil {
@@ -102,8 +103,9 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 
 	// Pre-validate the entire archive BEFORE writing anything to disk. This
 	// is the only chance to reject a malicious zip without leaving partial
-	// state in the workspace dir.
-	if err := validateWorkspaceZip(zipReader); err != nil {
+	// state in the workspace dir. Raw uploads use a much smaller drop list
+	// so the operator can carry sessions/, launcher-auth.db, etc. through.
+	if err := validateWorkspaceZip(zipReader, isRaw); err != nil {
 		writeError(w, http.StatusBadRequest, "archive validation: "+err.Error())
 		return
 	}
@@ -133,7 +135,7 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 	// Extract into home/. The cleanup path removes the entire workspace dir
 	// on extraction failure so the operator doesn't see a half-written tree.
 	cleanup := func() { _ = os.RemoveAll(hostPath) }
-	if err := extractWorkspaceZip(zipReader, homeDir); err != nil {
+	if err := extractWorkspaceZip(zipReader, homeDir, isRaw); err != nil {
 		cleanup()
 		writeError(w, http.StatusInternalServerError, "extract: "+err.Error())
 		return
@@ -153,6 +155,7 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 		HostPath:          hostPath,
 		IsDefaultAuto:     isDefaultAuto,
 		IsAvailableManual: isAvailableManual,
+		IsRaw:             isRaw,
 		RolePolicyJSON:    rolePolicyJSON,
 	}
 	if err := h.Workspaces.Insert(r.Context(), ws); err != nil {
@@ -176,9 +179,19 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 // first; the validator only complains about things that look like an attack.
 // The skip list mirrors shouldHideTenantPath so what gets dropped here is
 // exactly what would be hidden from the tenant file editor anyway.
-func validateWorkspaceZip(zr *zip.Reader) error {
+//
+// When isRaw is true, only truly-junk runtime files (.picoclaw.pid,
+// node_modules, .git, .cache, backups) are dropped. Everything else —
+// including launcher-auth.db, sessions/, launcher_policy.json — passes
+// through verbatim so the operator owns the full boot state.
+func validateWorkspaceZip(zr *zip.Reader, isRaw bool) error {
 	if len(zr.File) > maxWorkspaceExtractedFiles {
 		return fmt.Errorf("archive has %d files; cap is %d", len(zr.File), maxWorkspaceExtractedFiles)
+	}
+
+	dropFn := shouldHideTenantPath
+	if isRaw {
+		dropFn = shouldDropOnRawUpload
 	}
 
 	var total int64
@@ -203,7 +216,7 @@ func validateWorkspaceZip(zr *zip.Reader) error {
 		}
 		// Runtime files don't count toward the byte cap — they'll be skipped
 		// on extract. Only "real" workspace content contributes to total.
-		if shouldHideTenantPath(cleaned, f.FileInfo().IsDir()) {
+		if dropFn(cleaned, f.FileInfo().IsDir()) {
 			continue
 		}
 		total += int64(f.UncompressedSize64)
@@ -248,7 +261,15 @@ func allEntriesShareHomePrefix(zr *zip.Reader) bool {
 // silently skipped — they're either re-created by the launcher on first
 // boot or owned exclusively by the provisioner. Lets operators upload a
 // zip of a live tenant volume without curating it.
-func extractWorkspaceZip(zr *zip.Reader, dst string) error {
+//
+// When isRaw is true, the drop list shrinks to just .picoclaw.pid +
+// node_modules/.git/.cache/backups so the rest of the volume (including
+// launcher-auth.db, sessions/, launcher_policy.json) carries through.
+func extractWorkspaceZip(zr *zip.Reader, dst string, isRaw bool) error {
+	dropFn := shouldHideTenantPath
+	if isRaw {
+		dropFn = shouldDropOnRawUpload
+	}
 	stripHome := allEntriesShareHomePrefix(zr)
 	dstAbs, err := filepath.Abs(dst)
 	if err != nil {
@@ -266,7 +287,7 @@ func extractWorkspaceZip(zr *zip.Reader, dst string) error {
 		// Skip runtime-only entries silently. shouldHideTenantPath is the
 		// same predicate the file editor uses to hide these from the admin,
 		// so what gets dropped here is consistent with the rest of the UI.
-		if shouldHideTenantPath(cleaned, f.FileInfo().IsDir()) {
+		if dropFn(cleaned, f.FileInfo().IsDir()) {
 			continue
 		}
 		target := filepath.Join(dst, filepath.FromSlash(rel))

@@ -34,12 +34,18 @@ type Workspace struct {
 	HostPath          string
 	IsDefaultAuto     bool
 	IsAvailableManual bool
-	RolePolicyJSON    []byte
-	FrontendBuiltAt   *time.Time
-	FrontendBuildLog  string
-	Version           int64
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	// IsRaw, when true, tells the provisioner to copy the workspace's home/
+	// contents into the tenant volume verbatim and skip the default
+	// SeedDashboardPassword / LiteLLM key generation +
+	// SubstituteConfigPlaceholders / WriteLauncherPolicy steps. The
+	// operator owns the entire boot state.
+	IsRaw            bool
+	RolePolicyJSON   []byte
+	FrontendBuiltAt  *time.Time
+	FrontendBuildLog string
+	Version          int64
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // RolePolicy unmarshals the JSONB column into a typed policy struct and
@@ -57,14 +63,14 @@ func (w *Workspace) RolePolicy() policy.RolePolicy {
 type WorkspaceStore struct{ DB *DB }
 
 const workspaceCols = `id, name, slug, description, host_path,
-    is_default_auto, is_available_manual, role_policy_json,
+    is_default_auto, is_available_manual, is_raw, role_policy_json,
     frontend_built_at, frontend_build_log, version, created_at, updated_at`
 
 func scanWorkspace(row pgx.Row) (*Workspace, error) {
 	var w Workspace
 	err := row.Scan(
 		&w.ID, &w.Name, &w.Slug, &w.Description, &w.HostPath,
-		&w.IsDefaultAuto, &w.IsAvailableManual, &w.RolePolicyJSON,
+		&w.IsDefaultAuto, &w.IsAvailableManual, &w.IsRaw, &w.RolePolicyJSON,
 		&w.FrontendBuiltAt, &w.FrontendBuildLog, &w.Version,
 		&w.CreatedAt, &w.UpdatedAt,
 	)
@@ -99,11 +105,11 @@ func (s *WorkspaceStore) Insert(ctx context.Context, w *Workspace) error {
 	const q = `
         INSERT INTO workspaces
             (id, name, slug, description, host_path,
-             is_default_auto, is_available_manual, role_policy_json, version)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`
+             is_default_auto, is_available_manual, is_raw, role_policy_json, version)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`
 	if _, err := tx.Exec(ctx, q,
 		w.ID, w.Name, w.Slug, w.Description, w.HostPath,
-		w.IsDefaultAuto, w.IsAvailableManual, w.RolePolicyJSON, w.Version,
+		w.IsDefaultAuto, w.IsAvailableManual, w.IsRaw, w.RolePolicyJSON, w.Version,
 	); err != nil {
 		return err
 	}
@@ -132,14 +138,15 @@ func (s *WorkspaceStore) Update(ctx context.Context, w *Workspace) error {
             host_path = $5,
             is_default_auto = $6,
             is_available_manual = $7,
-            role_policy_json = $8,
+            is_raw = $8,
+            role_policy_json = $9,
             version = version + 1,
             updated_at = now()
         WHERE id = $1
         RETURNING version, updated_at`
 	if err := tx.QueryRow(ctx, q,
 		w.ID, w.Name, w.Slug, w.Description, w.HostPath,
-		w.IsDefaultAuto, w.IsAvailableManual, w.RolePolicyJSON,
+		w.IsDefaultAuto, w.IsAvailableManual, w.IsRaw, w.RolePolicyJSON,
 	).Scan(&w.Version, &w.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrWorkspaceNotFound
