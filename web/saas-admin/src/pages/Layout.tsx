@@ -39,11 +39,11 @@ export function Layout() {
     status.state === "authenticated" && status.me.platform_role === "platform_admin";
 
   return (
-    <div className="flex h-full min-h-0">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950">
-        <div className="border-b border-zinc-800 px-4 py-4">
-          <div className="text-sm font-semibold text-brand-500">Picoclaw SaaS</div>
-          <div className="text-xs text-zinc-500">control plane</div>
+    <div className="flex h-full min-h-0 bg-background text-foreground">
+      <aside className="flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+        <div className="border-b border-sidebar-border px-4 py-4">
+          <div className="text-sm font-semibold text-primary">Picoclaw SaaS</div>
+          <div className="text-xs text-muted-foreground">control plane</div>
         </div>
         <nav className="min-h-0 flex-1 overflow-y-auto py-2">
           {isPlatformAdmin && (
