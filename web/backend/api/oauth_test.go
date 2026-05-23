@@ -242,6 +242,75 @@ func TestOAuthProvidersAutoRefreshesAnthropicCredential(t *testing.T) {
 	}
 }
 
+func TestRefreshOAuthCredentialsOnceRefreshesBeforeExpiry(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+	resetOAuthHooks(t)
+
+	now := time.Now().Truncate(time.Second)
+	if err := auth.SetCredential(oauthProviderOpenAI, &auth.AuthCredential{
+		AccessToken:  "soon-expiring-openai-token",
+		RefreshToken: "openai-refresh-token",
+		AccountID:    "acct_123",
+		Email:        "user@example.com",
+		ExpiresAt:    now.Add(9 * time.Minute),
+		Provider:     oauthProviderOpenAI,
+		AuthMethod:   oauthMethodCodexCLI,
+	}); err != nil {
+		t.Fatalf("SetCredential: %v", err)
+	}
+
+	refreshCalls := 0
+	refreshedExpiresAt := now.Add(time.Hour)
+	oauthRefreshAccessToken = func(
+		cred *auth.AuthCredential,
+		cfg auth.OAuthProviderConfig,
+	) (*auth.AuthCredential, error) {
+		refreshCalls++
+		if cfg.ClientID != auth.OpenAIOAuthConfig().ClientID {
+			t.Fatalf("ClientID = %q, want OpenAI OAuth client", cfg.ClientID)
+		}
+		if cred.RefreshToken != "openai-refresh-token" {
+			t.Fatalf("RefreshToken = %q, want openai-refresh-token", cred.RefreshToken)
+		}
+		return &auth.AuthCredential{
+			AccessToken: "fresh-openai-token",
+			ExpiresAt:   refreshedExpiresAt,
+			Provider:    oauthProviderOpenAI,
+		}, nil
+	}
+
+	h := NewHandler(configPath)
+	h.refreshOAuthCredentialsOnce(now, 10*time.Minute)
+
+	if refreshCalls != 1 {
+		t.Fatalf("refresh calls = %d, want 1", refreshCalls)
+	}
+
+	stored, err := auth.GetCredential(oauthProviderOpenAI)
+	if err != nil {
+		t.Fatalf("GetCredential: %v", err)
+	}
+	if stored == nil {
+		t.Fatal("stored credential missing")
+	}
+	if stored.AccessToken != "fresh-openai-token" {
+		t.Fatalf("access token = %q, want fresh-openai-token", stored.AccessToken)
+	}
+	if stored.RefreshToken != "openai-refresh-token" {
+		t.Fatalf("refresh token = %q, want preserved refresh token", stored.RefreshToken)
+	}
+	if stored.AuthMethod != oauthMethodCodexCLI {
+		t.Fatalf("auth method = %q, want %q", stored.AuthMethod, oauthMethodCodexCLI)
+	}
+	if stored.AccountID != "acct_123" || stored.Email != "user@example.com" {
+		t.Fatalf("stored identity = account %q email %q, want preserved identity", stored.AccountID, stored.Email)
+	}
+	if !stored.ExpiresAt.Equal(refreshedExpiresAt) {
+		t.Fatalf("expires at = %s, want %s", stored.ExpiresAt, refreshedExpiresAt)
+	}
+}
+
 func TestImportClaudeCodeCredentialRefreshesExpiredToken(t *testing.T) {
 	_, cleanup := setupOAuthTestEnv(t)
 	defer cleanup()

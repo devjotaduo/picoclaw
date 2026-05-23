@@ -43,10 +43,13 @@ const (
 )
 
 const (
-	oauthBrowserFlowTTL    = 10 * time.Minute
-	oauthDeviceCodeFlowTTL = 15 * time.Minute
-	oauthTerminalFlowGC    = 30 * time.Minute
-	oauthGHCLIImportTTL    = 5 * time.Second
+	oauthBrowserFlowTTL      = 10 * time.Minute
+	oauthDeviceCodeFlowTTL   = 15 * time.Minute
+	oauthTerminalFlowGC      = 30 * time.Minute
+	oauthGHCLIImportTTL      = 5 * time.Second
+	oauthAutoRefreshEvery    = time.Minute
+	oauthAutoRefreshBefore   = 10 * time.Minute
+	oauthStatusRefreshBefore = 5 * time.Minute
 )
 
 var oauthProviderOrder = []string{
@@ -198,12 +201,76 @@ func (h *Handler) handleListOAuthProviders(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *Handler) refreshOAuthCredentialForStatus(provider string, cred *auth.AuthCredential) *auth.AuthCredential {
-	if cred == nil || !cred.NeedsRefresh() || strings.TrimSpace(cred.RefreshToken) == "" {
+	return h.refreshOAuthCredentialIfDue(provider, cred, oauthNow(), oauthStatusRefreshBefore)
+}
+
+// StartOAuthAutoRefresh keeps OAuth credentials fresh even when the credentials
+// page is not open.
+func (h *Handler) StartOAuthAutoRefresh() {
+	h.oauthAutoRefreshOnce.Do(func() {
+		stop := make(chan struct{})
+		h.oauthAutoRefreshStop = stop
+		go h.runOAuthAutoRefresh(stop)
+	})
+}
+
+func (h *Handler) stopOAuthAutoRefresh() {
+	h.oauthAutoRefreshStopOnce.Do(func() {
+		if h.oauthAutoRefreshStop != nil {
+			close(h.oauthAutoRefreshStop)
+		}
+	})
+}
+
+func (h *Handler) runOAuthAutoRefresh(stop <-chan struct{}) {
+	h.refreshOAuthCredentialsOnce(oauthNow(), oauthAutoRefreshBefore)
+
+	ticker := time.NewTicker(oauthAutoRefreshEvery)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			h.refreshOAuthCredentialsOnce(oauthNow(), oauthAutoRefreshBefore)
+		case <-stop:
+			return
+		}
+	}
+}
+
+func (h *Handler) refreshOAuthCredentialsOnce(now time.Time, refreshBefore time.Duration) {
+	for _, provider := range oauthProviderOrder {
+		cred, err := oauthGetCredential(provider)
+		if err != nil {
+			logger.ErrorC("oauth", fmt.Sprintf("oauth warning: could not load %s credentials for refresh: %v", provider, err))
+			continue
+		}
+		h.refreshOAuthCredentialIfDue(provider, cred, now, refreshBefore)
+	}
+}
+
+func (h *Handler) refreshOAuthCredentialIfDue(provider string, cred *auth.AuthCredential, now time.Time, refreshBefore time.Duration) *auth.AuthCredential {
+	if cred == nil || !oauthCredentialRefreshDue(cred, now, refreshBefore) || strings.TrimSpace(cred.RefreshToken) == "" {
 		return cred
 	}
 
 	cfg, err := oauthConfigForProvider(provider)
 	if err != nil {
+		return cred
+	}
+
+	h.oauthCredentialMu.Lock()
+	defer h.oauthCredentialMu.Unlock()
+
+	current, err := oauthGetCredential(provider)
+	if err != nil {
+		logger.ErrorC("oauth", fmt.Sprintf("oauth warning: could not reload %s credentials before refresh: %v", provider, err))
+		return cred
+	}
+	if current != nil {
+		cred = current
+	}
+	if cred == nil || !oauthCredentialRefreshDue(cred, now, refreshBefore) || strings.TrimSpace(cred.RefreshToken) == "" {
 		return cred
 	}
 
@@ -242,6 +309,16 @@ func (h *Handler) refreshOAuthCredentialForStatus(provider string, cred *auth.Au
 		return cred
 	}
 	return &cp
+}
+
+func oauthCredentialRefreshDue(cred *auth.AuthCredential, now time.Time, refreshBefore time.Duration) bool {
+	if cred == nil || cred.ExpiresAt.IsZero() {
+		return false
+	}
+	if refreshBefore < 0 {
+		refreshBefore = 0
+	}
+	return !now.Add(refreshBefore).Before(cred.ExpiresAt)
 }
 
 func (h *Handler) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
