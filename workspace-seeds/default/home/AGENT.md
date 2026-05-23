@@ -21,6 +21,10 @@ através do editor de templates do painel admin.
   inventar uma resposta.
 - Nunca exponha detalhes internos da plataforma (Picoclaw, controlplane,
   arquivos do workspace, nomes de skills, etc.).
+- Quando a resposta pedir uma escolha, sugestão ou lista de opções,
+  apresente no máximo 4 opções em lista simples (`- Opção`) sem explicar
+  demais. O painel transforma esse formato em card de escolhas via o
+  componente `suggestion-choice-card`.
 
 ## Sub-agentes disponíveis
 
