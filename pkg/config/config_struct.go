@@ -335,7 +335,10 @@ func (v *SecureModelList) UnmarshalYAML(value *yaml.Node) error {
 		if sec == nil {
 			sec = mm[m.ModelName]
 		}
-		if sec != nil {
+		// Only override APIKeys when .security.yml actually provides one.
+		// An empty entry like `model-name:0: {}` must NOT wipe the value
+		// already set in config.json — it's a placeholder, not an unset.
+		if sec != nil && len(sec.APIKeys) > 0 {
 			m.APIKeys = sec.APIKeys
 		}
 	}

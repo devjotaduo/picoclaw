@@ -170,6 +170,52 @@ func TestSecurityConfigWithAPIKeysArray(t *testing.T) {
 	})
 }
 
+// Empty entries in .security.yml (e.g. `model-name:0: {}`) are placeholders;
+// they must not wipe an api_keys value already set in config.json.
+func TestSecurityConfigEmptyEntryPreservesConfigJSONKeys(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configPath := filepath.Join(tmpDir, "config.json")
+	configContent := `{
+  "version": 3,
+  "model_list": [
+    {
+      "model_name": "default",
+      "model": "openai/gpt-4o-mini",
+      "api_base": "http://litellm:4000/v1",
+      "api_keys": ["sk-from-config-json"]
+    },
+    {
+      "model_name": "override-me",
+      "model": "openai/gpt-4o",
+      "api_keys": ["sk-from-config-json-original"]
+    }
+  ]
+}`
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o644))
+
+	securityPath := filepath.Join(tmpDir, SecurityConfigFile)
+	securityContent := `model_list:
+  default:0: {}
+  override-me:0:
+    api_keys:
+      - "sk-from-security-yml"
+`
+	require.NoError(t, os.WriteFile(securityPath, []byte(securityContent), 0o600))
+
+	cfg, err := LoadConfig(configPath)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(cfg.ModelList))
+
+	// Empty `default:0: {}` entry must NOT wipe config.json's key.
+	assert.Equal(t, "sk-from-config-json", cfg.ModelList[0].APIKey(),
+		"empty .security.yml entry must preserve config.json's api_keys")
+
+	// Non-empty `override-me:0` entry takes priority over config.json.
+	assert.Equal(t, "sk-from-security-yml", cfg.ModelList[1].APIKey(),
+		"non-empty .security.yml api_keys must override config.json")
+}
+
 func TestAllSecurityKeysAccessible(t *testing.T) {
 	t.Run("All security keys accessible via Key() methods including file://", func(t *testing.T) {
 		tmpDir := t.TempDir()
