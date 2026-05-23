@@ -174,6 +174,19 @@ func LauncherDashboardAuth(cfg LauncherDashboardAuthConfig, next http.Handler) h
 			return
 		}
 		if isPublicLauncherDashboardPath(r.Method, p) {
+			// Public paths bypass the auth check, but if signed
+			// trusted-gateway headers ARE present we still annotate the
+			// context with the verified claims so handlers (notably
+			// /api/auth/status) can short-circuit any "not initialized"
+			// state for HMAC-authenticated callers. The local-cookie
+			// case stays a no-op pass-through.
+			if strings.TrimSpace(cfg.TrustedGatewaySecret) != "" {
+				if claims, ok := validTrustedGatewayAuth(r, cfg); ok {
+					ctx := context.WithValue(r.Context(), trustedGatewayClaimsContextKey{}, claims)
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+			}
 			next.ServeHTTP(w, r)
 			return
 		}

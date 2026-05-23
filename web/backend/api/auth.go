@@ -197,6 +197,23 @@ func (h *launcherAuthHandlers) handleStatus(w http.ResponseWriter, r *http.Reque
 		_, _ = w.Write(enc)
 		return
 	}
+	// Local-mode hybrid: when the request reached us with valid trusted-gateway
+	// claims in context, the controlplane already vouched for the caller —
+	// same semantic guarantee as trusted_gateway mode, just unlocked per-request.
+	// Without this, the SPA's session guard sees initialized=false (the
+	// dashboardauth.db is empty for is_raw workspaces that ship no password)
+	// and redirects HMAC-authenticated magic-link visitors to /launcher-setup.
+	if _, ok := middleware.TrustedGatewayClaims(r); ok {
+		resp := launcherAuthStatusResponse{Authenticated: true, Initialized: true}
+		enc, err := json.Marshal(resp)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			writeErrorf(w, "marshal response failed: %v", err)
+			return
+		}
+		_, _ = w.Write(enc)
+		return
+	}
 	authed := false
 	if c, err := r.Cookie(middleware.LauncherDashboardCookieName); err == nil {
 		authed = subtle.ConstantTimeCompare([]byte(c.Value), []byte(h.sessionCookie)) == 1
