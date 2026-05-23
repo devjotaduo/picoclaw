@@ -78,6 +78,7 @@
     },
     "placeholder": "Pedir alterações adicionais",
     "supportWhatsapp": "Falar com o suporte",
+    "testAttendance": "Testar o atendimento",
     "disabledPlaceholder": {
       "gatewayUnknown": "Não é possível conversar: o status do Gateway ainda está sendo verificado. Aguarde e atualize a página ou reinicie o Launcher se necessário.",
       "gatewayStarting": "Não é possível conversar: o Gateway está iniciando. Aguarde a inicialização concluir e tente novamente.",

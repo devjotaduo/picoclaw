@@ -21,7 +21,6 @@ import { TypingIndicator } from "@/components/chat/typing-indicator"
 import { UserMessage } from "@/components/chat/user-message"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { useChatModels } from "@/hooks/use-chat-models"
 import { useGateway } from "@/hooks/use-gateway"
 import { usePicoChat } from "@/hooks/use-pico-chat"
@@ -324,7 +323,6 @@ export function ChatPage() {
     assistantDetailsPolicyReady &&
     launcherPolicyQ.data.ui?.show_tool_calls !== false
   const canToggleAssistantDetails = canShowReasoning || canShowToolCalls
-  const showChatTitleExtra = isVisible("chat.title_extra", false)
   const showModelSelector = isVisible("chat.model_selector", false)
   const showAssistantDetailsToggle = isVisible(
     "chat.assistant_details_toggle",
@@ -346,11 +344,6 @@ export function ChatPage() {
         (task) => task.label.trim() && task.prompt.trim(),
       )
     : []
-  const hasChatHeaderControls =
-    showChatTitleExtra &&
-    showModelSelector &&
-    canChooseModel &&
-    canShowModelSelector
   const inputDisabledReason = resolveChatInputDisabledReason({
     hasDefaultModel,
     connectionState,
@@ -526,43 +519,18 @@ export function ChatPage() {
           className={`transition-shadow ${
             hasScrolled ? "shadow-xs" : "shadow-none"
           }`}
-          titleExtra={
-            hasChatHeaderControls ? (
-              <div className="flex min-w-0 items-center gap-2">
-                <ModelSelector
-                  defaultModelName={defaultModelName}
-                  apiKeyModels={apiKeyModels}
-                  oauthModels={oauthModels}
-                  localModels={localModels}
-                  onValueChange={handleSetDefault}
-                />
-              </div>
-            ) : null
-          }
+          titleExtra={null}
         >
-          {showAssistantDetailsToggle && canToggleAssistantDetails && (
-            <div className="border-border/60 hidden items-center gap-2 rounded-lg border px-3 py-1.5 sm:flex">
-              <span className="text-muted-foreground text-sm">
-                {t("chat.showAssistantDetails")}
-              </span>
-              <Switch
-                checked={showAssistantDetails}
-                onCheckedChange={setShowAssistantDetails}
-                aria-label={t("chat.showAssistantDetails")}
-                size="sm"
-              />
-            </div>
-          )}
-
           {showNewChatButton && (
             <Button
               variant="secondary"
-              size="sm"
+              size="icon"
               onClick={newChat}
-              className="h-9 gap-2"
+              className="h-9 w-9"
+              aria-label={t("chat.newChat")}
+              title={t("chat.newChat")}
             >
               <IconPlus className="size-4" />
-              <span className="hidden sm:inline">{t("chat.newChat")}</span>
             </Button>
           )}
 
@@ -696,6 +664,22 @@ export function ChatPage() {
           inputDisabledReason={inputDisabledReason}
           canSend={canSubmit}
           contextUsage={showContextUsage ? contextUsage : undefined}
+          modelSelector={
+            showModelSelector && canChooseModel && canShowModelSelector ? (
+              <ModelSelector
+                defaultModelName={defaultModelName}
+                apiKeyModels={apiKeyModels}
+                oauthModels={oauthModels}
+                localModels={localModels}
+                onValueChange={handleSetDefault}
+              />
+            ) : undefined
+          }
+          showAssistantDetailsToggle={
+            showAssistantDetailsToggle && canToggleAssistantDetails
+          }
+          assistantDetailsEnabled={showAssistantDetails}
+          onAssistantDetailsChange={setShowAssistantDetails}
           showQualityIndicator={showQualityIndicator}
           attendantTestActive={
             showAttendantTestButton && testingPublicAttendant
