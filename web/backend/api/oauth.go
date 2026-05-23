@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -32,6 +33,7 @@ const (
 	oauthMethodDeviceCode = "device_code"
 	oauthMethodToken      = "token"
 	oauthMethodClaudeCode = "claude_code"
+	oauthMethodCodexCLI   = "codex_cli"
 	oauthMethodGHCLI      = "gh_cli"
 
 	oauthFlowPending = "pending"
@@ -55,7 +57,7 @@ var oauthProviderOrder = []string{
 }
 
 var oauthProviderMethods = map[string][]string{
-	oauthProviderOpenAI:            {oauthMethodBrowser, oauthMethodDeviceCode, oauthMethodToken},
+	oauthProviderOpenAI:            {oauthMethodBrowser, oauthMethodDeviceCode, oauthMethodCodexCLI, oauthMethodToken},
 	oauthProviderAnthropic:         {oauthMethodBrowser, oauthMethodToken, oauthMethodClaudeCode},
 	oauthProviderGoogleAntigravity: {oauthMethodBrowser},
 	oauthProviderGitHubCopilot:     {oauthMethodGHCLI, oauthMethodToken},
@@ -110,16 +112,18 @@ type oauthFlow struct {
 }
 
 type oauthProviderStatus struct {
-	Provider    string   `json:"provider"`
-	DisplayName string   `json:"display_name"`
-	Methods     []string `json:"methods"`
-	LoggedIn    bool     `json:"logged_in"`
-	Status      string   `json:"status"`
-	AuthMethod  string   `json:"auth_method,omitempty"`
-	ExpiresAt   string   `json:"expires_at,omitempty"`
-	AccountID   string   `json:"account_id,omitempty"`
-	Email       string   `json:"email,omitempty"`
-	ProjectID   string   `json:"project_id,omitempty"`
+	Provider     string   `json:"provider"`
+	DisplayName  string   `json:"display_name"`
+	Methods      []string `json:"methods"`
+	LoggedIn     bool     `json:"logged_in"`
+	Status       string   `json:"status"`
+	AuthMethod   string   `json:"auth_method,omitempty"`
+	ExpiresAt    string   `json:"expires_at,omitempty"`
+	ExpiresIn    int64    `json:"expires_in_seconds,omitempty"`
+	TokenPreview string   `json:"token_preview,omitempty"`
+	AccountID    string   `json:"account_id,omitempty"`
+	Email        string   `json:"email,omitempty"`
+	ProjectID    string   `json:"project_id,omitempty"`
 }
 
 type oauthFlowResponse struct {
@@ -169,8 +173,10 @@ func (h *Handler) handleListOAuthProviders(w http.ResponseWriter, r *http.Reques
 			item.AccountID = cred.AccountID
 			item.Email = cred.Email
 			item.ProjectID = cred.ProjectID
+			item.TokenPreview = maskCredentialToken(cred.AccessToken)
 			if !cred.ExpiresAt.IsZero() {
 				item.ExpiresAt = cred.ExpiresAt.Format(time.RFC3339)
+				item.ExpiresIn = int64(time.Until(cred.ExpiresAt).Seconds())
 			}
 			switch {
 			case cred.IsExpired():
@@ -424,6 +430,24 @@ func (h *Handler) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
 			"status":   "ok",
 			"provider": provider,
 			"method":   oauthMethodClaudeCode,
+		})
+		return
+
+	case oauthMethodCodexCLI:
+		cred, err := importCodexCLICredential()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to import Codex CLI credential: %v", err), http.StatusInternalServerError)
+			return
+		}
+		if err := h.persistCredentialAndConfig(provider, oauthMethodCodexCLI, cred); err != nil {
+			http.Error(w, fmt.Sprintf("failed to save credential: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":   "ok",
+			"provider": provider,
+			"method":   oauthMethodCodexCLI,
 		})
 		return
 
@@ -1076,6 +1100,114 @@ func defaultModelConfigForProvider(provider, authMethod string) *config.ModelCon
 	}
 }
 
+func maskCredentialToken(token string) string {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return ""
+	}
+	if len(token) <= 4 {
+		return "••••"
+	}
+	return "•••• •••• •••• " + token[len(token)-4:]
+}
+
+func importCodexCLICredential() (*auth.AuthCredential, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("finding home dir: %w", err)
+	}
+	checkedPaths := codexCredentialPaths(homeDir)
+	for _, path := range checkedPaths {
+		cred, readErr := importCodexCredentialFile(path)
+		if readErr == nil && cred != nil {
+			return cred, nil
+		}
+	}
+	return nil, fmt.Errorf("no Codex CLI credentials found (checked %s)", strings.Join(checkedPaths, ", "))
+}
+
+func codexCredentialPaths(homeDir string) []string {
+	paths := []string{filepath.Join(homeDir, ".codex", "auth.json")}
+	if codexHome := strings.TrimSpace(os.Getenv("CODEX_HOME")); codexHome != "" {
+		paths = append(paths, filepath.Join(codexHome, "auth.json"))
+	}
+	if configDir, err := os.UserConfigDir(); err == nil && configDir != "" {
+		paths = append(paths,
+			filepath.Join(configDir, "codex", "auth.json"),
+			filepath.Join(configDir, "Codex", "auth.json"),
+		)
+	}
+	return uniqueCleanPaths(paths)
+}
+
+func importCodexCredentialFile(path string) (*auth.AuthCredential, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var raw struct {
+		AuthMode string `json:"auth_mode"`
+		APIKey   string `json:"OPENAI_API_KEY"`
+		Tokens   struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+			AccountID    string `json:"account_id"`
+			IDToken      string `json:"id_token"`
+		} `json:"tokens"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+
+	accessToken := strings.TrimSpace(raw.Tokens.AccessToken)
+	if accessToken == "" {
+		accessToken = strings.TrimSpace(raw.APIKey)
+	}
+	if accessToken == "" {
+		return nil, fmt.Errorf("no OpenAI token found in %s", path)
+	}
+
+	cred := &auth.AuthCredential{
+		AccessToken:  accessToken,
+		RefreshToken: strings.TrimSpace(raw.Tokens.RefreshToken),
+		AccountID:    strings.TrimSpace(raw.Tokens.AccountID),
+		ExpiresAt:    jwtExpiresAt(accessToken),
+		Provider:     oauthProviderOpenAI,
+		AuthMethod:   oauthMethodCodexCLI,
+	}
+	if cred.ExpiresAt.IsZero() && raw.Tokens.IDToken != "" {
+		cred.ExpiresAt = jwtExpiresAt(raw.Tokens.IDToken)
+	}
+	if cred.NeedsRefresh() && cred.RefreshToken != "" {
+		refreshed, refreshErr := oauthRefreshAccessToken(cred, auth.OpenAIOAuthConfig())
+		if refreshErr != nil {
+			return nil, fmt.Errorf("refreshing Codex CLI credentials: %w", refreshErr)
+		}
+		refreshed.Provider = oauthProviderOpenAI
+		refreshed.AuthMethod = oauthMethodCodexCLI
+		return refreshed, nil
+	}
+	return cred, nil
+}
+
+func jwtExpiresAt(token string) time.Time {
+	parts := strings.Split(token, ".")
+	if len(parts) < 2 {
+		return time.Time{}
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return time.Time{}
+	}
+	var claims struct {
+		Exp int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil || claims.Exp <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(claims.Exp, 0)
+}
+
 // importClaudeCodeCredential reads the Anthropic OAuth token stored by the
 // Claude Code CLI from ~/.claude/.credentials.json.
 func importClaudeCodeCredential() (*auth.AuthCredential, error) {
@@ -1083,7 +1215,35 @@ func importClaudeCodeCredential() (*auth.AuthCredential, error) {
 	if err != nil {
 		return nil, fmt.Errorf("finding home dir: %w", err)
 	}
-	credPath := filepath.Join(homeDir, ".claude", ".credentials.json")
+	checkedPaths := claudeCredentialPaths(homeDir)
+	var lastErr error
+	for _, credPath := range checkedPaths {
+		cred, readErr := importClaudeCodeCredentialFile(credPath)
+		if readErr == nil {
+			return cred, nil
+		}
+		lastErr = readErr
+	}
+	return nil, fmt.Errorf("no Claude Code credentials found (checked %s): %w", strings.Join(checkedPaths, ", "), lastErr)
+}
+
+func claudeCredentialPaths(homeDir string) []string {
+	paths := []string{filepath.Join(homeDir, ".claude", ".credentials.json")}
+	if claudeConfigDir := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); claudeConfigDir != "" {
+		paths = append(paths, filepath.Join(claudeConfigDir, ".credentials.json"))
+	}
+	if configDir, err := os.UserConfigDir(); err == nil && configDir != "" {
+		paths = append(paths,
+			filepath.Join(configDir, "Claude", ".credentials.json"),
+			filepath.Join(configDir, "claude", ".credentials.json"),
+			filepath.Join(configDir, "Claude Code", ".credentials.json"),
+			filepath.Join(configDir, "claude-code", ".credentials.json"),
+		)
+	}
+	return uniqueCleanPaths(paths)
+}
+
+func importClaudeCodeCredentialFile(credPath string) (*auth.AuthCredential, error) {
 	data, err := os.ReadFile(credPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading Claude Code credentials (%s): %w", credPath, err)
@@ -1170,6 +1330,10 @@ func githubCredentialPaths(homeDir string) []string {
 		paths = append(paths, filepath.Join(ghConfigDir, "hosts.yml"))
 	}
 
+	return uniqueCleanPaths(paths)
+}
+
+func uniqueCleanPaths(paths []string) []string {
 	seen := make(map[string]bool, len(paths))
 	unique := make([]string, 0, len(paths))
 	for _, path := range paths {

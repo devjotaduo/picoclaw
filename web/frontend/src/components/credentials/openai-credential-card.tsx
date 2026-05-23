@@ -4,6 +4,7 @@ import {
   IconKey,
   IconLoader2,
   IconPlayerStopFilled,
+  IconTerminal2,
 } from "@tabler/icons-react"
 import { useTranslation } from "react-i18next"
 
@@ -12,6 +13,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 import { CredentialCard } from "./credential-card"
+import {
+  CredentialStatusDetails,
+  tokenPlaceholder,
+} from "./credential-status-details"
 
 interface OpenAICredentialCardProps {
   status?: OAuthProviderStatus
@@ -20,6 +25,7 @@ interface OpenAICredentialCardProps {
   onTokenChange: (value: string) => void
   onStartBrowserOAuth: () => void
   onStartDeviceCode: () => void
+  onImportCodexCLI: () => void
   onStopLoading: () => void
   onSaveToken: () => void
   onAskLogout: () => void
@@ -32,6 +38,7 @@ export function OpenAICredentialCard({
   onTokenChange,
   onStartBrowserOAuth,
   onStartDeviceCode,
+  onImportCodexCLI,
   onStopLoading,
   onSaveToken,
   onAskLogout,
@@ -42,6 +49,7 @@ export function OpenAICredentialCard({
   const deviceLoading = activeAction === "openai:device"
   const oauthLoading = browserLoading || deviceLoading
   const tokenLoading = activeAction === "openai:token"
+  const codexLoading = activeAction === "openai:codex_cli"
 
   return (
     <CredentialCard
@@ -56,13 +64,7 @@ export function OpenAICredentialCard({
       description={t("credentials.providers.openai.description")}
       status={status?.status ?? "not_logged_in"}
       authMethod={status?.auth_method}
-      details={
-        status?.account_id ? (
-          <p>
-            {t("credentials.labels.account")}: {status.account_id}
-          </p>
-        ) : null
-      }
+      details={<CredentialStatusDetails status={status} />}
       actions={
         <div className="border-muted flex h-[120px] flex-col rounded-lg border p-3">
           <div className="flex h-full flex-col gap-3">
@@ -104,6 +106,18 @@ export function OpenAICredentialCard({
                   <IconClockHour4 className="size-4" />
                   {t("credentials.actions.deviceCode")}
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={actionBusy}
+                  onClick={onImportCodexCLI}
+                >
+                  {codexLoading && (
+                    <IconLoader2 className="size-4 animate-spin" />
+                  )}
+                  <IconTerminal2 className="size-4" />
+                  {t("credentials.actions.importCodexCLI")}
+                </Button>
               </div>
             </div>
 
@@ -113,7 +127,10 @@ export function OpenAICredentialCard({
                   value={token}
                   onChange={(e) => onTokenChange(e.target.value)}
                   type="password"
-                  placeholder={t("credentials.fields.openaiToken")}
+                  placeholder={tokenPlaceholder(
+                    status,
+                    t("credentials.fields.openaiToken"),
+                  )}
                 />
                 <Button
                   size="sm"

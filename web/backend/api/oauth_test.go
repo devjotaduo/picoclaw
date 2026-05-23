@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -304,6 +305,50 @@ func TestImportClaudeCodeCredentialRefreshesExpiredToken(t *testing.T) {
 	}
 	if got.AuthMethod != oauthMethodClaudeCode {
 		t.Fatalf("auth method = %q, want %q", got.AuthMethod, oauthMethodClaudeCode)
+	}
+}
+
+func TestImportCodexCLICredentialReadsAuthJSON(t *testing.T) {
+	_, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+	resetOAuthHooks(t)
+
+	codexDir := filepath.Join(os.Getenv("HOME"), ".codex")
+	if err := os.MkdirAll(codexDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	expiresAt := time.Now().Add(time.Hour).Unix()
+	accessToken := testJWTWithExpiry(t, expiresAt)
+	credFile := filepath.Join(codexDir, "auth.json")
+	if err := os.WriteFile(
+		credFile,
+		[]byte(fmt.Sprintf(`{"auth_mode":"chatgpt","tokens":{"access_token":%q,"refresh_token":"refresh-token","account_id":"acct_123"}}`, accessToken)),
+		0o600,
+	); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	got, err := importCodexCLICredential()
+	if err != nil {
+		t.Fatalf("importCodexCLICredential error: %v", err)
+	}
+	if got.AccessToken != accessToken {
+		t.Fatalf("access token mismatch")
+	}
+	if got.RefreshToken != "refresh-token" {
+		t.Fatalf("refresh token = %q, want refresh-token", got.RefreshToken)
+	}
+	if got.AccountID != "acct_123" {
+		t.Fatalf("account id = %q, want acct_123", got.AccountID)
+	}
+	if got.Provider != oauthProviderOpenAI {
+		t.Fatalf("provider = %q, want %q", got.Provider, oauthProviderOpenAI)
+	}
+	if got.AuthMethod != oauthMethodCodexCLI {
+		t.Fatalf("auth method = %q, want %q", got.AuthMethod, oauthMethodCodexCLI)
+	}
+	if got.ExpiresAt.Unix() != expiresAt {
+		t.Fatalf("expires at = %d, want %d", got.ExpiresAt.Unix(), expiresAt)
 	}
 }
 
@@ -777,4 +822,11 @@ func resetOAuthHooks(t *testing.T) {
 		oauthFetchGoogleUserEmailFunc = origFetchGoogleEmail
 		oauthRunGHCLI = origRunGHCLI
 	})
+}
+
+func testJWTWithExpiry(t *testing.T, exp int64) string {
+	t.Helper()
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"exp":%d}`, exp)))
+	return header + "." + payload + ".signature"
 }

@@ -40,6 +40,7 @@ export function CredentialsPage() {
     setCopilotToken,
     startBrowserOAuth,
     startOpenAIDeviceCode,
+    importFromCodexCLI,
     importFromClaudeCode,
     importFromGHCLI,
     stopLoading,
@@ -90,6 +91,7 @@ export function CredentialsPage() {
               onTokenChange={setOpenAIToken}
               onStartBrowserOAuth={() => void startBrowserOAuth("openai")}
               onStartDeviceCode={() => void startOpenAIDeviceCode()}
+              onImportCodexCLI={() => void importFromCodexCLI()}
               onStopLoading={stopLoading}
               onSaveToken={() => void saveToken("openai", openAIToken.trim())}
               onAskLogout={() => askLogout("openai")}

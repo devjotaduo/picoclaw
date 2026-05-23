@@ -233,7 +233,10 @@
       "deviceCode": "设备码",
       "stopLoading": "停止加载",
       "saveToken": "保存",
-      "logout": "退出登录"
+      "logout": "退出登录",
+      "importCodexCLI": "从 Codex CLI 导入",
+      "importClaudeCode": "从 Claude Code 导入",
+      "importGHCLI": "从 GitHub CLI 导入"
     },
     "logoutDialog": {
       "title": "确认退出登录？",
@@ -241,12 +244,16 @@
     },
     "fields": {
       "openaiToken": "OpenAI Token",
-      "anthropicToken": "Anthropic Token"
+      "anthropicToken": "Anthropic Token",
+      "githubToken": "GitHub Token"
     },
     "labels": {
       "account": "账号",
       "email": "邮箱",
-      "project": "项目"
+      "project": "项目",
+      "identifier": "标识符",
+      "token": "Token",
+      "expires": "剩余"
     },
     "errors": {
       "loadFailed": "加载凭据失败",

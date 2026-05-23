@@ -256,6 +256,7 @@
       "stopLoading": "Parar Carregamento",
       "saveToken": "Salvar",
       "logout": "Sair",
+      "importCodexCLI": "Import from Codex CLI",
       "importClaudeCode": "Import from Claude Code",
       "importGHCLI": "Import from GitHub CLI"
     },
@@ -271,7 +272,10 @@
     "labels": {
       "account": "Conta",
       "email": "Email",
-      "project": "Projeto"
+      "project": "Projeto",
+      "identifier": "Identificador",
+      "token": "Token",
+      "expires": "Expira em"
     },
     "errors": {
       "loadFailed": "Falha ao carregar credenciais",

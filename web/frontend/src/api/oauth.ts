@@ -10,6 +10,7 @@ export type OAuthMethod =
   | "device_code"
   | "token"
   | "claude_code"
+  | "codex_cli"
   | "gh_cli"
 
 export interface OAuthProviderStatus {
@@ -20,6 +21,8 @@ export interface OAuthProviderStatus {
   status: "connected" | "expired" | "needs_refresh" | "not_logged_in"
   auth_method?: string
   expires_at?: string
+  expires_in_seconds?: number
+  token_preview?: string
   account_id?: string
   email?: string
   project_id?: string
@@ -127,6 +130,21 @@ export async function importGHCLI(): Promise<{
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ provider: "github-copilot", method: "gh_cli" }),
+    },
+  )
+}
+
+export async function importCodexCLI(): Promise<{
+  status: string
+  provider: string
+  method: string
+}> {
+  return request<{ status: string; provider: string; method: string }>(
+    "/api/oauth/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "openai", method: "codex_cli" }),
     },
   )
 }

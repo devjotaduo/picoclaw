@@ -10,6 +10,7 @@ import type { OAuthProviderStatus } from "@/api/oauth"
 import { Button } from "@/components/ui/button"
 
 import { CredentialCard } from "./credential-card"
+import { CredentialStatusDetails } from "./credential-status-details"
 
 interface AntigravityCredentialCardProps {
   status?: OAuthProviderStatus
@@ -43,20 +44,7 @@ export function AntigravityCredentialCard({
       description={t("credentials.providers.antigravity.description")}
       status={status?.status ?? "not_logged_in"}
       authMethod={status?.auth_method}
-      details={
-        <div className="space-y-1">
-          {status?.email && (
-            <p>
-              {t("credentials.labels.email")}: {status.email}
-            </p>
-          )}
-          {status?.project_id && (
-            <p>
-              {t("credentials.labels.project")}: {status.project_id}
-            </p>
-          )}
-        </div>
-      }
+      details={<CredentialStatusDetails status={status} />}
       actions={
         <div className="border-muted flex h-[120px] flex-col justify-center rounded-lg border p-3">
           <div className="flex flex-wrap items-center gap-2">

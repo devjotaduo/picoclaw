@@ -11,6 +11,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 import { CredentialCard } from "./credential-card"
+import {
+  CredentialStatusDetails,
+  tokenPlaceholder,
+} from "./credential-status-details"
 
 interface CopilotCredentialCardProps {
   status?: OAuthProviderStatus
@@ -51,6 +55,7 @@ export function CopilotCredentialCard({
       description={t("credentials.providers.copilot.description")}
       status={status?.status ?? "not_logged_in"}
       authMethod={status?.auth_method}
+      details={<CredentialStatusDetails status={status} />}
       actions={
         <div className="border-muted flex flex-col rounded-lg border p-3">
           <div className="flex flex-col gap-3">
@@ -73,7 +78,10 @@ export function CopilotCredentialCard({
                 value={token}
                 onChange={(e) => onTokenChange(e.target.value)}
                 type="password"
-                placeholder={t("credentials.fields.githubToken")}
+                placeholder={tokenPlaceholder(
+                  status,
+                  t("credentials.fields.githubToken"),
+                )}
               />
               <Button
                 size="sm"
