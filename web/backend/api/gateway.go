@@ -207,7 +207,8 @@ func isLikelyGatewayProcess(pid int) (bool, bool) {
 	// to overwrite, blocking every subsequent auto-start.
 	if proc, err := os.FindProcess(pid); err == nil {
 		if sigErr := proc.Signal(syscall.Signal(0)); sigErr != nil {
-			if errors.Is(sigErr, syscall.ESRCH) || strings.Contains(strings.ToLower(sigErr.Error()), "no such process") {
+			if errors.Is(sigErr, syscall.ESRCH) ||
+				strings.Contains(strings.ToLower(sigErr.Error()), "no such process") {
 				return false, true
 			}
 			// EPERM / other: fall through to ps, which may still succeed
