@@ -7,6 +7,10 @@ import { toast } from "sonner"
 
 import { type AgentSummary, getInternalAgents } from "@/api/internal-agents"
 import { getLauncherPolicy } from "@/api/launcher-policy"
+import {
+  Conversation,
+  ConversationContent,
+} from "@/components/ai-elements/conversation"
 import type { AuraPalette } from "@/components/chat/ai-orb-avatar"
 import { AssistantMessage } from "@/components/chat/assistant-message"
 import {
@@ -553,12 +557,12 @@ export function ChatPage() {
           )}
         </PageHeader>
 
-        <div
+        <Conversation
           ref={scrollRef}
           onScroll={handleScroll}
-          className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto px-4 py-6 md:px-8 lg:px-24 xl:px-48"
+          className="px-4 py-6 md:px-8 lg:px-24 xl:px-48"
         >
-          <div className="mx-auto flex w-full max-w-250 flex-col gap-8 pb-8">
+          <ConversationContent className="max-w-250 pb-8">
             {messages.length === 0 && !isTyping && (
               <ChatEmptyState
                 hasAvailableModels={hasAvailableModels}
@@ -631,8 +635,8 @@ export function ChatPage() {
             })}
 
             {isTyping && <TypingIndicator />}
-          </div>
-        </div>
+          </ConversationContent>
+        </Conversation>
 
         <input
           ref={fileInputRef}

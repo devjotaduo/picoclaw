@@ -8,7 +8,11 @@ import {
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
-import { MessageResponse } from "@/components/ai-elements/message"
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message"
 import { SuggestionChoiceCard } from "@/components/chat/suggestion-choice-card"
 import { Button } from "@/components/ui/button"
 import { formatMessageTime } from "@/hooks/use-pico-chat"
@@ -215,7 +219,7 @@ export function AssistantMessage({
   }
 
   return (
-    <div className="group flex w-full flex-col gap-1.5">
+    <Message from="assistant" className="max-w-full gap-1.5">
       {!isCollapsedBlock && messageMeta.length > 0 && (
         <div className="text-muted-foreground/60 flex items-center justify-between gap-2 px-1 text-xs opacity-70">
           <div className="flex items-center gap-2">
@@ -225,7 +229,7 @@ export function AssistantMessage({
       )}
 
       {(hasText || isCollapsedBlock || hasToolCalls) && (
-        <div
+        <MessageContent
           className={cn(
             "relative overflow-hidden rounded-xl border",
             isCollapsedBlock
@@ -277,7 +281,7 @@ export function AssistantMessage({
               )}
             </Button>
           )}
-        </div>
+        </MessageContent>
       )}
 
       {imageAttachments.length > 0 && (
@@ -342,6 +346,6 @@ export function AssistantMessage({
           ))}
         </div>
       )}
-    </div>
+    </Message>
   )
 }

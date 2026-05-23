@@ -1,5 +1,9 @@
 import { IconFileText } from "@tabler/icons-react"
 
+import {
+  Message,
+  MessageContent,
+} from "@/components/ai-elements/message"
 import { cn } from "@/lib/utils"
 import type { ChatAttachment } from "@/store/chat"
 
@@ -30,7 +34,7 @@ export function UserMessage({ content, attachments = [] }: UserMessageProps) {
   }
 
   return (
-    <div className="flex w-full flex-col items-end gap-1.5">
+    <Message from="user" className="max-w-full gap-1.5">
       {imageAttachments.length > 0 && (
         <div className="flex max-w-[70%] flex-wrap justify-end gap-2">
           {imageAttachments.map((attachment, index) => (
@@ -81,7 +85,7 @@ export function UserMessage({ content, attachments = [] }: UserMessageProps) {
       )}
 
       {hasText && (
-        <div
+        <MessageContent
           className={cn(
             "max-w-[70%] wrap-break-word whitespace-pre-wrap",
             isCommand
@@ -99,8 +103,8 @@ export function UserMessage({ content, attachments = [] }: UserMessageProps) {
           ) : (
             content
           )}
-        </div>
+        </MessageContent>
       )}
-    </div>
+    </Message>
   )
 }
