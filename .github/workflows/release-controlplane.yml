@@ -1,12 +1,12 @@
-name: Build & push controlplane image
+name: Build & push SaaS images
 
-# Builds the SaaS controlplane image (docker/saas/Dockerfile) and pushes
-# it to GHCR. The VPS at 155.138.210.187 polls this image every 2 min via
+# Builds the SaaS runtime images and pushes them to GHCR. The VPS at
+# 155.138.210.187 polls these images every 2 min via
 # scripts/auto-deploy/picoclaw-deploy.sh — see docs/operations/auto-deploy.md.
 #
 # Tags published:
-#   - :main      rolling tag for the prod VPS
-#   - :sha-<7>   immutable per-commit, for rollback
+#   - :main        rolling tag for the prod VPS
+#   - :sha-<full>  immutable per-commit, for rollback
 #
 # Uses the built-in GITHUB_TOKEN for GHCR auth — no additional secrets
 # need to live in repo settings. The VPS authenticates with its own PAT,
@@ -18,12 +18,20 @@ on:
     paths:
       - "cmd/picoclaw-saas/**"
       - "cmd/picoclaw-tenantctl/**"
+      - "cmd/picoclaw/**"
       - "internal/saas/**"
+      - "internal/**"
       - "pkg/**"
       - "web/saas-admin/**"
+      - "web/frontend/**"
+      - "web/backend/**"
       - "go.mod"
       - "go.sum"
       - "docker/saas/Dockerfile"
+      - "docker/saas/docker-compose.prod.yml"
+      - "docker/saas/opencrm/**"
+      - "docker/Dockerfile.launcher"
+      - "docker/Dockerfile.browser-sidecar"
       - ".github/workflows/release-controlplane.yml"
   # Manual rebuild for incident response or after fixing the Dockerfile.
   workflow_dispatch:
@@ -38,7 +46,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/picoclaw-saas
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}
 
 jobs:
   build-and-push:
@@ -58,26 +66,60 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compute image tags
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=main,enable={{is_default_branch}}
-            type=sha,format=short,prefix=sha-
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          ns="${REGISTRY}/${IMAGE_NAMESPACE}"
+          echo "controlplane=${ns}/picoclaw-saas:main,${ns}/picoclaw-saas:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "launcher=${ns}/picoclaw-launcher:main,${ns}/picoclaw-launcher:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "browser=${ns}/picoclaw-browser-sidecar:main,${ns}/picoclaw-browser-sidecar:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "opencrm=${ns}/picoclaw-opencrm:main,${ns}/picoclaw-opencrm:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push
+      - name: Build and push controlplane
         uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/saas/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.tags.outputs.controlplane }}
           # GHA cache halves the build time on subsequent runs by reusing
           # the multi-stage Go/Node layers.
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=controlplane
+          cache-to: type=gha,mode=max,scope=controlplane
           # Only amd64 — the VPS is x86. Add arm64 later if you put
           # tenants on a Pi or ARM VPS.
+          platforms: linux/amd64
+
+      - name: Build and push launcher
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile.launcher
+          push: true
+          tags: ${{ steps.tags.outputs.launcher }}
+          cache-from: type=gha,scope=launcher
+          cache-to: type=gha,mode=max,scope=launcher
+          platforms: linux/amd64
+
+      - name: Build and push browser sidecar
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile.browser-sidecar
+          push: true
+          tags: ${{ steps.tags.outputs.browser }}
+          cache-from: type=gha,scope=browser-sidecar
+          cache-to: type=gha,mode=max,scope=browser-sidecar
+          platforms: linux/amd64
+
+      - name: Build and push OpenCRM
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/saas/opencrm/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.opencrm }}
+          cache-from: type=gha,scope=opencrm
+          cache-to: type=gha,mode=max,scope=opencrm
           platforms: linux/amd64
