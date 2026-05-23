@@ -241,6 +241,72 @@ func TestOAuthProvidersAutoRefreshesAnthropicCredential(t *testing.T) {
 	}
 }
 
+func TestImportClaudeCodeCredentialRefreshesExpiredToken(t *testing.T) {
+	_, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+	resetOAuthHooks(t)
+
+	claudeDir := filepath.Join(os.Getenv("HOME"), ".claude")
+	if err := os.MkdirAll(claudeDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	expired := time.Now().Add(-time.Minute).UnixMilli()
+	credFile := filepath.Join(claudeDir, ".credentials.json")
+	if err := os.WriteFile(
+		credFile,
+		[]byte(fmt.Sprintf(`{"claudeAiOauth":{"accessToken":"expired-token","refreshToken":"refresh-token","expiresAt":%d}}`, expired)),
+		0o600,
+	); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	refreshedExpiresAt := time.Now().Add(time.Hour).Truncate(time.Second)
+	refreshCalls := 0
+	oauthRefreshAccessToken = func(
+		cred *auth.AuthCredential,
+		cfg auth.OAuthProviderConfig,
+	) (*auth.AuthCredential, error) {
+		refreshCalls++
+		if cred.AccessToken != "expired-token" {
+			t.Fatalf("access token = %q, want expired-token", cred.AccessToken)
+		}
+		if cred.RefreshToken != "refresh-token" {
+			t.Fatalf("refresh token = %q, want refresh-token", cred.RefreshToken)
+		}
+		if cfg.TokenURL != "https://console.anthropic.com/v1/oauth/token" {
+			t.Fatalf("TokenURL = %q, want Anthropic token endpoint", cfg.TokenURL)
+		}
+		return &auth.AuthCredential{
+			AccessToken:  "fresh-token",
+			RefreshToken: "fresh-refresh-token",
+			ExpiresAt:    refreshedExpiresAt,
+		}, nil
+	}
+
+	got, err := importClaudeCodeCredential()
+	if err != nil {
+		t.Fatalf("importClaudeCodeCredential error: %v", err)
+	}
+	if refreshCalls != 1 {
+		t.Fatalf("refresh calls = %d, want 1", refreshCalls)
+	}
+	if got.AccessToken != "fresh-token" {
+		t.Fatalf("access token = %q, want fresh-token", got.AccessToken)
+	}
+	if got.RefreshToken != "fresh-refresh-token" {
+		t.Fatalf("refresh token = %q, want fresh-refresh-token", got.RefreshToken)
+	}
+	if !got.ExpiresAt.Equal(refreshedExpiresAt) {
+		t.Fatalf("expires at = %s, want %s", got.ExpiresAt, refreshedExpiresAt)
+	}
+	if got.Provider != oauthProviderAnthropic {
+		t.Fatalf("provider = %q, want %q", got.Provider, oauthProviderAnthropic)
+	}
+	if got.AuthMethod != oauthMethodClaudeCode {
+		t.Fatalf("auth method = %q, want %q", got.AuthMethod, oauthMethodClaudeCode)
+	}
+}
+
 func TestOAuthBrowserFlowCreatedAndQueried(t *testing.T) {
 	configPath, cleanup := setupOAuthTestEnv(t)
 	defer cleanup()

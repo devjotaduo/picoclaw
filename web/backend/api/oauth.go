@@ -1105,13 +1105,23 @@ func importClaudeCodeCredential() (*auth.AuthCredential, error) {
 	if raw.ClaudeAiOauth.ExpiresAt > 0 {
 		expiresAt = time.UnixMilli(raw.ClaudeAiOauth.ExpiresAt)
 	}
-	return &auth.AuthCredential{
+	cred := &auth.AuthCredential{
 		AccessToken:  raw.ClaudeAiOauth.AccessToken,
 		RefreshToken: raw.ClaudeAiOauth.RefreshToken,
 		ExpiresAt:    expiresAt,
 		Provider:     oauthProviderAnthropic,
 		AuthMethod:   oauthMethodClaudeCode,
-	}, nil
+	}
+	if cred.NeedsRefresh() && cred.RefreshToken != "" {
+		refreshed, refreshErr := oauthRefreshAccessToken(cred, auth.AnthropicOAuthConfig())
+		if refreshErr != nil {
+			return nil, fmt.Errorf("refreshing Claude Code credentials: %w", refreshErr)
+		}
+		refreshed.Provider = oauthProviderAnthropic
+		refreshed.AuthMethod = oauthMethodClaudeCode
+		return refreshed, nil
+	}
+	return cred, nil
 }
 
 // importGHCLICredential reads a GitHub OAuth token from Copilot/GitHub CLI
