@@ -11,6 +11,7 @@ import {
   ReasoningContent,
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
+import { Shimmer } from "@/components/ai-elements/shimmer"
 import {
   Source,
   Sources,
@@ -150,9 +151,11 @@ function toolDisplayType(name: string): `tool-${string}` {
 function AssistantReasoningStatus({
   content,
   showContent,
+  label = "Pensando",
 }: {
   content: string
   showContent: boolean
+  label?: string
 }) {
   const hasContent = showContent && content.trim().length > 0
 
@@ -160,11 +163,13 @@ function AssistantReasoningStatus({
     <Reasoning isStreaming={!hasContent} defaultOpen={hasContent}>
       <ReasoningTrigger
         getThinkingMessage={(isStreaming, duration) =>
-          isStreaming
-            ? "Pensando"
-            : duration
-              ? `Pensou por ${duration}s`
-              : "Pensamento"
+          isStreaming ? (
+            <Shimmer duration={1}>{label}</Shimmer>
+          ) : duration ? (
+            `${label} por ${duration}s`
+          ) : (
+            label
+          )
         }
       />
       {hasContent ? <ReasoningContent>{content}</ReasoningContent> : null}
@@ -180,6 +185,16 @@ function AssistantToolStatus({
   showContent: boolean
 }) {
   const visibleToolCalls = toolCalls.length > 0 ? toolCalls : [{}]
+
+  if (!showContent) {
+    return (
+      <AssistantReasoningStatus
+        content=""
+        label="Executando tarefa"
+        showContent={false}
+      />
+    )
+  }
 
   return (
     <div className="grid gap-2">
@@ -216,9 +231,6 @@ function AssistantToolStatus({
           </Tool>
         )
       })}
-      <Reasoning isStreaming defaultOpen={false}>
-        <ReasoningTrigger getThinkingMessage={() => "Pensando"} />
-      </Reasoning>
     </div>
   )
 }

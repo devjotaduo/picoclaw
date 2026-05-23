@@ -150,6 +150,19 @@ Se quiser, eu também posso transformar isso em:
     expect(parsed).toBeNull()
   })
 
+  it("keeps technical file and skill lists as markdown without an explicit cue", () => {
+    const parsed = parseChatSuggestionCard(`
+- .security.yml
+- AGENT.md
+- AGENTS.md
+- HEARTBEAT.md
+- agent-browser
+- appointment-triage
+`)
+
+    expect(parsed).toBeNull()
+  })
+
   it("ignores normal bullet lists without a suggestion cue", () => {
     const parsed = parseChatSuggestionCard(`
 Resumo do atendimento:

@@ -23,6 +23,8 @@ const SUGGESTION_CUE_RE =
   /\b(sugest[aã]o|sugest[oõ]es|op[cç][aã]o|op[cç][oõ]es|escolh|aplicar|melhoria|alternativa|prefere|qual|cores?|estilos?|modelos?|formatos?|tipos?)\b/i
 const MIN_PLAIN_CHOICE_OPTIONS = 4
 const SHORT_CHOICE_MAX_LENGTH = 48
+const TECHNICAL_CHOICE_RE =
+  /(?:\.(?:md|json|ya?ml|toml|txt|tsx?|jsx?|css|html|py|go|sql|log|env)\b|^[a-z0-9_./-]+$)/
 
 function cleanInlineMarkdown(value: string): string {
   return value
@@ -84,6 +86,10 @@ function isShortChoiceText(value: string): boolean {
     cleaned.length <= SHORT_CHOICE_MAX_LENGTH &&
     !/[.!?;:]$/.test(cleaned)
   )
+}
+
+function isTechnicalChoiceText(value: string): boolean {
+  return TECHNICAL_CHOICE_RE.test(cleanInlineMarkdown(value))
 }
 
 function findPlainChoiceRun(lines: string[]): number[] {
@@ -170,7 +176,11 @@ export function parseChatSuggestionCard(
     ? plainChoiceRun[0]
     : optionIndexes[0]
   const hasSuggestionCue =
-    isPlainChoiceList ||
+    (isPlainChoiceList &&
+      plainChoiceRun.some((index) => {
+        const optionText = matchOptionLine(lines[index])
+        return Boolean(optionText && !isTechnicalChoiceText(optionText))
+      })) ||
     lines
       .slice(0, firstOptionIndex + 1)
       .some((line) => SUGGESTION_CUE_RE.test(cleanInlineMarkdown(line)))

@@ -598,7 +598,7 @@ export function ChatPage() {
               />
             )}
 
-            {displayMessages.map((msg) => {
+            {displayMessages.map((msg, index) => {
               const isAssistantReasoning = msg.kind === "thought"
               const isAssistantToolCall = msg.kind === "tool_calls"
               const showAssistantDetailContent =
@@ -609,6 +609,33 @@ export function ChatPage() {
                   showAssistantDetails &&
                   canShowToolCalls) ||
                 (!isAssistantReasoning && !isAssistantToolCall)
+              const isAssistantInternalMessage =
+                msg.role === "assistant" &&
+                (isAssistantReasoning || isAssistantToolCall)
+              const hasLaterAssistantResponse = displayMessages
+                .slice(index + 1)
+                .some(
+                  (nextMsg) =>
+                    nextMsg.role === "assistant" &&
+                    (nextMsg.kind === undefined || nextMsg.kind === "normal") &&
+                    nextMsg.content.trim().length > 0,
+                )
+              const hasLaterInternalProgress = displayMessages
+                .slice(index + 1)
+                .some(
+                  (nextMsg) =>
+                    nextMsg.role === "assistant" &&
+                    (nextMsg.kind === "thought" ||
+                      nextMsg.kind === "tool_calls"),
+                )
+
+              if (
+                isAssistantInternalMessage &&
+                !showAssistantDetailContent &&
+                (hasLaterAssistantResponse || hasLaterInternalProgress)
+              ) {
+                return null
+              }
 
               return (
                 <div key={msg.id} className="flex w-full">
