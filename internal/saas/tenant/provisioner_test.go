@@ -1,6 +1,7 @@
 package tenant
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -58,7 +59,10 @@ func TestBuildSpec_PublicTenantInjectsOnboardingEnv(t *testing.T) {
 	}
 
 	t.Run("public tenant gets onboarding env + public-web allowlist", func(t *testing.T) {
-		spec := p.buildSpec(&store.Tenant{ID: "t1", IsPublic: true})
+		spec, err := p.buildSpec(context.Background(), &store.Tenant{ID: "t1", IsPublic: true})
+		if err != nil {
+			t.Fatalf("buildSpec: %v", err)
+		}
 		if got := spec.Env["PICOCLAW_ONBOARDING_CALLBACK_SECRET"]; got != "hmac-secret" {
 			t.Errorf("CALLBACK_SECRET = %q, want %q", got, "hmac-secret")
 		}
@@ -71,15 +75,18 @@ func TestBuildSpec_PublicTenantInjectsOnboardingEnv(t *testing.T) {
 	})
 
 	t.Run("private tenant does NOT see onboarding env", func(t *testing.T) {
-		spec := p.buildSpec(&store.Tenant{ID: "t2", IsPublic: false})
+		spec, err := p.buildSpec(context.Background(), &store.Tenant{ID: "t2", IsPublic: false})
+		if err != nil {
+			t.Fatalf("buildSpec: %v", err)
+		}
 		if _, ok := spec.Env["PICOCLAW_ONBOARDING_CALLBACK_SECRET"]; ok {
 			t.Errorf("private tenant unexpectedly got CALLBACK_SECRET")
 		}
 		if _, ok := spec.Env["PICOCLAW_ONBOARDING_CALLBACK_URL"]; ok {
 			t.Errorf("private tenant unexpectedly got CALLBACK_URL")
 		}
-		if got := spec.Env["PICOCLAW_ALLOWED_CHANNELS"]; got != "whatsapp_native" {
-			t.Errorf("ALLOWED_CHANNELS = %q, want %q (default)", got, "whatsapp_native")
+		if got := spec.Env["PICOCLAW_ALLOWED_CHANNELS"]; got != "whatsapp_native,pico" {
+			t.Errorf("ALLOWED_CHANNELS = %q, want %q (default includes pico for in-browser chat)", got, "whatsapp_native,pico")
 		}
 	})
 }
@@ -97,7 +104,10 @@ func TestBuildSpec_PublicTenantInjectsOnboardingEnv(t *testing.T) {
 func TestBuildSpec_WorkspaceMountSkippedWithoutStore(t *testing.T) {
 	wsID := "ws-test"
 	p := &Provisioner{Cfg: &config.Config{GatewaySharedSecret: "gw"}}
-	spec := p.buildSpec(&store.Tenant{ID: "t1", WorkspaceID: &wsID})
+	spec, err := p.buildSpec(context.Background(), &store.Tenant{ID: "t1", WorkspaceID: &wsID})
+	if err != nil {
+		t.Fatalf("buildSpec: %v", err)
+	}
 	if len(spec.ExtraMounts) != 0 {
 		t.Errorf("expected no ExtraMounts when Workspaces store is nil, got %d", len(spec.ExtraMounts))
 	}
