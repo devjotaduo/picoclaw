@@ -117,7 +117,7 @@
         "sidebar.models": false,
         "sidebar.navigation": true,
         "sidebar.pendencias": false,
-        "sidebar.pending_requests": true,
+        "sidebar.pending_requests": false,
         "sidebar.readiness": false,
         "sidebar.skill_editor": false,
         "sidebar.skills": false,
