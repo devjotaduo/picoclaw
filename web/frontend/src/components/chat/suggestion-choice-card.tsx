@@ -130,10 +130,10 @@ export function SuggestionChoiceCard({
               key={`${option.title}-${index}`}
               type="button"
               className={cn(
-                "group/choice bg-muted/35 hover:bg-muted/55 flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                "group/choice flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all duration-200",
                 selected
-                  ? "bg-muted/55 border-yellow-300/35"
-                  : "border-transparent",
+                  ? "border-amber-300/55 bg-[#3a3324] shadow-[inset_3px_0_0_rgba(245,188,65,0.85)]"
+                  : "border-[#3b3b3b] bg-[#2d2d2d] hover:border-amber-300/35 hover:bg-[#36332d]",
               )}
               onClick={() => {
                 setCustomValue("")
@@ -141,23 +141,40 @@ export function SuggestionChoiceCard({
               }}
             >
               <span className="min-w-0 flex-1">
-                <span className="text-foreground block text-sm font-semibold">
+                <span
+                  className={cn(
+                    "block text-sm font-semibold",
+                    selected ? "text-amber-50" : "text-foreground",
+                  )}
+                >
                   {option.title}
                 </span>
                 {option.description ? (
-                  <span className="text-muted-foreground mt-0.5 block text-[13px] leading-snug">
+                  <span
+                    className={cn(
+                      "mt-0.5 block text-[13px] leading-snug",
+                      selected ? "text-amber-100/70" : "text-muted-foreground",
+                    )}
+                  >
                     {option.description}
                   </span>
                 ) : null}
               </span>
-              <span className="border-border/70 bg-background/35 text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-semibold">
+              <span
+                className={cn(
+                  "flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-semibold transition-colors",
+                  selected
+                    ? "border-transparent bg-amber-300 text-zinc-950"
+                    : "border-[#4a4a4a] bg-[#383838] text-zinc-300 group-hover/choice:border-amber-300/40 group-hover/choice:text-amber-100",
+                )}
+              >
                 {index + 1}
               </span>
             </button>
           )
         })}
 
-        <div className="bg-muted/35 rounded-lg px-3 py-2.5">
+        <div className="rounded-lg border border-[#3b3b3b] bg-[#2d2d2d] px-3 py-2.5">
           <div className="mb-2 flex items-center justify-between gap-3">
             <label
               htmlFor={inputId}
@@ -165,7 +182,7 @@ export function SuggestionChoiceCard({
             >
               {t("chat.suggestionChoice.other")}
             </label>
-            <span className="border-border/70 bg-background/35 text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-semibold">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-md border border-[#4a4a4a] bg-[#383838] text-xs font-semibold text-zinc-300">
               5
             </span>
           </div>
@@ -173,7 +190,7 @@ export function SuggestionChoiceCard({
             ref={customInputRef}
             id={inputId}
             value={customValue}
-            className="bg-background/35 text-foreground placeholder:text-muted-foreground/70 h-9 w-full rounded-md border border-transparent px-3 text-sm outline-none focus:border-yellow-300/45 focus:ring-3 focus:ring-yellow-300/15"
+            className="text-foreground h-9 w-full rounded-md border border-[#474747] bg-[#3a3a3a] px-3 text-sm outline-none placeholder:text-zinc-500 focus:border-amber-300/55 focus:ring-3 focus:ring-amber-300/15"
             placeholder={t("chat.suggestionChoice.placeholder")}
             onChange={(event) => setCustomValue(event.target.value)}
             onFocus={() => setSelectedIndex(-1)}

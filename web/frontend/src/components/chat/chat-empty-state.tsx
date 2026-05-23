@@ -176,9 +176,9 @@ export function ChatEmptyState({
               size="sm"
               disabled={disabled}
               onClick={() => onQuickTask?.(task.prompt)}
-              className="h-auto justify-start gap-2 px-3 py-2 text-left text-sm whitespace-normal"
+              className="h-auto justify-start gap-2 border-[#3b3b3b] bg-[#2d2d2d] px-3 py-2 text-left text-sm whitespace-normal text-zinc-100 hover:border-amber-300/35 hover:bg-[#36332d] hover:text-amber-50"
             >
-              <IconSparkles className="text-primary mt-0.5 size-4 shrink-0" />
+              <IconSparkles className="mt-0.5 size-4 shrink-0 text-amber-300" />
               <span className="flex-1 leading-snug">{task.label}</span>
             </Button>
           ))}
