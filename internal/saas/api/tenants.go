@@ -3,16 +3,21 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"io"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/sipeed/picoclaw/internal/saas/config"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 	"github.com/sipeed/picoclaw/internal/saas/tenant"
 )
+
+func tenantURL(cfg *config.Config, subdomain string) string {
+	return fmt.Sprintf("https://%s.%s", subdomain, cfg.TenantBaseDomain)
+}
 
 type createTenantReq struct {
 	DisplayName      string   `json:"display_name"`
@@ -251,117 +256,6 @@ func (h *Handler) handleRotatePassword(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// bootstrapOnboardingReq is the body of POST /tenants/onboarding/bootstrap.
-// All fields default to sane onboarding-tenant values, so callers (typically
-// scripts/provision-onboarding-tenant.sh) can POST an empty body.
-type bootstrapOnboardingReq struct {
-	DisplayName string `json:"display_name"`
-	Subdomain   string `json:"subdomain"`
-	// WorkspaceID picks the workspace to seed the onboarding tenant from.
-	// When empty, falls back to a workspace whose slug is "onboarding".
-	WorkspaceID string `json:"workspace_id"`
-}
-
-// handleBootstrapOnboardingTenant provisions the singleton public onboarding
-// tenant (is_public=true) and overlays workspace-onboarding/ into its volume.
-// Idempotent: returns 409 with the existing tenant info if the subdomain is
-// already provisioned, so the bootstrap script can re-run safely.
-func (h *Handler) handleBootstrapOnboardingTenant(w http.ResponseWriter, r *http.Request) {
-	var req bootstrapOnboardingReq
-	// Decode is best-effort: an empty body is OK (script may not send any
-	// overrides). io.EOF is the canonical "empty body" signal from json.Decoder.
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-		writeError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	req.DisplayName = strings.TrimSpace(req.DisplayName)
-	req.Subdomain = strings.TrimSpace(strings.ToLower(req.Subdomain))
-	if req.DisplayName == "" {
-		req.DisplayName = "Onboarding"
-	}
-	if req.Subdomain == "" {
-		req.Subdomain = "onboarding"
-	}
-
-	// Dedup by subdomain — the onboarding tenant is a singleton. Surface a
-	// 409 so the script can short-circuit cleanly instead of hitting the
-	// downstream "subdomain already taken" path with an opaque body.
-	if existing, err := h.Tenants.GetBySubdomain(r.Context(), req.Subdomain); err == nil && existing != nil {
-		writeJSON(w, http.StatusConflict, map[string]any{
-			"error":     "onboarding tenant already exists",
-			"tenant_id": existing.ID,
-			"subdomain": existing.Subdomain,
-			"url":       tenantURL(h.Cfg, existing.Subdomain),
-		})
-		return
-	} else if err != nil && !errors.Is(err, store.ErrTenantNotFound) {
-		writeError(w, http.StatusInternalServerError, "db error")
-		return
-	}
-
-	if err := tenant.ValidateSubdomain(req.Subdomain); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	// The onboarding tenant has no human owner — derive an ops mailbox from
-	// the configured TenantBaseDomain so the owner_email column has a stable
-	// non-empty value the controlplane can audit later.
-	ownerEmail := "ops@" + strings.Trim(h.Cfg.TenantBaseDomain, ".")
-
-	// Resolve the workspace that seeds the onboarding tenant. Explicit id
-	// wins; otherwise we look up by the conventional "onboarding" slug. If
-	// the operator hasn't created either, bail with a clear message so the
-	// bootstrap script doesn't half-provision a tenant pointing at nothing.
-	wsID := strings.TrimSpace(req.WorkspaceID)
-	if wsID == "" {
-		ws, lerr := h.Workspaces.GetBySlug(r.Context(), "onboarding")
-		if lerr != nil {
-			writeError(
-				w,
-				http.StatusBadRequest,
-				"create a workspace with slug 'onboarding' first, or pass workspace_id in the body",
-			)
-			return
-		}
-		wsID = ws.ID
-	}
-
-	out, err := h.Provisioner.Create(r.Context(), tenant.CreateInput{
-		DisplayName: req.DisplayName,
-		OwnerEmail:  ownerEmail,
-		Subdomain:   req.Subdomain,
-		MemLimitMB:  512,
-		CPUQuota:    0.5,
-		IsPublic:    true,
-		AuthBackend: "local", // public tenant has no Supabase user
-		WorkspaceID: wsID,
-	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// Surface a clear warning when the HMAC secret is unset on the
-	// controlplane — without it, the skill scripts inside the container
-	// exit non-zero and Clara can't mark intakes qualified. Container
-	// boots either way, so the bootstrap doesn't fail.
-	var warning string
-	if h.Cfg.OnboardingCallbackSecret == "" {
-		warning = "PICOCLAW_ONBOARDING_CALLBACK_SECRET is unset on the controlplane — the onboarding skills will exit with a `required` env error. Set it and `Restart` this tenant before flipping VITE_USE_ONBOARDING_TENANT."
-	}
-
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"tenant_id":    out.TenantID,
-		"url":          out.URL,
-		"subdomain":    req.Subdomain,
-		"is_public":    true,
-		"workspace_id": wsID,
-		"warning":      warning,
-		"info":         "Onboarding tenant provisioned. Content is now driven by the chosen workspace — edit it via /workspaces in the admin.",
-	})
-}
-
 func (h *Handler) handleMarkPasswordDelivered(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.Tenants.MarkPasswordDelivered(r.Context(), id); err != nil {
@@ -418,11 +312,8 @@ func summarizeTenant(t *store.Tenant) map[string]any {
 		// "Reenviar credenciais" button (only works for supabase-backed
 		// tenants; legacy local-auth tenants don't have a user to update).
 		"supabase_user_id": t.SupabaseUserID,
-		// auth_backend + is_public surfaced so the admin tenant list
-		// can show how the tenant authenticates and whether it accepts
-		// anonymous public-chat traffic. These two together determine
-		// whether the launcher runs in trusted_gateway vs local mode.
+		// auth_backend exposed so the admin UI can show how the tenant
+		// authenticates (local vs supabase) and decide which controls to render.
 		"auth_backend": t.AuthBackend,
-		"is_public":    t.IsPublic,
 	}
 }

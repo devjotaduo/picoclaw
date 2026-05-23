@@ -92,35 +92,19 @@ type CreateInput struct {
 	CPUQuota         float64
 	// WorkspaceID is required: it picks the Workspace whose home/ subtree
 	// seeds the tenant volume and whose frontend-dist/ gets bind-mounted
-	// into the container. The auto-provisioner resolves this from
-	// Workspaces.GetDefaultAuto(); the manual admin form passes whatever
-	// the operator picked from the dropdown.
+	// into the container. The admin form passes whatever the operator
+	// picked from the dropdown.
 	WorkspaceID string
 	// SkipDashboardPassword tells the provisioner to NOT seed launcher-auth.db
-	// with the generated password. Auto-provision uses this when Supabase Auth
-	// is the source of truth for the tenant's dashboard login — seeding a
-	// local bcrypt hash would just be dead weight inside the tenant volume.
-	// The InitialPassword in CreateOutput is still populated for cases where
-	// the caller wants to surface a password (LoginMode=password).
+	// with the generated password. Used when Supabase Auth is the source of
+	// truth for the tenant's dashboard login — seeding a local bcrypt hash
+	// would just be dead weight inside the tenant volume. The InitialPassword
+	// in CreateOutput is still populated for cases where the caller wants to
+	// surface a password (LoginMode=password).
 	SkipDashboardPassword bool
 	// AuthBackend records how the controlplane will authenticate this
 	// tenant's dashboard requests: "local" (default) or "supabase".
 	AuthBackend string
-	// IsPublic marks the tenant as a public-facing service. When true,
-	// SkipDashboardPassword is forced on (no human owner password) and the
-	// resulting Tenant row has is_public=true so the gateway can later
-	// dispense with Supabase JWT verification on /api/public/* routes.
-	IsPublic bool
-}
-
-// normalize applies CreateInput defaults and consistency rules. Currently
-// it only enforces that public tenants skip the dashboard-password seed
-// (public tenants have no human owner), but it's the place to add future
-// coupled-field rules without growing Create with one-off if blocks.
-func (in *CreateInput) normalize() {
-	if in.IsPublic {
-		in.SkipDashboardPassword = true
-	}
 }
 
 type CreateOutput struct {
@@ -143,9 +127,6 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 	if in.CPUQuota <= 0 {
 		in.CPUQuota = 0.5
 	}
-	// Public tenants have no human owner; normalize() forces the bcrypt seed off.
-	in.normalize()
-
 	id, err := GenerateID(in.Subdomain)
 	if err != nil {
 		return nil, fmt.Errorf("id: %w", err)
@@ -185,7 +166,6 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		MemLimitMB:              in.MemLimitMB,
 		CPUQuota:                in.CPUQuota,
 		AuthBackend:             backend,
-		IsPublic:                in.IsPublic,
 		WorkspaceID:             &ws.ID,
 		WorkspaceVersionApplied: &ws.Version,
 	}
@@ -547,7 +527,7 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 	//     cookie, and the controlplane is a transparent reverse proxy. This
 	//     fixes the Supabase-JWT-expires-and-WS-disconnects issue.
 	authMode := "local"
-	if t.AuthBackend == "supabase" || t.IsPublic {
+	if t.AuthBackend == "supabase" {
 		authMode = "trusted_gateway"
 	}
 
@@ -572,26 +552,6 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 	// configured so older deployments without the sidecar keep working.
 	if u := p.Cfg.BrowserCDPURL; u != "" {
 		env["BROWSER_CDP_URL"] = u
-	}
-
-	// Public-onboarding tenants run skills that call the controlplane via
-	// HMAC-signed callback (mark-qualified.sh, submit-intake.sh). Both vars
-	// are read by the scripts; skipping them means the skills exit with a
-	// `required` env error and Clara has to apologize in chat. We propagate
-	// them only for IsPublic tenants — regular tenants have no business
-	// signing onboarding callbacks.
-	if t.IsPublic {
-		if s := p.Cfg.OnboardingCallbackSecret; s != "" {
-			env["PICOCLAW_ONBOARDING_CALLBACK_SECRET"] = s
-		}
-		if u := p.Cfg.OnboardingCallbackURL; u != "" {
-			env["PICOCLAW_ONBOARDING_CALLBACK_URL"] = u
-		}
-		// publicweb is the entire reason this tenant exists — make sure
-		// the channel allowlist reflects that. Without this override the
-		// tenant container ignores public-web messages (default allowlist
-		// is whatsapp_native, kept intact above for non-public tenants).
-		env["PICOCLAW_ALLOWED_CHANNELS"] = "public-web"
 	}
 
 	spec := ContainerSpec{

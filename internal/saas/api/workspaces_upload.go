@@ -37,7 +37,6 @@ const maxWorkspaceExtractedFiles = 5000
 //	name           string  (required)
 //	slug           string  (optional — derived from name if empty)
 //	description    string  (optional)
-//	is_default_auto string ("true"/"false", optional, default false)
 //	is_available_manual string ("true"/"false", optional, default true)
 //	archive        file    (required) — .zip containing a single top-level
 //	                                    "home/" or the workspace files
@@ -66,7 +65,6 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	description := strings.TrimSpace(r.FormValue("description"))
-	isDefaultAuto := r.FormValue("is_default_auto") == "true"
 	isAvailableManual := r.FormValue("is_available_manual") != "false" // default true
 	isRaw := r.FormValue("is_raw") == "true"                            // default false — opt in
 
@@ -153,7 +151,6 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 		Slug:              slug,
 		Description:       description,
 		HostPath:          hostPath,
-		IsDefaultAuto:     isDefaultAuto,
 		IsAvailableManual: isAvailableManual,
 		IsRaw:             isRaw,
 		RolePolicyJSON:    rolePolicyJSON,

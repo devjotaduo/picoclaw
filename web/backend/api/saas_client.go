@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,35 +15,31 @@ import (
 )
 
 // SaaSAdminConfig pulls the controlplane connection params from env vars.
-// All four are required for /api/admin/saas/* endpoints to work; if any is
+// The three are required for /api/admin/saas/* endpoints to work; if any is
 // empty those handlers return 503 with a clear message.
 //
-//   - PICOCLAW_SAAS_BASE_URL  : e.g. https://adm.jotaduo.com (or the
-//                              container DNS http://controlplane:8080)
-//   - PICOCLAW_SAAS_EMAIL     : platform_admin email
-//   - PICOCLAW_SAAS_PASSWORD  : password for that account
-//   - PICOCLAW_SAAS_ADMIN_MODE: must be "true" to expose the proxy and the
-//                              sidebar group on the frontend
+//   - PICOCLAW_SAAS_BASE_URL : e.g. https://adm.jotaduo.com (or the
+//                             container DNS http://controlplane:8080)
+//   - PICOCLAW_SAAS_EMAIL    : platform_admin email
+//   - PICOCLAW_SAAS_PASSWORD : password for that account
 type SaaSAdminConfig struct {
-	BaseURL   string
-	Email     string
-	Password  string
-	AdminMode bool
+	BaseURL  string
+	Email    string
+	Password string
 }
 
 func loadSaaSAdminConfig() SaaSAdminConfig {
 	return SaaSAdminConfig{
-		BaseURL:   strings.TrimRight(strings.TrimSpace(os.Getenv("PICOCLAW_SAAS_BASE_URL")), "/"),
-		Email:     strings.TrimSpace(os.Getenv("PICOCLAW_SAAS_EMAIL")),
-		Password:  strings.TrimSpace(os.Getenv("PICOCLAW_SAAS_PASSWORD")),
-		AdminMode: strings.EqualFold(strings.TrimSpace(os.Getenv("PICOCLAW_SAAS_ADMIN_MODE")), "true"),
+		BaseURL:  strings.TrimRight(strings.TrimSpace(os.Getenv("PICOCLAW_SAAS_BASE_URL")), "/"),
+		Email:    strings.TrimSpace(os.Getenv("PICOCLAW_SAAS_EMAIL")),
+		Password: strings.TrimSpace(os.Getenv("PICOCLAW_SAAS_PASSWORD")),
 	}
 }
 
 // Ready is true when the launcher has enough config to call the controlplane
 // on behalf of the dashboard user.
 func (c SaaSAdminConfig) Ready() bool {
-	return c.AdminMode && c.BaseURL != "" && c.Email != "" && c.Password != ""
+	return c.BaseURL != "" && c.Email != "" && c.Password != ""
 }
 
 // saasAdminClient keeps a single authenticated session with the controlplane
@@ -67,9 +62,6 @@ type saasAdminClient struct {
 const saasSessionCookieName = "picoclaw_saas_session"
 
 func newSaaSAdminClient(cfg SaaSAdminConfig) (*saasAdminClient, error) {
-	if !cfg.Ready() {
-		return nil, errors.New("saas admin not configured")
-	}
 	return &saasAdminClient{
 		cfg:  cfg,
 		http: &http.Client{Timeout: 30 * time.Second},

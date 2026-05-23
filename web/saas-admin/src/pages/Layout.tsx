@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
-import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, ClipboardList, UserCog, LayoutDashboard, FileText, Activity, KeyRound, FolderTree, Link2 } from "lucide-react";
+import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, ClipboardList, UserCog, LayoutDashboard, Activity, KeyRound, FolderTree, Link2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -69,11 +69,6 @@ export function Layout() {
           {isPlatformAdmin && (
             <SideLink to="/workspaces" icon={<FolderTree className="h-4 w-4" />} active={inWorkspaces}>
               Workspaces
-            </SideLink>
-          )}
-          {isPlatformAdmin && (
-            <SideLink to="/intakes" icon={<FileText className="h-4 w-4" />} active={loc.pathname === "/intakes"}>
-              Pré-cadastros
             </SideLink>
           )}
           {isPlatformAdmin && (

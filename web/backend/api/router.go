@@ -73,11 +73,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Pico Channel (WebSocket chat)
 	h.registerPicoRoutes(mux)
 
-	// Public-web channel (anonymous SSE chat for onboarding tenants).
-	// Proxied to the gateway, where publicweb.Channel implements the
-	// channels.WebhookHandler interface.
-	h.registerPublicChatRoutes(mux)
-
 	// Gateway process lifecycle
 	h.registerGatewayRoutes(mux)
 

@@ -54,10 +54,10 @@ func (h *Handler) handleGetLauncherPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 	// is_saas_admin enables the embedded SaaS administration sidebar group
-	// and the /admin/* routes on the frontend. It's a coarse gate driven by
-	// env (PICOCLAW_SAAS_ADMIN_MODE) plus the presence of controlplane creds.
-	// The trusted-gateway role check still keeps tenant-scoped roles out.
-	saasReady := loadSaaSAdminConfig().Ready() && role == saasPolicy.RolePlatformAdmin
+	// and the /admin/* routes on the frontend. Gated only by the effective
+	// trusted-gateway role; the controlplane proxy itself enforces the
+	// credentials check at request time.
+	saasReady := role == saasPolicy.RolePlatformAdmin
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"role":          role,

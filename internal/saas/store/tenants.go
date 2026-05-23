@@ -52,10 +52,6 @@ type Tenant struct {
 	// AuthBackend selects how the controlplane validates dashboard requests
 	// for this tenant: "local" (sessions table) or "supabase" (verify JWT).
 	AuthBackend string
-	// IsPublic: when true, tenant launcher accepts anonymous traffic on
-	// /api/public/* routes (no Supabase JWT). Used by the onboarding tenant
-	// serving /pre-cadastro visitors.
-	IsPublic bool
 }
 
 type TenantStore struct{ DB *DB }
@@ -66,7 +62,7 @@ const tenantCols = `tenants.id, tenants.display_name, tenants.owner_email, tenan
     tenants.created_at, tenants.suspended_at, tenants.deleted_at, tenants.cleanup_completed_at,
     tenants.crm_contact_id, tenants.crm_company_id, tenants.crm_deal_id,
     tenants.workspace_id, tenants.workspace_version_applied,
-    tenants.supabase_user_id::text, tenants.auth_backend, tenants.is_public`
+    tenants.supabase_user_id::text, tenants.auth_backend`
 
 func scanTenant(row pgx.Row) (*Tenant, error) {
 	var t Tenant
@@ -77,7 +73,7 @@ func scanTenant(row pgx.Row) (*Tenant, error) {
 		&t.CreatedAt, &t.SuspendedAt, &t.DeletedAt, &t.CleanupCompletedAt,
 		&t.CRMContactID, &t.CRMCompanyID, &t.CRMDealID,
 		&t.WorkspaceID, &t.WorkspaceVersionApplied,
-		&t.SupabaseUserID, &t.AuthBackend, &t.IsPublic,
+		&t.SupabaseUserID, &t.AuthBackend,
 	)
 	return &t, err
 }
@@ -92,14 +88,14 @@ func (s *TenantStore) Insert(ctx context.Context, t *Tenant) error {
 		                     container_image, volume_path, monthly_budget_usd,
 		                     mem_limit_mb, cpu_quota,
 		                     workspace_id, workspace_version_applied,
-		                     auth_backend, is_public)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`
+		                     auth_backend)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`
 	_, err := s.DB.Pool.Exec(ctx, q,
 		t.ID, t.DisplayName, t.OwnerEmail, t.Subdomain, t.Status,
 		t.ContainerImage, t.VolumePath, t.MonthlyBudgetUSD,
 		t.MemLimitMB, t.CPUQuota,
 		t.WorkspaceID, t.WorkspaceVersionApplied,
-		backend, t.IsPublic,
+		backend,
 	)
 	return err
 }

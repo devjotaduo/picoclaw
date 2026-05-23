@@ -59,7 +59,6 @@ type workspaceReq struct {
 	Name              string            `json:"name"`
 	Slug              string            `json:"slug"`
 	Description       string            `json:"description"`
-	IsDefaultAuto     bool              `json:"is_default_auto"`
 	IsAvailableManual bool              `json:"is_available_manual"`
 	IsRaw             bool              `json:"is_raw"`
 	RolePolicy        policy.RolePolicy `json:"role_policy"`
@@ -128,7 +127,6 @@ func (h *Handler) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) 
 		Slug:              slug,
 		Description:       strings.TrimSpace(req.Description),
 		HostPath:          hostPath,
-		IsDefaultAuto:     req.IsDefaultAuto,
 		IsAvailableManual: req.IsAvailableManual,
 		IsRaw:             req.IsRaw,
 		RolePolicyJSON:    rolePolicyJSON,
@@ -175,7 +173,6 @@ func (h *Handler) handleUpdateWorkspace(w http.ResponseWriter, r *http.Request) 
 	ws.Name = name
 	ws.Slug = slug
 	ws.Description = strings.TrimSpace(req.Description)
-	ws.IsDefaultAuto = req.IsDefaultAuto
 	ws.IsAvailableManual = req.IsAvailableManual
 	ws.IsRaw = req.IsRaw
 	ws.RolePolicyJSON = rolePolicyJSON
@@ -509,7 +506,6 @@ func summarizeWorkspace(ws *store.Workspace) map[string]any {
 		"slug":                ws.Slug,
 		"description":         ws.Description,
 		"host_path":           ws.HostPath,
-		"is_default_auto":     ws.IsDefaultAuto,
 		"is_available_manual": ws.IsAvailableManual,
 		"is_raw":              ws.IsRaw,
 		"role_policy":         ws.RolePolicy(),

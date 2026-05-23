@@ -80,15 +80,12 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 	// New default: the launcher runs in its native "local" auth mode
 	// (dashboardauth.db bcrypt + HttpOnly cookie). The controlplane is a
 	// transparent reverse proxy for everything except the legacy Supabase
-	// path and the public-chat anonymous surface. This fixes the WS
-	// disconnect after the Supabase JWT (1h, no refresh) expired.
+	// path. This fixes the WS disconnect after the Supabase JWT (1h, no
+	// refresh) expired.
 	//
 	// Tenants with auth_backend='supabase' still flow through the legacy
 	// Supabase /login + JWT branch below for backwards compat.
-	// Public-onboarding tenants (t.IsPublic) keep the HMAC-signed anonymous
-	// branch further down because the launcher's VerifyRequest rejects
-	// empty claims and we need a stable identity for the public-web channel.
-	useLauncherNativeAuth := t.AuthBackend != "supabase" && !t.IsPublic
+	useLauncherNativeAuth := t.AuthBackend != "supabase"
 
 	// Tenant-scoped login page. Served BY the controlplane (not the launcher)
 	// because the launcher in trusted_gateway mode doesn't authenticate users
@@ -141,36 +138,6 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 			})
 			return
 		}
-	}
-
-	// Public-onboarding tenants accept anonymous traffic on a tiny set of chat
-	// endpoints. Skip Supabase JWT but still sign trusted_gateway HMAC so the
-	// launcher knows the request came from the controlplane. Sentinel values
-	// are used for UserID/Role because the launcher's VerifyRequest rejects
-	// empty claims; the agent identifies the visitor via session id.
-	if t.IsPublic && isPublicChatRoute(r.URL.Path) {
-		// Anonymous + open-internet route — apply the per-IP cap before we
-		// burn LiteLLM budget on a flood. Health checks pass through
-		// uncounted so probes / load balancers stay cheap.
-		if h.PublicChatRateLimit != nil && !isPublicChatHealthRoute(r.URL.Path) {
-			if !h.PublicChatRateLimit.Allow(clientIP(r)) {
-				writeError(w, http.StatusTooManyRequests, "muitas mensagens, tenta de novo em um minuto")
-				return
-			}
-		}
-		h.proxyTenantRequest(w, r, target, func(req *http.Request) {
-			gatewayauth.AnnotateRequest(req, h.Cfg.GatewaySharedSecret, gatewayauth.Claims{
-				TenantID: t.ID,
-				// Anonymous visitors don't have a Supabase user; the launcher's
-				// VerifyRequest rejects empty UserID/Role, so we sign with sentinels.
-				// The "public" role is recognized by the public-chat handlers only;
-				// it grants no privileges on regular dashboard routes (which never
-				// hit this code path — they go through authenticateTenantRequest).
-				UserID: "anonymous",
-				Role:   "public",
-			}, time.Now())
-		})
-		return
 	}
 
 	// Launcher-native auth path: the controlplane is a transparent reverse
@@ -328,16 +295,10 @@ func (h *Handler) authenticateSupabaseTenant(
 		writeError(w, http.StatusForbidden, "this account is not registered for this tenant")
 		return "", "", "", false
 	}
-	// First successful owner auth: mark the tenant engaged and cancel any
-	// pending onboarding reminders. initial_password_delivered is reused
-	// as the "owner has shown up" flag for Supabase tenants (the original
-	// local-auth meaning doesn't apply since we skip the bcrypt seed).
-	// This block is cheap (one tenant column read above) and idempotent.
+	// First successful owner auth: mark the tenant engaged. Cheap (one
+	// tenant column read above) and idempotent.
 	if !t.InitialPasswordDelivered && mapSupabaseRoleToTenantRole(claims.Role) == string(store.RoleTenantOwner) {
-		bgCtx := r.Context()
-		if err := h.Tenants.MarkPasswordDelivered(bgCtx, t.ID); err == nil && h.Reminders != nil {
-			_, _ = h.Reminders.CancelByTenant(bgCtx, t.ID, "owner first auth")
-		}
+		_ = h.Tenants.MarkPasswordDelivered(r.Context(), t.ID)
 	}
 	return claims.UserID, claims.Email, mapSupabaseRoleToTenantRole(claims.Role), true
 }
@@ -508,28 +469,6 @@ func isPublicTenantStatic(method, rawPath string) bool {
 	default:
 		return false
 	}
-}
-
-// isPublicChatRoute returns true for the small set of paths a public-onboarding
-// tenant exposes to anonymous visitors (no Supabase JWT). Anything else still
-// goes through the normal authenticateTenantRequest path even on a public tenant.
-func isPublicChatRoute(rawPath string) bool {
-	p := path.Clean("/" + strings.TrimPrefix(rawPath, "/"))
-	switch p {
-	case "/api/public/chat",
-		"/api/public/chat/stream",
-		"/api/public/chat/health":
-		return true
-	}
-	return strings.HasPrefix(p, "/api/public/chat/")
-}
-
-// isPublicChatHealthRoute returns true for the health-probe endpoint that
-// load balancers / uptime monitors hit every few seconds. Excluded from
-// the per-IP cap so a single watchdog doesn't exhaust the budget; the cap
-// targets actual chat traffic (POST + SSE GET).
-func isPublicChatHealthRoute(rawPath string) bool {
-	return path.Clean("/"+strings.TrimPrefix(rawPath, "/")) == "/api/public/chat/health"
 }
 
 // rejectTenantGatewayAuth handles unauthenticated tenant requests in the

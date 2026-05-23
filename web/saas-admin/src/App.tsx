@@ -19,8 +19,6 @@ import { AuditLog } from "@/pages/AuditLog";
 import { TenantLogs } from "@/pages/TenantLogs";
 import { UserManagement } from "@/pages/UserManagement";
 import { PlatformDashboard } from "@/pages/PlatformDashboard";
-import { PublicPreCadastro } from "@/pages/PublicPreCadastro";
-import { CompanyIntakes } from "@/pages/CompanyIntakes";
 import { ServerHealth } from "@/pages/ServerHealth";
 import { ChangePassword } from "@/pages/ChangePassword";
 import { Shortlinks } from "@/pages/Shortlinks";
@@ -57,7 +55,6 @@ export default function App() {
       <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/pre-cadastro" element={<PublicPreCadastro />} />
       <Route
         element={
           <RequireAuth>
@@ -83,7 +80,6 @@ export default function App() {
         <Route path="/server-health" element={<RequirePlatform><ServerHealth /></RequirePlatform>} />
         <Route path="/shortlinks" element={<RequirePlatform><Shortlinks /></RequirePlatform>} />
         <Route path="/account/password" element={<ChangePassword />} />
-        <Route path="/intakes" element={<RequirePlatform><CompanyIntakes /></RequirePlatform>} />
         <Route path="/crm" element={<RequirePlatform><Navigate to="/crm/contacts" replace /></RequirePlatform>} />
         <Route path="/crm/:view" element={<RequirePlatform><CrmPage /></RequirePlatform>} />
         <Route path="/" element={<Navigate to="/tenants" replace />} />

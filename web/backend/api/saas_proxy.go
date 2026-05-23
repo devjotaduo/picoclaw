@@ -33,15 +33,6 @@ func (h *Handler) registerSaaSProxyRoutes(mux *http.ServeMux) {
 }
 
 func (h *Handler) handleSaaSProxy(w http.ResponseWriter, r *http.Request) {
-	cfg := loadSaaSAdminConfig()
-	if !cfg.AdminMode {
-		writeSaaSProxyError(w, http.StatusForbidden, "saas admin disabled (set PICOCLAW_SAAS_ADMIN_MODE=true)")
-		return
-	}
-	if !cfg.Ready() {
-		writeSaaSProxyError(w, http.StatusServiceUnavailable, "saas admin proxy is missing PICOCLAW_SAAS_BASE_URL / EMAIL / PASSWORD env vars")
-		return
-	}
 	client, err := getSaaSAdminClient()
 	if err != nil {
 		writeSaaSProxyError(w, http.StatusInternalServerError, err.Error())

@@ -32,7 +32,6 @@ type Workspace struct {
 	Slug              string
 	Description       string
 	HostPath          string
-	IsDefaultAuto     bool
 	IsAvailableManual bool
 	// IsRaw, when true, tells the provisioner to copy the workspace's home/
 	// contents into the tenant volume verbatim and skip the default
@@ -63,14 +62,14 @@ func (w *Workspace) RolePolicy() policy.RolePolicy {
 type WorkspaceStore struct{ DB *DB }
 
 const workspaceCols = `id, name, slug, description, host_path,
-    is_default_auto, is_available_manual, is_raw, role_policy_json,
+    is_available_manual, is_raw, role_policy_json,
     frontend_built_at, frontend_build_log, version, created_at, updated_at`
 
 func scanWorkspace(row pgx.Row) (*Workspace, error) {
 	var w Workspace
 	err := row.Scan(
 		&w.ID, &w.Name, &w.Slug, &w.Description, &w.HostPath,
-		&w.IsDefaultAuto, &w.IsAvailableManual, &w.IsRaw, &w.RolePolicyJSON,
+		&w.IsAvailableManual, &w.IsRaw, &w.RolePolicyJSON,
 		&w.FrontendBuiltAt, &w.FrontendBuildLog, &w.Version,
 		&w.CreatedAt, &w.UpdatedAt,
 	)
@@ -88,72 +87,44 @@ func (s *WorkspaceStore) Insert(ctx context.Context, w *Workspace) error {
 		}
 		w.RolePolicyJSON = b
 	}
-	// Clear-default + insert must be atomic so the partial unique index on
-	// is_default_auto can't reject the insert (or briefly observe zero
-	// defaults) when concurrent writers race. pgxpool acquires a fresh
-	// connection per Exec, so we need an explicit transaction.
-	tx, err := s.DB.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if w.IsDefaultAuto {
-		if _, err := tx.Exec(ctx, `UPDATE workspaces SET is_default_auto = false WHERE is_default_auto`); err != nil {
-			return err
-		}
-	}
 	const q = `
         INSERT INTO workspaces
             (id, name, slug, description, host_path,
-             is_default_auto, is_available_manual, is_raw, role_policy_json, version)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`
-	if _, err := tx.Exec(ctx, q,
+             is_available_manual, is_raw, role_policy_json, version)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`
+	if _, err := s.DB.Pool.Exec(ctx, q,
 		w.ID, w.Name, w.Slug, w.Description, w.HostPath,
-		w.IsDefaultAuto, w.IsAvailableManual, w.IsRaw, w.RolePolicyJSON, w.Version,
+		w.IsAvailableManual, w.IsRaw, w.RolePolicyJSON, w.Version,
 	); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 func (s *WorkspaceStore) Update(ctx context.Context, w *Workspace) error {
-	// Same atomicity reason as Insert: pgxpool Exec calls don't share a
-	// connection, so the clear-default + update pair must run inside an
-	// explicit transaction or the partial unique index can race.
-	tx, err := s.DB.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if w.IsDefaultAuto {
-		if _, err := tx.Exec(ctx, `UPDATE workspaces SET is_default_auto = false WHERE id <> $1`, w.ID); err != nil {
-			return err
-		}
-	}
 	const q = `
         UPDATE workspaces
         SET name = $2,
             slug = $3,
             description = $4,
             host_path = $5,
-            is_default_auto = $6,
-            is_available_manual = $7,
-            is_raw = $8,
-            role_policy_json = $9,
+            is_available_manual = $6,
+            is_raw = $7,
+            role_policy_json = $8,
             version = version + 1,
             updated_at = now()
         WHERE id = $1
         RETURNING version, updated_at`
-	if err := tx.QueryRow(ctx, q,
+	if err := s.DB.Pool.QueryRow(ctx, q,
 		w.ID, w.Name, w.Slug, w.Description, w.HostPath,
-		w.IsDefaultAuto, w.IsAvailableManual, w.IsRaw, w.RolePolicyJSON,
+		w.IsAvailableManual, w.IsRaw, w.RolePolicyJSON,
 	).Scan(&w.Version, &w.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrWorkspaceNotFound
 		}
 		return err
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 // SetFrontendBuilt records the timestamp and trimmed log of the most recent
@@ -179,10 +150,8 @@ func (s *WorkspaceStore) SetFrontendBuilt(ctx context.Context, id string, builtA
 
 // Delete removes a workspace. Tenants pointing at it are rejected by the FK
 // (ON DELETE RESTRICT) so callers must reassign tenants before calling here.
-// The default-auto workspace is also protected — clearing the flag first is
-// required.
 func (s *WorkspaceStore) Delete(ctx context.Context, id string) error {
-	ct, err := s.DB.Pool.Exec(ctx, `DELETE FROM workspaces WHERE id = $1 AND is_default_auto = false`, id)
+	ct, err := s.DB.Pool.Exec(ctx, `DELETE FROM workspaces WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}
@@ -210,27 +179,14 @@ func (s *WorkspaceStore) GetBySlug(ctx context.Context, slug string) (*Workspace
 	return w, err
 }
 
-// GetDefaultAuto returns the workspace marked as the auto-provision default.
-// AutoProvisioner.Run calls this when Clara qualifies a lead — if no row is
-// marked, the auto-provision flow short-circuits with a clear message rather
-// than picking a random workspace.
-func (s *WorkspaceStore) GetDefaultAuto(ctx context.Context) (*Workspace, error) {
-	q := `SELECT ` + workspaceCols + ` FROM workspaces WHERE is_default_auto = true LIMIT 1`
-	w, err := scanWorkspace(s.DB.Pool.QueryRow(ctx, q))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrWorkspaceNotFound
-	}
-	return w, err
-}
-
-// List returns all workspaces, default-auto first. When availableManualOnly
-// is true, the manual-create dropdown filters out internal-only workspaces.
+// List returns all workspaces, sorted by name. When availableManualOnly is
+// true, the manual-create dropdown filters out internal-only workspaces.
 func (s *WorkspaceStore) List(ctx context.Context, availableManualOnly bool) ([]*Workspace, error) {
 	q := `SELECT ` + workspaceCols + ` FROM workspaces`
 	if availableManualOnly {
 		q += ` WHERE is_available_manual = true`
 	}
-	q += ` ORDER BY is_default_auto DESC, name ASC`
+	q += ` ORDER BY name ASC`
 	rows, err := s.DB.Pool.Query(ctx, q)
 	if err != nil {
 		return nil, err

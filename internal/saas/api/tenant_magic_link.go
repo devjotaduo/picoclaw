@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"net/http"
 	"net/url"
 	"strings"
@@ -425,7 +426,7 @@ func magicLinkConsumedHTML(tenantName, summary, consumedAt string) string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Obrigado — ` + htmlEscape(tenantName) + `</title>
+<title>Obrigado — ` + html.EscapeString(tenantName) + `</title>
 <style>
   :root { color-scheme: light dark; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -451,12 +452,12 @@ func magicLinkConsumedHTML(tenantName, summary, consumedAt string) string {
   <div class="card">
     <div class="check">✓</div>
     <h1>Obrigado pelo seu contato!</h1>
-    <p class="lead">` + htmlEscape(tenantName) + ` recebeu suas informações com sucesso.</p>
-    <div class="summary">` + htmlEscape(summary) + `</div>
+    <p class="lead">` + html.EscapeString(tenantName) + ` recebeu suas informações com sucesso.</p>
+    <div class="summary">` + html.EscapeString(summary) + `</div>
     <p>Em breve um especialista entrará em contato com você.
        Se precisar falar com a gente antes, é só responder à mensagem
        que você recebeu por WhatsApp ou e-mail.</p>
-    <div class="meta">Conversa finalizada em ` + htmlEscape(consumedAt) + `</div>
+    <div class="meta">Conversa finalizada em ` + html.EscapeString(consumedAt) + `</div>
   </div>
 </body>
 </html>`
