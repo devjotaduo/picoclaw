@@ -883,7 +883,7 @@
   },
   "heartbeat": {
     "enabled": true,
-    "interval": 30
+    "interval": 3
   },
   "devices": {
     "enabled": false,

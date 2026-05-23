@@ -24,7 +24,9 @@ import (
 )
 
 const (
-	minIntervalMinutes     = 5
+	// minIntervalMinutes — chão de segurança pra evitar tight-loop por engano.
+	// 1 min permite operação agressiva (custo de tokens cresce linear).
+	minIntervalMinutes     = 1
 	defaultIntervalMinutes = 30
 	userTasksMarker        = "Add your heartbeat tasks below this line:"
 )
