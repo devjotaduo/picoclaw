@@ -242,6 +242,22 @@
       },
       "copilot": {
         "description": "Importe seu token do GitHub via gh CLI ou insira manualmente."
+      },
+      "imageGeneration": {
+        "title": "Geração de imagem",
+        "description": "Usa OpenRouter para gerar imagens reais pelos agentes.",
+        "enabled": "Ativar",
+        "apiBase": "API base",
+        "model": "Modelo",
+        "size": "Tamanho",
+        "outputDir": "Diretório",
+        "key": "Chave",
+        "notConfigured": "pendente",
+        "expiration": "Expiração",
+        "noExpiration": "não informada",
+        "recommended": "Recomendado",
+        "saveSuccess": "Configuração de imagem salva.",
+        "saveError": "Falha ao salvar geração de imagem."
       }
     },
     "status": {
@@ -1147,6 +1163,7 @@
           "filesystem": "Sistema de Arquivos",
           "web": "Web",
           "communication": "Comunicação",
+          "marketing": "Marketing",
           "skills": "Skills",
           "agents": "Agentes",
           "hardware": "Hardware",
@@ -1158,6 +1175,7 @@
           "requires_skills": "Habilite `tools.skills` antes que esta ferramenta de skill-registry possa ser usada.",
           "requires_subagent": "Habilite `tools.subagent` antes que a ferramenta de spawn possa delegar trabalho.",
           "requires_mcp_discovery": "Habilite `tools.mcp.discovery` antes que as ferramentas de descoberta MCP fiquem disponíveis.",
+          "missing_api_key": "Configure a API key antes de usar esta ferramenta.",
           "requires_web_search_provider": "Configure ao menos um provedor externo de pesquisa web pronto para uso."
         }
       }

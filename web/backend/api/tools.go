@@ -69,6 +69,35 @@ type webSearchConfigRequest struct {
 	Settings     map[string]webSearchProviderConfig `json:"settings"`
 }
 
+type imageGenerationConfigResponse struct {
+	Enabled             bool   `json:"enabled"`
+	APIBase             string `json:"api_base"`
+	Model               string `json:"model"`
+	Size                string `json:"size"`
+	OutputDir           string `json:"output_dir"`
+	APIKeySet           bool   `json:"api_key_set"`
+	APIKeyMasked        string `json:"api_key_masked,omitempty"`
+	RecommendedProvider string `json:"recommended_provider"`
+	RecommendedModel    string `json:"recommended_model"`
+}
+
+type imageGenerationConfigRequest struct {
+	Enabled   bool   `json:"enabled"`
+	APIBase   string `json:"api_base"`
+	Model     string `json:"model"`
+	Size      string `json:"size"`
+	OutputDir string `json:"output_dir"`
+	APIKey    string `json:"api_key"`
+}
+
+const (
+	recommendedImageAPIBase   = "https://openrouter.ai/api/v1"
+	recommendedImageProvider  = "OpenRouter"
+	recommendedImageModel     = "google/gemini-2.5-flash-image"
+	recommendedImageSize      = "1024x1024"
+	recommendedImageOutputDir = "public/marketing"
+)
+
 var toolCatalog = []toolCatalogEntry{
 	{
 		Name:        "read_file",
@@ -221,6 +250,8 @@ func (h *Handler) registerToolRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/tools/{name}/state", h.handleUpdateToolState)
 	mux.HandleFunc("GET /api/tools/web-search-config", h.handleGetWebSearchConfig)
 	mux.HandleFunc("PUT /api/tools/web-search-config", h.handleUpdateWebSearchConfig)
+	mux.HandleFunc("GET /api/tools/image-generation-config", h.handleGetImageGenerationConfig)
+	mux.HandleFunc("PUT /api/tools/image-generation-config", h.handleUpdateImageGenerationConfig)
 }
 
 func (h *Handler) handleListTools(w http.ResponseWriter, r *http.Request) {
@@ -294,6 +325,8 @@ func buildToolSupport(cfg *config.Config) []toolSupportItem {
 			status, reasonCode = resolveDiscoveryToolSupport(cfg, cfg.Tools.MCP.Discovery.UseBM25)
 		case "web_search":
 			status, reasonCode = resolveWebSearchToolSupport(cfg)
+		case "generate_image":
+			status, reasonCode = resolveImageGenerationToolSupport(cfg)
 		case "i2c", "spi":
 			status, reasonCode = resolveHardwareToolSupport(cfg.Tools.IsToolEnabled(entry.ConfigKey))
 		case "serial":
@@ -354,6 +387,16 @@ func resolveDiscoveryToolSupport(cfg *config.Config, methodEnabled bool) (string
 func resolveWebSearchToolSupport(cfg *config.Config) (string, string) {
 	if !cfg.Tools.IsToolEnabled("web") {
 		return "disabled", ""
+	}
+	return "enabled", ""
+}
+
+func resolveImageGenerationToolSupport(cfg *config.Config) (string, string) {
+	if !cfg.Tools.ImageGeneration.Enabled {
+		return "disabled", ""
+	}
+	if strings.TrimSpace(cfg.Tools.ImageGeneration.APIKey.String()) == "" {
+		return "blocked", "missing_api_key"
 	}
 	return "enabled", ""
 }
@@ -435,6 +478,52 @@ func applyToolState(cfg *config.Config, toolName string, enabled bool) error {
 	return nil
 }
 
+func (h *Handler) handleGetImageGenerationConfig(w http.ResponseWriter, r *http.Request) {
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to load config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(buildImageGenerationConfigResponse(cfg)); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+func (h *Handler) handleUpdateImageGenerationConfig(w http.ResponseWriter, r *http.Request) {
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to load config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	var req imageGenerationConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	cfg.Tools.ImageGeneration.Enabled = req.Enabled
+	cfg.Tools.ImageGeneration.APIBase = firstImageConfigNonEmpty(req.APIBase, recommendedImageAPIBase)
+	cfg.Tools.ImageGeneration.Model = firstImageConfigNonEmpty(req.Model, recommendedImageModel)
+	cfg.Tools.ImageGeneration.Size = firstImageConfigNonEmpty(req.Size, recommendedImageSize)
+	cfg.Tools.ImageGeneration.OutputDir = firstImageConfigNonEmpty(req.OutputDir, recommendedImageOutputDir)
+	if key := strings.TrimSpace(req.APIKey); key != "" {
+		cfg.Tools.ImageGeneration.APIKey = *config.NewSecureString(key)
+	}
+
+	if err := config.SaveConfig(h.configPath, cfg); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to save config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(buildImageGenerationConfigResponse(cfg)); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
 func (h *Handler) handleGetWebSearchConfig(w http.ResponseWriter, r *http.Request) {
 	cfg, err := config.LoadConfig(h.configPath)
 	if err != nil {
@@ -446,6 +535,42 @@ func (h *Handler) handleGetWebSearchConfig(w http.ResponseWriter, r *http.Reques
 	if err := json.NewEncoder(w).Encode(buildWebSearchConfigResponse(cfg)); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
+}
+
+func buildImageGenerationConfigResponse(cfg *config.Config) imageGenerationConfigResponse {
+	settings := cfg.Tools.ImageGeneration
+	apiKey := strings.TrimSpace(settings.APIKey.String())
+	return imageGenerationConfigResponse{
+		Enabled:             settings.Enabled,
+		APIBase:             firstImageConfigNonEmpty(settings.APIBase, recommendedImageAPIBase),
+		Model:               firstImageConfigNonEmpty(settings.Model, recommendedImageModel),
+		Size:                firstImageConfigNonEmpty(settings.Size, recommendedImageSize),
+		OutputDir:           firstImageConfigNonEmpty(settings.OutputDir, recommendedImageOutputDir),
+		APIKeySet:           apiKey != "",
+		APIKeyMasked:        maskSecret(apiKey),
+		RecommendedProvider: recommendedImageProvider,
+		RecommendedModel:    recommendedImageModel,
+	}
+}
+
+func firstImageConfigNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func maskSecret(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if len(value) <= 8 {
+		return "****"
+	}
+	return value[:4] + "..." + value[len(value)-4:]
 }
 
 func (h *Handler) handleUpdateWebSearchConfig(w http.ResponseWriter, r *http.Request) {

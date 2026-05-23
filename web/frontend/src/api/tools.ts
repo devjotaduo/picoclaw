@@ -43,6 +43,27 @@ export interface WebSearchConfigResponse {
   settings: Record<string, WebSearchProviderConfig>
 }
 
+export interface ImageGenerationConfigResponse {
+  enabled: boolean
+  api_base: string
+  model: string
+  size: string
+  output_dir: string
+  api_key_set: boolean
+  api_key_masked?: string
+  recommended_provider: string
+  recommended_model: string
+}
+
+export interface ImageGenerationConfigRequest {
+  enabled: boolean
+  api_base: string
+  model: string
+  size: string
+  output_dir: string
+  api_key?: string
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await launcherFetch(path, options)
   if (!res.ok) {
@@ -95,4 +116,23 @@ export async function updateWebSearchConfig(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   })
+}
+
+export async function getImageGenerationConfig(): Promise<ImageGenerationConfigResponse> {
+  return request<ImageGenerationConfigResponse>(
+    "/api/tools/image-generation-config",
+  )
+}
+
+export async function updateImageGenerationConfig(
+  payload: ImageGenerationConfigRequest,
+): Promise<ImageGenerationConfigResponse> {
+  return request<ImageGenerationConfigResponse>(
+    "/api/tools/image-generation-config",
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  )
 }

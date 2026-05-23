@@ -9,6 +9,7 @@ import { AnthropicPasteSheet } from "./anthropic-paste-sheet"
 import { AntigravityCredentialCard } from "./antigravity-credential-card"
 import { CopilotCredentialCard } from "./copilot-credential-card"
 import { DeviceCodeSheet } from "./device-code-sheet"
+import { ImageGenerationCredentialCard } from "./image-generation-credential-card"
 import { LogoutConfirmDialog } from "./logout-confirm-dialog"
 import { OpenAICredentialCard } from "./openai-credential-card"
 
@@ -133,6 +134,8 @@ export function CredentialsPage() {
               onAskLogout={() => askLogout("github-copilot")}
               onImportGHCLI={() => void importFromGHCLI()}
             />
+
+            <ImageGenerationCredentialCard />
           </div>
         )}
       </div>

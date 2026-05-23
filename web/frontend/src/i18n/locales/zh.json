@@ -220,6 +220,22 @@
       },
       "antigravity": {
         "description": "使用浏览器 OAuth 登录 Google Cloud Code Assist。"
+      },
+      "imageGeneration": {
+        "title": "图像生成",
+        "description": "通过 OpenRouter 让代理生成真实图像。",
+        "enabled": "启用",
+        "apiBase": "API base",
+        "model": "模型",
+        "size": "尺寸",
+        "outputDir": "目录",
+        "key": "密钥",
+        "notConfigured": "待配置",
+        "expiration": "过期时间",
+        "noExpiration": "未提供",
+        "recommended": "推荐",
+        "saveSuccess": "图像配置已保存。",
+        "saveError": "保存图像生成配置失败。"
       }
     },
     "status": {
@@ -1121,6 +1137,7 @@
           "filesystem": "文件系统",
           "web": "网页",
           "communication": "通信",
+          "marketing": "营销",
           "skills": "技能",
           "agents": "Agent",
           "hardware": "硬件",
@@ -1132,6 +1149,7 @@
           "requires_skills": "需要先启用 `tools.skills`，该技能注册表工具才能使用。",
           "requires_subagent": "需要先启用 `tools.subagent`，`spawn` 才能委派任务。",
           "requires_mcp_discovery": "需要先启用 `tools.mcp.discovery`，MCP 发现工具才会可用。",
+          "missing_api_key": "使用该工具前需要先配置 API 密钥。",
           "requires_web_search_provider": "请至少配置一个可用的外部网络搜索 provider。"
         }
       }
