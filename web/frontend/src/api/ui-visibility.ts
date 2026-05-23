@@ -183,15 +183,19 @@ export function resolveUIVisibilityProfile(
     return policy.active_profile
   }
 
+  // Operadores Picoclaw e admins do tenant vêem o template "admin" (UI
+  // completa). Usuários regulares do tenant (owner/operator/viewer) vêem
+  // o "tenant" (UI básica, sem ferramentas técnicas). Anônimos / sem
+  // sessão caem no "public" (visão mínima).
   if (launcherPolicy?.is_saas_admin) {
     return "admin"
   }
 
   switch (launcherPolicy?.role) {
     case "platform_admin":
-      return "tenant"
-    case "tenant_owner":
     case "tenant_admin":
+      return "admin"
+    case "tenant_owner":
     case "operator":
     case "viewer":
       return "tenant"

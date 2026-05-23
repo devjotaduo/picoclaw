@@ -1,23 +1,26 @@
 /**
  * TemplateSelector
  *
- * Dropdown que permite ao operador alternar a "persona" da UI em runtime:
- * admin (operador), tenant (cliente logado) ou public (visitante anônimo).
- * O valor escolhido é gravado em localStorage via
- * `setUIVisibilityProfileOverride` e o hook `useUIVisibility` reage à
- * mudança automaticamente — sem reload da página.
+ * Dropdown que permite ao OPERADOR ADMIN alternar a "persona" da UI em
+ * runtime: admin / tenant / public. O valor escolhido é gravado em
+ * localStorage via `setUIVisibilityProfileOverride` e o hook
+ * `useUIVisibility` reage à mudança automaticamente — sem reload.
+ *
+ * Gating (retorna null em qualquer um destes casos):
+ *  - Build de produção (só renderiza em dev mode, via import.meta.env.DEV).
+ *  - Usuário NÃO é platform_admin nem is_saas_admin (tenant_admin/owner
+ *    /operator/viewer/anônimo NÃO veem o seletor — eles recebem o template
+ *    correto automaticamente via resolveUIVisibilityProfile).
  *
  * Útil para:
- *  - Preview de como a UI aparece para cada tipo de usuário.
+ *  - Preview de como a UI aparece para cada tipo de usuário durante dev.
  *  - Validar visibility flags do `mock-api/ui-visibility.json`.
- *  - Demo de SaaS para diferentes tiers de tenant.
- *
- * Quando nenhum override está ativo, a resolução automática (launcher
- * policy + role + active_profile do JSON) volta a vigorar.
+ *  - Demo de SaaS para diferentes tiers de tenant em ambiente dev.
  */
 
 import { useCallback } from "react"
 
+import type { LauncherPolicyResponse } from "@/api/launcher-policy"
 import type { UIVisibilityProfile } from "@/api/ui-visibility"
 import {
   Select,
@@ -57,10 +60,35 @@ export interface TemplateSelectorProps {
   compact?: boolean
   /** Optional className forwarded to the trigger for layout tweaks. */
   className?: string
+  /**
+   * Launcher policy do usuário atual. O seletor só renderiza para admins
+   * (is_saas_admin OU platform_admin). Outras roles recebem o template
+   * correto via resolução automática e não veem o controle.
+   */
+  launcherPolicy?: Pick<LauncherPolicyResponse, "role" | "is_saas_admin">
 }
 
-export function TemplateSelector({ compact, className }: TemplateSelectorProps) {
-  const { profile, override, setProfileOverride } = useUIVisibility()
+export function TemplateSelector({
+  compact,
+  className,
+  launcherPolicy,
+}: TemplateSelectorProps) {
+  // Hooks ANTES de qualquer return (regra do React).
+  const { profile, override, setProfileOverride } = useUIVisibility(launcherPolicy)
+
+  // Hard gate #1: build de produção nunca expõe o seletor (é dev tool).
+  if (!import.meta.env.DEV) {
+    return null
+  }
+
+  // Hard gate #2: só admins veem. Tenants normais (owner/operator/viewer)
+  // e anônimos pegam o template via resolveUIVisibilityProfile e pronto.
+  const isAdmin =
+    launcherPolicy?.is_saas_admin === true ||
+    launcherPolicy?.role === "platform_admin"
+  if (!isAdmin) {
+    return null
+  }
 
   const handleChange = useCallback(
     (value: string) => {

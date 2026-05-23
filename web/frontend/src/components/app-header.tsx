@@ -198,9 +198,10 @@ export function AppHeader() {
           showHeaderActions ? "flex" : "hidden"
         } items-center gap-1 text-sm font-medium md:gap-2`}
       >
-        {/* Runtime persona/template switcher — overrides ui-visibility profile
-            resolution via localStorage. See components/template-selector.tsx. */}
-        <TemplateSelector compact />
+        {/* Runtime persona/template switcher — DEV ONLY, ADMINS ONLY.
+            Outras roles não veem este controle; recebem o template via
+            resolveUIVisibilityProfile. Ver components/template-selector.tsx. */}
+        <TemplateSelector compact launcherPolicy={launcherPolicyQ.data} />
 
         {restartRequired && showGatewayRestart && (
           <Tooltip delayDuration={700}>
