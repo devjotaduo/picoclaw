@@ -308,6 +308,70 @@ Resumo do atendimento:
 })
 
 describe("groupChatSuggestionMessages", () => {
+  it("groups consecutive small assistant replies into one message", () => {
+    const grouped = groupChatSuggestionMessages([
+      {
+        id: "one",
+        role: "assistant",
+        content: "Perfeito.",
+      },
+      {
+        id: "two",
+        role: "assistant",
+        content: "Me envie a conversa real que você quer revisar.",
+      },
+      {
+        id: "three",
+        role: "assistant",
+        content:
+          "Pode ser colando o texto aqui ou mandando os trechos principais.",
+      },
+      {
+        id: "four",
+        role: "assistant",
+        content:
+          "Assim eu analiso e aplico uma triagem mais clara em cima dela.",
+      },
+    ])
+
+    expect(grouped).toHaveLength(1)
+    expect(grouped[0].id).toBe("one-grouped")
+    expect(grouped[0].content).toBe(
+      [
+        "Perfeito.",
+        "Me envie a conversa real que você quer revisar.",
+        "Pode ser colando o texto aqui ou mandando os trechos principais.",
+        "Assim eu analiso e aplico uma triagem mais clara em cima dela.",
+      ].join("\n\n"),
+    )
+  })
+
+  it("does not merge plain replies into suggestion cards", () => {
+    const grouped = groupChatSuggestionMessages([
+      {
+        id: "plain",
+        role: "assistant",
+        content: "Aqui está o caminho mais simples.",
+      },
+      {
+        id: "one",
+        role: "assistant",
+        content:
+          "1. Melhorar a primeira resposta\nUse quando o atendimento começa frio ou genérico.",
+      },
+      {
+        id: "two",
+        role: "assistant",
+        content:
+          "2. Organizar triagem\nUse quando a conversa precisa ir para o assunto certo.",
+      },
+    ])
+
+    expect(grouped).toHaveLength(2)
+    expect(grouped[0].id).toBe("plain")
+    expect(grouped[1].id).toBe("one-suggestions")
+  })
+
   it("groups separate assistant option messages into one suggestion card input", () => {
     const grouped = groupChatSuggestionMessages([
       {

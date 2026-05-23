@@ -374,6 +374,60 @@ function buildGroupedSuggestionMessage<T extends ChatSuggestionMessageInput>(
   }
 }
 
+function shouldGroupPlainAssistantMessage(
+  messages: readonly ChatSuggestionMessageInput[],
+  index: number,
+): boolean {
+  const message = messages[index]
+  if (!message || !isPlainAssistantMessage(message)) {
+    return false
+  }
+
+  return (
+    !buildGroupedSuggestionMessage(messages, index) &&
+    !isChatSuggestionOptionText(message.content)
+  )
+}
+
+function buildGroupedPlainAssistantMessage<
+  T extends ChatSuggestionMessageInput,
+>(
+  messages: readonly T[],
+  startIndex: number,
+): { message: T; nextIndex: number } | null {
+  const first = messages[startIndex]
+  if (!first || !shouldGroupPlainAssistantMessage(messages, startIndex)) {
+    return null
+  }
+
+  const plainMessages: T[] = [first]
+  let cursor = startIndex + 1
+
+  while (
+    cursor < messages.length &&
+    shouldGroupPlainAssistantMessage(messages, cursor)
+  ) {
+    plainMessages.push(messages[cursor])
+    cursor += 1
+  }
+
+  if (plainMessages.length < 2) {
+    return null
+  }
+
+  return {
+    message: {
+      ...first,
+      id: `${first.id}-grouped`,
+      content: plainMessages
+        .map((message) => message.content.trim())
+        .filter(Boolean)
+        .join("\n\n"),
+    },
+    nextIndex: cursor,
+  }
+}
+
 export function groupChatSuggestionMessages<
   T extends ChatSuggestionMessageInput,
 >(messages: readonly T[]): T[] {
@@ -384,6 +438,13 @@ export function groupChatSuggestionMessages<
     if (group) {
       grouped.push(group.message)
       index = group.nextIndex - 1
+      continue
+    }
+
+    const plainGroup = buildGroupedPlainAssistantMessage(messages, index)
+    if (plainGroup) {
+      grouped.push(plainGroup.message)
+      index = plainGroup.nextIndex - 1
       continue
     }
 
