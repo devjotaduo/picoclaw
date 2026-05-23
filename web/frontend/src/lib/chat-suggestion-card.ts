@@ -20,7 +20,7 @@ export interface ChatSuggestionMessageInput {
 const OPTION_LINE_RE = /^\s*(?:[-*•]|\d{1,2}[.)])\s+(.*)$/
 const CHECKBOX_LINE_RE = /^\s*[-*]\s+\[[ xX]\]\s+(.*)$/
 const SUGGESTION_CUE_RE =
-  /\b(sugest[aã]o|sugest[oõ]es|op[cç][aã]o|op[cç][oõ]es|escolh|aplicar|melhoria|alternativa|prefere|qual|cores?|estilos?|modelos?|formatos?|tipos?)\b/i
+  /\b(sugest[aã]o|sugest[oõ]es|op[cç][aã]o|op[cç][oõ]es|escolh|aplicar|melhoria|alternativa|prefere|qual|cores?|estilos?|modelos?|formatos?|tipos?|posso fazer|posso te dar|posso oferecer|quer seguir|quer que eu|bot[aã]o|bot[oõ]es|menu)\b/i
 const MIN_PLAIN_CHOICE_OPTIONS = 4
 const SHORT_CHOICE_MAX_LENGTH = 48
 const TECHNICAL_CHOICE_RE =
@@ -60,6 +60,29 @@ function matchOptionLine(line: string): string | null {
 
 function splitChoice(value: string): ChatSuggestionChoice {
   const cleaned = cleanInlineMarkdown(value)
+  const cardTitle = cleaned.match(
+    /(?:^|\s)T[ií]tulo:\s*(.+?)(?:\s+Descri[cç][aã]o:|\s+Bot[aã]o:|$)/i,
+  )
+  const cardDescription = cleaned.match(
+    /(?:^|\s)Descri[cç][aã]o:\s*(.+?)(?:\s+Bot[aã]o:|$)/i,
+  )
+  const cardButton = cleaned.match(/(?:^|\s)Bot[aã]o:\s*(.+)$/i)
+
+  if (cardTitle?.[1]) {
+    return {
+      title: cleanInlineMarkdown(cardButton?.[1] || cardTitle[1]),
+      description: cleanInlineMarkdown(cardDescription?.[1] || cardTitle[1]),
+    }
+  }
+
+  const cardPrefix = cleaned.replace(/^card\s*:\s*/i, "").trim()
+  if (cardPrefix !== cleaned && cardPrefix) {
+    return {
+      title: cardPrefix,
+      description: "",
+    }
+  }
+
   const separator = cleaned.match(/\s(?:[-–—])\s|:\s/)
 
   if (!separator || separator.index === undefined) {

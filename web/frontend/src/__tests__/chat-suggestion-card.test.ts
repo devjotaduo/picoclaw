@@ -61,6 +61,37 @@ Garantir navegacao por teclado.
     ])
   })
 
+  it("extracts card-style choices from assistant option answers", () => {
+    const parsed = parseChatSuggestionCard(`
+Aqui vão 4 opções:
+
+1. Card: Resposta rápida Título: Responder cliente agora Descrição: Gerar uma mensagem curta para WhatsApp. Botão: Usar resposta rápida
+2. Card: Fluxo guiado Título: Criar fluxo de atendimento Descrição: Montar uma sequência para triagem. Botão: Criar fluxo
+3. Card: Resumo Título: Ver resumo do caso Descrição: Mostrar o que é mais importante. Botão: Ver resumo
+4. Card: Encaminhamento Título: Chamar humano Descrição: Passar a conversa para suporte. Botão: Chamar suporte
+`)
+
+    expect(parsed?.title).toBe("Aqui vão 4 opções:")
+    expect(parsed?.options).toEqual([
+      {
+        title: "Usar resposta rápida",
+        description: "Gerar uma mensagem curta para WhatsApp.",
+      },
+      {
+        title: "Criar fluxo",
+        description: "Montar uma sequência para triagem.",
+      },
+      {
+        title: "Ver resumo",
+        description: "Mostrar o que é mais importante.",
+      },
+      {
+        title: "Chamar suporte",
+        description: "Passar a conversa para suporte.",
+      },
+    ])
+  })
+
   it("extracts nested-looking option prompts from one markdown list item", () => {
     const parsed = parseChatSuggestionCard(`
 - 3 opções mais chiques
