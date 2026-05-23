@@ -16,8 +16,18 @@ build/
 cmd/**/workspace
 
 # Dev / debug artifacts at repo root
+.codex-dev/
 .codex-dev-logs/
 pre-cadastro-e2e-*.png
+
+# Local-only runtime snapshots / experiments at repo root that look like
+# they belong in $PICOCLAW_HOME or a tenant volume but accidentally land
+# here when an operator points a launcher/tenant at the repo dir.
+/home/
+/frontend/
+workspace-assistente/
+workspace-marketing/
+workspace-vendas/
 
 # agent-skills + ui-ux-pro-max-skill were accidentally added as gitlinks
 # (mode 160000) in earlier commits without a corresponding .gitmodules
