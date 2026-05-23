@@ -391,34 +391,33 @@ export const CodeBlockContent = ({
     [code, language, rawTokens],
   )
 
-  // Async highlighting result (populated after shiki loads)
-  const [asyncTokens, setAsyncTokens] = useState<TokenizedCode | null>(null)
-  const asyncKeyRef = useRef({ code, language })
+  const asyncKey = useMemo(
+    () => getTokensCacheKey(code, language),
+    [code, language],
+  )
 
-  // Invalidate stale async tokens synchronously during render
-  if (
-    asyncKeyRef.current.code !== code ||
-    asyncKeyRef.current.language !== language
-  ) {
-    asyncKeyRef.current = { code, language }
-    setAsyncTokens(null)
-  }
+  // Async highlighting result (populated after shiki loads)
+  const [asyncTokens, setAsyncTokens] = useState<{
+    key: string
+    tokens: TokenizedCode
+  } | null>(null)
 
   useEffect(() => {
     let cancelled = false
 
     highlightCode(code, language, (result) => {
       if (!cancelled) {
-        setAsyncTokens(result)
+        setAsyncTokens({ key: asyncKey, tokens: result })
       }
     })
 
     return () => {
       cancelled = true
     }
-  }, [code, language])
+  }, [asyncKey, code, language])
 
-  const tokenized = asyncTokens ?? syncTokens
+  const tokenized =
+    asyncTokens?.key === asyncKey ? asyncTokens.tokens : syncTokens
 
   return (
     <div className="relative overflow-auto">
