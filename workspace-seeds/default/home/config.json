@@ -1,0 +1,227 @@
+{
+  "_comment": "Template baseline para tenants Picoclaw. Placeholders ${LITELLM_KEY} / ${LITELLM_URL} / ${TENANT_ID} são substituídos pelo provisionador no momento da criação do tenant. NÃO edite os 3 sub-agentes pixel/doc/dev — eles são infra compartilhada (PR no repo). Edite agents.list[0] (main) para customizar por tenant.",
+  "version": 3,
+  "session": {
+    "dimensions": ["chat"]
+  },
+  "isolation": {},
+  "ui": {
+    "show_reasoning": false,
+    "show_tool_calls": false,
+    "show_model_selector": true
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/root/.picoclaw/workspace",
+      "restrict_to_workspace": true,
+      "allow_read_outside_workspace": false,
+      "provider": "litellm",
+      "model_name": "default",
+      "max_tokens": 8192,
+      "context_window": 131072,
+      "max_tool_iterations": 50,
+      "summarize_message_threshold": 20,
+      "summarize_token_percent": 75,
+      "steering_mode": "one-at-a-time",
+      "split_on_marker": false,
+      "max_llm_retries": 2,
+      "llm_retry_backoff_secs": 2,
+      "tool_feedback": {
+        "enabled": false,
+        "max_args_length": 300,
+        "separate_messages": false
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "name": "Atendente",
+        "avatar": {
+          "type": "preset",
+          "icon": "headset",
+          "initials": "AT",
+          "background": "#2563eb",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace",
+        "subagents": {
+          "allow_agents": ["pixel", "doc", "dev"]
+        },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": ["tenant_owner", "tenant_admin", "platform_admin"],
+          "whatsapp_direct_enabled": false
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "attendant",
+          "description": "Agente principal cliente-facing. Operador deve customizar nome, escopo e tom no AGENT.md/SOUL.md."
+        }
+      },
+      {
+        "id": "pixel",
+        "name": "Pixel",
+        "avatar": {
+          "type": "preset",
+          "icon": "image",
+          "initials": "PX",
+          "background": "#7c3aed",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace/agents/pixel",
+        "subagents": { "allow_agents": [] },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": ["platform_admin", "tenant_admin"],
+          "whatsapp_direct_enabled": false
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "assistant",
+          "description": "Sub-agente interno (thin-router) para geração de imagens. Delega Claude CLI > Codex CLI.",
+          "assistant": {
+            "authorized_scopes": ["workspace", "image_generation"],
+            "report_cadence": ["on_demand"],
+            "audit_level": "medium"
+          }
+        }
+      },
+      {
+        "id": "doc",
+        "name": "Doc",
+        "avatar": {
+          "type": "preset",
+          "icon": "file-text",
+          "initials": "DC",
+          "background": "#0ea5e9",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace/agents/doc-maker",
+        "subagents": { "allow_agents": [] },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": ["platform_admin", "tenant_admin"],
+          "whatsapp_direct_enabled": false
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "assistant",
+          "description": "Sub-agente interno (thin-router) para geração de documentos PDF/DOCX/MD/HTML. Delega Claude CLI > Codex CLI.",
+          "assistant": {
+            "authorized_scopes": ["workspace", "documents"],
+            "report_cadence": ["on_demand"],
+            "audit_level": "medium"
+          }
+        }
+      },
+      {
+        "id": "dev",
+        "name": "Dev",
+        "avatar": {
+          "type": "preset",
+          "icon": "code",
+          "initials": "DV",
+          "background": "#16a34a",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace/agents/dev-coder",
+        "subagents": { "allow_agents": [] },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": ["platform_admin"],
+          "whatsapp_direct_enabled": false
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "assistant",
+          "description": "Sub-agente interno (thin-router) para programação. Delega Claude CLI > Codex CLI; valida com go vet/pnpm test no CLI.",
+          "assistant": {
+            "authorized_scopes": ["workspace", "github", "terminal", "code_generation"],
+            "report_cadence": ["on_demand"],
+            "audit_level": "high",
+            "requires_confirmation": [
+              "git push",
+              "git push --force",
+              "gh pr merge",
+              "rm -rf"
+            ]
+          }
+        }
+      }
+    ],
+    "dispatch": {
+      "rules": []
+    }
+  },
+  "model_list": [
+    {
+      "model_name": "default",
+      "provider": "litellm",
+      "model": "gpt-4o-mini",
+      "api_base": "${LITELLM_URL}",
+      "api_key": "${LITELLM_KEY}",
+      "enabled": true
+    }
+  ],
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 18790,
+    "hot_reload": false,
+    "log_level": "error"
+  },
+  "events": {
+    "logging": {
+      "enabled": true,
+      "include": ["agent.*"],
+      "min_severity": "info"
+    }
+  },
+  "hooks": {
+    "enabled": true,
+    "defaults": {
+      "observer_timeout_ms": 500,
+      "interceptor_timeout_ms": 5000,
+      "approval_timeout_ms": 60000
+    }
+  },
+  "tools": {
+    "allow_read_paths": null,
+    "allow_write_paths": null,
+    "filter_sensitive_data": true,
+    "filter_min_length": 8,
+    "exec": {
+      "enabled": true,
+      "enable_deny_patterns": true,
+      "allow_remote": false,
+      "custom_deny_patterns": null,
+      "custom_allow_patterns": null,
+      "timeout_seconds": 300
+    },
+    "read_file": {
+      "enabled": true,
+      "mode": "bytes",
+      "max_read_file_size": 65536
+    },
+    "write_file": {
+      "enabled": true,
+      "workspace_only": true
+    },
+    "edit_file": { "enabled": true },
+    "append_file": { "enabled": true },
+    "list_files": { "enabled": true },
+    "list_dir": { "enabled": true },
+    "web": {
+      "enabled": false
+    },
+    "find_skills": { "enabled": false },
+    "install_skill": { "enabled": false },
+    "skills": {
+      "enabled": true
+    },
+    "spawn": { "enabled": false },
+    "spawn_status": { "enabled": false },
+    "subagent": { "enabled": true }
+  },
+  "channels": {}
+}

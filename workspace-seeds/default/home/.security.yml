@@ -1,0 +1,54 @@
+# Picoclaw security policy — baseline para tenants do template `default`.
+#
+# Edite via `adm.<base>/workspaces/<id>/files` ou SSH no host.
+# Trade-off por padrão: conservador — agente responde mensagens, lê
+# memória, executa shell/CLI controlado, mas não escreve fora do
+# workspace nem faz HTTP arbitrário sem o operador abrir o allowlist.
+
+# Isolamento de subprocessos (exec, MCP stdio, CLI providers como
+# claude/codex). Em prod com bubblewrap (Linux), ligue. Em dev/macOS é
+# no-op.
+isolation:
+  enabled: false  # ative quando o host tiver bwrap validado
+
+# Allowlist de tools. Tools fora dessa lista retornam "tool not permitted".
+tools:
+  read_file:
+    enabled: true
+  write_file:
+    enabled: true
+    workspace_only: true   # provider-managed paths bloqueados mesmo true
+  edit_file:
+    enabled: true
+  append_file:
+    enabled: true
+  list_files:
+    enabled: true
+  list_dir:
+    enabled: true
+  exec:
+    enabled: true
+    enable_deny_patterns: true
+    allow_remote: false   # canal externo não consegue rodar exec
+    timeout_seconds: 300  # 5 min — caber chamadas longas de claude/codex
+  web_search:
+    enabled: false        # operador habilita quando o tenant precisar
+  web_fetch:
+    enabled: false
+  spawn:
+    enabled: false        # sub-agentes via @mention, não via tool
+  find_skills:
+    enabled: false        # tenant não baixa skills do marketplace
+  install_skill:
+    enabled: false
+
+# Allowlist de canais que conseguem invocar o agente.
+# `panel` e `pico` são canais internos (sempre confiáveis). WhatsApp e
+# outros canais públicos ficam restritos até o operador habilitar.
+channels:
+  panel:
+    enabled: true
+  pico:
+    enabled: true
+  whatsapp:
+    enabled: false

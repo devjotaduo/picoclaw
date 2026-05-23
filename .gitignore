@@ -69,6 +69,7 @@ config.json
 sessions/
 build/
 
+
 # Coverage
 
 # Secrets & Config (keep templates, ignore actual secrets)
@@ -133,3 +134,12 @@ docker/data
 .playwright-mcp/
 docker/saas/traefik/dynamic/dev-tls.yml
 .worktrees/
+
+# ============================================================================
+# Tracked exceptions — MUST come last to override patterns above.
+# Tenant template configs under workspace-seeds/ are versioned in Git.
+# They carry ${LITELLM_KEY}/${LITELLM_URL}/${TENANT_ID} placeholders that
+# the provisioner substitutes at tenant-create time — no real secrets.
+# ============================================================================
+!workspace-seeds/**/config.json
+!workspace-seeds/**/.security.yml
