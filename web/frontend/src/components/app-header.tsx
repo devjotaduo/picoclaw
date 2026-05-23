@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator.tsx"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { TemplateSelector } from "@/components/template-selector"
 import {
   Tooltip,
   TooltipContent,
@@ -197,6 +198,10 @@ export function AppHeader() {
           showHeaderActions ? "flex" : "hidden"
         } items-center gap-1 text-sm font-medium md:gap-2`}
       >
+        {/* Runtime persona/template switcher — overrides ui-visibility profile
+            resolution via localStorage. See components/template-selector.tsx. */}
+        <TemplateSelector compact />
+
         {restartRequired && showGatewayRestart && (
           <Tooltip delayDuration={700}>
             <TooltipTrigger asChild>

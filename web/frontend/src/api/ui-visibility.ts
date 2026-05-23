@@ -129,10 +129,56 @@ export async function getLocalUIVisibilityPolicy(): Promise<UIVisibilityPolicy> 
   return normalizeUIVisibilityPolicy(await res.json())
 }
 
+// localStorage key used by the runtime template selector to override
+// auto-resolution. Set via setUIVisibilityProfileOverride(); cleared by
+// passing null. Other tabs / hooks observe changes via the "storage" event.
+export const UI_VISIBILITY_OVERRIDE_STORAGE_KEY = "picoclaw.ui-visibility.override"
+
+export function getUIVisibilityProfileOverride(): UIVisibilityProfile | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(UI_VISIBILITY_OVERRIDE_STORAGE_KEY)
+    return isUIVisibilityProfile(raw) ? raw : null
+  } catch {
+    return null
+  }
+}
+
+export function setUIVisibilityProfileOverride(
+  profile: UIVisibilityProfile | null,
+): void {
+  if (typeof window === "undefined") return
+  try {
+    if (profile) {
+      window.localStorage.setItem(UI_VISIBILITY_OVERRIDE_STORAGE_KEY, profile)
+    } else {
+      window.localStorage.removeItem(UI_VISIBILITY_OVERRIDE_STORAGE_KEY)
+    }
+    // Notify same-tab listeners (the native "storage" event only fires
+    // across tabs/windows, not within the tab that performed the write).
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: UI_VISIBILITY_OVERRIDE_STORAGE_KEY,
+        newValue: profile,
+      }),
+    )
+  } catch {
+    // best-effort — Safari private mode etc. just won't persist
+  }
+}
+
 export function resolveUIVisibilityProfile(
   policy: UIVisibilityPolicy,
   launcherPolicy?: Pick<LauncherPolicyResponse, "role" | "is_saas_admin">,
 ): UIVisibilityProfile {
+  // Runtime override from the template selector takes precedence over
+  // both the JSON's `active_profile` field and the role-based resolution.
+  // This is the dev/admin "preview as ..." switch.
+  const override = getUIVisibilityProfileOverride()
+  if (override) {
+    return override
+  }
+
   if (policy.active_profile) {
     return policy.active_profile
   }
