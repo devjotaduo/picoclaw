@@ -30,7 +30,10 @@ import { useGateway } from "@/hooks/use-gateway"
 import { usePicoChat } from "@/hooks/use-pico-chat"
 import { useSessionHistory } from "@/hooks/use-session-history"
 import { useUIVisibility } from "@/hooks/use-ui-visibility"
-import { groupChatSuggestionMessages } from "@/lib/chat-suggestion-card"
+import {
+  groupChatSuggestionMessages,
+  parseChatSuggestionCard,
+} from "@/lib/chat-suggestion-card"
 import type { ConnectionState } from "@/store/chat"
 import type { ChatAttachment } from "@/store/chat"
 import { showAssistantDetailsAtom } from "@/store/chat"
@@ -286,6 +289,27 @@ export function ChatPage() {
     () => groupChatSuggestionMessages(messages),
     [messages],
   )
+  const activeSuggestionMessageId = useMemo(() => {
+    for (let index = displayMessages.length - 1; index >= 0; index -= 1) {
+      const message = displayMessages[index]
+      if (message.role === "user") {
+        return null
+      }
+
+      const isPlainAssistantMessage =
+        message.role === "assistant" &&
+        (message.kind === undefined || message.kind === "normal") &&
+        (message.attachments?.length ?? 0) === 0 &&
+        (message.toolCalls?.length ?? 0) === 0 &&
+        message.content.trim().length > 0
+
+      if (isPlainAssistantMessage && parseChatSuggestionCard(message.content)) {
+        return message.id
+      }
+    }
+
+    return null
+  }, [displayMessages])
 
   const publicAttendantAgent = useMemo(
     () => findPublicAttendantAgent(agents),
@@ -649,6 +673,7 @@ export function ChatPage() {
                       timestamp={msg.timestamp}
                       onSuggestionReply={handleSuggestionReply}
                       showAssistantDetailContent={showAssistantDetailContent}
+                      allowSuggestionCard={msg.id === activeSuggestionMessageId}
                     />
                   ) : (
                     <UserMessage

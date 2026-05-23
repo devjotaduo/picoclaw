@@ -1,4 +1,9 @@
-import { IconCheck, IconCopy, IconFileText } from "@tabler/icons-react"
+import {
+  IconCheck,
+  IconCopy,
+  IconFileText,
+  IconTerminal2,
+} from "@tabler/icons-react"
 import { useState } from "react"
 
 import {
@@ -45,6 +50,7 @@ interface AssistantMessageProps {
   timestamp?: string | number
   onSuggestionReply?: (content: string) => void
   showAssistantDetailContent?: boolean
+  allowSuggestionCard?: boolean
 }
 
 function localizeContextCommandContent(content: string): string {
@@ -152,12 +158,36 @@ function AssistantReasoningStatus({
   content,
   showContent,
   label = "Pensando",
+  compact = false,
 }: {
   content: string
   showContent: boolean
   label?: string
+  compact?: boolean
 }) {
   const hasContent = showContent && content.trim().length > 0
+
+  if (compact && !hasContent) {
+    return (
+      <Reasoning
+        className="mb-1 rounded-md px-1 py-0"
+        defaultOpen={false}
+        isStreaming
+      >
+        <ReasoningTrigger
+          aria-label={label}
+          className="text-muted-foreground/75 hover:text-muted-foreground/75 pointer-events-none w-fit cursor-default gap-2 px-0 py-0 text-[13px]"
+        >
+          <span className="border-border/60 bg-muted/20 text-muted-foreground/70 grid size-4 shrink-0 place-items-center rounded-sm border">
+            <IconTerminal2 className="size-3" />
+          </span>
+          <Shimmer as="span" duration={1.1}>
+            {label}
+          </Shimmer>
+        </ReasoningTrigger>
+      </Reasoning>
+    )
+  }
 
   return (
     <Reasoning isStreaming={!hasContent} defaultOpen={hasContent}>
@@ -185,12 +215,17 @@ function AssistantToolStatus({
   showContent: boolean
 }) {
   const visibleToolCalls = toolCalls.length > 0 ? toolCalls : [{}]
+  const activeLabel =
+    toolCalls.length > 0
+      ? `Executando ${summarizeToolCall(toolCalls[0])}`
+      : "Executando tarefa"
 
   if (!showContent) {
     return (
       <AssistantReasoningStatus
+        compact
         content=""
-        label="Executando tarefa"
+        label={activeLabel}
         showContent={false}
       />
     )
@@ -306,6 +341,7 @@ export function AssistantMessage({
   timestamp = "",
   onSuggestionReply,
   showAssistantDetailContent = true,
+  allowSuggestionCard = true,
 }: AssistantMessageProps) {
   const [isCopied, setIsCopied] = useState(false)
   const isThought = kind === "thought"
@@ -327,7 +363,9 @@ export function AssistantMessage({
     timestamp !== "" ? formatMessageTime(timestamp) : ""
   const messageMeta = [assistantName.trim(), formattedTimestamp].filter(Boolean)
   const suggestionCard =
-    kind === "normal" ? parseChatSuggestionCard(displayContent) : null
+    kind === "normal" && allowSuggestionCard
+      ? parseChatSuggestionCard(displayContent)
+      : null
   const sources = [
     ...extractLinks(displayContent),
     ...attachmentSources(fileAttachments),
@@ -388,6 +426,7 @@ export function AssistantMessage({
         >
           {isThought && (
             <AssistantReasoningStatus
+              compact={!showAssistantDetailContent}
               content={displayContent}
               showContent={showAssistantDetailContent}
             />
