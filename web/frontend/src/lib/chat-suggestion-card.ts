@@ -20,7 +20,7 @@ export interface ChatSuggestionMessageInput {
 const OPTION_LINE_RE = /^\s*(?:[-*•]|\d{1,2}[.)])\s+(.*)$/
 const CHECKBOX_LINE_RE = /^\s*[-*]\s+\[[ xX]\]\s+(.*)$/
 const SUGGESTION_CUE_RE =
-  /\b(sugest[aã]o|sugest[oõ]es|op[cç][aã]o|op[cç][oõ]es|escolh|aplicar|melhoria|alternativa|prefere|qual|cores?|estilos?|modelos?|formatos?|tipos?|posso fazer|posso te dar|posso oferecer|quer seguir|quer que eu|bot[aã]o|bot[oõ]es|menu)\b/i
+  /\b(sugest[aã]o|sugest[oõ]es|op[cç][aã]o|op[cç][oõ]es|escolh|aplicar|melhoria|alternativa|prefere|qual|cores?|estilos?|modelos?|formatos?|tipos?|posso fazer|posso te dar|posso oferecer|quer seguir|quer que eu|bot[aã]o|bot[oõ]es|menu|use quando|quando usar)\b/i
 const MIN_PLAIN_CHOICE_OPTIONS = 4
 const SHORT_CHOICE_MAX_LENGTH = 48
 const TECHNICAL_CHOICE_RE =
@@ -80,6 +80,22 @@ function splitChoice(value: string): ChatSuggestionChoice {
     return {
       title: cardPrefix,
       description: "",
+    }
+  }
+
+  const useWhen = cleaned.match(/^(.+?)\s+Use quando\s+(.+)$/i)
+  if (useWhen?.[1] && useWhen?.[2]) {
+    return {
+      title: cleanInlineMarkdown(useWhen[1]),
+      description: `Use quando ${cleanInlineMarkdown(useWhen[2])}`,
+    }
+  }
+
+  const whenToUse = cleaned.match(/^(.+?)\s+Quando usar:?\s+(.+)$/i)
+  if (whenToUse?.[1] && whenToUse?.[2]) {
+    return {
+      title: cleanInlineMarkdown(whenToUse[1]),
+      description: cleanInlineMarkdown(whenToUse[2]),
     }
   }
 
@@ -204,6 +220,14 @@ export function parseChatSuggestionCard(
         const optionText = matchOptionLine(lines[index])
         return Boolean(optionText && !isTechnicalChoiceText(optionText))
       })) ||
+    optionIndexes.some((index) => {
+      const optionText = matchOptionLine(lines[index])
+      return Boolean(
+        optionText &&
+        !isTechnicalChoiceText(optionText) &&
+        SUGGESTION_CUE_RE.test(cleanInlineMarkdown(optionText)),
+      )
+    }) ||
     lines
       .slice(0, firstOptionIndex + 1)
       .some((line) => SUGGESTION_CUE_RE.test(cleanInlineMarkdown(line)))

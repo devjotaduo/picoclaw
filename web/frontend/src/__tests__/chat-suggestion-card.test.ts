@@ -92,6 +92,64 @@ Aqui vão 4 opções:
     ])
   })
 
+  it("extracts separate numbered use-when choices into one card", () => {
+    const grouped = groupChatSuggestionMessages([
+      {
+        id: "one",
+        role: "assistant",
+        content:
+          "1. Diagnóstico rápido Use quando você quer identificar o principal problema do atendimento antes de mexer em script, fluxo ou equipe.",
+      },
+      {
+        id: "two",
+        role: "assistant",
+        content:
+          "2. Ajuste da mensagem inicial Use quando o atendimento começa frio, confuso ou genérico.",
+      },
+      {
+        id: "three",
+        role: "assistant",
+        content:
+          "3. Triagem mais clara Use quando as conversas se perdem no começo.",
+      },
+      {
+        id: "four",
+        role: "assistant",
+        content:
+          "4. Follow-up mais eficiente Use quando muitos atendimentos ficam parados.",
+      },
+      {
+        id: "pick",
+        role: "assistant",
+        content: "Se quiser, escolha 1, 2, 3 ou 4.",
+      },
+    ])
+    const parsed = parseChatSuggestionCard(grouped[0].content)
+
+    expect(grouped[0].id).toBe("one-suggestions")
+    expect(parsed?.title).toBe("Qual opção você quer seguir?")
+    expect(parsed?.options).toEqual([
+      {
+        title: "Diagnóstico rápido",
+        description:
+          "Use quando você quer identificar o principal problema do atendimento antes de mexer em script, fluxo ou equipe.",
+      },
+      {
+        title: "Ajuste da mensagem inicial",
+        description:
+          "Use quando o atendimento começa frio, confuso ou genérico.",
+      },
+      {
+        title: "Triagem mais clara",
+        description: "Use quando as conversas se perdem no começo.",
+      },
+      {
+        title: "Follow-up mais eficiente",
+        description: "Use quando muitos atendimentos ficam parados.",
+      },
+    ])
+  })
+
   it("extracts nested-looking option prompts from one markdown list item", () => {
     const parsed = parseChatSuggestionCard(`
 - 3 opções mais chiques
