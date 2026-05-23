@@ -1,5 +1,5 @@
 # ============================================================
-# Stage 1: Build admin UI (Node.js + pnpm)
+# Stage 1a: Build admin UI (Node.js + pnpm)
 # ============================================================
 FROM node:24-alpine3.23 AS frontend
 
@@ -11,6 +11,25 @@ COPY web/saas-admin/package.json web/saas-admin/pnpm-lock.yaml ./
 RUN CI=true pnpm install --frozen-lockfile
 
 COPY web/saas-admin/ ./
+RUN pnpm build
+
+# ============================================================
+# Stage 1b: Build apex landing page (Node.js + pnpm)
+#
+# Esta landing é servida em jotaduo.com (apex) via LandingMux do controlplane
+# que lê de /var/lib/picoclaw-landing/ na imagem final. Bakeada aqui pra que
+# todo push em web/landing/ entre em produção via CI/CD sem passos manuais.
+# ============================================================
+FROM node:24-alpine3.23 AS landing
+
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+
+WORKDIR /src/web/landing
+
+COPY web/landing/package.json web/landing/pnpm-lock.yaml ./
+RUN CI=true pnpm install --frozen-lockfile
+
+COPY web/landing/ ./
 RUN pnpm build
 
 # ============================================================
@@ -47,6 +66,13 @@ RUN apk add --no-cache ca-certificates tzdata curl
 
 COPY --from=builder /out/picoclaw-saas /usr/local/bin/picoclaw-saas
 COPY --from=builder /out/picoclaw-tenantctl /usr/local/bin/picoclaw-tenantctl
+
+# Bake the apex landing dist into the image. LandingMux reads from this
+# path at request time (PICOCLAW_LANDING_DIR default). With no host
+# bind-mount, every controlplane rebuild ships the latest landing.
+# Operator que quiser hot-fix sem rebuild pode docker exec ou re-adicionar
+# o bind-mount em docker-compose.override.yml apontando para esta mesma path.
+COPY --from=landing /src/web/landing/dist /var/lib/picoclaw-landing
 
 EXPOSE 8080
 

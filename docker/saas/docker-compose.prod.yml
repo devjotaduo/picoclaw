@@ -223,12 +223,15 @@ services:
       - /srv/saas/tenants:/srv/saas/tenants
       - controlplane_data:/var/lib/picoclaw-saas
       - /srv/picoclaw-workspaces:/srv/picoclaw-workspaces
-      # Static React landing for jotaduo.com apex. Built locally in
-      # web/landing/ and uploaded via scp. Read-only; controlplane reads
-      # at request time so an scp is immediately visible. If the dir is
-      # empty the apex falls through to the SPA admin (safe default).
-      # See web/landing/README.md for the workflow.
-      - /var/lib/picoclaw-landing:/var/lib/picoclaw-landing:ro
+      # NOTE: a landing page de jotaduo.com (apex) é BAKEADA na imagem
+      # do controlplane em /var/lib/picoclaw-landing/ — ver Dockerfile
+      # stage 1b. Toda push em web/landing/ entra em produção via CI/CD
+      # automaticamente. Para hot-fix sem rebuild, criar
+      # docker-compose.override.yml com:
+      #   volumes:
+      #     - /var/lib/picoclaw-landing:/var/lib/picoclaw-landing:ro
+      # e fazer scp pra /var/lib/picoclaw-landing/ na VPS — o bind-mount
+      # do host sobrescreve o conteúdo bakeado da imagem.
     networks:
       - saas_edge
       - saas_llm

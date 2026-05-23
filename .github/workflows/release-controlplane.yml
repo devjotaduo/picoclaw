@@ -24,6 +24,7 @@ on:
       - "pkg/**"
       - "web/saas-admin/**"
       - "web/frontend/**"
+      - "web/landing/**"
       - "web/backend/**"
       - "go.mod"
       - "go.sum"
