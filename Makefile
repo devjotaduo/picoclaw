@@ -1,5 +1,5 @@
 .PHONY: all build install uninstall clean help test cover build-all lint-docs \
-	build-whatsapp-native-local \
+	build-whatsapp-native-local sync-seeds check-seeds \
 	saas-dev-sync saas-dev-controlplane saas-dev-tenants saas-dev-admin-ui saas-dev-tenant-ui
 
 # Build variables
@@ -428,6 +428,14 @@ fmt:
 lint-docs:
 	@./scripts/lint-docs.sh
 
+## sync-seeds: Copy thin-router agents + cli-delegation skill from workspace/ to workspace-seeds/
+sync-seeds:
+	@./scripts/sync-workspace-seeds.sh --apply
+
+## check-seeds: Verify workspace-seeds/ is in sync with workspace/ (fails if drift)
+check-seeds:
+	@./scripts/sync-workspace-seeds.sh --check
+
 ## lint: Run linters
 lint:
 	@$(GOLANGCI_LINT) run --build-tags $(GO_BUILD_TAGS)
@@ -448,7 +456,7 @@ update-deps:
 	@$(GO) mod tidy
 
 ## check: Run deps, fmt, vet, tests, and docs consistency checks
-check: deps fmt vet test lint-docs
+check: deps fmt vet test lint-docs check-seeds
 
 ## run: Build and run picoclaw
 run: build

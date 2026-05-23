@@ -12,15 +12,42 @@ workspace-seeds/
 └── <slug>/
     ├── README.md              ← descreve o template (público-alvo, tom, etc.)
     └── home/                  ← vira /root/.picoclaw dentro do tenant
-        ├── AGENT.md, SOUL.md  ← agente principal
-        ├── .security.yml      ← política de segurança
-        ├── config.json        ← com placeholders ${LITELLM_KEY}/${TENANT_ID}
+        ├── AGENT.md, SOUL.md  ← agente principal (editado à mão por template)
+        ├── .security.yml      ← política de segurança (à mão)
+        ├── config.json        ← com placeholders ${LITELLM_KEY}/${TENANT_ID} (à mão)
         └── workspace/         ← memória, skills, sub-agentes
+            ├── agents/        ← GERADO via sync (não editar aqui)
+            └── skills/        ← GERADO via sync (não editar aqui)
 ```
 
 `home/` é exatamente o que `tenant.CopyWorkspaceHome` espera — o
 provisionador copia o subtree inteiro para o volume do tenant, depois
 substitui placeholders e adiciona a key LiteLLM gerada.
+
+## Fonte da verdade dos arquivos compartilhados
+
+Os arquivos em `<slug>/home/workspace/agents/` e `<slug>/home/workspace/skills/`
+**não são editados aqui**. A fonte da verdade é `workspace/` na raiz do
+repo (que é o seed do launcher dev). O script
+`scripts/sync-workspace-seeds.sh` copia os diretórios listados nele
+(`THIN_ROUTER_AGENTS` + `SHARED_SKILLS`) para todos os seeds, removendo
+runtime state (`memory/`, `sessions/`, `*.db`, etc.).
+
+```bash
+# Após editar workspace/agents/pixel/AGENT.md ou
+# workspace/skills/cli-delegation/SKILL.md:
+make sync-seeds          # ou: scripts/sync-workspace-seeds.sh --apply
+
+# Antes de commitar (e em CI):
+make check-seeds         # falha se workspace-seeds está dessincronizado
+```
+
+`make check-seeds` é parte de `make check`, então PRs com seeds
+dessincronizados quebram o pre-PR.
+
+Arquivos NÃO-gerados (`AGENT.md`/`SOUL.md` raiz, `config.json`,
+`.security.yml`) são editados à mão por template — eles definem a
+personalidade do template, não infra compartilhada.
 
 ## Estado atual: stage 1 (versionado, sync manual)
 
