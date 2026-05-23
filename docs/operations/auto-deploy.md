@@ -1,22 +1,33 @@
-# Auto-deploy (CI → GHCR → VPS pull)
+# Auto-deploy (CI -> GHCR -> VPS pull)
 
-Status: planned for `155.138.210.187` (live SaaS host).
+Status: canonical production deploy for `155.138.210.187` (live SaaS host).
 
-The SaaS controlplane container auto-updates from `ghcr.io/devjotaduo/picoclaw-saas:main`
-every 2 minutes via a systemd timer on the VPS. CI builds the image on every
-push to `main` that touches controlplane code; the VPS polls and recreates
-the container only when the image actually changed.
+The VPS does not compile application code. CI builds the runtime images on
+every relevant push to `main`, pushes them to GHCR, and the VPS polls every 2
+minutes via a systemd timer. The deploy script pulls the images, retags them to
+the local names used by Compose, and recreates only central services whose
+image ID changed.
+
+Images published by `.github/workflows/release-controlplane.yml`:
+
+- `ghcr.io/devjotaduo/picoclaw-saas:main`
+- `ghcr.io/devjotaduo/picoclaw-launcher:main`
+- `ghcr.io/devjotaduo/picoclaw-browser-sidecar:main`
+- `ghcr.io/devjotaduo/picoclaw-opencrm:main`
 
 **Tenant containers (`tenant-<id>`) are NOT touched by this mechanism.**
-They run `picoclaw-launcher:latest` (a different image), hold live
-customer state (sessions, dashboardauth, whatsapp), and need intentional
-update flows.
+The script only makes the new launcher image available locally as
+`picoclaw-launcher:latest`. Existing tenants hold live customer state
+(sessions, dashboardauth, whatsapp) and still need intentional update flows.
 
 ## Topology this assumes
 
 - The VPS is fully containerized (no Go/Node toolchain).
 - `controlplane` container runs `picoclaw/saas:latest` (local tag).
-- Compose file at `/srv/saas/picoclaw/docker/saas/docker-compose.yml`,
+- `browser-sidecar` runs `picoclaw/browser-sidecar:latest` (local tag).
+- `opencrm` runs `picoclaw/opencrm:latest` (local tag).
+- Tenant creation/recreate uses `picoclaw-launcher:latest`.
+- Compose file at `/srv/saas/picoclaw/docker/saas/docker-compose.prod.yml`,
   project name `picoclaw-saas`.
 - Docker 20.10+ with `compose` v2 plugin.
 - ~134 MiB RAM headroom is enough — pulls + recreate happen in <100 MiB.
@@ -34,21 +45,20 @@ push to main
    │
    ▼
 .github/workflows/release-controlplane.yml
-   │ builds docker/saas/Dockerfile
-   │ pushes ghcr.io/devjotaduo/picoclaw-saas:main
-   │             :sha-<short>  (immutable per-commit)
+   │ builds controlplane, launcher, browser-sidecar, opencrm
+   │ pushes :main and :sha-<commit> tags to GHCR
    ▼
 ~2 min later, on the VPS:
    │ /etc/systemd/system/picoclaw-deploy.timer fires
    ▼
 /usr/local/bin/picoclaw-deploy.sh
-   │ docker pull ghcr.io/.../picoclaw-saas:main
-   │ docker tag  ghcr.io/.../picoclaw-saas:main picoclaw/saas:latest
-   │ compare image ID vs running container
+   │ docker pull ghcr.io/... images
+   │ docker tag them to local Compose tags
+   │ compare image ID vs running central containers
    │ if different:
-   │   docker compose -f .../docker-compose.yml up -d --no-deps controlplane
+   │   docker compose -f .../docker-compose.prod.yml up -d --no-deps <service>
    ▼
-new controlplane container live
+new central containers live; tenant image staged for explicit tenant recreate
 ```
 
 ## Why pull-based over GitHub Actions SSH
@@ -80,10 +90,12 @@ docker login ghcr.io -u <github-user>
 # paste a PAT with `read:packages` scope only — NO write/admin.
 
 # 2. Make sure /srv/saas/picoclaw/ has the auto-deploy scripts. If it's
-#    stale (synced from a dev box), pull a fresh copy. The scripts are
-#    in the repo at scripts/auto-deploy/. One way:
+#    stale, refresh a minimal production bundle. Avoid syncing a dirty
+#    developer working tree to the VPS.
 cd /tmp && git clone https://github.com/devjotaduo/picoclaw.git picoclaw-bootstrap
 cd picoclaw-bootstrap
+install -d /srv/saas/picoclaw/docker/saas
+cp -a docker/saas/docker-compose.prod.yml docker/saas/traefik docker/saas/litellm docker/saas/postgres /srv/saas/picoclaw/docker/saas/
 
 # 3. Install the timer.
 sudo bash scripts/auto-deploy/install.sh
@@ -122,7 +134,7 @@ systemctl disable --now picoclaw-deploy.timer
 docker pull ghcr.io/devjotaduo/picoclaw-saas:sha-XXXXXXX
 docker tag  ghcr.io/devjotaduo/picoclaw-saas:sha-XXXXXXX picoclaw/saas:latest
 docker compose -p picoclaw-saas \
-  -f /srv/saas/picoclaw/docker/saas/docker-compose.yml \
+  -f /srv/saas/picoclaw/docker/saas/docker-compose.prod.yml \
   up -d --no-deps controlplane
 
 # Reinstall the script after editing it in this repo
@@ -131,14 +143,17 @@ sudo bash /tmp/picoclaw-bootstrap/scripts/auto-deploy/install.sh
 
 ## Pinning to a specific build
 
-The deploy script reads `$PICOCLAW_DEPLOY_IMAGE` so you can override
-the tracked tag without editing the script:
+The deploy script reads image override env vars so you can pin one or more
+images without editing the script:
 
 ```bash
 sudo systemctl edit picoclaw-deploy.service
 # In the editor:
 #   [Service]
 #   Environment=PICOCLAW_DEPLOY_IMAGE=ghcr.io/devjotaduo/picoclaw-saas:sha-abc1234
+#   Environment=PICOCLAW_LAUNCHER_SOURCE_IMAGE=ghcr.io/devjotaduo/picoclaw-launcher:sha-abc1234
+#   Environment=PICOCLAW_BROWSER_SIDECAR_SOURCE_IMAGE=ghcr.io/devjotaduo/picoclaw-browser-sidecar:sha-abc1234
+#   Environment=PICOCLAW_OPENCRM_SOURCE_IMAGE=ghcr.io/devjotaduo/picoclaw-opencrm:sha-abc1234
 ```
 
 This is the canonical "freeze deploys during an incident" mechanism.
@@ -149,16 +164,19 @@ Drop the override and `daemon-reload` to resume tracking `:main`.
 | Failure | Behaviour |
 |---|---|
 | `docker pull` fails (auth/network) | Script exits 1; timer retries in 2 min. Container keeps running old image. |
-| Pulled image is broken (compile-time bug snuck through CI) | `docker compose up -d` recreates the container. Healthcheck may fail; container goes into restart loop. Visible in `docker ps`. **No automatic rollback** — you `docker tag ... sha-<previous>` manually. |
+| Pulled image is broken (compile-time bug snuck through CI) | `docker compose up -d` recreates the changed central service. Healthcheck may fail; container goes into restart loop. Visible in `docker ps`. **No automatic rollback** — you `docker tag ... sha-<previous>` manually. |
 | GHCR rate limit | Same as auth failure. |
 | Timer overlapping with slow deploy | `flock` makes the second invocation no-op. |
 | Compose file moved/missing | `install.sh` checks at install time. At runtime, deploy fails loudly. |
-| Tenant container needs the new image | Out of scope. Tenants run `picoclaw-launcher:latest` (different image). |
+| Tenant container needs the new image | Out of scope for the timer. The new `picoclaw-launcher:latest` is available locally; recreate selected tenants intentionally from the admin flow. |
 
 ## What this does NOT do
 
 - **No tenant updates.** Push tenant container updates via the admin
   dashboard's "rebuild tenant" flow.
+- **No source build on the VPS.** `docker/saas/docker-compose.prod.yml` has no
+  `build:` keys. If you need to compile on the box for emergency recovery, use
+  the legacy `docker/saas/docker-compose.yml` deliberately.
 - **No DB migration gating.** Migrations run in-process when the
   controlplane starts (`internal/saas/store/migrations/`). If you
   introduce a migration that needs a specific deploy order, don't

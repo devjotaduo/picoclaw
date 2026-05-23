@@ -19,6 +19,18 @@ cmd/**/workspace
 .codex-dev/
 .codex-dev-logs/
 pre-cadastro-e2e-*.png
+agent-activity-status-*.png
+claude-probe*.png
+single-choice-card-*.png
+tenet-adm-*.png
+*.fbk
+*.db
+*.db-shm
+*.db-wal
+*.rvf
+*.rvf.lock
+workspace*.zip
+wa-native-*.png
 
 # Local-only runtime snapshots / experiments at repo root that look like
 # they belong in $PICOCLAW_HOME or a tenant volume but accidentally land
@@ -27,6 +39,7 @@ pre-cadastro-e2e-*.png
 /frontend/
 workspace-assistente/
 workspace-marketing/
+workspace-pico/
 workspace-vendas/
 
 # agent-skills + ui-ux-pro-max-skill were accidentally added as gitlinks
@@ -110,6 +123,8 @@ web/backend/dist/*
 !web/backend/dist/.gitkeep
 
 .claude/
+.claude-flow/
+.swarm/
 
 docker/data
 

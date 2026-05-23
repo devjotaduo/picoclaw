@@ -75,13 +75,30 @@ install -d -m 755 /srv/saas/opencrm/data
 install -d -m 755 /srv/picoclaw-workspaces  # workspaces live here (one dir per slug)
 ```
 
-## 4. Repo + first workspace
+## 4. Runtime bundle + first workspace
 
-Either git-clone or scp a `git archive HEAD` tarball into
-`/srv/saas/picoclaw/`. Workspaces are created via the admin UI
-(`adm.<base>/workspaces`) after the controlplane is running — see
-[`docs/architecture/workspaces.md`](../architecture/workspaces.md) for
-the on-disk layout the admin creates.
+Do not sync a developer working tree to the VPS. Production only needs a small
+runtime bundle under `/srv/saas/picoclaw/`:
+
+- `docker/saas/docker-compose.prod.yml`
+- `docker/saas/traefik/`
+- `docker/saas/litellm/`
+- `docker/saas/postgres/`
+- `scripts/auto-deploy/` only during timer installation
+
+One bootstrap path from a clean checkout:
+
+```bash
+cd /tmp && git clone https://github.com/devjotaduo/picoclaw.git picoclaw-bootstrap
+cd picoclaw-bootstrap
+install -d /srv/saas/picoclaw/docker/saas
+cp -a docker/saas/docker-compose.prod.yml docker/saas/traefik docker/saas/litellm docker/saas/postgres /srv/saas/picoclaw/docker/saas/
+sudo bash scripts/auto-deploy/install.sh
+```
+
+Workspaces are created via the admin UI (`adm.<base>/workspaces`) after the
+controlplane is running — see [`docs/architecture/workspaces.md`](../architecture/workspaces.md)
+for the on-disk layout the admin creates.
 
 ## 5. `.env`
 
@@ -126,24 +143,29 @@ PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY=3
 TZ=America/Sao_Paulo
 ```
 
-## 6. Build images
+## 6. Pull prebuilt images
 
 ```bash
 cd /srv/saas/picoclaw
-docker compose -f docker/saas/docker-compose.yml --env-file .env pull
-docker compose -f docker/saas/docker-compose.yml --env-file .env build controlplane opencrm
-docker build -f docker/Dockerfile.launcher -t picoclaw-launcher:latest .
+docker pull ghcr.io/devjotaduo/picoclaw-saas:main
+docker pull ghcr.io/devjotaduo/picoclaw-launcher:main
+docker pull ghcr.io/devjotaduo/picoclaw-browser-sidecar:main
+docker pull ghcr.io/devjotaduo/picoclaw-opencrm:main
+docker tag ghcr.io/devjotaduo/picoclaw-saas:main picoclaw/saas:latest
+docker tag ghcr.io/devjotaduo/picoclaw-launcher:main picoclaw-launcher:latest
+docker tag ghcr.io/devjotaduo/picoclaw-browser-sidecar:main picoclaw/browser-sidecar:latest
+docker tag ghcr.io/devjotaduo/picoclaw-opencrm:main picoclaw/opencrm:latest
 ```
 
 ## 7. Up
 
 ```bash
-docker compose -f docker/saas/docker-compose.yml --env-file .env up -d
+docker compose -f docker/saas/docker-compose.prod.yml --env-file .env up -d
 ```
 
 Watch:
 ```bash
-docker compose -f docker/saas/docker-compose.yml --env-file .env ps
+docker compose -f docker/saas/docker-compose.prod.yml --env-file .env ps
 docker logs -f traefik     # cert issuance lands within ~30s after first request
 ```
 

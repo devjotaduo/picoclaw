@@ -1,0 +1,238 @@
+name: picoclaw-saas
+
+# Production compose file.
+#
+# This file intentionally contains no `build:` sections. Production hosts
+# should pull prebuilt images from CI/GHCR and only keep the small runtime
+# bundle under /srv/saas/picoclaw: compose files, Traefik/LiteLLM/Postgres
+# config, scripts, and .env.
+
+networks:
+  saas_edge:
+    name: saas_edge
+    driver: bridge
+  saas_llm:
+    name: saas_llm
+    driver: bridge
+    internal: false
+  saas_db:
+    name: saas_db
+    driver: bridge
+    internal: true
+  saas_dockerproxy:
+    name: saas_dockerproxy
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /srv/saas/postgres/data
+  traefik_letsencrypt:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /srv/saas/traefik
+  controlplane_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /srv/saas/controlplane/data
+
+services:
+  dockerproxy:
+    image: tecnativa/docker-socket-proxy:0.3
+    container_name: dockerproxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: "1"
+      NETWORKS: "1"
+      IMAGES: "1"
+      INFO: "1"
+      EVENTS: "1"
+      POST: "1"
+      VOLUMES: "0"
+      EXEC: "0"
+      BUILD: "0"
+      SWARM: "0"
+      SYSTEM: "0"
+      DISTRIBUTION: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - saas_dockerproxy
+
+  traefik:
+    image: traefik:v3.5
+    container_name: traefik
+    restart: unless-stopped
+    depends_on:
+      - dockerproxy
+    command:
+      - "--configFile=/etc/traefik/traefik.yml"
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      LE_EMAIL: ${LE_EMAIL}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks:
+      - saas_edge
+      - saas_dockerproxy
+    labels:
+      - "traefik.enable=false"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB_CONTROL}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    networks:
+      - saas_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB_CONTROL}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    container_name: litellm
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB_LITELLM}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    command:
+      - "--config=/app/config.yaml"
+      - "--port=4000"
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    networks:
+      - saas_llm
+      - saas_db
+
+  browser-sidecar:
+    image: ${PICOCLAW_BROWSER_SIDECAR_IMAGE:-picoclaw/browser-sidecar:latest}
+    container_name: browser-sidecar
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - saas_llm
+    ports:
+      - "127.0.0.1:9222:9222"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9222/json/version || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "traefik.enable=false"
+
+  opencrm:
+    image: ${PICOCLAW_OPENCRM_IMAGE:-picoclaw/opencrm:latest}
+    container_name: opencrm
+    restart: unless-stopped
+    environment:
+      OPENCRM_DB_PATH: /data/opencrm.db
+      OPENCRM_PORT: "8787"
+    ports:
+      - "127.0.0.1:18802:8787"
+    volumes:
+      - /srv/saas/opencrm/data:/data
+    networks:
+      - saas_db
+      - saas_edge
+    labels:
+      - "traefik.enable=false"
+
+  controlplane:
+    image: ${PICOCLAW_CONTROLPLANE_IMAGE:-picoclaw/saas:latest}
+    container_name: controlplane
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dockerproxy:
+        condition: service_started
+      opencrm:
+        condition: service_started
+      browser-sidecar:
+        condition: service_started
+    ports:
+      - "127.0.0.1:18801:8080"
+    environment:
+      PG_DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB_CONTROL}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      PICOCLAW_SAAS_GATEWAY_SECRET: ${PICOCLAW_SAAS_GATEWAY_SECRET:-}
+      JWT_TTL_HOURS: "12"
+      LISTEN_ADDR: ":8080"
+      DOCKER_HOST: "tcp://dockerproxy:2375"
+      LITELLM_URL: ${LITELLM_URL}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      TENANT_IMAGE: ${TENANT_IMAGE:-picoclaw-launcher:latest}
+      TENANT_BASE_DOMAIN: ${SAAS_BASE_DOMAIN}
+      TENANT_HOST_DATA_DIR: ${TENANT_HOST_DATA_DIR}
+      PICOCLAW_WORKSPACE_DIR: ${PICOCLAW_WORKSPACE_DIR:-/srv/picoclaw-workspaces}
+      TENANT_NETWORK_EDGE: saas_edge
+      TENANT_NETWORK_LLM: saas_llm
+      COOKIE_DOMAIN: ${SAAS_BASE_DOMAIN}
+      COOKIE_SECURE: "true"
+      OPENCRM_URL: ${OPENCRM_URL:-http://opencrm:8787}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      ALERT_FROM: ${ALERT_FROM:-}
+      ALERT_TO: ${ALERT_TO:-}
+      ALERT_DISK_THRESHOLD_PCT: ${ALERT_DISK_THRESHOLD_PCT:-85}
+      PICOCLAW_SAAS_AUTO_PROVISION: ${PICOCLAW_SAAS_AUTO_PROVISION:-false}
+      PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY: ${PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY:-3}
+      SUPABASE_PROJECT_REF: ${SUPABASE_PROJECT_REF:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
+      SUPABASE_SITE_URL: ${SUPABASE_SITE_URL:-https://${SAAS_BASE_DOMAIN}}
+      PICOCLAW_ONBOARDING_CALLBACK_SECRET: ${PICOCLAW_ONBOARDING_CALLBACK_SECRET:-}
+      PICOCLAW_ONBOARDING_CALLBACK_URL: ${PICOCLAW_ONBOARDING_CALLBACK_URL:-}
+    volumes:
+      - /srv/saas/tenants:/srv/saas/tenants
+      - controlplane_data:/var/lib/picoclaw-saas
+      - /srv/picoclaw-workspaces:/srv/picoclaw-workspaces
+    networks:
+      - saas_edge
+      - saas_llm
+      - saas_db
+      - saas_dockerproxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=saas_edge"
+      - "traefik.http.routers.controlplane.rule=Host(`${SAAS_BASE_DOMAIN}`) || Host(`admin.${SAAS_BASE_DOMAIN}`) || HostRegexp(`[a-z0-9-]+\\.${SAAS_BASE_DOMAIN}`)"
+      - "traefik.http.routers.controlplane.entrypoints=websecure"
+      - "traefik.http.routers.controlplane.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.controlplane.middlewares=security-headers@file"
+      - "traefik.http.services.controlplane.loadbalancer.server.port=8080"

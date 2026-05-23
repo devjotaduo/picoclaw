@@ -24,8 +24,10 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-# Verify the compose file the deploy script expects exists.
-COMPOSE_FILE="${PICOCLAW_COMPOSE_FILE:-/srv/saas/picoclaw/docker/saas/docker-compose.yml}"
+# Verify the compose file the deploy script expects exists. Production uses
+# the no-build compose file; the legacy build-capable compose is for dev/manual
+# recovery only.
+COMPOSE_FILE="${PICOCLAW_COMPOSE_FILE:-/srv/saas/picoclaw/docker/saas/docker-compose.prod.yml}"
 if [ ! -f "$COMPOSE_FILE" ]; then
   echo "ERROR: compose file not found at $COMPOSE_FILE" >&2
   echo "       (override with PICOCLAW_COMPOSE_FILE env if it's elsewhere)" >&2
