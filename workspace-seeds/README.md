@@ -49,31 +49,45 @@ Arquivos NÃO-gerados (`AGENT.md`/`SOUL.md` raiz, `config.json`,
 `.security.yml`) são editados à mão por template — eles definem a
 personalidade do template, não infra compartilhada.
 
-## Estado atual: stage 1 (versionado, sync manual)
+## Stage atual: auto-sync no deploy ✓
 
-Hoje não há automação de deploy desses seeds para a VPS. O fluxo é
-manual:
+O `scripts/auto-deploy/picoclaw-deploy.sh` (rodado a cada 2 min pelo
+`picoclaw-deploy.timer`) sincroniza este diretório com
+`/srv/picoclaw-workspaces/` antes de qualquer rebuild de container.
 
+**Modelo de propriedade via marker file `.seed-managed`:**
+
+- **Primeira sincronização** (target ausente): cria
+  `/srv/picoclaw-workspaces/<slug>/home/` + popula com o conteúdo do seed
+  + escreve `.seed-managed` com o sha256 do seed.
+- **Sync subsequente** (target tem `.seed-managed`): se o sha256 mudou,
+  faz `rsync -a --delete` (preservando o marker, sessions/, *.db etc.) e
+  atualiza o sha. Idempotente quando nada mudou.
+- **Workspace "reclamada" pelo admin** (admin deletou o
+  `.seed-managed`): o auto-deploy nunca mais toca ali. Admin assume
+  responsabilidade total daquela workspace.
+
+Por padrão, **tenants existentes NÃO recriam** seus volumes — eles
+continuam com o snapshot que receberam no provision original. Só
+provisions NOVAS (após a sincronização) ganham o template atualizado.
+
+**Para forçar um tenant a receber template novo:**
 ```bash
-# Na VPS, após pull deste repo:
-rsync -a --delete workspace-seeds/default/home/ /srv/picoclaw-workspaces/default/home/
+# Na VPS:
+docker stop tenant-<id>
+docker rm tenant-<id>
+# admin reprovisiona via painel (a workspace template já está atualizada)
 ```
 
-Workspaces existentes na VPS NÃO são tocadas pelo sync — apenas serve
-para criar novas, ou para preparar o conteúdo antes do admin marcar
-`is_default_auto=true`.
+**Para "destacar" uma workspace do Git** e editar livremente pelo painel:
+```bash
+rm /srv/picoclaw-workspaces/<slug>/home/.seed-managed
+```
 
-## Próximo passo: stage 2 (auto-sync no deploy)
-
-Quando o template estabilizar, adicionar passo no
-`scripts/auto-deploy/picoclaw-deploy.sh` que compara checksum do diretório
-com o que está em `/srv/picoclaw-workspaces/<slug>/home/` e roda o rsync
-quando mudou. Tenants existentes seguem intocados — só novos provisions
-pegam o template novo.
-
-## Stage 3: upload via API
+## Próximo: stage 3 (upload via API GitHub Actions)
 
 Workflow GitHub Actions que zipa `workspace-seeds/<slug>/home/` e bate em
 `POST /api/v1/workspaces/upload` com bearer admin token. Cria uma nova
 workspace row na DB (com nome versionado tipo `default-v2`); admin decide
-quando promover para `is_default_auto`.
+quando promover para `is_default_auto`. Útil quando o admin quer
+versionamento por release sem auto-overwrite.

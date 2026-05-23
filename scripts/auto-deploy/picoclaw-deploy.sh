@@ -44,6 +44,14 @@ CONTAINER="${PICOCLAW_CONTAINER:-controlplane}"
 CONTROLPLANE_SERVICE="${PICOCLAW_CONTROLPLANE_SERVICE:-controlplane}"
 LOCKFILE="${PICOCLAW_DEPLOY_LOCK:-/var/run/picoclaw-deploy.lock}"
 
+# Workspace-seeds sync: source = git-versioned templates under the repo;
+# destination = where the controlplane Provisioner.runProvision copies from
+# (CopyWorkspaceHome). Marker file `.seed-managed` opts a workspace into
+# auto-sync — admin can `rm` the marker to claim the workspace and freeze it.
+SEEDS_DIR="${PICOCLAW_SEEDS_DIR:-/srv/saas/picoclaw/workspace-seeds}"
+WORKSPACES_DIR="${PICOCLAW_WORKSPACES_DIR:-/srv/picoclaw-workspaces}"
+SEED_MARKER=".seed-managed"
+
 log() { echo "[picoclaw-deploy $(date -Iseconds)] $*"; }
 
 if [ ! -f "$COMPOSE_FILE" ] && [ -z "${PICOCLAW_COMPOSE_FILE:-}" ] && [ -f "$LEGACY_COMPOSE_FILE" ]; then
@@ -134,6 +142,79 @@ recreate_if_changed() {
   log "recreating $service via docker compose"
   compose_up_service "$service"
 }
+
+sync_workspace_seeds() {
+  if [ ! -d "$SEEDS_DIR" ]; then
+    return  # nothing to sync (older repo without workspace-seeds/)
+  fi
+  if ! command -v rsync >/dev/null 2>&1; then
+    log "WARN: rsync not installed; skipping workspace-seeds sync"
+    return
+  fi
+  if ! command -v sha256sum >/dev/null 2>&1; then
+    log "WARN: sha256sum not available; skipping workspace-seeds sync"
+    return
+  fi
+  if [ ! -d "$WORKSPACES_DIR" ]; then
+    log "WARN: $WORKSPACES_DIR does not exist; skipping workspace-seeds sync"
+    return
+  fi
+
+  for home_path in "$SEEDS_DIR"/*/home; do
+    [ -d "$home_path" ] || continue
+    slug=$(basename "$(dirname "$home_path")")
+    dst="$WORKSPACES_DIR/$slug/home"
+
+    # Checksum the source tree (sorted to be deterministic across platforms).
+    new_sha=$(
+      cd "$home_path" && find . -type f -print0 \
+        | LC_ALL=C sort -z \
+        | xargs -0 sha256sum 2>/dev/null \
+        | sha256sum \
+        | awk '{print $1}'
+    )
+
+    if [ ! -d "$dst" ]; then
+      # First-time creation. Whole tree + marker.
+      log "workspace-seeds: creating $dst (slug=$slug, sha=${new_sha:0:12}...)"
+      mkdir -p "$dst"
+      rsync -a "$home_path"/ "$dst"/
+      printf '%s\n' "$new_sha" > "$dst/$SEED_MARKER"
+      continue
+    fi
+
+    # Existing target — only sync if it opted in via the marker.
+    if [ ! -f "$dst/$SEED_MARKER" ]; then
+      # Admin owns this one — don't touch.
+      continue
+    fi
+
+    cur_sha=$(head -n1 "$dst/$SEED_MARKER" 2>/dev/null || true)
+    if [ "$cur_sha" = "$new_sha" ]; then
+      continue  # already in sync
+    fi
+
+    log "workspace-seeds: $slug source changed (${cur_sha:0:12}... -> ${new_sha:0:12}...), syncing"
+    # --delete drops files the seed no longer has; --exclude protects our
+    # marker (rewritten below) and any per-tenant runtime that an admin
+    # might still have inside the seed-managed workspace (e.g. tenant
+    # picked it up via auto-provision and the launcher wrote sessions/
+    # before the next deploy cycle).
+    rsync -a --delete \
+      --exclude "$SEED_MARKER" \
+      --exclude "sessions/" \
+      --exclude "state/" \
+      --exclude "whatsapp/" \
+      --exclude "matrix/" \
+      --exclude "runtime-user-env/" \
+      --exclude "dashboardauth.db" \
+      --exclude "*.log" \
+      "$home_path"/ "$dst"/
+    printf '%s\n' "$new_sha" > "$dst/$SEED_MARKER"
+  done
+}
+
+sync_workspace_seeds
 
 pull_and_tag "$CONTROLPLANE_IMAGE" "$CONTROLPLANE_LOCAL_TAG" "controlplane"
 pull_and_tag "$LAUNCHER_IMAGE" "$LAUNCHER_LOCAL_TAG" "launcher"
