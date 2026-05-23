@@ -599,18 +599,16 @@ export function ChatPage() {
             )}
 
             {displayMessages.map((msg) => {
-              if (
-                msg.kind === "thought" &&
-                (!showAssistantDetails || !canShowReasoning)
-              ) {
-                return null
-              }
-              if (
-                msg.kind === "tool_calls" &&
-                (!showAssistantDetails || !canShowToolCalls)
-              ) {
-                return null
-              }
+              const isAssistantReasoning = msg.kind === "thought"
+              const isAssistantToolCall = msg.kind === "tool_calls"
+              const showAssistantDetailContent =
+                (isAssistantReasoning &&
+                  showAssistantDetails &&
+                  canShowReasoning) ||
+                (isAssistantToolCall &&
+                  showAssistantDetails &&
+                  canShowToolCalls) ||
+                (!isAssistantReasoning && !isAssistantToolCall)
 
               return (
                 <div key={msg.id} className="flex w-full">
@@ -623,6 +621,7 @@ export function ChatPage() {
                       toolCalls={msg.toolCalls}
                       timestamp={msg.timestamp}
                       onSuggestionReply={handleSuggestionReply}
+                      showAssistantDetailContent={showAssistantDetailContent}
                     />
                   ) : (
                     <UserMessage

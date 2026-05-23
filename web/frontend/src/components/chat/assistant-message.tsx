@@ -43,6 +43,7 @@ interface AssistantMessageProps {
   toolCalls?: ChatToolCall[]
   timestamp?: string | number
   onSuggestionReply?: (content: string) => void
+  showAssistantDetailContent?: boolean
 }
 
 function localizeContextCommandContent(content: string): string {
@@ -139,13 +140,19 @@ function toolOutput(toolCall: ChatToolCall): string {
   return toolCall.extraContent?.toolFeedbackExplanation?.trim() ?? ""
 }
 
-function AssistantReasoningStatus({ content }: { content: string }) {
+function AssistantReasoningStatus({
+  content,
+  showContent,
+}: {
+  content: string
+  showContent: boolean
+}) {
+  const hasContent = showContent && content.trim().length > 0
+
   return (
-    <Reasoning isStreaming={!content.trim()} defaultOpen={Boolean(content)}>
-      <ReasoningTrigger isStreaming={!content.trim()}>
-        Pensando
-      </ReasoningTrigger>
-      {content.trim() ? (
+    <Reasoning isStreaming={!hasContent} defaultOpen={hasContent}>
+      <ReasoningTrigger isStreaming={!hasContent}>Pensando</ReasoningTrigger>
+      {hasContent ? (
         <ReasoningContent>
           <MessageResponse>{content}</MessageResponse>
         </ReasoningContent>
@@ -154,7 +161,13 @@ function AssistantReasoningStatus({ content }: { content: string }) {
   )
 }
 
-function AssistantToolStatus({ toolCalls }: { toolCalls: ChatToolCall[] }) {
+function AssistantToolStatus({
+  toolCalls,
+  showContent,
+}: {
+  toolCalls: ChatToolCall[]
+  showContent: boolean
+}) {
   const visibleToolCalls = toolCalls.length > 0 ? toolCalls : [{}]
 
   return (
@@ -166,21 +179,28 @@ function AssistantToolStatus({ toolCalls }: { toolCalls: ChatToolCall[] }) {
         const state = output ? "output-available" : "input-available"
 
         return (
-          <Tool key={toolCall.id || `${name}-${index}`} defaultOpen={!output}>
+          <Tool
+            key={toolCall.id || `${name}-${index}`}
+            defaultOpen={showContent && !output}
+          >
             <ToolHeader
               state={state}
-              title={summarizeToolCall(toolCall)}
+              title={
+                showContent ? summarizeToolCall(toolCall) : "Executando tarefa"
+              }
               toolName={friendlyToolName(name)}
               type={name}
             />
-            <ToolContent>
-              <ToolInput input={input} />
-              <ToolOutput
-                output={
-                  output ? <MessageResponse>{output}</MessageResponse> : null
-                }
-              />
-            </ToolContent>
+            {showContent ? (
+              <ToolContent>
+                <ToolInput input={input} />
+                <ToolOutput
+                  output={
+                    output ? <MessageResponse>{output}</MessageResponse> : null
+                  }
+                />
+              </ToolContent>
+            ) : null}
           </Tool>
         )
       })}
@@ -261,6 +281,7 @@ export function AssistantMessage({
   toolCalls = [],
   timestamp = "",
   onSuggestionReply,
+  showAssistantDetailContent = true,
 }: AssistantMessageProps) {
   const [isCopied, setIsCopied] = useState(false)
   const isThought = kind === "thought"
@@ -341,8 +362,18 @@ export function AssistantMessage({
               : "bg-card text-card-foreground border-border/60",
           )}
         >
-          {isThought && <AssistantReasoningStatus content={displayContent} />}
-          {isToolCalls && <AssistantToolStatus toolCalls={toolCalls} />}
+          {isThought && (
+            <AssistantReasoningStatus
+              content={displayContent}
+              showContent={showAssistantDetailContent}
+            />
+          )}
+          {isToolCalls && (
+            <AssistantToolStatus
+              toolCalls={toolCalls}
+              showContent={showAssistantDetailContent}
+            />
+          )}
           {!isCollapsedBlock && !isToolCalls && hasText && (
             <>
               {suggestionCard ? (
