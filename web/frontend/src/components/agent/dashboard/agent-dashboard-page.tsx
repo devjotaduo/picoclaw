@@ -511,6 +511,7 @@ function AgentChatCard({
   onSave: () => void
   onDecision?: (decision: ApprovalDecision) => void
 }) {
+  const [replyOpen, setReplyOpen] = useState(false)
   const agentName = friendlyAgentName(item)
   const initials = getAgentInitials(agentName)
   const title = friendlyDashboardText(item.title)
@@ -520,77 +521,57 @@ function AgentChatCard({
   const source = friendlyDashboardSourceLabel(item.source)
 
   return (
-    <article className="bg-background/55 hover:border-primary/35 rounded-lg border px-3.5 py-3.5 transition-colors">
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.4fr)]">
-        <div className="min-w-0">
-          <div className="flex items-start gap-3">
-            <AgentAvatar initials={initials} seed={agentName} />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-foreground text-sm font-semibold">
-                  {agentName}
-                </span>
-                <StatusBadge status={item.status} />
-                {priority ? (
-                  <Badge variant="secondary">{priority}</Badge>
-                ) : null}
-                {timestamp ? (
-                  <span className="text-muted-foreground text-xs">
-                    {timestamp}
-                  </span>
-                ) : null}
-              </div>
-              <div className="mt-2">
-                <p className="text-foreground text-sm leading-5 font-semibold">
-                  {title}
-                </p>
-                {!compact && summary ? (
-                  <p className="text-muted-foreground mt-1 text-sm leading-5">
-                    {summary}
-                  </p>
-                ) : null}
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-muted-foreground rounded-md border px-2 py-1">
-                    {source}
-                  </span>
-                  {choice ? (
-                    <span
-                      className={cn(
-                        "rounded-md border px-2 py-1 font-medium",
-                        choice === "approved"
-                          ? "border-emerald-500/30 text-emerald-600"
-                          : "border-red-500/30 text-red-600",
-                      )}
-                    >
-                      {choice === "approved" ? "Aprovado" : "Recusado"}
-                    </span>
-                  ) : null}
-                </div>
-                {item.artifacts?.length ? (
-                  <div className="mt-2">
-                    <ArtifactLinks artifacts={item.artifacts} />
-                  </div>
-                ) : null}
-              </div>
-            </div>
+    <article className="bg-background/55 hover:border-primary/35 rounded-lg border px-3 py-3 transition-colors">
+      <div className="flex items-start gap-3">
+        <AgentAvatar initials={initials} seed={agentName} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-foreground text-sm font-semibold">
+              {agentName}
+            </span>
+            <StatusBadge status={item.status} />
+            {priority ? <Badge variant="secondary">{priority}</Badge> : null}
+            {timestamp ? (
+              <span className="text-muted-foreground text-xs">{timestamp}</span>
+            ) : null}
           </div>
-        </div>
 
-        <div className="border-border/80 bg-card/70 rounded-lg border p-2.5">
-          <textarea
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder={`Resposta para ${readableApprovalAgentName(item)}...`}
-            rows={compact ? 2 : 3}
-            className="placeholder:text-muted-foreground/70 text-foreground min-h-16 w-full resize-none bg-transparent text-sm outline-none"
-          />
-          <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+          <p className="text-foreground mt-1.5 line-clamp-2 text-sm leading-5 font-semibold">
+            {title}
+          </p>
+          {!compact && summary ? (
+            <p className="text-muted-foreground mt-1 line-clamp-1 text-sm leading-5">
+              {summary}
+            </p>
+          ) : null}
+
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-muted-foreground rounded-md border px-2 py-1">
+              {source}
+            </span>
+            {choice ? (
+              <span
+                className={cn(
+                  "rounded-md border px-2 py-1 font-medium",
+                  choice === "approved"
+                    ? "border-emerald-500/30 text-emerald-600"
+                    : "border-red-500/30 text-red-600",
+                )}
+              >
+                {choice === "approved" ? "Aprovado" : "Recusado"}
+              </span>
+            ) : null}
+            {item.artifacts?.length ? (
+              <ArtifactLinks artifacts={item.artifacts} />
+            ) : null}
+            <span className="min-w-2 flex-1" />
             {onDecision ? (
               <>
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
+                  className="h-8 px-2.5"
                   disabled={saving}
                   onClick={() => onDecision("denied")}
                 >
@@ -601,6 +582,7 @@ function AgentChatCard({
                   type="button"
                   size="sm"
                   variant="secondary"
+                  className="h-8 px-2.5"
                   disabled={saving}
                   onClick={() => onDecision("approved")}
                 >
@@ -609,16 +591,40 @@ function AgentChatCard({
                 </Button>
               </>
             ) : null}
-            <Button
-              type="button"
-              size="sm"
-              disabled={!value.trim() || saving}
-              onClick={onSave}
-            >
-              <IconDeviceFloppy className="size-4" />
-              Salvar
-            </Button>
+            {!replyOpen && !value.trim() ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2.5"
+                onClick={() => setReplyOpen(true)}
+              >
+                Responder
+              </Button>
+            ) : null}
           </div>
+
+          {replyOpen || value.trim() ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                value={value}
+                autoFocus
+                onChange={(event) => onChange(event.target.value)}
+                placeholder={`Resposta para ${readableApprovalAgentName(item)}...`}
+                className="border-border/80 bg-card/70 placeholder:text-muted-foreground/70 text-foreground h-8 min-w-56 flex-1 rounded-md border px-2 text-xs outline-none"
+              />
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 px-2.5"
+                disabled={!value.trim() || saving}
+                onClick={onSave}
+              >
+                <IconDeviceFloppy className="size-4" />
+                Salvar
+              </Button>
+            </div>
+          ) : null}
         </div>
       </div>
     </article>
