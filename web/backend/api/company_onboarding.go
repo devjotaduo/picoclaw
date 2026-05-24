@@ -157,7 +157,7 @@ func buildCompanyOnboardingResponse(workspace string, now time.Time) (companyOnb
 		{
 			ID:          "channels",
 			Title:       "Canais autorizados",
-			Description: "Números e grupos onde cada agente pode falar.",
+			Description: "WhatsApp, Instagram e grupos liberados para atendimento.",
 			Source:      "Canais autorizados",
 			Completed:   documentLooksReady(authorizedChannels),
 		},
