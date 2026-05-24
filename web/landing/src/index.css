@@ -191,6 +191,84 @@ body {
   clip-path: polygon(0 0, 100% 0, 100% 82%, 72% 100%, 28% 100%, 0 82%);
 }
 
+.hero-flows {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: min(1080px, calc(100vw - 32px));
+  height: 100%;
+  min-height: 560px;
+  margin: 0 auto;
+  overflow: visible;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.hero-flows path,
+.hero-flows use {
+  fill: none;
+}
+
+.flow-static use {
+  stroke: rgba(10, 10, 10, 0.08);
+  stroke-width: 1;
+}
+
+.flow-streak {
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 54 680;
+  animation: flowTravel 5.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.flow-streak-a {
+  stroke: url("#flowGreen");
+  animation-delay: -1.2s;
+}
+
+.flow-streak-b {
+  stroke: url("#flowRed");
+  animation-delay: -3.4s;
+  animation-duration: 6.8s;
+}
+
+.flow-streak-c {
+  stroke: url("#flowGreen");
+  animation-delay: -4.6s;
+  animation-duration: 5.2s;
+}
+
+.flow-streak-d {
+  stroke: url("#flowRed");
+  animation-delay: -2s;
+  animation-duration: 7.2s;
+}
+
+.flow-packets circle {
+  fill: #10b981;
+  filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.7));
+  opacity: 0.88;
+}
+
+.flow-packets circle:nth-child(2) {
+  fill: #ef4444;
+  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.58));
+}
+
+.flow-beams path {
+  stroke: url("#flowRed");
+  stroke-width: 18;
+  stroke-linecap: square;
+  opacity: 0;
+  animation: beamPulse 4.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.flow-beams path:nth-child(2) {
+  stroke: url("#flowGreen");
+  animation-delay: -2.5s;
+}
+
 .floating-mark {
   position: relative;
   height: 100%;
@@ -241,6 +319,20 @@ body {
   .perspective-room::after {
     inset: 72px 8% 92px;
   }
+
+  .hero-flows {
+    min-height: 560px;
+    width: calc(100vw - 28px);
+  }
+
+  .flow-streak {
+    stroke-width: 3;
+    stroke-dasharray: 42 690;
+  }
+
+  .flow-beams path {
+    stroke-width: 14;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -248,5 +340,54 @@ body {
   .nav-link,
   .status-dot {
     will-change: transform;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-streak,
+  .flow-beams path {
+    animation: none;
+  }
+
+  .flow-packets {
+    display: none;
+  }
+
+  .flow-streak {
+    opacity: 0.35;
+    stroke-dasharray: none;
+  }
+}
+
+@keyframes flowTravel {
+  0% {
+    stroke-dashoffset: 720;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 0.9;
+  }
+  100% {
+    stroke-dashoffset: -720;
+    opacity: 0;
+  }
+}
+
+@keyframes beamPulse {
+  0%,
+  58%,
+  100% {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+  14% {
+    opacity: 0.9;
+  }
+  32% {
+    opacity: 0.05;
+    transform: translateY(42px);
   }
 }

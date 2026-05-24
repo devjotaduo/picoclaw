@@ -123,7 +123,7 @@ function Nav() {
           <a className="button button-secondary hidden sm:inline-flex" href={ADMIN_URL}>
             Entrar
           </a>
-            <a className="button button-primary" href={PRE_CADASTRO_URL}>
+          <a className="button button-primary" href={PRE_CADASTRO_URL}>
             Criar rede
           </a>
         </div>
@@ -136,6 +136,7 @@ function Hero() {
   return (
     <section className="relative overflow-hidden border-b border-ink-950/10">
       <PerspectiveRoom />
+      <FlowField />
       <div className="relative z-10 mx-auto grid min-h-[560px] max-w-7xl place-items-center px-4 py-12 sm:min-h-[640px] sm:px-6 sm:py-16 lg:min-h-[680px] lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
           <FloatingMark />
@@ -474,6 +475,89 @@ function PerspectiveRoom() {
     <div className="pointer-events-none absolute inset-0 flex justify-center" aria-hidden="true">
       <div className="perspective-room" />
     </div>
+  )
+}
+
+function FlowField() {
+  return (
+    <svg
+      className="hero-flows"
+      viewBox="0 0 1080 640"
+      preserveAspectRatio="xMidYMin meet"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id="flowGreen" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#34d399" stopOpacity="0" />
+          <stop offset="48%" stopColor="#34d399" stopOpacity="0.95" />
+          <stop offset="100%" stopColor="#34d399" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="flowRed" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#ef4444" stopOpacity="0" />
+          <stop offset="45%" stopColor="#ef4444" stopOpacity="0.88" />
+          <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
+        </linearGradient>
+        <filter id="flowGlow" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+
+      <path id="flow-support" d="M98 470 L540 330 L982 470" />
+      <path id="flow-sales" d="M222 88 L540 316 L858 88" />
+      <path id="flow-context" d="M540 92 L540 316 L540 568" />
+      <path id="flow-ops" d="M166 168 L540 316 L914 168" />
+
+      <g className="flow-static">
+        <use href="#flow-support" />
+        <use href="#flow-sales" />
+        <use href="#flow-context" />
+        <use href="#flow-ops" />
+      </g>
+
+      <g className="flow-streaks" filter="url(#flowGlow)">
+        <use className="flow-streak flow-streak-a" href="#flow-support" />
+        <use className="flow-streak flow-streak-b" href="#flow-sales" />
+        <use className="flow-streak flow-streak-c" href="#flow-context" />
+        <use className="flow-streak flow-streak-d" href="#flow-ops" />
+      </g>
+
+      <g className="flow-packets">
+        <circle r="5">
+          <animateMotion dur="7.4s" repeatCount="indefinite" rotate="auto">
+            <mpath href="#flow-support" />
+          </animateMotion>
+        </circle>
+        <circle r="4">
+          <animateMotion
+            begin="-2.1s"
+            dur="8.2s"
+            repeatCount="indefinite"
+            rotate="auto"
+          >
+            <mpath href="#flow-sales" />
+          </animateMotion>
+        </circle>
+        <circle r="4">
+          <animateMotion
+            begin="-4.4s"
+            dur="6.6s"
+            repeatCount="indefinite"
+            rotate="auto"
+          >
+            <mpath href="#flow-context" />
+          </animateMotion>
+        </circle>
+      </g>
+
+      <g className="flow-beams" filter="url(#flowGlow)">
+        <path d="M350 76 L390 122" />
+        <path d="M690 90 L646 140" />
+      </g>
+    </svg>
   )
 }
 
