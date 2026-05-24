@@ -124,6 +124,11 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Per-agent readiness semaforo (workspace memory completeness).
 	h.registerReadinessRoutes(mux)
 
+	// Tenant-wide validate readiness (runs validate_workspace.py) +
+	// integration mark-resolved (writes sidecar). Espelha o que o admin
+	// vê em adm.<base>/tenants/discovery mas no escopo do próprio tenant.
+	h.registerWorkspaceValidateRoutes(mux)
+
 	// Cron jobs read-only view (reads workspace/cron/jobs.json).
 	h.registerCronRoutes(mux)
 
