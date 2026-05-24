@@ -20,6 +20,10 @@ type PasswordStore interface {
 	VerifyPassword(ctx context.Context, plain string) (bool, error)
 }
 
+type loginPasswordStore interface {
+	VerifyLogin(ctx context.Context, email, plain string) (bool, error)
+}
+
 // LauncherAuthRouteOpts configures dashboard auth handlers.
 type LauncherAuthRouteOpts struct {
 	SessionCookie string
@@ -41,6 +45,7 @@ type LauncherAuthRouteOpts struct {
 }
 
 type launcherAuthLoginBody struct {
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
@@ -116,7 +121,13 @@ func (h *launcherAuthHandlers) handleLogin(w http.ResponseWriter, r *http.Reques
 		_, _ = w.Write([]byte(`{"error":"too many login attempts"}`))
 		return
 	}
+	email := strings.TrimSpace(strings.ToLower(body.Email))
 	in := strings.TrimSpace(body.Password)
+	if email == "" || in == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"email and password required"}`))
+		return
+	}
 
 	initialized, initErr := h.isStoreInitialized(r.Context())
 	if initErr != nil {
@@ -130,7 +141,13 @@ func (h *launcherAuthHandlers) handleLogin(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	ok, err := h.store.VerifyPassword(r.Context(), in)
+	var ok bool
+	var err error
+	if verifier, supportsEmail := h.store.(loginPasswordStore); supportsEmail {
+		ok, err = verifier.VerifyLogin(r.Context(), email, in)
+	} else {
+		ok, err = h.store.VerifyPassword(r.Context(), in)
+	}
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		writeErrorf(w, "password verification failed: %v", err)
@@ -138,7 +155,7 @@ func (h *launcherAuthHandlers) handleLogin(w http.ResponseWriter, r *http.Reques
 	}
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`{"error":"invalid password"}`))
+		_, _ = w.Write([]byte(`{"error":"invalid credentials"}`))
 		return
 	}
 

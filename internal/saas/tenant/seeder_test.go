@@ -29,7 +29,7 @@ func TestSeedDashboardPassword(t *testing.T) {
 	defer db.Close()
 
 	// Schema matches picoclaw verbatim: table name, columns, CHECK(id=1).
-	const expectSchema = "CREATE TABLE dashboard_credentials (\n\t\t\tid          INTEGER PRIMARY KEY CHECK (id = 1),\n\t\t\tbcrypt_hash TEXT    NOT NULL\n\t\t)"
+	const expectSchema = "CREATE TABLE dashboard_credentials (\n\t\t\tid          INTEGER PRIMARY KEY CHECK (id = 1),\n\t\t\towner_email TEXT    NOT NULL DEFAULT '',\n\t\t\tbcrypt_hash TEXT    NOT NULL\n\t\t)"
 	var schema string
 	if err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name='dashboard_credentials'`).Scan(&schema); err != nil {
 		t.Fatalf("schema query: %v", err)
@@ -45,6 +45,14 @@ func TestSeedDashboardPassword(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("want exactly 1 row at id=1, got %d", count)
+	}
+
+	var ownerEmail string
+	if err := db.QueryRow(`SELECT owner_email FROM dashboard_credentials WHERE id = 1`).Scan(&ownerEmail); err != nil {
+		t.Fatalf("scan owner_email: %v", err)
+	}
+	if ownerEmail != "" {
+		t.Errorf("owner_email = %q, want empty for legacy SeedDashboardPassword", ownerEmail)
 	}
 
 	// Hash verifies against the original plaintext (i.e. bcrypt cost matches).
@@ -86,5 +94,31 @@ func TestSeedDashboardPassword_Reseed(t *testing.T) {
 	}
 	if !auth.VerifyPassword(hash, "second") {
 		t.Error("new password does not verify after reseed")
+	}
+}
+
+func TestSeedDashboardCredentialsStoresOwnerEmail(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+
+	if err := SeedDashboardCredentials(ctx, dir, " Owner@Example.COM ", "tenant-password"); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	db, err := sql.Open("sqlite", filepath.Join(dir, DBFilename))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	var ownerEmail, hash string
+	if err := db.QueryRow(`SELECT owner_email, bcrypt_hash FROM dashboard_credentials WHERE id = 1`).Scan(&ownerEmail, &hash); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if ownerEmail != "owner@example.com" {
+		t.Fatalf("owner_email = %q, want owner@example.com", ownerEmail)
+	}
+	if !auth.VerifyPassword(hash, "tenant-password") {
+		t.Fatal("seeded hash does not verify")
 	}
 }

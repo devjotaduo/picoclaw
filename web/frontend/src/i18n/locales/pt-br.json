@@ -35,7 +35,7 @@
   },
   "launcherLogin": {
     "title": "Entrar na Jota Duo",
-    "description": "Use o email do operador e a senha do dashboard da Jota Duo para continuar.",
+    "description": "Entre com o email cadastrado pelo administrador e a senha do painel.",
     "emailLabel": "Email",
     "emailPlaceholder": "operador@empresa.com",
     "passwordLabel": "Senha",
@@ -45,7 +45,7 @@
     "submit": "Entrar",
     "errorEmailRequired": "Digite um email válido.",
     "errorPasswordRequired": "Digite a senha.",
-    "errorInvalid": "Senha incorreta. Tente novamente.",
+    "errorInvalid": "Email ou senha incorretos. Tente novamente.",
     "errorNetwork": "Erro de rede. Tente novamente."
   },
   "rootLayout": {

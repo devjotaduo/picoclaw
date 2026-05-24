@@ -7,8 +7,8 @@ export type LoginResult =
   | { ok: false; status: number; error: string }
 
 export async function postLauncherDashboardLogin(
+  email: string,
   password: string,
-  email?: string,
 ): Promise<LoginResult> {
   const res = await fetch("/api/auth/login", {
     method: "POST",

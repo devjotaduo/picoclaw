@@ -23,6 +23,7 @@ type Config struct {
 	Port                  int      `json:"port"`
 	Public                bool     `json:"public"`
 	AllowedCIDRs          []string `json:"allowed_cidrs,omitempty"`
+	DashboardOwnerEmail   string   `json:"dashboard_owner_email,omitempty"`
 	DashboardPasswordHash string   `json:"dashboard_password_hash,omitempty"`
 	// LegacyLauncherToken is read only for one-time migration from the removed
 	// token login flow. Save always clears it so new configs do not persist it.
@@ -95,6 +96,7 @@ func Load(path string, fallback Config) (Config, error) {
 		return Config{}, err
 	}
 	cfg.AllowedCIDRs = NormalizeCIDRs(cfg.AllowedCIDRs)
+	cfg.DashboardOwnerEmail = strings.TrimSpace(strings.ToLower(cfg.DashboardOwnerEmail))
 	cfg.DashboardPasswordHash = strings.TrimSpace(cfg.DashboardPasswordHash)
 	cfg.LegacyLauncherToken = strings.TrimSpace(cfg.LegacyLauncherToken)
 	if err := Validate(cfg); err != nil {
@@ -106,6 +108,7 @@ func Load(path string, fallback Config) (Config, error) {
 // Save writes launcher settings to disk.
 func Save(path string, cfg Config) error {
 	cfg.AllowedCIDRs = NormalizeCIDRs(cfg.AllowedCIDRs)
+	cfg.DashboardOwnerEmail = strings.TrimSpace(strings.ToLower(cfg.DashboardOwnerEmail))
 	cfg.DashboardPasswordHash = strings.TrimSpace(cfg.DashboardPasswordHash)
 	cfg.LegacyLauncherToken = ""
 	if err := Validate(cfg); err != nil {

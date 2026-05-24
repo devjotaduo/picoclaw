@@ -65,6 +65,33 @@ func (s *PasswordStore) SetPassword(ctx context.Context, plain string) error {
 	return Save(s.path, cfg)
 }
 
+// SetCredentials hashes plain and stores the owner email next to the password
+// hash. The email is used as a second login factor for SaaS-provisioned tenants.
+func (s *PasswordStore) SetCredentials(ctx context.Context, ownerEmail, plain string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if len([]rune(plain)) == 0 {
+		return errors.New("password must not be empty")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(plain), passwordBcryptCost)
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cfg, err := Load(s.path, s.fallback)
+	if err != nil {
+		return err
+	}
+	cfg.DashboardOwnerEmail = normalizeEmail(ownerEmail)
+	cfg.DashboardPasswordHash = string(hash)
+	cfg.LegacyLauncherToken = ""
+	return Save(s.path, cfg)
+}
+
 // VerifyPassword returns true iff plain matches the stored bcrypt hash.
 func (s *PasswordStore) VerifyPassword(ctx context.Context, plain string) (bool, error) {
 	if err := ctx.Err(); err != nil {
@@ -85,8 +112,41 @@ func (s *PasswordStore) VerifyPassword(ctx context.Context, plain string) (bool,
 	return err == nil, err
 }
 
+// VerifyLogin validates password and, when a dashboard owner email is stored,
+// requires the submitted email to match it. Config files without email keep the
+// legacy password-only behavior.
+func (s *PasswordStore) VerifyLogin(ctx context.Context, ownerEmail, plain string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	cfg, err := s.load()
+	if err != nil {
+		return false, err
+	}
+	hash := strings.TrimSpace(cfg.DashboardPasswordHash)
+	if hash == "" {
+		return false, nil
+	}
+	err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(plain))
+	if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	storedEmail := normalizeEmail(cfg.DashboardOwnerEmail)
+	if storedEmail == "" {
+		return true, nil
+	}
+	return storedEmail == normalizeEmail(ownerEmail), nil
+}
+
 func (s *PasswordStore) load() (Config, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return Load(s.path, s.fallback)
+}
+
+func normalizeEmail(email string) string {
+	return strings.TrimSpace(strings.ToLower(email))
 }

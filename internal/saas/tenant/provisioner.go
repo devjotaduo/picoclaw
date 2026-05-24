@@ -288,7 +288,7 @@ func (p *Provisioner) runProvision(
 	if !ws.IsRaw {
 		// 2. Dashboard password (skipped for Supabase / public tenants).
 		if !skipDashboardPassword {
-			if err := SeedDashboardPassword(ctx, t.VolumePath, password); err != nil {
+			if err := SeedDashboardCredentials(ctx, t.VolumePath, t.OwnerEmail, password); err != nil {
 				return fmt.Errorf("seed password: %w", err)
 			}
 		}

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/sipeed/picoclaw/internal/saas/auth"
 	"github.com/sipeed/picoclaw/internal/saas/policy"
@@ -31,18 +32,26 @@ const (
 	sqlCreateTable = `
 		CREATE TABLE IF NOT EXISTS dashboard_credentials (
 			id          INTEGER PRIMARY KEY CHECK (id = 1),
+			owner_email TEXT    NOT NULL DEFAULT '',
 			bcrypt_hash TEXT    NOT NULL
 		)`
 
-	sqlUpsertHash = `
-		INSERT INTO dashboard_credentials (id, bcrypt_hash) VALUES (1, ?)
-		ON CONFLICT(id) DO UPDATE SET bcrypt_hash = excluded.bcrypt_hash`
+	sqlUpsertCredentials = `
+		INSERT INTO dashboard_credentials (id, owner_email, bcrypt_hash) VALUES (1, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET owner_email = excluded.owner_email, bcrypt_hash = excluded.bcrypt_hash`
 )
 
 // SeedDashboardPassword creates (or rewrites) the launcher-auth.db inside
 // volumeDir and stores a bcrypt(password) hash. The bcrypt cost is fixed at
 // auth.BcryptCost to match picoclaw exactly.
 func SeedDashboardPassword(ctx context.Context, volumeDir, password string) error {
+	return SeedDashboardCredentials(ctx, volumeDir, "", password)
+}
+
+// SeedDashboardCredentials creates (or rewrites) the launcher-auth.db inside
+// volumeDir and stores owner email + bcrypt(password). The launcher validates
+// both when owner_email is present.
+func SeedDashboardCredentials(ctx context.Context, volumeDir, ownerEmail, password string) error {
 	if password == "" {
 		return fmt.Errorf("empty password")
 	}
@@ -62,10 +71,14 @@ func SeedDashboardPassword(ctx context.Context, volumeDir, password string) erro
 	if _, err := db.ExecContext(ctx, sqlCreateTable); err != nil {
 		return fmt.Errorf("create table: %w", err)
 	}
-	if _, err := db.ExecContext(ctx, sqlUpsertHash, hash); err != nil {
+	if _, err := db.ExecContext(ctx, sqlUpsertCredentials, normalizeEmail(ownerEmail), hash); err != nil {
 		return fmt.Errorf("upsert hash: %w", err)
 	}
 	return nil
+}
+
+func normalizeEmail(email string) string {
+	return strings.TrimSpace(strings.ToLower(email))
 }
 
 // WriteLauncherPolicy writes launcher_policy.json into the tenant volume so

@@ -50,8 +50,18 @@ func (s *Store) SetPassword(context.Context, string) error {
 	return unsupportedPlatformError()
 }
 
+// SetCredentials reports that the store is unavailable on this platform.
+func (s *Store) SetCredentials(context.Context, string, string) error {
+	return unsupportedPlatformError()
+}
+
 // VerifyPassword reports that the store is unavailable on this platform.
 func (s *Store) VerifyPassword(context.Context, string) (bool, error) {
+	return false, unsupportedPlatformError()
+}
+
+// VerifyLogin reports that the store is unavailable on this platform.
+func (s *Store) VerifyLogin(context.Context, string, string) (bool, error) {
 	return false, unsupportedPlatformError()
 }
 

@@ -17,6 +17,7 @@ import (
 
 type fakePasswordStore struct {
 	initialized bool
+	email       string
 	password    string
 	err         error
 }
@@ -44,10 +45,24 @@ func (s *fakePasswordStore) VerifyPassword(_ context.Context, plain string) (boo
 	return s.initialized && plain == s.password, nil
 }
 
+func (s *fakePasswordStore) VerifyLogin(_ context.Context, email, plain string) (bool, error) {
+	if s.err != nil {
+		return false, s.err
+	}
+	if !s.initialized || plain != s.password {
+		return false, nil
+	}
+	if s.email == "" {
+		return true, nil
+	}
+	return strings.EqualFold(strings.TrimSpace(email), strings.TrimSpace(s.email)), nil
+}
+
 func TestLauncherAuthLoginAndStatus(t *testing.T) {
 	const password = "dashboard-test-password"
+	const email = "owner@example.com"
 	const sess = "session-cookie-value"
-	store := &fakePasswordStore{initialized: true, password: password}
+	store := &fakePasswordStore{initialized: true, email: email, password: password}
 	mux := http.NewServeMux()
 	RegisterLauncherAuthRoutes(mux, LauncherAuthRouteOpts{
 		SessionCookie: sess,
@@ -74,7 +89,7 @@ func TestLauncherAuthLoginAndStatus(t *testing.T) {
 
 	t.Run("login_ok", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"password":"`+password+`"}`))
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"`+email+`","password":"`+password+`"}`))
 		req.Header.Set("Content-Type", "application/json")
 		req.RemoteAddr = "127.0.0.1:12345"
 		mux.ServeHTTP(rec, req)
@@ -84,6 +99,20 @@ func TestLauncherAuthLoginAndStatus(t *testing.T) {
 		cookies := rec.Result().Cookies()
 		if len(cookies) != 1 || cookies[0].Name != middleware.LauncherDashboardCookieName {
 			t.Fatalf("cookies = %#v", cookies)
+		}
+	})
+
+	t.Run("login_rejects_wrong_email", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"other@example.com","password":"`+password+`"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = "127.0.0.2:12345"
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("login code = %d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "invalid credentials") {
+			t.Fatalf("body = %s", rec.Body.String())
 		}
 	})
 
@@ -134,7 +163,7 @@ func TestLauncherAuthUninitializedStoreRequiresSetup(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"password":"not-set-yet"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"owner@example.com","password":"not-set-yet"}`))
 	req.Header.Set("Content-Type", "application/json")
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusConflict {
@@ -154,7 +183,7 @@ func TestLauncherAuthUninitializedStoreRequiresSetup(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"password":"12345678"}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"owner@example.com","password":"12345678"}`))
 	req.Header.Set("Content-Type", "application/json")
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -229,7 +258,7 @@ func TestLauncherAuthStoreUnavailableFailsClosed(t *testing.T) {
 		body   string
 	}{
 		{name: "status", method: http.MethodGet, path: "/api/auth/status"},
-		{name: "login", method: http.MethodPost, path: "/api/auth/login", body: `{"password":"password"}`},
+		{name: "login", method: http.MethodPost, path: "/api/auth/login", body: `{"email":"owner@example.com","password":"password"}`},
 		{name: "setup", method: http.MethodPost, path: "/api/auth/setup", body: `{"password":"12345678","confirm":"12345678"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -284,7 +313,7 @@ func TestLauncherAuthLoginRateLimit(t *testing.T) {
 	})
 
 	// 11 failing logins by wrong password; each consumes allow() slot after valid JSON.
-	wrongBody := `{"password":"wrong"}`
+	wrongBody := `{"email":"owner@example.com","password":"wrong"}`
 	for i := 0; i < loginAttemptsPerIP; i++ {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(wrongBody))

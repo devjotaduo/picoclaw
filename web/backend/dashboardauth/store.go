@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 	_ "modernc.org/sqlite" // register "sqlite" driver
@@ -41,6 +42,10 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	if _, err = db.Exec(sqlCreateTable); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err = migrateSchema(db); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -77,6 +82,21 @@ func (s *Store) SetPassword(ctx context.Context, plain string) error {
 	return err
 }
 
+// SetCredentials stores the owner's email together with the dashboard password.
+// Existing callers can continue to use SetPassword; this method is used by the
+// SaaS provisioner so launcher login can validate both email and password.
+func (s *Store) SetCredentials(ctx context.Context, ownerEmail, plain string) error {
+	if len([]rune(plain)) == 0 {
+		return errors.New("password must not be empty")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(plain), bcryptCost)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, sqlUpsertCredentials, normalizeEmail(ownerEmail), string(hash))
+	return err
+}
+
 // VerifyPassword returns true iff plain matches the stored bcrypt hash.
 // Returns (false, nil) when no password has been set yet.
 func (s *Store) VerifyPassword(ctx context.Context, plain string) (bool, error) {
@@ -93,4 +113,66 @@ func (s *Store) VerifyPassword(ctx context.Context, plain string) (bool, error) 
 		return false, nil
 	}
 	return err == nil, err
+}
+
+// VerifyLogin validates password and, when an owner email is stored, requires
+// the submitted email to match it. Old local installs without owner_email keep
+// working and fall back to password-only verification.
+func (s *Store) VerifyLogin(ctx context.Context, ownerEmail, plain string) (bool, error) {
+	var storedEmail, hash string
+	err := s.db.QueryRowContext(ctx, sqlSelectCredentials).Scan(&storedEmail, &hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(plain))
+	if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	storedEmail = normalizeEmail(storedEmail)
+	if storedEmail == "" {
+		return true, nil
+	}
+	return storedEmail == normalizeEmail(ownerEmail), nil
+}
+
+func migrateSchema(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA table_info(dashboard_credentials)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	hasOwnerEmail := false
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &defaultValue, &pk); err != nil {
+			return err
+		}
+		if name == "owner_email" {
+			hasOwnerEmail = true
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if hasOwnerEmail {
+		return nil
+	}
+	_, err = db.Exec(sqlAddOwnerEmailColumn)
+	return err
+}
+
+func normalizeEmail(email string) string {
+	return strings.TrimSpace(strings.ToLower(email))
 }

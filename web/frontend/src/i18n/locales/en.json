@@ -35,7 +35,7 @@
   },
   "launcherLogin": {
     "title": "Sign in to Jota Duo",
-    "description": "Use the operator email and Jota Duo dashboard password to continue.",
+    "description": "Sign in with the email registered by the administrator and the dashboard password.",
     "emailLabel": "Email",
     "emailPlaceholder": "operator@company.com",
     "passwordLabel": "Password",
@@ -45,7 +45,7 @@
     "submit": "Sign in",
     "errorEmailRequired": "Enter a valid email.",
     "errorPasswordRequired": "Enter the password.",
-    "errorInvalid": "Incorrect password. Try again.",
+    "errorInvalid": "Incorrect email or password. Try again.",
     "errorNetwork": "Network error. Try again."
   },
   "rootLayout": {

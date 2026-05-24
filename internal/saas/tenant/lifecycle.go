@@ -166,7 +166,7 @@ func (p *Provisioner) RotatePassword(ctx context.Context, id string) (string, er
 	if err != nil {
 		return "", err
 	}
-	if err := SeedDashboardPassword(ctx, t.VolumePath, password); err != nil {
+	if err := SeedDashboardCredentials(ctx, t.VolumePath, t.OwnerEmail, password); err != nil {
 		return "", err
 	}
 	// Restart container so any in-memory state in picoclaw picks up the new hash.

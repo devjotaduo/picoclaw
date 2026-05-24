@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -27,6 +28,7 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 		Port:                  18080,
 		Public:                true,
 		AllowedCIDRs:          []string{"192.168.1.0/24", "10.0.0.0/8"},
+		DashboardOwnerEmail:   " Owner@Example.COM ",
 		DashboardPasswordHash: "$2a$12$saved-dashboard-password-hash",
 		LegacyLauncherToken:   "legacy-token-should-not-persist",
 	}
@@ -44,6 +46,9 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	if got.DashboardPasswordHash != want.DashboardPasswordHash {
 		t.Fatalf("dashboard_password_hash = %q, want %q", got.DashboardPasswordHash, want.DashboardPasswordHash)
 	}
+	if got.DashboardOwnerEmail != "owner@example.com" {
+		t.Fatalf("dashboard_owner_email = %q, want owner@example.com", got.DashboardOwnerEmail)
+	}
 	if got.LegacyLauncherToken != "" {
 		t.Fatalf("legacy launcher_token = %q, want empty after Save", got.LegacyLauncherToken)
 	}
@@ -60,7 +65,7 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat() error = %v", err)
 	}
-	if perm := stat.Mode().Perm(); perm != 0o600 {
+	if perm := stat.Mode().Perm(); runtime.GOOS != "windows" && perm != 0o600 {
 		t.Fatalf("file perm = %o, want 600", perm)
 	}
 }
@@ -148,5 +153,43 @@ func TestPasswordStoreSetAndVerify(t *testing.T) {
 	}
 	if ok {
 		t.Fatal("VerifyPassword(wrong) = true, want false")
+	}
+	ok, err = store.VerifyLogin(ctx, "anything@example.com", "dashboard-password")
+	if err != nil {
+		t.Fatalf("VerifyLogin(legacy) error = %v", err)
+	}
+	if !ok {
+		t.Fatal("VerifyLogin(legacy correct password) = false, want true")
+	}
+}
+
+func TestPasswordStoreSetCredentialsAndVerifyLogin(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "launcher-config.json")
+	store := NewPasswordStore(path, Default())
+	ctx := context.Background()
+
+	if err := store.SetCredentials(ctx, " Owner@Example.COM ", "dashboard-password"); err != nil {
+		t.Fatalf("SetCredentials() error = %v", err)
+	}
+	ok, err := store.VerifyLogin(ctx, "owner@example.com", "dashboard-password")
+	if err != nil {
+		t.Fatalf("VerifyLogin(correct) error = %v", err)
+	}
+	if !ok {
+		t.Fatal("VerifyLogin(correct) = false, want true")
+	}
+	ok, err = store.VerifyLogin(ctx, "other@example.com", "dashboard-password")
+	if err != nil {
+		t.Fatalf("VerifyLogin(wrong email) error = %v", err)
+	}
+	if ok {
+		t.Fatal("VerifyLogin(wrong email) = true, want false")
+	}
+	ok, err = store.VerifyLogin(ctx, "owner@example.com", "wrong-password")
+	if err != nil {
+		t.Fatalf("VerifyLogin(wrong password) error = %v", err)
+	}
+	if ok {
+		t.Fatal("VerifyLogin(wrong password) = true, want false")
 	}
 }
