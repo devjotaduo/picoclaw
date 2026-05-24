@@ -72,8 +72,14 @@ type uiVisibility struct {
 }
 
 const (
-	uiVisibilityFile         = "ui-visibility.json"
-	validateWorkspaceScript  = "workspace/skills/validate-workspace/validate_workspace.py"
+	uiVisibilityFile = "ui-visibility.json"
+	// Path RELATIVO ao volume do tenant onde o script vive. O nome
+	// canonical da skill é "tenant-liberation" (vide
+	// workspace/skills/tenant-liberation/SKILL.md). A pasta legada
+	// "validate-workspace" não existe — esse era um nome inicial que
+	// nunca foi adotado e deixava o botão LIBERAR permanentemente
+	// desativado no painel admin.
+	validateWorkspaceScript  = "workspace/skills/tenant-liberation/scripts/validate_workspace.py"
 	validateWorkspaceTimeout = 15 * time.Second
 )
 
@@ -201,13 +207,18 @@ func (h *Handler) handleAdminTenantDiscoveryLiberate(w http.ResponseWriter, r *h
 // read the checklist".
 func runDiscoveryValidation(ctx context.Context, volumePath string, markResolved string) (discoveryStatus, bool, error) {
 	scriptPath := filepath.Join(volumePath, validateWorkspaceScript)
+	// O script Python espera --workspace apontando pro WORKSPACE ROOT
+	// (diretório que contém memory/empresa.md). No layout do volume do
+	// tenant, isso é <volumePath>/workspace/. Passar <volumePath> direto
+	// faz o script procurar memory/empresa.md em <volumePath>/memory/
+	// que NÃO existe — bug que deixava o checklist sempre vazio.
+	workspaceRoot := filepath.Join(volumePath, "workspace")
 	if _, err := os.Stat(scriptPath); err == nil {
-		// Script exists — invoke it. Pass the volume root as $1 so the script
-		// can resolve memory/empresa.md and other workspace files relative
-		// to the tenant home, not its own location.
+		// Script exists — invoke it. Pass the workspace root so the script
+		// can resolve memory/empresa.md and other workspace files.
 		execCtx, cancel := context.WithTimeout(ctx, validateWorkspaceTimeout)
 		defer cancel()
-		args := []string{scriptPath, "--workspace-root", volumePath, "--json"}
+		args := []string{scriptPath, "--workspace-root", workspaceRoot, "--json"}
 		if markResolved != "" {
 			args = append(args, "--mark-resolved", markResolved)
 		}
@@ -264,33 +275,106 @@ func runDiscoveryValidation(ctx context.Context, volumePath string, markResolved
 		}, true, nil
 	}
 
-	// TODO(discovery): once validate_workspace.py lands in the canonical
-	// workspace, drop this fallback. Until then, return a minimal stub that
-	// keeps the LIBERAR button disabled so we don't accidentally flip a
-	// tenant into "active" while the validation harness is still missing.
+	// Fallback in-process: tenants legados podem ter sido provisionados
+	// antes da skill `tenant-liberation` entrar no baseline. Em vez de
+	// trancar o botão LIBERAR esperando a skill ser sincronizada, parseamos
+	// `empresa.md` direto aqui e devolvemos o mesmo checklist universal
+	// que o Python script geraria — admin consegue liberar normalmente.
+	//
+	// Limitação: não detecta integrações técnicas (`integracoes_required`)
+	// nem campos específicos por segmento. Pra esses casos, atualizar a
+	// skill no volume do tenant (sync script será admin V2). Por agora,
+	// admin assume que o discovery cobriu as integrações na conversa.
 	empresaMD := filepath.Join(volumePath, "workspace", "memory", "empresa.md")
 	empresaPresent := false
+	empresaContent := ""
 	if info, err := os.Stat(empresaMD); err == nil && !info.IsDir() && info.Size() > 0 {
 		empresaPresent = true
+		if b, err := os.ReadFile(empresaMD); err == nil {
+			empresaContent = string(b)
+		}
 	}
+
+	// Parse universal: Nome, Segmento, Email/E-mail, WhatsApp/Telefone.
+	// Match case-insensitive, aceita "Chave: valor" ou "Chave:valor" com
+	// valor não-vazio (e diferente de placeholder tipo "<...>" ou "(...)").
+	universal := []discoveryCheck{
+		{Key: "nome", Label: "Nome da empresa", Present: hasFilledField(empresaContent, "nome")},
+		{Key: "segmento", Label: "Segmento", Present: hasFilledField(empresaContent, "segmento")},
+		{Key: "contato_email", Label: "E-mail de contato", Present: hasFilledField(empresaContent, "email", "e-mail", "contato email", "contato e-mail")},
+		{Key: "contato_whatsapp", Label: "WhatsApp / telefone", Present: hasFilledField(empresaContent, "whatsapp", "telefone", "celular", "contato whatsapp")},
+	}
+
+	allPresent := empresaPresent
 	missing := []string{}
 	if !empresaPresent {
 		missing = append(missing, "workspace/memory/empresa.md ainda não preenchido")
+		allPresent = false
 	}
-	missing = append(missing, "validate_workspace.py ainda não disponível — liberação bloqueada até o script estar instalado")
+	for _, u := range universal {
+		if !u.Present {
+			missing = append(missing, u.Label+" ausente em empresa.md")
+			allPresent = false
+		}
+	}
 
 	return discoveryStatus{
-		OK: false,
-		Universal: []discoveryCheck{
-			{
-				Key:     "empresa_md",
-				Label:   "workspace/memory/empresa.md preenchido",
-				Present: empresaPresent,
-			},
-		},
+		OK:                  allPresent,
+		Universal:           universal,
 		IntegracoesRequired: []discoveryIntegracao{},
 		MissingSummary:      missing,
 	}, false, nil
+}
+
+// hasFilledField returns true when `empresaContent` contains a line
+// matching any of `aliases` as "alias: value" (case-insensitive) with
+// a non-trivial value. Rejects empty values and obvious placeholders
+// like "<...>", "(...)", "TBD", "todo", "n/a".
+func hasFilledField(content string, aliases ...string) bool {
+	if content == "" {
+		return false
+	}
+	lower := strings.ToLower(content)
+	for _, alias := range aliases {
+		aliasLower := strings.ToLower(alias)
+		// Look for "alias:" at line start (with optional leading whitespace).
+		searchIdx := 0
+		for searchIdx < len(lower) {
+			idx := strings.Index(lower[searchIdx:], aliasLower+":")
+			if idx < 0 {
+				break
+			}
+			absIdx := searchIdx + idx
+			// Must be at start of line (no alphanumeric before).
+			if absIdx > 0 {
+				prev := lower[absIdx-1]
+				if prev != '\n' && prev != ' ' && prev != '\t' {
+					searchIdx = absIdx + len(aliasLower) + 1
+					continue
+				}
+			}
+			// Extract value after colon, until newline.
+			valStart := absIdx + len(aliasLower) + 1
+			valEnd := strings.IndexByte(lower[valStart:], '\n')
+			if valEnd < 0 {
+				valEnd = len(lower) - valStart
+			}
+			value := strings.TrimSpace(content[valStart : valStart+valEnd])
+			if value == "" {
+				searchIdx = absIdx + len(aliasLower) + 1
+				continue
+			}
+			// Reject placeholders.
+			low := strings.ToLower(value)
+			if strings.HasPrefix(low, "<") || strings.HasPrefix(low, "(") ||
+				low == "tbd" || low == "todo" || low == "n/a" || low == "-" {
+				searchIdx = absIdx + len(aliasLower) + 1
+				continue
+			}
+			return true
+		}
+	}
+	return false
 }
 
 // readActiveProfile returns the current ui-visibility.active_profile, or
