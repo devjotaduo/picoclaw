@@ -1,14 +1,14 @@
 @import "tailwindcss";
 
 @theme {
-  --color-page: #fafafa;
-  --color-ink-950: #0a0a0a;
-  --color-ink-800: #1f1f1f;
-  --color-ink-700: #2f2f2f;
-  --color-ink-600: #5f5f5f;
-  --color-ink-500: #7a7a7a;
-  --color-ink-300: #b8b8b8;
-  --color-ink-100: #ededed;
+  --color-page: #000000;
+  --color-ink-950: #ffffff;
+  --color-ink-800: #f4f4f5;
+  --color-ink-700: #e4e4e7;
+  --color-ink-600: #a1a1aa;
+  --color-ink-500: #71717a;
+  --color-ink-300: #3f3f46;
+  --color-ink-100: #18181b;
 
   --font-sans:
     "SF Pro Display", "Aptos", "Segoe UI", ui-sans-serif, system-ui,
@@ -30,14 +30,16 @@ body {
   overflow-x: hidden;
   font-family: var(--font-sans);
   color: var(--color-ink-950);
-  background: var(--color-page);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.08), transparent 34rem),
+    var(--color-page);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: var(--color-ink-950);
-  color: #ffffff;
+  background: #ffffff;
+  color: #000000;
 }
 
 .nav-link {
@@ -76,24 +78,24 @@ body {
 }
 
 .button-primary {
-  background: var(--color-ink-950);
-  color: #ffffff;
-  box-shadow: 0 12px 30px -18px rgba(10, 10, 10, 0.8);
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 12px 30px -18px rgba(255, 255, 255, 0.45);
 }
 
 .button-primary:hover {
-  background: var(--color-ink-800);
+  background: #e8e8e8;
 }
 
 .button-secondary {
-  border-color: rgba(10, 10, 10, 0.12);
-  background: #ffffff;
-  color: var(--color-ink-950);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
 }
 
 .button-secondary:hover {
-  border-color: rgba(10, 10, 10, 0.25);
-  background: #f5f5f5;
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .button-large {
@@ -106,9 +108,9 @@ body {
   width: fit-content;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(10, 10, 10, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.04);
   padding: 7px 12px;
   font-size: 12px;
   font-weight: 650;
@@ -132,7 +134,7 @@ body {
   gap: 7px;
   border: 1px solid rgba(16, 185, 129, 0.2);
   border-radius: 999px;
-  background: #ecfdf5;
+  background: rgba(16, 185, 129, 0.1);
   padding: 6px 10px;
   font-size: 12px;
   font-weight: 700;
@@ -476,12 +478,12 @@ body {
   width: min(1080px, calc(100vw - 32px));
   height: 100%;
   min-height: 560px;
-  border-left: 1px solid rgba(10, 10, 10, 0.08);
-  border-right: 1px solid rgba(10, 10, 10, 0.08);
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
   background:
-    linear-gradient(90deg, rgba(10, 10, 10, 0.05) 1px, transparent 1px) 0 0 /
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px) 0 0 /
       120px 100%,
-    linear-gradient(rgba(10, 10, 10, 0.05) 1px, transparent 1px) 0 0 / 100%
+    linear-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px) 0 0 / 100%
       96px;
   clip-path: polygon(0 0, 100% 0, 100% 84%, 74% 100%, 26% 100%, 0 84%);
 }
@@ -495,13 +497,13 @@ body {
     linear-gradient(
       30deg,
       transparent 0 48%,
-      rgba(10, 10, 10, 0.08) 48% 48.2%,
+      rgba(255, 255, 255, 0.1) 48% 48.2%,
       transparent 48.2% 100%
     ),
     linear-gradient(
       -30deg,
       transparent 0 48%,
-      rgba(10, 10, 10, 0.08) 48% 48.2%,
+      rgba(255, 255, 255, 0.1) 48% 48.2%,
       transparent 48.2% 100%
     );
   opacity: 0.9;
@@ -509,7 +511,7 @@ body {
 
 .perspective-room::after {
   inset: 90px 10% 80px;
-  border: 1px solid rgba(10, 10, 10, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   background: transparent;
   clip-path: polygon(0 0, 100% 0, 100% 82%, 72% 100%, 28% 100%, 0 82%);
 }
@@ -534,7 +536,7 @@ body {
 }
 
 .flow-static use {
-  stroke: rgba(10, 10, 10, 0.08);
+  stroke: rgba(255, 255, 255, 0.11);
   stroke-width: 1;
 }
 
@@ -603,8 +605,9 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
   background: linear-gradient(180deg, #0a0a0a 0%, #1f1f1f 100%);
-  box-shadow: 0 18px 40px -26px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 18px 44px -24px rgba(255, 255, 255, 0.28);
 }
 
 .floating-mark span {

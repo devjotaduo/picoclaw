@@ -341,7 +341,7 @@ function Hero() {
 function NetworkConsole() {
   return (
     <aside
-      className="relative z-10 mt-14 overflow-hidden rounded-[28px] border border-ink-950/10 bg-white shadow-[0_40px_100px_-60px_rgba(0,0,0,0.65)] lg:mt-0"
+      className="relative z-10 mt-14 overflow-hidden rounded-[28px] border border-ink-950/10 bg-white/[0.04] shadow-[0_40px_100px_-60px_rgba(255,255,255,0.45)] lg:mt-0"
       aria-label="Prévia da rede de agentes"
     >
       <div className="flex items-center justify-between border-b border-ink-950/10 px-5 py-4">
@@ -382,7 +382,7 @@ function NetworkConsole() {
         ))}
       </div>
 
-      <div className="bg-ink-950 px-5 py-5 text-white">
+      <div className="bg-white/[0.06] px-5 py-5 text-white">
         <p className="text-sm font-medium">Próxima decisão</p>
         <p className="mt-2 text-sm leading-6 text-white/68">
           A rede executa o que é repetível e separa o que precisa de aprovação,
@@ -445,7 +445,7 @@ function OverheadSection() {
               ))}
             </div>
             <div className="border-t border-ink-950/10 p-6 sm:p-8">
-              <div className="rounded-2xl border border-ink-950/10 bg-white p-5">
+              <div className="rounded-2xl border border-ink-950/10 bg-white/[0.04] p-5">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-semibold text-ink-950">
@@ -455,7 +455,7 @@ function OverheadSection() {
                       Memória revisada · tarefas roteadas · humano em alerta
                     </p>
                   </div>
-                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                  <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
                     Pronto
                   </span>
                 </div>
@@ -505,7 +505,7 @@ function UseCases() {
 
         <div className="grid gap-px overflow-hidden rounded-[28px] border border-ink-950/10 bg-ink-950/10 lg:grid-cols-3">
           {useCases.map((item) => (
-            <article className="bg-white p-7 sm:p-8" key={item.title}>
+            <article className="bg-white/[0.04] p-7 sm:p-8" key={item.title}>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-500">
                 {item.eyebrow}
               </p>
@@ -551,7 +551,7 @@ function Footer() {
   const year = new Date().getFullYear()
 
   return (
-    <footer className="border-t border-ink-950/10 bg-white">
+    <footer className="border-t border-ink-950/10 bg-page">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-[1fr_auto] lg:px-8">
         <div className="flex items-center gap-3">
           <LogoMark />
@@ -611,7 +611,7 @@ function Metric({ value, label }: { value: string; label: string }) {
 
 function ProofMetric({ value, label }: { value: string; label: string }) {
   return (
-    <div className="bg-white p-6 text-center">
+    <div className="bg-white/[0.04] p-6 text-center">
       <p className="text-4xl font-semibold tracking-[-0.04em] text-ink-950">
         {value}
       </p>
@@ -640,7 +640,7 @@ function CheckIcon() {
 function GridLines() {
   return (
     <div
-      className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(10,10,10,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(10,10,10,0.06)_1px,transparent_1px)] bg-[size:72px_72px] [mask-image:linear-gradient(to_bottom,black,transparent_82%)]"
+      className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.07)_1px,transparent_1px)] bg-[size:72px_72px] [mask-image:linear-gradient(to_bottom,black,transparent_82%)]"
       aria-hidden="true"
     />
   )
@@ -757,9 +757,9 @@ function LogoMark() {
       aria-hidden="true"
       className="shrink-0"
     >
-      <rect width="28" height="28" rx="7" fill="#0A0A0A" />
-      <path d="M7 21V7h14v14H7Z" stroke="white" strokeWidth="2" />
-      <path d="M7 21 21 7" stroke="white" strokeWidth="2" />
+      <rect width="28" height="28" rx="7" fill="#FFFFFF" />
+      <path d="M7 21V7h14v14H7Z" stroke="#000000" strokeWidth="2" />
+      <path d="M7 21 21 7" stroke="#000000" strokeWidth="2" />
     </svg>
   )
 }
