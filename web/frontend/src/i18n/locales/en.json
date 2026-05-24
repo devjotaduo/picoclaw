@@ -70,8 +70,8 @@
     "errorNetwork": "Erro de rede. Tente novamente."
   },
   "chat": {
-    "welcome": "How can I help you today?",
-    "welcomeWithAgent": "Hi! I'm {{name}}, how can I help?",
+    "welcome": "What should we solve now?",
+    "welcomeWithAgent": "Hi, I'm {{name}}. What should we solve now?",
     "welcomeDesc": "Tell me what you need and I will route it to the right workflow.",
     "agentIntro": {
       "attendant": "{{name}} helps with support, triage, questions, routing, and scheduling.",

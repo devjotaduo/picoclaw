@@ -70,8 +70,8 @@
     "errorNetwork": "Erro de rede. Tente novamente."
   },
   "chat": {
-    "welcome": "Como posso te ajudar hoje?",
-    "welcomeWithAgent": "Olá! Sou {{name}}, como posso te ajudar?",
+    "welcome": "O que vamos resolver agora?",
+    "welcomeWithAgent": "Oi, sou {{name}}. O que vamos resolver agora?",
     "welcomeDesc": "Descreva o que você precisa e eu encaminho para o melhor fluxo.",
     "agentIntro": {
       "attendant": "{{name}} ajuda com atendimento, triagem, dúvidas, encaminhamentos e agendamentos.",

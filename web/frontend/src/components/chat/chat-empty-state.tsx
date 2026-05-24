@@ -16,27 +16,23 @@ const DISCONNECTED_GATEWAY_AURA: AuraPalette = [
 ]
 
 const AGENT_INTRO_BY_KEY: Record<string, string> = {
-  rafael:
-    "Acompanha a operação, organiza pendências e aciona o agente certo.",
-  main: "Acompanha a operação, organiza pendências e aciona o agente certo.",
-  assistente:
-    "Acompanha a operação, organiza pendências e aciona o agente certo.",
-  clara: "Atende clientes, tira dúvidas e encaminha vendas ou suporte.",
-  atendente: "Atende clientes, tira dúvidas e encaminha vendas ou suporte.",
-  luna: "Atende fora do horário e deixa tudo organizado para o próximo turno.",
-  marcos: "Qualifica leads, prepara propostas e acompanha oportunidades.",
-  vendas: "Qualifica leads, prepara propostas e acompanha oportunidades.",
-  camila: "Cuida de suporte, pós-venda e casos que precisam de acompanhamento.",
-  suporte: "Cuida de suporte, pós-venda e casos que precisam de acompanhamento.",
-  lia: "Cria campanhas, posts, catálogos e páginas simples para marketing.",
-  marketing: "Cria campanhas, posts, catálogos e páginas simples para marketing.",
-  sofia: "Conduz o cadastro da empresa e aponta pendências antes da operação.",
-  onboarding:
-    "Conduz o cadastro da empresa e aponta pendências antes da operação.",
-  catarina:
-    "Aprofunda a memória da empresa para os agentes responderem melhor.",
-  operador: "Cuida de diagnóstico técnico, integrações e manutenção interna.",
-  humano: "Assume casos sensíveis ou decisões que precisam de uma pessoa.",
+  rafael: "Cuido dos bastidores e chamo a pessoa certa.",
+  main: "Cuido dos bastidores e chamo a pessoa certa.",
+  assistente: "Cuido dos bastidores e chamo a pessoa certa.",
+  clara: "Recebo clientes e encaminho o que precisar.",
+  atendente: "Recebo clientes e encaminho o que precisar.",
+  luna: "Atendo fora do horário e deixo tudo organizado.",
+  marcos: "Ajudo a vender e acompanhar oportunidades.",
+  vendas: "Ajudo a vender e acompanhar oportunidades.",
+  camila: "Cuido do suporte e do pós-venda.",
+  suporte: "Cuido do suporte e do pós-venda.",
+  lia: "Crio campanhas e materiais de marketing.",
+  marketing: "Crio campanhas e materiais de marketing.",
+  sofia: "Te ajudo a completar o cadastro.",
+  onboarding: "Te ajudo a completar o cadastro.",
+  catarina: "Organizo o conhecimento da empresa.",
+  operador: "Cuido dos ajustes técnicos.",
+  humano: "Chamo uma pessoa quando precisa.",
 }
 
 interface ChatEmptyStateProps {
@@ -96,13 +92,12 @@ function agentSpecificIntro(agent: AgentSummary | null | undefined): string {
 function agentIntro(agent: AgentSummary | null | undefined, t: TFunction) {
   const name = (agent?.name || agent?.id || "").trim()
   const kind = roleConfigText(agent, "kind")
-  const configuredDescription =
-    roleConfigText(agent, "short_description") ||
-    roleConfigText(agent, "description")
-  if (configuredDescription) return configuredDescription
 
   const specificDescription = agentSpecificIntro(agent)
   if (specificDescription) return specificDescription
+
+  const configuredShortDescription = roleConfigText(agent, "short_description")
+  if (configuredShortDescription) return configuredShortDescription
 
   if (kind) {
     const translated = t(`chat.agentIntro.${kind}`, {
@@ -114,7 +109,7 @@ function agentIntro(agent: AgentSummary | null | undefined, t: TFunction) {
     }
   }
 
-  return ""
+  return roleConfigText(agent, "description")
 }
 
 export function ChatEmptyState({
