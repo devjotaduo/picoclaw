@@ -250,6 +250,18 @@ func (p *Provisioner) runProvision(
 		return fmt.Errorf("sanitize security config: %w", err)
 	}
 
+	// 1c. Patch memory/empresa.md com o nome da empresa que o admin
+	// digitou. Sem Clara public, este é o único dado de negócio que vem
+	// pré-preenchido — Sofia usa pra cumprimentar com contexto em vez de
+	// perguntar "qual o nome do seu negócio?" do zero. Marker "Status:
+	// pendente de validação" é garantido pra o detector de onboarding
+	// (pkg/agent/onboarding_default.go) promover Sofia como default.
+	// Non-fatal: se falhar, segue (Sofia ainda funciona, só pergunta o
+	// nome no primeiro turno).
+	if serr := SeedTenantFromAdminCreate(t.VolumePath, t.DisplayName, t.OwnerEmail); serr != nil {
+		log.Printf("WARN: provisioner: seed empresa from admin create: %v", serr)
+	}
+
 	// 1b. Shared OAuth credentials. If the operator has authenticated against
 	// Codex / Claude CLI / GitHub / etc. at the controlplane level by
 	// dropping the resulting auth.json at /etc/picoclaw/shared-auth.json,

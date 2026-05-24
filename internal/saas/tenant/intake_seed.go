@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -83,6 +84,72 @@ func writeIfMissing(path, content string) error {
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
+	}
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+// reEmpresaEmptyNome — captura "Nome:" sem valor (template baseline).
+// Usado pra patch surgical no SeedTenantFromAdminCreate.
+var reEmpresaEmptyNome = regexp.MustCompile(`(?m)^Nome:\s*$`)
+
+// SeedTenantFromAdminCreate é a versão simplificada de SeedTenantFromIntake
+// para tenants criados via admin UI (sem intake da Clara public). O admin
+// só fornece DisplayName + OwnerEmail; outros campos ficam pra Sofia
+// preencher no playbook.
+//
+// O que faz:
+//   - Se memory/empresa.md existe e tem "Nome:" vazio → preenche com
+//     displayName (operação idempotente — não toca se já tem valor)
+//   - Garante que "Status: pendente de validação" está presente (Sofia
+//     usa este marker pra saber que precisa conduzir onboarding)
+//
+// Tudo que NÃO faz:
+//   - Não cria empresa.md do zero (espera CopyWorkspaceHome já ter colocado
+//     o template). Se ausente, no-op.
+//   - Não toca em outros campos (Segmento, Horário, etc) — Sofia colhe.
+//   - Não escreve email no arquivo (PII; OwnerEmail vive no DB tenant).
+func SeedTenantFromAdminCreate(volumePath, displayName, ownerEmail string) error {
+	if volumePath == "" {
+		return nil
+	}
+	displayName = strings.TrimSpace(displayName)
+	if displayName == "" {
+		return nil
+	}
+	_ = ownerEmail // reservado para uso futuro (não escrito no arquivo)
+
+	path := filepath.Join(volumePath, "workspace", "memory", "empresa.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // sem template, nada a patchar
+		}
+		return fmt.Errorf("read empresa.md: %w", err)
+	}
+
+	content := string(data)
+	original := content
+
+	// Patch 1: preenche "Nome:" se estiver vazio. Não toca se já tem valor.
+	if reEmpresaEmptyNome.MatchString(content) {
+		content = reEmpresaEmptyNome.ReplaceAllString(content, "Nome: "+displayName)
+	}
+
+	// Patch 2: garante marcador de pendente. Se o template já tem
+	// "Status da informação: pendente de validação" ou outro Status:
+	// pendente, deixa quieto. Se não tem nenhum Status:, adiciona um no
+	// final pra Sofia/banner detectarem.
+	if !strings.Contains(content, "Status: pendente de validação") &&
+		!strings.Contains(content, "Status da informação: pendente de validação") {
+		// Append no final, com newline garantido.
+		if !strings.HasSuffix(content, "\n") {
+			content += "\n"
+		}
+		content += "Status: pendente de validação\n"
+	}
+
+	if content == original {
+		return nil // nada mudou
 	}
 	return os.WriteFile(path, []byte(content), 0o644)
 }
