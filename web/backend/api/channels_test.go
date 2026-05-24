@@ -195,7 +195,7 @@ func TestHandleGetChannelConfig_ReturnsDefaultShapeForMissingChannel(t *testing.
 }
 
 func TestChannelCatalogHonorsAllowedChannels(t *testing.T) {
-	t.Setenv(allowedChannelsEnv, "whatsapp_native")
+	t.Setenv(allowedChannelsEnv, "whatsapp_native,public-web")
 
 	configPath, cleanup := setupOAuthTestEnv(t)
 	defer cleanup()
@@ -218,11 +218,18 @@ func TestChannelCatalogHonorsAllowedChannels(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	if len(resp.Channels) != 1 {
-		t.Fatalf("len(channels) = %d, want 1: %#v", len(resp.Channels), resp.Channels)
+	if len(resp.Channels) != 2 {
+		t.Fatalf("len(channels) = %d, want 2: %#v", len(resp.Channels), resp.Channels)
 	}
-	if got := resp.Channels[0].Name; got != "whatsapp_native" {
-		t.Fatalf("channel name = %q, want whatsapp_native", got)
+	got := map[string]string{}
+	for _, ch := range resp.Channels {
+		got[ch.Name] = ch.ConfigKey
+	}
+	if got["whatsapp_native"] != "whatsapp" {
+		t.Fatalf("whatsapp_native config key = %q, want whatsapp", got["whatsapp_native"])
+	}
+	if got["public-web"] != "public-web" {
+		t.Fatalf("public-web config key = %q, want public-web", got["public-web"])
 	}
 }
 

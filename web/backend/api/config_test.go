@@ -84,7 +84,7 @@ func TestHandleUpdateConfig_PreservesExecAllowRemoteDefaultWhenOmitted(t *testin
 }
 
 func TestHandlePatchConfig_EnforcesAllowedChannels(t *testing.T) {
-	t.Setenv(allowedChannelsEnv, "whatsapp_native")
+	t.Setenv(allowedChannelsEnv, "whatsapp_native,public-web")
 
 	configPath, cleanup := setupOAuthTestEnv(t)
 	defer cleanup()
@@ -96,7 +96,8 @@ func TestHandlePatchConfig_EnforcesAllowedChannels(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/api/config", bytes.NewBufferString(`{
 		"channel_list": {
 			"telegram": {"enabled": true, "type": "telegram", "settings": {"token": "secret"}},
-			"whatsapp": {"enabled": false, "type": "whatsapp", "settings": {"use_native": false, "bridge_url": "http://bridge"}}
+			"whatsapp": {"enabled": false, "type": "whatsapp", "settings": {"use_native": false, "bridge_url": "http://bridge"}},
+			"public-web": {"enabled": false, "type": "public-web", "settings": {"rate_limit_per_ip": 9}}
 		}
 	}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -133,6 +134,16 @@ func TestHandlePatchConfig_EnforcesAllowedChannels(t *testing.T) {
 	}
 	if got := settings["bridge_url"]; got != "" {
 		t.Fatalf("bridge_url = %#v, want empty string", got)
+	}
+	publicWeb := cfg.Channels.Get("public-web")
+	if publicWeb == nil {
+		t.Fatal("missing public-web channel")
+	}
+	if !publicWeb.Enabled {
+		t.Fatal("public-web channel should be enabled by allowed channel policy")
+	}
+	if got := publicWeb.Type; got != "public-web" {
+		t.Fatalf("public-web type = %q, want public-web", got)
 	}
 }
 
