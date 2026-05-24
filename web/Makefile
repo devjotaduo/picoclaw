@@ -189,9 +189,17 @@ endif
 	@$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o "$(PICOCLAW_BINARY)" ../cmd/picoclaw
 
 # Run all tests
+#
+# Mirrors what .github/workflows/web-frontend.yml runs so `make check` at the
+# repo root catches the same errors locally. Without `typecheck` + vitest here
+# we shipped 3 TS2304/TS2741 errors and a vitest fixture failure to main in
+# commits ebf06669 + 21bdba3b, the GHA build silently broke for hours, and
+# every `:latest` deploy on the VPS pulled the same stale image.
 test:
 	cd $(BACKEND_DIR) && ${WEB_GO} test ./...
 	cd $(FRONTEND_DIR) && pnpm lint
+	cd $(FRONTEND_DIR) && pnpm typecheck
+	cd $(FRONTEND_DIR) && pnpm test
 
 # Lint and format
 lint:
