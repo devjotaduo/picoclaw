@@ -14,10 +14,11 @@ import (
 
 // AgentRegistry manages multiple agent instances and routes messages to them.
 type AgentRegistry struct {
-	cfg      *config.Config
-	agents   map[string]*AgentInstance
-	resolver *routing.RouteResolver
-	mu       sync.RWMutex
+	cfg        *config.Config
+	agents     map[string]*AgentInstance
+	resolver   *routing.RouteResolver
+	mu         sync.RWMutex
+	onboarding *onboardingDetector // nil quando Sofia não está registrada
 }
 
 // NewAgentRegistry creates a registry from config, instantiating all agents.
@@ -86,6 +87,21 @@ func NewAgentRegistry(
 					"error":    err.Error(),
 				})
 			}
+		}
+	}
+
+	// Onboarding default-override: ativa apenas quando Sofia está
+	// registrada no tenant. Detector lê memory/empresa.md do workspace
+	// principal — se ainda em template (Nome:/Segmento: vazios ou
+	// "Status: pendente de validação"), Sofia vira default agent até o
+	// dono completar o cadastro. Ver pkg/agent/onboarding_default.go.
+	if _, hasSofia := registry.agents[onboardingAgentID]; hasSofia {
+		mainWorkspace := cfg.Agents.Defaults.Workspace
+		if mainWorkspace != "" {
+			registry.onboarding = newOnboardingDetector(mainWorkspace)
+			logger.InfoCF("agent", "Onboarding default-override enabled (Sofia present)", map[string]any{
+				"workspace": mainWorkspace,
+			})
 		}
 	}
 
@@ -202,9 +218,21 @@ func (r *AgentRegistry) Close() {
 }
 
 // GetDefaultAgent returns the default agent instance.
+//
+// Onboarding override: quando Sofia está registrada E o cadastro da
+// empresa está incompleto (memory/empresa.md vazio ou marcado pendente),
+// Sofia age como default — isso captura heartbeat, mensagens de chat,
+// outbound dispatch e tudo mais que depende do default agent. Quando o
+// dono completa o cadastro, o default volta automaticamente pro
+// configurado (geralmente Rafael/main).
 func (r *AgentRegistry) GetDefaultAgent() *AgentInstance {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	if r.onboarding != nil && r.onboarding.IsIncomplete() {
+		if sofia, ok := r.agents[onboardingAgentID]; ok {
+			return sofia
+		}
+	}
 	if id := r.defaultAgentIDLocked(); id != "" {
 		if agent, ok := r.agents[id]; ok {
 			return agent
