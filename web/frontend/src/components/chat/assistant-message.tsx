@@ -2,6 +2,7 @@ import {
   IconCheck,
   IconCopy,
   IconFileText,
+  IconLoader2,
   IconTerminal2,
 } from "@tabler/icons-react"
 import { useState } from "react"
@@ -76,6 +77,29 @@ function truncateStatusText(value: string, maxLength = 72): string {
   return `${normalized.slice(0, maxLength - 1).trimEnd()}…`
 }
 
+const LOCAL_PATH_LABEL = "caminho local"
+const ABSOLUTE_PATH_PREFIX = String.raw`(?:[A-Za-z]:[\\/]|/(?:Users|home|var|tmp|mnt|opt|usr|workspace|app|srv|etc)/)`
+const QUOTED_ABSOLUTE_PATH_RE = new RegExp(
+  `(["'\`])${ABSOLUTE_PATH_PREFIX}[^"'\`<>|]+\\1`,
+  "g",
+)
+const UNQUOTED_WINDOWS_PATH_RE =
+  /(^|[\s([{=,:])([A-Za-z]:[\\/][^\s"'`<>|)\]}]+)/g
+const UNQUOTED_UNIX_PATH_RE =
+  /(^|[\s([{=,:])(\/(?:Users|home|var|tmp|mnt|opt|usr|workspace|app|srv|etc)\/[^\s"'`<>|)\]}]+)/g
+
+function redactAbsolutePaths(value: string): string {
+  return value
+    .replace(QUOTED_ABSOLUTE_PATH_RE, `$1${LOCAL_PATH_LABEL}$1`)
+    .replace(UNQUOTED_WINDOWS_PATH_RE, `$1${LOCAL_PATH_LABEL}`)
+    .replace(UNQUOTED_UNIX_PATH_RE, `$1${LOCAL_PATH_LABEL}`)
+}
+
+function cleanToolStatusText(value: string): string {
+  const sanitized = redactAbsolutePaths(value).replace(/\s+/g, " ").trim()
+  return sanitized === LOCAL_PATH_LABEL ? "ferramenta local" : sanitized
+}
+
 function parseToolArguments(
   rawArguments: string,
 ): Record<string, unknown> | null {
@@ -135,7 +159,7 @@ function summarizeToolCall(toolCall: ChatToolCall): string {
   ])
   const summary = command || friendlyToolName(toolName) || rawArguments
 
-  return truncateStatusText(summary || "tarefa")
+  return truncateStatusText(cleanToolStatusText(summary || "tarefa"))
 }
 
 function toolInput(toolCall: ChatToolCall): unknown {
@@ -216,18 +240,20 @@ function AssistantToolStatus({
 }) {
   const visibleToolCalls = toolCalls.length > 0 ? toolCalls : [{}]
   const activeLabel =
-    toolCalls.length > 0
-      ? `Executando ${summarizeToolCall(toolCalls[0])}`
-      : "Executando tarefa"
+    toolCalls.length > 0 ? summarizeToolCall(toolCalls[0]) : "tarefa"
 
   if (!showContent) {
     return (
-      <AssistantReasoningStatus
-        compact
-        content=""
-        label={activeLabel}
-        showContent={false}
-      />
+      <div className="not-prose border-border/55 bg-card/70 relative mb-2 flex w-fit max-w-[min(42rem,100%)] items-center gap-2 overflow-hidden rounded-full border px-3 py-1.5 text-[13px] shadow-sm shadow-black/10 backdrop-blur-sm">
+        <span className="grid size-5 shrink-0 place-items-center rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-400">
+          <IconLoader2 className="size-3.5 animate-spin" />
+        </span>
+        <span className="text-foreground/85 font-medium">Executando</span>
+        <span className="text-muted-foreground max-w-[30rem] truncate">
+          {activeLabel}
+        </span>
+        <span className="absolute inset-x-3 bottom-0 h-px bg-gradient-to-r from-transparent via-amber-400/35 to-transparent" />
+      </div>
     )
   }
 
@@ -243,9 +269,11 @@ function AssistantToolStatus({
         return (
           <Tool
             key={toolCall.id || `${name}-${index}`}
+            className="border-border/55 bg-card/70 mb-2 overflow-hidden rounded-lg shadow-sm shadow-black/10"
             defaultOpen={showContent && !output}
           >
             <ToolHeader
+              className="hover:bg-muted/25 min-h-11 px-3 py-2.5 [&_span]:truncate [&>div:first-child]:min-w-0"
               title={
                 showContent ? summarizeToolCall(toolCall) : "Executando tarefa"
               }
@@ -253,7 +281,7 @@ function AssistantToolStatus({
               type={type}
             />
             {showContent ? (
-              <ToolContent>
+              <ToolContent className="border-border/35 bg-background/35 border-t p-3">
                 <ToolInput input={input || {}} />
                 <ToolOutput
                   output={
