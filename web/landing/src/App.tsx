@@ -103,9 +103,8 @@ function Nav() {
   return (
     <header className="sticky top-0 z-50 border-b border-ink-950/10 bg-page/85 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <a href="/" className="flex items-center gap-2" aria-label="Jotaduo">
+        <a href="/" className="flex items-center" aria-label="Jota Duo">
           <LogoMark />
-          <span className="text-[15px] font-semibold tracking-tight">Jotaduo</span>
         </a>
 
         <nav className="hidden items-center gap-6 text-sm text-ink-600 md:flex">
@@ -167,7 +166,7 @@ function FlowCardsSection() {
             <div className="flow-card-copy">
               <p className="flow-card-kicker">Rede operacional</p>
               <h3>
-                9+ funções conectadas para atendimento, vendas, suporte,
+                Funções conectadas para atendimento, vendas, suporte,
                 marketing, compras e operação.
               </h3>
             </div>
@@ -262,24 +261,22 @@ function AgentNetworkMap() {
 }
 
 function SkillSnippet() {
+  const examples = [
+    ["Cliente pede preço", "Qualificar venda"],
+    ["Pedido deu problema", "Abrir suporte"],
+    ["Campanha precisa sair", "Criar conteúdo"],
+    ["Decisão sensível", "Pedir aprovação"],
+  ]
+
   return (
-    <pre className="skill-snippet" aria-hidden="true">
-      <code>
-        <span className="code-green">contexto</span>
-        <span> = consultar_memoria()</span>
-        {"\n"}
-        <span className="code-pink">fluxo</span>
-        <span> = rotear_tarefa(entrada)</span>
-        {"\n\n"}
-        <span>se fluxo.precisa_dono:</span>
-        {"\n"}
-        <span>  pausar_para_aprovacao()</span>
-        {"\n"}
-        <span>senão:</span>
-        {"\n"}
-        <span>  executar_com_historico()</span>
-      </code>
-    </pre>
+    <div className="skill-example" aria-hidden="true">
+      {examples.map(([input, output]) => (
+        <div className="skill-example-row" key={input}>
+          <span>{input}</span>
+          <strong>{output}</strong>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -315,8 +312,7 @@ function Hero() {
       <FlowField />
       <div className="relative z-10 mx-auto grid min-h-[560px] max-w-7xl place-items-center px-4 py-12 sm:min-h-[640px] sm:px-6 sm:py-16 lg:min-h-[680px] lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
-          <FloatingMark />
-          <h1 className="mt-12 text-balance text-5xl font-semibold leading-[0.96] tracking-[-0.045em] text-ink-950 sm:text-6xl lg:text-7xl">
+          <h1 className="text-balance text-5xl font-semibold leading-[0.96] tracking-[-0.045em] text-ink-950 sm:text-6xl lg:text-7xl">
             Uma rede de agentes autônoma
           </h1>
           <p className="mx-auto mt-12 max-w-xl text-pretty text-lg leading-8 text-ink-600 sm:mt-24 sm:text-xl lg:mt-28">
@@ -357,7 +353,7 @@ function NetworkConsole() {
       </div>
 
       <div className="grid grid-cols-3 border-b border-ink-950/10">
-        <Metric value="9" label="funções" />
+        <Metric value="Todas" label="áreas" />
         <Metric value="24h" label="execução" />
         <Metric value="99.9%" label="pronto" />
       </div>
@@ -479,7 +475,7 @@ function ProofSection() {
         <div className="mt-8 grid gap-px overflow-hidden rounded-2xl border border-ink-950/10 bg-ink-950/10 sm:grid-cols-4">
           <ProofMetric value="24h" label="execução contínua" />
           <ProofMetric value="1" label="memória por empresa" />
-          <ProofMetric value="9+" label="funções operacionais" />
+          <ProofMetric value="Áreas" label="conectadas" />
           <ProofMetric value="0" label="automação cega" />
         </div>
       </div>
@@ -553,14 +549,9 @@ function Footer() {
   return (
     <footer className="border-t border-ink-950/10 bg-page">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-[1fr_auto] lg:px-8">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-2">
           <LogoMark />
-          <div>
-            <p className="text-sm font-semibold text-ink-950">Jotaduo</p>
-            <p className="text-sm text-ink-500">
-              Rede de agentes para empresas
-            </p>
-          </div>
+          <p className="text-sm text-ink-500">Rede de agentes para empresas</p>
         </div>
         <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-ink-500">
           <a className="nav-link" href={`mailto:${SUPPORT_EMAIL}`}>
@@ -737,29 +728,13 @@ function FlowField() {
   )
 }
 
-function FloatingMark() {
-  return (
-    <div className="mx-auto h-20 w-20 sm:h-24 sm:w-24" aria-hidden="true">
-      <div className="floating-mark">
-        <span />
-      </div>
-    </div>
-  )
-}
-
 function LogoMark() {
   return (
-    <svg
-      width="28"
-      height="28"
-      viewBox="0 0 28 28"
-      fill="none"
-      aria-hidden="true"
-      className="shrink-0"
-    >
-      <rect width="28" height="28" rx="7" fill="#FFFFFF" />
-      <path d="M7 21V7h14v14H7Z" stroke="#000000" strokeWidth="2" />
-      <path d="M7 21 21 7" stroke="#000000" strokeWidth="2" />
-    </svg>
+    <img
+      src="/jota-duo-logo.png"
+      alt="Jota Duo"
+      className="brand-logo"
+      decoding="async"
+    />
   )
 }
