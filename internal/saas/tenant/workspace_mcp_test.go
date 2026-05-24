@@ -100,6 +100,65 @@ func TestWriteWorkspaceMCPMergesWithExisting(t *testing.T) {
 	}
 }
 
+func TestWriteWorkspaceMCPPubloraKeepsSecretInEnvFile(t *testing.T) {
+	dst := t.TempDir()
+	cfgPath := filepath.Join(dst, "config.json")
+	if err := os.WriteFile(cfgPath, []byte(`{"mcp":{"servers":{}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	servers := []ActiveMCPServer{
+		{
+			Entry: mustLookup(t, "publora-instagram"),
+			Credentials: map[string]string{
+				"PUBLORA_API_KEY": "sk_test_secret",
+			},
+		},
+	}
+	if err := WriteWorkspaceMCP(dst, servers); err != nil {
+		t.Fatal(err)
+	}
+
+	envPath := filepath.Join(dst, "auth", "mcp-publora-instagram.env")
+	content, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != "PUBLORA_API_KEY=sk_test_secret\n" {
+		t.Fatalf("env content = %q, want only PUBLORA_API_KEY", content)
+	}
+
+	raw, _ := os.ReadFile(cfgPath)
+	if string(raw) == "" || string(raw) == "sk_test_secret" {
+		t.Fatalf("config.json should not contain raw secret: %s", raw)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	mcpServers := cfg["mcp"].(map[string]any)["servers"].(map[string]any)
+	publora, ok := mcpServers["publora-instagram"].(map[string]any)
+	if !ok {
+		t.Fatalf("publora-instagram not in mcp.servers: %+v", mcpServers)
+	}
+	if publora["type"] != "http" {
+		t.Fatalf("type = %v, want http", publora["type"])
+	}
+	if publora["url"] != "https://mcp.publora.com" {
+		t.Fatalf("url = %v, want https://mcp.publora.com", publora["url"])
+	}
+	headers, ok := publora["headers"].(map[string]any)
+	if !ok {
+		t.Fatalf("headers = %#v, want object", publora["headers"])
+	}
+	if headers["Authorization"] != "Bearer ${PUBLORA_API_KEY}" {
+		t.Fatalf("Authorization header = %v, want env placeholder", headers["Authorization"])
+	}
+	if publora["env_file"] != "auth/mcp-publora-instagram.env" {
+		t.Fatalf("env_file = %v, want auth/mcp-publora-instagram.env", publora["env_file"])
+	}
+}
+
 func mustLookup(t *testing.T, id string) mcp.Entry {
 	t.Helper()
 	e, ok := mcp.Lookup(id)

@@ -29,6 +29,7 @@ type ServerSpec struct {
 	Args    []string
 	URL     string
 	EnvKeys []string
+	Headers map[string]string
 }
 
 // CredentialField describes one secret the admin must enter when activating
@@ -214,6 +215,36 @@ var Catalog = []Entry{
 		Official: true,
 		DocsURL:  "https://github.com/resend/mcp-send-email",
 		CostTier: "free",
+	},
+	{
+		ID:           "publora-instagram",
+		DisplayName:  "Publora Instagram",
+		Vendor:       "Publora",
+		Category:     "social_media",
+		Description:  "Publicar ou agendar conteúdo aprovado no Instagram pelo agente de marketing.",
+		Integrations: []string{"social_media", "instagram_publishing", "marketing"},
+		Verticals:    []string{"marketing", "atendente-loja", "vendas-prospec"},
+		Server: ServerSpec{
+			Type:    "http",
+			URL:     "https://mcp.publora.com",
+			EnvKeys: []string{"PUBLORA_API_KEY"},
+			Headers: map[string]string{
+				"Authorization": "Bearer ${PUBLORA_API_KEY}",
+			},
+		},
+		Credentials: []CredentialField{
+			{
+				Key:         "PUBLORA_API_KEY",
+				Label:       "Publora API key",
+				Placeholder: "sk_...",
+				Help:        "Use uma chave da Publora com acesso ao workspace/conta conectada ao Instagram.",
+				Required:    true,
+				Secret:      true,
+			},
+		},
+		Official: true,
+		DocsURL:  "https://docs.publora.com/guides/mcp-server",
+		CostTier: "metered",
 	},
 	{
 		ID:           "sentry",

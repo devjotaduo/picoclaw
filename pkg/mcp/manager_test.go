@@ -213,6 +213,52 @@ SHARED_VAR=from_file`
 	}
 }
 
+func TestResolveHeaderTemplatesUsesEnvFileWithoutLeakingToConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	envFile := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envFile, []byte("PUBLORA_API_KEY=sk_test_secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.MCPServerConfig{
+		EnvFile: envFile,
+		Headers: map[string]string{
+			"Authorization": "Bearer ${PUBLORA_API_KEY}",
+			"X-Static":      "picoclaw",
+		},
+	}
+
+	got, err := resolveHTTPHeaders(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["Authorization"] != "Bearer sk_test_secret" {
+		t.Fatalf("Authorization = %q, want expanded secret", got["Authorization"])
+	}
+	if got["X-Static"] != "picoclaw" {
+		t.Fatalf("X-Static = %q, want unchanged static header", got["X-Static"])
+	}
+	if cfg.Headers["Authorization"] != "Bearer ${PUBLORA_API_KEY}" {
+		t.Fatalf("source config header mutated to %q", cfg.Headers["Authorization"])
+	}
+}
+
+func TestResolveHeaderTemplatesErrorsForMissingRequiredEnv(t *testing.T) {
+	cfg := config.MCPServerConfig{
+		Headers: map[string]string{
+			"Authorization": "Bearer ${PUBLORA_API_KEY}",
+		},
+	}
+
+	_, err := resolveHTTPHeaders(cfg)
+	if err == nil {
+		t.Fatal("expected missing PUBLORA_API_KEY error")
+	}
+	if !strings.Contains(err.Error(), "PUBLORA_API_KEY") {
+		t.Fatalf("error = %v, want missing key name", err)
+	}
+}
+
 func TestLoadFromMCPConfig_EmptyWorkspaceWithRelativeEnvFile(t *testing.T) {
 	mgr := NewManager()
 

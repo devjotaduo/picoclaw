@@ -116,6 +116,51 @@ func loadEnvFile(path string) (map[string]string, error) {
 	return envVars, nil
 }
 
+func resolveHTTPHeaders(cfg config.MCPServerConfig) (map[string]string, error) {
+	if len(cfg.Headers) == 0 {
+		return nil, nil
+	}
+
+	envMap := make(map[string]string)
+	for _, e := range os.Environ() {
+		if idx := strings.Index(e, "="); idx > 0 {
+			envMap[e[:idx]] = e[idx+1:]
+		}
+	}
+	if cfg.EnvFile != "" {
+		envVars, err := loadEnvFile(cfg.EnvFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load env file %s: %w", cfg.EnvFile, err)
+		}
+		for k, v := range envVars {
+			envMap[k] = v
+		}
+	}
+	for k, v := range cfg.Env {
+		envMap[k] = v
+	}
+
+	missing := make(map[string]struct{})
+	headers := make(map[string]string, len(cfg.Headers))
+	for key, value := range cfg.Headers {
+		headers[key] = os.Expand(value, func(name string) string {
+			if v, ok := envMap[name]; ok {
+				return v
+			}
+			missing[name] = struct{}{}
+			return ""
+		})
+	}
+	if len(missing) > 0 {
+		names := make([]string, 0, len(missing))
+		for name := range missing {
+			names = append(names, name)
+		}
+		return nil, fmt.Errorf("missing MCP header environment variable(s): %s", strings.Join(names, ", "))
+	}
+	return headers, nil
+}
+
 // ServerConnection represents a connection to an MCP server
 type ServerConnection struct {
 	Name        string
@@ -381,13 +426,17 @@ func connectServer(
 			DisableStandaloneSSE: disableStandaloneSSE,
 		}
 
+		headers, err := resolveHTTPHeaders(cfg)
+		if err != nil {
+			return nil, err
+		}
 		// Add custom headers if provided
-		if len(cfg.Headers) > 0 {
+		if len(headers) > 0 {
 			// Create a custom HTTP client with header-injecting transport
 			sseTransport.HTTPClient = &http.Client{
 				Transport: &headerTransport{
 					base:    http.DefaultTransport,
-					headers: cfg.Headers,
+					headers: headers,
 				},
 			}
 			logger.DebugCF("mcp", "Added custom HTTP headers",

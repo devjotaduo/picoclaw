@@ -87,7 +87,7 @@ func TestDefaultAgentPromptsUseNaturalConversationRules(t *testing.T) {
 	}
 
 	marketingPrompt := defaultAgentPrompt(AgentMarketing)
-	for _, want := range []string{"generate_image", "save_marketing_proposal", "ENTREGA", "ARQUIVOS", "URL", "public/marketing"} {
+	for _, want := range []string{"generate_image", "save_marketing_proposal", "publora-instagram", "ENTREGA", "ARQUIVOS", "URL", "public/marketing"} {
 		if !strings.Contains(marketingPrompt, want) {
 			t.Fatalf("marketing prompt missing %q:\n%s", want, marketingPrompt)
 		}

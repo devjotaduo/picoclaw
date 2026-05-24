@@ -212,6 +212,7 @@ function ActivationModal({
                 </label>
                 <input
                   type={c.secret ? "password" : "text"}
+                  placeholder={c.placeholder}
                   className="mt-1 w-full border rounded px-2 py-1 text-sm"
                   value={values[c.key] ?? ""}
                   onChange={(ev) =>

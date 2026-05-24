@@ -83,3 +83,22 @@ func TestLookup(t *testing.T) {
 		t.Error("Lookup should return ok=false for unknown ID")
 	}
 }
+
+func TestCatalogPubloraInstagramUsesRemoteHTTPWithBearerCredential(t *testing.T) {
+	e, ok := Lookup("publora-instagram")
+	if !ok {
+		t.Fatal("expected publora-instagram to be in catalog")
+	}
+	if e.Server.Type != "http" {
+		t.Fatalf("Server.Type = %q, want http", e.Server.Type)
+	}
+	if e.Server.URL != "https://mcp.publora.com" {
+		t.Fatalf("Server.URL = %q, want https://mcp.publora.com", e.Server.URL)
+	}
+	if got := e.Server.Headers["Authorization"]; got != "Bearer ${PUBLORA_API_KEY}" {
+		t.Fatalf("Authorization header = %q, want Bearer ${PUBLORA_API_KEY}", got)
+	}
+	if len(e.Credentials) != 1 || e.Credentials[0].Key != "PUBLORA_API_KEY" || !e.Credentials[0].Secret {
+		t.Fatalf("Credentials = %#v, want one secret PUBLORA_API_KEY", e.Credentials)
+	}
+}

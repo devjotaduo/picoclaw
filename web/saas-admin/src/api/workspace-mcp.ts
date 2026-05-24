@@ -3,6 +3,7 @@ import { api } from "./client";
 export type MCPCredentialField = {
   key: string;
   label: string;
+  placeholder: string;
   help: string;
   required: boolean;
   secret: boolean;

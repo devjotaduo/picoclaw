@@ -121,6 +121,13 @@ func WriteWorkspaceMCP(homeDir string, servers []ActiveMCPServer) error {
 		if s.Entry.Server.URL != "" {
 			entry["url"] = s.Entry.Server.URL
 		}
+		if len(s.Entry.Server.Headers) > 0 {
+			headers := make(map[string]string, len(s.Entry.Server.Headers))
+			for k, v := range s.Entry.Server.Headers {
+				headers[k] = v
+			}
+			entry["headers"] = headers
+		}
 		mcpServers[s.Entry.ID] = entry
 	}
 
