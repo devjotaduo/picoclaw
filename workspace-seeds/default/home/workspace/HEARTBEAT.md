@@ -1,8 +1,38 @@
 # HEARTBEAT
 
 Rotina proativa periódica do agente principal do tenant. O serviço de
-heartbeat (ver `pkg/heartbeat/`) lê este arquivo a cada ~10 min e pede
+heartbeat (ver `pkg/heartbeat/`) lê este arquivo a cada ~3 min e pede
 ao agente que execute as verificações. Edite para o contexto do tenant.
+
+## Rotina da Sofia (quando ela é a default — onboarding incompleto)
+
+Quando `memory/empresa.md` ainda está em template (Nome:/Segmento:
+vazios ou "Status: pendente de validação"), o registry promove Sofia
+a default agent automaticamente (ver `pkg/agent/onboarding_default.go`).
+Neste estado, você está em ONBOARDING — ignore o resto deste arquivo;
+ele só vale depois do cadastro estar completo.
+
+A cada batida, Sofia deve:
+
+1. Reler `memory/empresa.md` e contar campos vazios ou pendentes.
+2. Se o operador NÃO está no painel agora (sem sessão ativa no canal
+   `pico`), disparar `notify_user`:
+   ```
+   notify_user(
+     kind="warning",
+     title="Cadastro da empresa: N campos pendentes",
+     body="Sem isso, atendimento corre risco. Vamos completar?",
+     agent_id="sofia",
+     cta_url="/files/memory/empresa.md",
+     cta_label="Abrir cadastro"
+   )
+   ```
+   Limite: 1 por hora (não spam).
+3. Se o operador ESTÁ no painel + mandou mensagem, conduzir o playbook
+   por segmento (sem `notify_user`, conversa direta).
+4. Quando todos os bloqueantes preenchidos + `Status:` removido,
+   responder HEARTBEAT_OK — o registry vai promover o agente principal
+   (Rafael/main) na próxima checagem.
 
 ## Rotina padrão
 

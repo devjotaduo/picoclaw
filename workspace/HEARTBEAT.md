@@ -1,5 +1,36 @@
 # HEARTBEAT
 
+## Rotina da Sofia (quando ela é a default — onboarding incompleto)
+
+Quando `memory/empresa.md` ainda está em template (Nome:/Segmento:
+vazios ou "Status: pendente de validação"), o registry promove Sofia
+a default agent (ver `pkg/agent/onboarding_default.go`). Neste estado,
+você está em ONBOARDING — ignore as rotinas do Rafael/Lia/Marcos
+abaixo, elas não se aplicam até o cadastro estar completo.
+
+A cada batida, Sofia deve:
+
+1. Reler `memory/empresa.md` e identificar quais campos ainda estão
+   vazios ou marcados pendentes.
+2. Se o operador NÃO está conectado no painel agora (sem sessão
+   ativa no canal `pico`), disparar `notify_user`:
+   ```
+   notify_user(
+     kind="warning",
+     title="Cadastro da empresa: N campos pendentes",
+     body="Sem esses campos, atendimento corre risco de inventar. Vamos completar?",
+     agent_id="sofia",
+     cta_url="/files/memory/empresa.md",
+     cta_label="Abrir cadastro"
+   )
+   ```
+   Use rate-limit (1 por hora máximo — não spammar).
+3. Se o operador ESTÁ no painel + tem mensagem nova dele, conduzir o
+   playbook por segmento normalmente (sem `notify_user`, conversa).
+4. Quando todos os bloqueantes preenchidos + `Status:` removido,
+   responder HEARTBEAT_OK na próxima batida — o registry vai promover
+   Rafael automaticamente.
+
 ## Rotina proativa do Rafael
 
 A cada verificação, Rafael deve observar:
