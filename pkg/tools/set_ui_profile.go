@@ -53,8 +53,8 @@ func (t *SetUIProfileTool) Parameters() map[string]any {
 		"properties": map[string]any{
 			"profile": map[string]any{
 				"type":        "string",
-				"enum":        []string{"public", "tenant", "admin"},
-				"description": "Which UI visibility profile to activate. Must be one of: public, tenant, admin.",
+				"enum":        []string{"public", "tenant", "admin", "waiting"},
+				"description": "Which UI visibility profile to activate. Must be one of: public (só chat), tenant (painel completo), admin (tudo), waiting (oculta tudo e mostra mensagem de espera).",
 			},
 		},
 		"required": []string{"profile"},
@@ -65,12 +65,12 @@ func (t *SetUIProfileTool) Execute(_ context.Context, args map[string]any) *Tool
 	profileRaw, _ := args["profile"].(string)
 	profile := strings.TrimSpace(profileRaw)
 	if profile == "" {
-		return ErrorResult("profile is required (public, tenant, or admin)")
+		return ErrorResult("profile is required (public, tenant, admin, or waiting)")
 	}
 	switch profile {
-	case "public", "tenant", "admin":
+	case "public", "tenant", "admin", "waiting":
 	default:
-		return ErrorResult(fmt.Sprintf("profile must be public, tenant, or admin — got %q", profile))
+		return ErrorResult(fmt.Sprintf("profile must be public, tenant, admin, or waiting — got %q", profile))
 	}
 
 	workspace := strings.TrimSpace(t.workspace)

@@ -4,7 +4,9 @@ import { useEffect, useState } from "react"
 
 import { getLauncherAuthStatus } from "@/api/launcher-auth"
 import { AppLayout } from "@/components/app-layout"
+import { WaitingScreen } from "@/components/waiting-screen"
 import { initializeChatStore } from "@/features/chat/controller"
+import { useUIVisibility } from "@/hooks/use-ui-visibility"
 import { isLauncherPublicPathname } from "@/lib/launcher-login-path"
 
 const RootLayout = () => {
@@ -69,6 +71,18 @@ const RootLayout = () => {
     }
     initializeChatStore()
   }, [isPublicPage])
+
+  // Waiting screen: quando o tenant terminou o discovery e está aguardando
+  // contato/liberação do admin, ui-visibility.json tem active_profile="waiting".
+  // Renderiza overlay fullscreen com mensagem fixa em vez do app inteiro.
+  // Funciona ANTES de qualquer outra UI — inclui páginas públicas (chat
+  // anônimo), porque o cliente chega lá pela URL do tenant dele.
+  const uiVisibility = useUIVisibility()
+  const isWaiting = uiVisibility.profile === "waiting"
+
+  if (isWaiting) {
+    return <WaitingScreen />
+  }
 
   if (isPublicPage) {
     return (

@@ -390,11 +390,24 @@ notify_user(
 )
 ```
 
+**Antes de encerrar, ative a tela de espera** delegando ao Rafael:
+
+```
+delegate(
+  agent_id="main",
+  task="Use set_ui_profile com profile=\"waiting\" para ativar a tela de espera. Confirma quando ui-visibility.json foi atualizado."
+)
+```
+
 Encerra com dono:
-> "Está tudo registrado. O time vai liberar o painel completo assim
-> que conectarmos <sistema X> — sem isso a equipe não consegue
-> responder com segurança. Te avisamos no e-mail quando estiver
-> pronto."
+> "Está tudo sendo preparado por aqui. Falta só o time da Jotaduo
+> resolver as integrações que <empresa> precisa pra equipe operar
+> sem inventar. Em breve você vai receber um contato nosso com os
+> próximos passos."
+
+(O cliente vai ver a tela de espera fullscreen — chat fica oculto.
+Admin promove `waiting → tenant` via painel admin depois que
+resolver integrações e fizer o contato.)
 
 **Caminho B — ZERO integrações técnicas pendentes** (só informativas
 como WhatsApp/Instagram, OU `integracoes_required` vazio): segue pra
@@ -466,16 +479,19 @@ Aguarda confirmação ("sim", "pode liberar", "vai"):
   ```
   delegate(
     agent_id="main",
-    task="Use a tool set_ui_profile com profile=tenant. Confirme que ui-visibility.json foi atualizado."
+    task="Use a tool set_ui_profile com profile=\"waiting\" para ativar a tela de espera. Confirma que ui-visibility.json foi atualizado."
   )
   ```
 
-  Rafael executa, frontend re-renderiza, painel completo aparece.
+  Rafael executa, frontend re-renderiza com a **tela de espera
+  fullscreen** (chat oculto). O painel completo (profile=tenant)
+  só é liberado quando admin promover via painel admin — geralmente
+  depois de fazer um contato breve confirmando os próximos passos
+  com o dono.
 
   Encerra com dono:
-  > "Pronto. Painel liberado. A Clara já está atendendo seu WhatsApp,
-  > Marcos vai cuidar de vendas, Camila do pós-venda. Qualquer
-  > coisa, o Rafael fica disponível pra você no painel."
+  > "Está tudo sendo preparado. Em breve você vai receber um contato
+  > nosso com os próximos passos pra começar a usar a equipe."
 
 - Se **NÃO / mais ajustes** → volta pro Passo 8h (loop)
 

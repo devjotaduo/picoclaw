@@ -1,6 +1,12 @@
 import type { LauncherPolicyResponse } from "@/api/launcher-policy"
 
-export type UIVisibilityProfile = "admin" | "tenant" | "public"
+export type UIVisibilityProfile = "admin" | "tenant" | "public" | "waiting"
+
+// `waiting`: tela de espera pós-discovery. Sofia/Rafael chama
+// set_ui_profile("waiting") quando termina o discovery — cliente vê só
+// uma mensagem "tudo sendo preparado, em breve receberá contato".
+// Admin promove pra "tenant" via painel admin depois que fizer
+// contato/integrações.
 
 export interface UIVisibilityProfileConfig {
   description?: string
@@ -118,6 +124,63 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "chat.tool_call_messages": false,
         "agent_editor.create_agents": false,
         "chat.pending_handoffs_sidebar": false,
+      },
+    },
+    waiting: {
+      description:
+        "Tela de espera pós-discovery. Tudo oculto exceto a mensagem central.",
+      visibility: {
+        // Tudo false — só renderiza a WaitingScreen
+        "layout.sidebar_trigger": false,
+        "header.actions": false,
+        "header.sidebar_toggle": false,
+        "header.connection_status": false,
+        "header.settings": false,
+        "header.logout": false,
+        "header.gateway_restart": false,
+        "header.gateway_status": false,
+        "header.gateway_start_stop": false,
+        "header.theme_toggle": false,
+        "header.gateway_stop_menu": false,
+        "sidebar.navigation": false,
+        "sidebar.pending_requests": false,
+        "sidebar.chat": false,
+        "sidebar.models": false,
+        "sidebar.credentials": false,
+        "sidebar.agent_dashboard": false,
+        "sidebar.agent_editor": false,
+        "sidebar.whatsapp_inbox": false,
+        "sidebar.whatsapp_reports": false,
+        "sidebar.agent_hub": false,
+        "sidebar.agent_templates": false,
+        "sidebar.template_editor": false,
+        "sidebar.skills": false,
+        "sidebar.skill_editor": false,
+        "sidebar.readiness": false,
+        "sidebar.memory": false,
+        "sidebar.pendencias": false,
+        "sidebar.cron": false,
+        "sidebar.integrations": false,
+        "sidebar.tools": false,
+        "sidebar.config": false,
+        "sidebar.logs": false,
+        "sidebar.admin_tenants": false,
+        "sidebar.admin_new_tenant": false,
+        "sidebar.admin_clone": false,
+        "chat.model_selector": false,
+        "chat.assistant_details_toggle": false,
+        "chat.new_chat": false,
+        "chat.session_history": false,
+        "chat.test_attendant": false,
+        "chat.quality_indicator": false,
+        "chat.context_usage": false,
+        "chat.quick_tasks": false,
+        "chat.reasoning_messages": false,
+        "chat.tool_call_messages": false,
+        "agent_editor.create_agents": false,
+        "chat.pending_handoffs_sidebar": false,
+        // Flag que ativa o overlay WaitingScreen no AppLayout
+        "layout.waiting_screen": true,
       },
     },
   },
@@ -256,6 +319,7 @@ function normalizeUIVisibilityPolicy(value: unknown): UIVisibilityPolicy {
       admin: normalizeProfile(raw.profiles?.admin),
       tenant: normalizeProfile(raw.profiles?.tenant),
       public: normalizeProfile(raw.profiles?.public),
+      waiting: normalizeProfile(raw.profiles?.waiting),
     },
   }
 }
@@ -285,5 +349,10 @@ function normalizeProfile(value: unknown): UIVisibilityProfileConfig {
 }
 
 function isUIVisibilityProfile(value: unknown): value is UIVisibilityProfile {
-  return value === "admin" || value === "tenant" || value === "public"
+  return (
+    value === "admin" ||
+    value === "tenant" ||
+    value === "public" ||
+    value === "waiting"
+  )
 }
