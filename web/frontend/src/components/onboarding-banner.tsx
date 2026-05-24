@@ -10,15 +10,12 @@
  * Comportamento:
  *  - Aparece quando onboarding.incomplete = true
  *  - Mostra contagem de campos pendentes quando disponível
- *  - CTA "Conversar com Sofia" → abre o chat com Sofia selecionada
- *    (Sofia é o default automaticamente, então /chat já vai pra ela)
  *  - Dismissable via X (cookie 24h) — operador pode esconder sem
  *    completar o cadastro se preferir
  *  - Desaparece automaticamente quando incomplete = false (sem reload)
  */
-import { IconArrowRight, IconCircleDot, IconX } from "@tabler/icons-react"
+import { IconCircleDot, IconX } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
-import { Link } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 
 import { getLauncherPolicy } from "@/api/launcher-policy"
@@ -108,14 +105,6 @@ export function OnboardingBanner() {
         </p>
         <p className="text-muted-foreground truncate text-xs">{detail}</p>
       </div>
-
-      <Link
-        to="/"
-        className="border-border bg-card text-foreground hover:bg-muted/60 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors"
-      >
-        Completar com Sofia
-        <IconArrowRight className="size-3.5" />
-      </Link>
 
       <button
         type="button"

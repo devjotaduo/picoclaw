@@ -324,7 +324,9 @@ export function ChatPage() {
     ? publicAttendantLabel(publicAttendantAgent)
     : (mainAgent?.name || mainAgent?.id || "").trim()
   const emptyStateDescription = testingPublicAttendant
-    ? PUBLIC_ATTENDANT_DESCRIPTION
+    ? publicAttendantAgent
+      ? undefined
+      : PUBLIC_ATTENDANT_DESCRIPTION
     : undefined
 
   const { state: gwState } = useGateway()

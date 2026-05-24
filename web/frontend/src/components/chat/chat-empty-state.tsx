@@ -15,6 +15,30 @@ const DISCONNECTED_GATEWAY_AURA: AuraPalette = [
   "#7F1D1D",
 ]
 
+const AGENT_INTRO_BY_KEY: Record<string, string> = {
+  rafael:
+    "Acompanha a operação, organiza pendências e aciona o agente certo.",
+  main: "Acompanha a operação, organiza pendências e aciona o agente certo.",
+  assistente:
+    "Acompanha a operação, organiza pendências e aciona o agente certo.",
+  clara: "Atende clientes, tira dúvidas e encaminha vendas ou suporte.",
+  atendente: "Atende clientes, tira dúvidas e encaminha vendas ou suporte.",
+  luna: "Atende fora do horário e deixa tudo organizado para o próximo turno.",
+  marcos: "Qualifica leads, prepara propostas e acompanha oportunidades.",
+  vendas: "Qualifica leads, prepara propostas e acompanha oportunidades.",
+  camila: "Cuida de suporte, pós-venda e casos que precisam de acompanhamento.",
+  suporte: "Cuida de suporte, pós-venda e casos que precisam de acompanhamento.",
+  lia: "Cria campanhas, posts, catálogos e páginas simples para marketing.",
+  marketing: "Cria campanhas, posts, catálogos e páginas simples para marketing.",
+  sofia: "Conduz o cadastro da empresa e aponta pendências antes da operação.",
+  onboarding:
+    "Conduz o cadastro da empresa e aponta pendências antes da operação.",
+  catarina:
+    "Aprofunda a memória da empresa para os agentes responderem melhor.",
+  operador: "Cuida de diagnóstico técnico, integrações e manutenção interna.",
+  humano: "Assume casos sensíveis ou decisões que precisam de uma pessoa.",
+}
+
 interface ChatEmptyStateProps {
   hasAvailableModels: boolean
   defaultModelName: string
@@ -30,12 +54,55 @@ interface ChatEmptyStateProps {
   onQuickTask?: (prompt: string) => void
 }
 
+function normalizeAgentLookup(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
+
+function roleConfigText(
+  agent: AgentSummary | null | undefined,
+  key: string,
+): string {
+  const value = agent?.role_config?.[key]
+  return typeof value === "string" ? value.trim() : ""
+}
+
+function agentSpecificIntro(agent: AgentSummary | null | undefined): string {
+  const candidates = [
+    agent?.id,
+    agent?.name,
+    roleConfigText(agent, "kind"),
+    roleConfigText(agent, "role"),
+  ].filter((value): value is string => Boolean(value?.trim()))
+
+  for (const candidate of candidates) {
+    const normalized = normalizeAgentLookup(candidate)
+    const direct = AGENT_INTRO_BY_KEY[normalized]
+    if (direct) return direct
+
+    const partial = Object.entries(AGENT_INTRO_BY_KEY).find(([key]) =>
+      normalized.includes(key),
+    )
+    if (partial) return partial[1]
+  }
+
+  return ""
+}
+
 function agentIntro(agent: AgentSummary | null | undefined, t: TFunction) {
   const name = (agent?.name || agent?.id || "").trim()
-  const kind =
-    typeof agent?.role_config?.kind === "string"
-      ? agent.role_config.kind.trim()
-      : ""
+  const kind = roleConfigText(agent, "kind")
+  const configuredDescription =
+    roleConfigText(agent, "short_description") ||
+    roleConfigText(agent, "description")
+  if (configuredDescription) return configuredDescription
+
+  const specificDescription = agentSpecificIntro(agent)
+  if (specificDescription) return specificDescription
 
   if (kind) {
     const translated = t(`chat.agentIntro.${kind}`, {
@@ -47,11 +114,7 @@ function agentIntro(agent: AgentSummary | null | undefined, t: TFunction) {
     }
   }
 
-  const description =
-    typeof agent?.role_config?.description === "string"
-      ? agent.role_config.description.trim()
-      : ""
-  return description || ""
+  return ""
 }
 
 export function ChatEmptyState({
