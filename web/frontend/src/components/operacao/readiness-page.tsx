@@ -16,6 +16,7 @@ import {
   getReadiness,
 } from "@/api/readiness"
 import { PageHeader } from "@/components/page-header"
+import { ValidateReadinessCard } from "@/components/operacao/validate-readiness-card"
 import { Button } from "@/components/ui/button"
 
 function statusBadge(status: AgentReadinessStatus) {
@@ -163,6 +164,9 @@ export function ReadinessPage() {
       </PageHeader>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+        <div className="mb-4">
+          <ValidateReadinessCard />
+        </div>
         {query.isLoading ? (
           <div className="text-muted-foreground flex items-center gap-2 text-sm">
             <IconLoader2 className="size-4 animate-spin" /> Carregando...

@@ -17,6 +17,7 @@ import {
   getIntegrationStatus,
   saveIntegrationConfig,
 } from "@/api/integrations"
+import { ExternalSystemsCard } from "@/components/integrations/external-systems-card"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -363,6 +364,10 @@ export function IntegrationsPage() {
           <BufferCard configured={status?.bufferConfigured ?? false} />
           <MakeCard configured={status?.makeConfigured ?? false} />
           <WhatsAppCard />
+        </div>
+
+        <div className="mt-8 max-w-4xl">
+          <ExternalSystemsCard />
         </div>
       </div>
     </div>
