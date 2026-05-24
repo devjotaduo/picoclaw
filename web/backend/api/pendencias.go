@@ -110,7 +110,15 @@ func extractPendencias(file, content string) []pendenciaItem {
 		if headingMarker.MatchString(raw) {
 			currentHead = strings.TrimLeft(strings.TrimSpace(raw), "#")
 			currentHead = strings.TrimSpace(currentHead)
-			inBlock = false
+			// Se o heading começa com "Pendências/PENDENCIAS", entra no
+			// bloco de captura — bullets seguintes serão coletados como
+			// items. Padrão atual das memórias é usar headings (## ou ###)
+			// pra abrir seções de pendência; sem isso o scan ignorava tudo.
+			if pendenciaMarker.MatchString(currentHead) {
+				inBlock = true
+			} else {
+				inBlock = false
+			}
 			continue
 		}
 		if loc := pendenciaMarker.FindStringIndex(trimmed); loc != nil {
