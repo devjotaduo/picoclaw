@@ -4,6 +4,7 @@ import {
   IconBrandWhatsapp,
   IconCalendarEvent,
   IconChartBar,
+  IconCheck,
   IconChecklist,
   IconDeviceFloppy,
   IconExternalLink,
@@ -15,6 +16,7 @@ import {
   IconSparkles,
   IconUsers,
   IconWorld,
+  IconX,
 } from "@tabler/icons-react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import type { ComponentType, ReactNode } from "react"
@@ -35,11 +37,7 @@ import {
 } from "@/api/whatsapp"
 import { AIOrbAvatar } from "@/components/chat/ai-orb-avatar"
 import { PageHeader } from "@/components/page-header"
-import {
-  ApprovalCard,
-  type ApprovalDecision,
-  safeParseSerializableApprovalCard,
-} from "@/components/tool-ui/approval-card"
+import { type ApprovalDecision } from "@/components/tool-ui/approval-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -139,14 +137,13 @@ export function AgentDashboardPage() {
   // KPIs row só renderiza quando ao menos um número for relevante OU o
   // WhatsApp estiver offline (estado que vale comunicar).
   const kpisHaveData =
-    dashboard?.metrics?.pending_items != null && (
-      dashboard.metrics.pending_items > 0 ||
+    dashboard?.metrics?.pending_items != null &&
+    (dashboard.metrics.pending_items > 0 ||
       dashboard.metrics.reports > 0 ||
       dashboard.metrics.active_tasks > 0 ||
       dashboard.metrics.alerts > 0 ||
       whatsapp.unread > 0 ||
-      chatsQuery.isError
-    )
+      chatsQuery.isError)
 
   const handleDraftChange = (item: AgentDashboardItem, value: string) => {
     setDrafts((current) => ({
@@ -219,8 +216,8 @@ export function AgentDashboardPage() {
         </Button>
       </PageHeader>
 
-      <main className="min-h-0 flex-1 overflow-y-auto border-t px-5 py-5 pb-20">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
+      <main className="from-background via-background to-muted/30 min-h-0 flex-1 overflow-y-auto border-t bg-linear-to-b px-5 py-5 pb-20">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
           {dashboardQuery.isLoading ? (
             <DashboardSkeleton />
           ) : dashboardQuery.isError ? (
@@ -312,9 +309,9 @@ export function AgentDashboardPage() {
               {hasAttention || hasWhatsAppPulse ? (
                 <section
                   className={cn(
-                    "grid gap-5",
+                    "grid gap-4",
                     hasAttention && hasWhatsAppPulse
-                      ? "xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]"
+                      ? "xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]"
                       : "",
                   )}
                 >
@@ -324,29 +321,15 @@ export function AgentDashboardPage() {
                       icon={<IconBell className="size-4" />}
                       badge={`${attentionItems.length} itens`}
                     >
-                      <div className="space-y-4">
-                        <ToolUiApprovalPreview
-                          item={attentionItems[0]!}
-                          choice={
-                            approvalChoices[
-                              dashboardItemKey(attentionItems[0]!)
-                            ]
-                          }
-                          saving={saveResponseMutation.isPending}
-                          onDecision={(decision) =>
-                            handleApprovalDecision(attentionItems[0]!, decision)
-                          }
-                        />
-                        {attentionItems.length > 1 ? (
-                          <AgentChatList
-                            items={attentionItems.slice(1)}
-                            drafts={drafts}
-                            saving={saveResponseMutation.isPending}
-                            onDraftChange={handleDraftChange}
-                            onSave={handleSaveResponse}
-                          />
-                        ) : null}
-                      </div>
+                      <AgentChatList
+                        items={attentionItems}
+                        drafts={drafts}
+                        approvalChoices={approvalChoices}
+                        saving={saveResponseMutation.isPending}
+                        onDraftChange={handleDraftChange}
+                        onSave={handleSaveResponse}
+                        onDecision={handleApprovalDecision}
+                      />
                     </Panel>
                   ) : null}
 
@@ -419,7 +402,7 @@ function KpiCard({
   return (
     <div
       className={cn(
-        "bg-card rounded-lg border px-4 py-3 shadow-sm",
+        "bg-card/80 rounded-lg border px-4 py-3 shadow-sm",
         tone === "warning" && "border-amber-500/30 bg-amber-500/10",
         tone === "danger" && "border-destructive/30 bg-destructive/10",
       )}
@@ -452,8 +435,10 @@ function Panel({
   className?: string
 }) {
   return (
-    <section className={cn("bg-card rounded-lg border shadow-sm", className)}>
-      <div className="flex min-h-12 items-center justify-between gap-3 border-b px-4 py-3">
+    <section
+      className={cn("bg-card/85 rounded-lg border shadow-sm", className)}
+    >
+      <div className="flex min-h-11 items-center justify-between gap-3 border-b px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="text-muted-foreground">{icon}</span>
           <h2 className="text-foreground truncate text-sm font-semibold">
@@ -462,7 +447,7 @@ function Panel({
         </div>
         {badge ? <Badge variant="outline">{badge}</Badge> : null}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-3.5">{children}</div>
     </section>
   )
 }
@@ -470,91 +455,61 @@ function Panel({
 function AgentChatList({
   items,
   drafts,
+  approvalChoices,
   saving,
   compact = false,
   onDraftChange,
   onSave,
+  onDecision,
 }: {
   items: AgentDashboardItem[]
   drafts: Record<string, string>
+  approvalChoices?: Record<string, ApprovalDecision>
   saving: boolean
   compact?: boolean
   onDraftChange: (item: AgentDashboardItem, value: string) => void
   onSave: (item: AgentDashboardItem) => void
+  onDecision?: (item: AgentDashboardItem, decision: ApprovalDecision) => void
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {items.map((item) => (
         <AgentChatCard
           key={dashboardItemKey(item)}
           item={item}
           value={drafts[dashboardItemKey(item)] ?? ""}
+          choice={approvalChoices?.[dashboardItemKey(item)]}
           saving={saving}
           compact={compact}
           onChange={(value) => onDraftChange(item, value)}
           onSave={() => onSave(item)}
+          onDecision={
+            onDecision ? (decision) => onDecision(item, decision) : undefined
+          }
         />
       ))}
     </div>
   )
 }
 
-function ToolUiApprovalPreview({
-  item,
-  choice,
-  saving,
-  onDecision,
-}: {
-  item: AgentDashboardItem
-  choice?: ApprovalDecision
-  saving: boolean
-  onDecision: (decision: ApprovalDecision) => void
-}) {
-  const payload = safeParseSerializableApprovalCard({
-    id: `agent-approval-${dashboardItemKey(item)}`,
-    title: approvalQuestionForItem(item),
-    description: approvalDescriptionForItem(item),
-    metadata: [
-      { key: "Agente", value: readableApprovalAgentName(item) },
-      { key: "Status", value: dashboardStatusLabel(item.status) },
-      {
-        key: "Origem",
-        value: friendlyDashboardSourceLabel(item.source),
-      },
-    ],
-    confirmLabel: "Aprovar",
-    cancelLabel: "Recusar",
-    choice,
-  })
-
-  if (!payload) {
-    return null
-  }
-
-  return (
-    <ApprovalCard
-      {...payload}
-      disabled={saving}
-      onConfirm={() => onDecision("approved")}
-      onCancel={() => onDecision("denied")}
-    />
-  )
-}
-
 function AgentChatCard({
   item,
   value,
+  choice,
   saving,
   compact,
   onChange,
   onSave,
+  onDecision,
 }: {
   item: AgentDashboardItem
   value: string
+  choice?: ApprovalDecision
   saving: boolean
   compact?: boolean
   onChange: (value: string) => void
   onSave: () => void
+  onDecision?: (decision: ApprovalDecision) => void
 }) {
   const agentName = friendlyAgentName(item)
   const initials = getAgentInitials(agentName)
@@ -562,64 +517,108 @@ function AgentChatCard({
   const summary = friendlyDashboardText(item.summary)
   const priority = dashboardPriorityLabel(item.priority)
   const timestamp = formatDashboardDate(dashboardItemStamp(item))
+  const source = friendlyDashboardSourceLabel(item.source)
 
   return (
-    <article className="bg-background/40 rounded-lg border px-3 py-3">
-      <div className="flex items-start gap-3">
-        <AgentAvatar initials={initials} seed={agentName} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-foreground text-sm font-semibold">
-              {agentName}
-            </span>
-            <Badge variant="outline">{agentNeedLabel(item.status)}</Badge>
-            {priority ? <Badge variant="secondary">{priority}</Badge> : null}
-            {timestamp ? (
-              <span className="text-muted-foreground text-xs">{timestamp}</span>
-            ) : null}
-          </div>
-          <div className="bg-card mt-2 rounded-2xl rounded-tl-sm border px-3 py-2.5">
-            <p className="text-foreground text-sm leading-5 font-medium">
-              {title}
-            </p>
-            {!compact && summary ? (
-              <p className="text-muted-foreground mt-1 text-sm leading-5">
-                {summary}
-              </p>
-            ) : null}
-            <p className="text-muted-foreground mt-2 text-xs">
-              Origem: {friendlyDashboardSourceLabel(item.source)}
-            </p>
-            {item.artifacts?.length ? (
-              <div className="mt-2">
-                <ArtifactLinks artifacts={item.artifacts} />
+    <article className="bg-background/55 hover:border-primary/35 rounded-lg border px-3.5 py-3.5 transition-colors">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.4fr)]">
+        <div className="min-w-0">
+          <div className="flex items-start gap-3">
+            <AgentAvatar initials={initials} seed={agentName} />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-foreground text-sm font-semibold">
+                  {agentName}
+                </span>
+                <StatusBadge status={item.status} />
+                {priority ? (
+                  <Badge variant="secondary">{priority}</Badge>
+                ) : null}
+                {timestamp ? (
+                  <span className="text-muted-foreground text-xs">
+                    {timestamp}
+                  </span>
+                ) : null}
               </div>
-            ) : null}
+              <div className="mt-2">
+                <p className="text-foreground text-sm leading-5 font-semibold">
+                  {title}
+                </p>
+                {!compact && summary ? (
+                  <p className="text-muted-foreground mt-1 text-sm leading-5">
+                    {summary}
+                  </p>
+                ) : null}
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-muted-foreground rounded-md border px-2 py-1">
+                    {source}
+                  </span>
+                  {choice ? (
+                    <span
+                      className={cn(
+                        "rounded-md border px-2 py-1 font-medium",
+                        choice === "approved"
+                          ? "border-emerald-500/30 text-emerald-600"
+                          : "border-red-500/30 text-red-600",
+                      )}
+                    >
+                      {choice === "approved" ? "Aprovado" : "Recusado"}
+                    </span>
+                  ) : null}
+                </div>
+                {item.artifacts?.length ? (
+                  <div className="mt-2">
+                    <ArtifactLinks artifacts={item.artifacts} />
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="border-primary/20 bg-primary/5 mt-3 ml-10 rounded-2xl rounded-tr-sm border p-2">
-        <textarea
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={`Responder para ${agentName} e salvar no histórico...`}
-          rows={compact ? 2 : 3}
-          className="placeholder:text-muted-foreground/70 text-foreground min-h-14 w-full resize-none bg-transparent text-sm outline-none"
-        />
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-muted-foreground text-xs">
-            A resposta fica registrada para o agente continuar o trabalho.
-          </span>
-          <Button
-            type="button"
-            size="sm"
-            disabled={!value.trim() || saving}
-            onClick={onSave}
-          >
-            <IconDeviceFloppy className="size-4" />
-            Salvar
-          </Button>
+        <div className="border-border/80 bg-card/70 rounded-lg border p-2.5">
+          <textarea
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder={`Resposta para ${readableApprovalAgentName(item)}...`}
+            rows={compact ? 2 : 3}
+            className="placeholder:text-muted-foreground/70 text-foreground min-h-16 w-full resize-none bg-transparent text-sm outline-none"
+          />
+          <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+            {onDecision ? (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => onDecision("denied")}
+                >
+                  <IconX className="size-4" />
+                  Recusar
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={saving}
+                  onClick={() => onDecision("approved")}
+                >
+                  <IconCheck className="size-4" />
+                  Aprovar
+                </Button>
+              </>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              disabled={!value.trim() || saving}
+              onClick={onSave}
+            >
+              <IconDeviceFloppy className="size-4" />
+              Salvar
+            </Button>
+          </div>
         </div>
       </div>
     </article>
@@ -931,14 +930,6 @@ function StatePanel({
   )
 }
 
-function EmptyLine({ text }: { text: string }) {
-  return (
-    <div className="text-muted-foreground bg-background/35 flex min-h-24 items-center justify-center rounded-lg border border-dashed px-4 text-center text-sm">
-      {text}
-    </div>
-  )
-}
-
 function AgentAvatar({ initials, seed }: { initials: string; seed?: string }) {
   return (
     <div className="ring-border/50 relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-[11px] font-semibold text-white ring-1">
@@ -964,49 +955,6 @@ function getAgentInitials(name: string): string {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
 }
 
-function approvalQuestionForItem(item: AgentDashboardItem) {
-  const title = friendlyDashboardText(item.title)
-  const summary = friendlyDashboardText(item.summary)
-  const text = `${title} ${summary}`.toLowerCase()
-
-  if (text.includes("formas de pagamento") || text.includes("pagamento")) {
-    return "Aprovar revisão das formas de pagamento?"
-  }
-  if (text.includes("dados da empresa")) {
-    return "Aprovar preenchimento dos dados da empresa?"
-  }
-  if (text.includes("canais autorizados")) {
-    return "Aprovar confirmação dos canais autorizados?"
-  }
-  if (text.includes("cadastro principal")) {
-    return "Aprovar revisão do cadastro principal?"
-  }
-
-  return "Aprovar o agente continuar?"
-}
-
-function approvalDescriptionForItem(item: AgentDashboardItem) {
-  const title = friendlyDashboardText(item.title)
-  const summary = friendlyDashboardText(item.summary)
-  const text = `${title} ${summary}`.toLowerCase()
-
-  if (text.includes("formas de pagamento") || text.includes("pagamento")) {
-    return "O agente encontrou possível duplicidade no campo de pagamento e precisa de aprovação para ajustar."
-  }
-  if (text.includes("dados da empresa")) {
-    return "O agente precisa completar informações básicas antes de seguir."
-  }
-  if (text.includes("canais autorizados")) {
-    return "O agente precisa confirmar quais canais podem ser usados."
-  }
-  if (text.includes("cadastro principal")) {
-    return "O agente encontrou um ponto do cadastro que precisa de revisão."
-  }
-
-  const compact = (summary || title).replace(/\s+/g, " ").trim()
-  return compact.length > 140 ? `${compact.slice(0, 137).trim()}...` : compact
-}
-
 function readableApprovalAgentName(item: AgentDashboardItem) {
   return friendlyAgentName(item)
     .replace(/\s*\([^)]*\)/g, "")
@@ -1016,20 +964,6 @@ function readableApprovalAgentName(item: AgentDashboardItem) {
 
 function dashboardItemKey(item: AgentDashboardItem) {
   return `${item.source}:${item.id}`
-}
-
-function agentNeedLabel(status: AgentDashboardItem["status"]) {
-  switch (status) {
-    case "done":
-    case "implemented":
-      return "Registrado"
-    case "dismissed":
-      return "Arquivado"
-    case "scheduled":
-      return "Programado"
-    default:
-      return "Precisa de resposta"
-  }
 }
 
 function DashboardSkeleton() {
