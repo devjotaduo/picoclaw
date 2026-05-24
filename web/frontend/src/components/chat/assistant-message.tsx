@@ -244,7 +244,7 @@ function AssistantToolStatus({
 
   if (!showContent) {
     return (
-      <div className="not-prose border-border/55 bg-card/70 relative mb-2 flex w-fit max-w-[min(42rem,100%)] items-center gap-2 overflow-hidden rounded-full border px-3 py-1.5 text-[13px] shadow-sm shadow-black/10 backdrop-blur-sm">
+      <div className="not-prose border-border/55 bg-card/70 relative flex w-fit max-w-[min(42rem,100%)] items-center gap-2 overflow-hidden rounded-full border px-3 py-1.5 text-[13px] shadow-sm shadow-black/10 backdrop-blur-sm">
         <span className="grid size-5 shrink-0 place-items-center rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-400">
           <IconLoader2 className="size-3.5 animate-spin" />
         </span>
@@ -375,6 +375,7 @@ export function AssistantMessage({
   const isThought = kind === "thought"
   const isToolCalls = kind === "tool_calls"
   const isCollapsedBlock = isThought || isToolCalls
+  const isCompactToolCall = isToolCalls && !showAssistantDetailContent
   const displayContent = localizeContextCommandContent(content)
   const hasText = displayContent.trim().length > 0
   const hasToolCalls = toolCalls.length > 0
@@ -448,8 +449,9 @@ export function AssistantMessage({
           className={cn(
             "relative overflow-hidden rounded-xl border",
             isCollapsedBlock
-              ? "border-transparent bg-transparent"
+              ? "border-transparent bg-transparent group-[.is-assistant]:border-transparent group-[.is-assistant]:bg-transparent"
               : "bg-card text-card-foreground border-border/60",
+            isCompactToolCall && "w-fit max-w-[min(42rem,100%)] rounded-full",
           )}
         >
           {isThought && (
