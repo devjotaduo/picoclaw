@@ -13,7 +13,7 @@
  */
 
 import { IconChevronDown, IconChevronRight, IconX } from "@tabler/icons-react"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { type Notification } from "@/api/notifications"
 import { useNotifications } from "@/hooks/use-notifications"
@@ -40,6 +40,15 @@ export function NotificationPanel() {
   const { notifications, unreadCount, markRead, markAllRead, dismiss } =
     useNotifications()
   const [open, setOpen] = useState(unreadCount > 0)
+  const previousUnreadCountRef = useRef(unreadCount)
+
+  useEffect(() => {
+    const previousUnreadCount = previousUnreadCountRef.current
+    if (previousUnreadCount === 0 && unreadCount > 0) {
+      setOpen(true)
+    }
+    previousUnreadCountRef.current = unreadCount
+  }, [unreadCount])
 
   return (
     <div
