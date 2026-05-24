@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Plus, Download, Hammer, Save, Trash2, FileText, FolderTree, CheckCircle2, XCircle, ShieldCheck, Upload } from "lucide-react";
+import { Plus, Copy, Download, Hammer, Save, Trash2, FileText, FolderTree, CheckCircle2, XCircle, ShieldCheck, Upload } from "lucide-react";
 
 import {
   buildWorkspaceFrontend,
@@ -58,15 +58,44 @@ export function Workspaces() {
     if (!selectedId && workspaces[0]) setSelectedId(workspaces[0].id);
   }, [workspaces, selectedId]);
 
+  // Create new workspace seeded with the embedded baseline (Sofia discovery +
+  // Clara/Luna/Marcos/Camila/Lia/Catarina roster). Backend auto-extracts the
+  // baseline-workspace template when seed_from_baseline is true (default).
   const createM = useMutation({
     mutationFn: () =>
       createWorkspace({
         name: `Novo workspace ${workspaces.length + 1}`,
         slug: `novo-${Date.now()}`,
-        description: "",
+        description:
+          "Workspace baseado no template padrão (Sofia discovery + Clara atende).",
         is_default_auto: workspaces.length === 0,
         is_available_manual: true,
+        seed_from_baseline: true,
       }),
+    onSuccess: async (ws) => {
+      await qc.invalidateQueries({ queryKey: ["workspaces"] });
+      setSelectedId(ws.id);
+    },
+  });
+
+  // Clone the currently selected workspace into a new one (deep-copies home/).
+  // Useful for "duplicate this template" — e.g. clone "default-business" into
+  // "saude-clinica" then customize agents/skills for that segment.
+  const cloneM = useMutation({
+    mutationFn: () => {
+      if (!selected) throw new Error("Selecione um workspace pra clonar");
+      const baseSlug = selected.slug || "workspace";
+      return createWorkspace({
+        name: `${selected.name} (cópia)`,
+        slug: `${baseSlug}-${Date.now().toString(36)}`,
+        description: selected.description
+          ? `Clonado de "${selected.name}". ${selected.description}`
+          : `Clonado de "${selected.name}".`,
+        is_default_auto: false,
+        is_available_manual: true,
+        clone_from_slug: baseSlug,
+      });
+    },
     onSuccess: async (ws) => {
       await qc.invalidateQueries({ queryKey: ["workspaces"] });
       setSelectedId(ws.id);
@@ -143,6 +172,18 @@ export function Workspaces() {
         </Button>
         <Button variant="secondary" onClick={() => setUploadOpen(true)}>
           <Upload className="size-4" /> Upload (.zip)
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={() => cloneM.mutate()}
+          disabled={cloneM.isPending || !selected}
+          title={
+            selected
+              ? `Duplicar "${selected.name}" como novo template editável`
+              : "Selecione um workspace antes pra duplicar"
+          }
+        >
+          <Copy className="size-4" /> Clonar selecionado
         </Button>
         <Button onClick={() => createM.mutate()} disabled={createM.isPending}>
           <Plus className="size-4" /> Novo workspace

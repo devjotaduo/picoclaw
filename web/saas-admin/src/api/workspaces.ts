@@ -34,6 +34,14 @@ export type WorkspaceInput = {
   is_available_manual?: boolean;
   is_raw?: boolean;
   role_policy?: RolePolicy;
+  // Default true. Set false only when caller will SSH-edit or upload home/
+  // content manually before any tenant provisions from this workspace.
+  // Ignored when clone_from_slug is set.
+  seed_from_baseline?: boolean;
+  // Set to slug of an existing workspace to clone home/ from it instead of
+  // seeding from the embedded baseline. Use for "duplicate this template"
+  // workflows (e.g. clone "default-business" → "saude-clinica").
+  clone_from_slug?: string;
 };
 
 export type WorkspaceFile = {

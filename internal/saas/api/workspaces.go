@@ -59,10 +59,22 @@ type workspaceReq struct {
 	Name              string            `json:"name"`
 	Slug              string            `json:"slug"`
 	Description       string            `json:"description"`
-	IsDefaultAuto     bool              `json:"is_default_auto"`
-	IsAvailableManual bool              `json:"is_available_manual"`
-	IsRaw             bool              `json:"is_raw"`
-	RolePolicy        policy.RolePolicy `json:"role_policy"`
+	IsDefaultAuto     bool               `json:"is_default_auto"`
+	IsAvailableManual bool               `json:"is_available_manual"`
+	IsRaw             bool               `json:"is_raw"`
+	RolePolicy        policy.RolePolicy  `json:"role_policy"`
+	// SeedFromBaseline (default true) extracts the embedded
+	// baseline-workspace template into home/ right after creating the
+	// directories. Set false only when the caller intends to fill the
+	// workspace manually (SSH or admin file editor) before any tenant
+	// provisions from it. Cloning from another workspace overrides this
+	// (use CloneFromSlug instead).
+	SeedFromBaseline *bool `json:"seed_from_baseline,omitempty"`
+	// CloneFromSlug, when set, copies home/ recursively from the workspace
+	// with the matching slug instead of seeding from the embedded baseline.
+	// Useful for "duplicate this template" workflows (e.g. clone
+	// "default-business" → "saude-clinica" then customize).
+	CloneFromSlug string `json:"clone_from_slug,omitempty"`
 }
 
 func (h *Handler) handleListWorkspaces(w http.ResponseWriter, r *http.Request) {
@@ -114,6 +126,36 @@ func (h *Handler) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) 
 		if err := os.MkdirAll(filepath.Join(hostPath, sub), 0o755); err != nil {
 			writeError(w, http.StatusInternalServerError, "create workspace dir: "+err.Error())
 			return
+		}
+	}
+
+	homeDir := filepath.Join(hostPath, tenant.WorkspaceHomeSubdir)
+
+	// Seed home/ with either a clone from existing workspace or the
+	// embedded baseline. Clone wins when both are set.
+	if cloneFrom := strings.TrimSpace(req.CloneFromSlug); cloneFrom != "" {
+		source, err := h.Workspaces.GetBySlug(r.Context(), cloneFrom)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "clone source not found: "+cloneFrom)
+			return
+		}
+		sourceHome := filepath.Join(source.HostPath, tenant.WorkspaceHomeSubdir)
+		if err := copyDir(sourceHome, homeDir); err != nil {
+			writeError(w, http.StatusInternalServerError, "clone home: "+err.Error())
+			return
+		}
+	} else {
+		// Default: seed from embedded baseline unless caller explicitly opted out.
+		// nil pointer means "not specified" → use default true.
+		seed := true
+		if req.SeedFromBaseline != nil {
+			seed = *req.SeedFromBaseline
+		}
+		if seed {
+			if err := extractEmbeddedBaseline(homeDir); err != nil {
+				writeError(w, http.StatusInternalServerError, "seed baseline: "+err.Error())
+				return
+			}
 		}
 	}
 
