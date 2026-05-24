@@ -87,6 +87,7 @@ export function App() {
       <Nav />
       <main>
         <Hero />
+        <FlowCardsSection />
         <DeliverySection />
         <OverheadSection />
         <ProofSection />
@@ -108,6 +109,9 @@ function Nav() {
         </a>
 
         <nav className="hidden items-center gap-6 text-sm text-ink-600 md:flex">
+          <a className="nav-link" href="#fluxos">
+            Fluxos
+          </a>
           <a className="nav-link" href="#rede">
             Rede
           </a>
@@ -129,6 +133,178 @@ function Nav() {
         </div>
       </div>
     </header>
+  )
+}
+
+function FlowCardsSection() {
+  return (
+    <section id="fluxos" className="agent-flow-section">
+      <div className="mx-auto max-w-7xl">
+        <div className="agent-flow-hero">
+          <h2>Configure uma vez, execute em todas as áreas.</h2>
+          <p>
+            Agentes resolvem fluxos da empresa sem criar uma pilha de automações
+            frágeis para sua equipe manter.
+          </p>
+          <div className="agent-flow-pill">
+            <span />
+            Rede ativa
+          </div>
+        </div>
+
+        <div className="agent-flow-grid">
+          <article className="agent-flow-card">
+            <div className="flow-card-copy">
+              <p className="flow-card-kicker">Contexto versionado</p>
+              <h3>
+                Teste mudanças de regra antes de colocar agentes para executar.
+              </h3>
+            </div>
+            <PreviewFlowTable />
+          </article>
+
+          <article className="agent-flow-card">
+            <div className="flow-card-copy">
+              <p className="flow-card-kicker">Rede operacional</p>
+              <h3>
+                9+ funções conectadas para atendimento, vendas, suporte,
+                marketing, compras e operação.
+              </h3>
+            </div>
+            <AgentNetworkMap />
+          </article>
+
+          <article className="agent-flow-card">
+            <div className="flow-card-copy">
+              <p className="flow-card-kicker">Skills por tarefa</p>
+              <h3>
+                Cada fluxo chama a capacidade certa sem expor ferramenta técnica
+                para o usuário final.
+              </h3>
+            </div>
+            <SkillSnippet />
+          </article>
+
+          <article className="agent-flow-card">
+            <div className="flow-card-copy">
+              <p className="flow-card-kicker">Controle humano</p>
+              <h3>
+                Permissões, LGPD, transferência humana e auditoria protegem a
+                operação inteira.
+              </h3>
+            </div>
+            <GovernanceFlow />
+          </article>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function PreviewFlowTable() {
+  const rows = [
+    ["memoria-empresa", "Pronto", "3m"],
+    ["funil-comercial", "Revisando", "2m"],
+    ["campanha-maio", "Na fila", "aguarda"],
+  ]
+
+  return (
+    <div className="preview-flow-table" aria-hidden="true">
+      {rows.map(([name, status, time], index) => (
+        <div className="preview-flow-row" key={name}>
+          <div>
+            <strong>{name}</strong>
+            <span>{index === 0 ? "Produção" : "Rascunho"}</span>
+          </div>
+          <div>
+            <span className={`preview-status preview-status-${index}`} />
+            <strong>{status}</strong>
+            <span>{time}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function AgentNetworkMap() {
+  const points = [
+    [50, 14],
+    [26, 33],
+    [72, 34],
+    [18, 62],
+    [55, 58],
+    [84, 67],
+  ]
+
+  return (
+    <div className="agent-network-map" aria-hidden="true">
+      <svg viewBox="0 0 320 180">
+        <path className="map-arc" d="M25 160C42 70 100 24 160 24s118 46 135 136" />
+        <path className="map-arc" d="M70 160C82 92 116 44 160 24c44 20 78 68 90 136" />
+        <path className="map-arc" d="M160 24v136" />
+        <path className="map-arc" d="M42 108h236" />
+        {points.map(([x, y]) => (
+          <g className="map-node" key={`${x}-${y}`}>
+            <circle cx={(x / 100) * 320} cy={(y / 100) * 180} r="8" />
+            <path
+              d={`M ${(x / 100) * 320 - 3} ${(y / 100) * 180 + 2} L ${
+                (x / 100) * 320
+              } ${(y / 100) * 180 - 3} L ${(x / 100) * 320 + 4} ${
+                (y / 100) * 180 + 3
+              } Z`}
+            />
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function SkillSnippet() {
+  return (
+    <pre className="skill-snippet" aria-hidden="true">
+      <code>
+        <span className="code-green">contexto</span>
+        <span> = consultar_memoria()</span>
+        {"\n"}
+        <span className="code-pink">fluxo</span>
+        <span> = rotear_tarefa(entrada)</span>
+        {"\n\n"}
+        <span>se fluxo.precisa_dono:</span>
+        {"\n"}
+        <span>  pausar_para_aprovacao()</span>
+        {"\n"}
+        <span>senão:</span>
+        {"\n"}
+        <span>  executar_com_historico()</span>
+      </code>
+    </pre>
+  )
+}
+
+function GovernanceFlow() {
+  const items = ["LGPD", "Humano", "Auditoria", "Política"]
+
+  return (
+    <div className="governance-flow" aria-hidden="true">
+      <div className="governance-lines">
+        {items.map((item, index) => (
+          <div className="governance-line" key={item}>
+            <span />
+            <i className={index === 1 ? "is-green" : ""} />
+          </div>
+        ))}
+      </div>
+      <div className="governance-panel">
+        {items.map((item, index) => (
+          <div className="governance-chip" key={item}>
+            <span className={index === 1 ? "is-green" : ""} />
+            {item}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
