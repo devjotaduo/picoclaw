@@ -17,7 +17,7 @@
  *  - Desaparece automaticamente quando incomplete = false (sem reload)
  */
 
-import { IconHeartHandshake, IconX } from "@tabler/icons-react"
+import { IconX } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
@@ -89,43 +89,43 @@ export function OnboardingBanner() {
       ? `${pending.length} campo${pending.length === 1 ? "" : "s"} pendente${pending.length === 1 ? "" : "s"}`
       : "cadastro pendente"
 
-  const hint =
-    pending.length > 0
-      ? `Faltando: ${pending.slice(0, 3).join(", ")}${pending.length > 3 ? "…" : ""}`
-      : "Sem o cadastro, atendimento corre risco de inventar dados."
-
+  // Refined-minimal: zero gradient, sem ícone categórico, 1 linha, link
+  // sublinhado em vez de botão. Indicador de estado fica num único dot
+  // que pulsa sutilmente (a única microinteração). Hairline border-bottom
+  // separa do conteúdo abaixo sem cards/sombras.
   return (
     <div
       data-testid="onboarding-banner"
-      className="relative flex items-center gap-3 border-b border-amber-500/30 bg-gradient-to-r from-amber-50 via-amber-50/80 to-transparent px-4 py-2.5 text-sm dark:from-amber-950/40 dark:via-amber-950/20 dark:to-transparent"
+      className="relative flex items-center gap-3 border-b border-border/50 bg-background px-4 py-2 text-[13px]"
     >
-      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
-        <IconHeartHandshake className="size-4" />
-      </div>
+      {/* Dot indicador minimal (acento âmbar — único toque de cor) */}
+      <span
+        aria-hidden="true"
+        className="relative size-1.5 shrink-0 rounded-full bg-amber-500"
+      >
+        <span className="absolute inset-0 animate-ping rounded-full bg-amber-500 opacity-60" />
+      </span>
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-amber-900 dark:text-amber-100">
-          Sofia precisa de você para terminar o cadastro · {countText}
-        </p>
-        <p className="truncate text-xs text-amber-800/80 dark:text-amber-200/70">
-          {hint}
-        </p>
-      </div>
+      <p className="min-w-0 flex-1 truncate text-foreground/80">
+        <span className="font-medium text-foreground">Cadastro pendente</span>
+        <span className="mx-2 text-foreground/30">·</span>
+        <span className="text-foreground/60">{countText}</span>
+      </p>
 
       <Link
         to="/"
-        className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-amber-700"
+        className="shrink-0 text-[13px] font-medium text-foreground underline decoration-foreground/30 decoration-1 underline-offset-4 transition-colors hover:decoration-foreground"
       >
-        Conversar com Sofia →
+        Conversar com Sofia
       </Link>
 
       <button
         type="button"
         onClick={handleDismiss}
         aria-label="Dispensar por 24h"
-        className="shrink-0 rounded-md p-1 text-amber-700/70 transition-colors hover:bg-amber-500/10 hover:text-amber-900 dark:text-amber-300/70 dark:hover:text-amber-100"
+        className="-mr-1 shrink-0 rounded p-1 text-foreground/40 transition-colors hover:text-foreground/80"
       >
-        <IconX className="size-4" />
+        <IconX className="size-3.5" />
       </button>
     </div>
   )
