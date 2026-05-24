@@ -156,6 +156,96 @@ func SanitizeTenantSecurityConfig(volumePath string) error {
 	return os.WriteFile(path, out, mode)
 }
 
+// EnsurePublicWebChannelConfig makes an existing tenant volume boot with the
+// public-web channel enabled. Public tenants may be recreated long after their
+// original workspace copy, so this keeps old volumes compatible without
+// overwriting operator-owned channel settings.
+func EnsurePublicWebChannelConfig(volumePath string) error {
+	path := filepath.Join(volumePath, "config.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read config.json: %w", err)
+	}
+
+	var cfg map[string]any
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("parse config.json: %w", err)
+	}
+
+	channelsKey := "channel_list"
+	if _, ok := cfg["channels"]; ok {
+		channelsKey = "channels"
+	}
+	channels, err := configObject(cfg, channelsKey)
+	if err != nil {
+		return err
+	}
+	if channels == nil {
+		channels = map[string]any{}
+		cfg[channelsKey] = channels
+	}
+
+	publicWeb, err := configObject(channels, "public-web")
+	if err != nil {
+		return err
+	}
+	if publicWeb == nil {
+		publicWeb = map[string]any{}
+		channels["public-web"] = publicWeb
+	}
+	publicWeb["type"] = "public-web"
+	publicWeb["enabled"] = true
+	if _, ok := publicWeb["allow_from"]; !ok {
+		publicWeb["allow_from"] = []any{"*"}
+	}
+
+	settings, err := configObject(publicWeb, "settings")
+	if err != nil {
+		return err
+	}
+	if settings == nil {
+		settings = map[string]any{}
+		publicWeb["settings"] = settings
+	}
+	if _, ok := settings["rate_limit_per_ip"]; !ok {
+		settings["rate_limit_per_ip"] = 30
+	}
+	if _, ok := settings["session_ttl_seconds"]; !ok {
+		settings["session_ttl_seconds"] = 1800
+	}
+	if _, ok := settings["require_captcha_header"]; !ok {
+		settings["require_captcha_header"] = false
+	}
+
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config.json: %w", err)
+	}
+	if len(data) > 0 && data[len(data)-1] == '\n' {
+		out = append(out, '\n')
+	}
+	mode := os.FileMode(0o644)
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	if err := writeFileAtomic(path, out, mode); err != nil {
+		return fmt.Errorf("write config.json: %w", err)
+	}
+	return nil
+}
+
+func configObject(parent map[string]any, key string) (map[string]any, error) {
+	raw, ok := parent[key]
+	if !ok || raw == nil {
+		return nil, nil
+	}
+	obj, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("config.json: %q is %T, want object", key, raw)
+	}
+	return obj, nil
+}
+
 // placeholderFiles lists relative paths inside the tenant volume that
 // SubstituteConfigPlaceholders walks. We don't scan every file because
 // placeholder substitution is a string-replace that could corrupt binary

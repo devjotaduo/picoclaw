@@ -249,6 +249,11 @@ func (p *Provisioner) runProvision(
 	if err := SanitizeTenantSecurityConfig(t.VolumePath); err != nil {
 		return fmt.Errorf("sanitize security config: %w", err)
 	}
+	if t.IsPublic {
+		if err := EnsurePublicWebChannelConfig(t.VolumePath); err != nil {
+			return fmt.Errorf("ensure public-web config: %w", err)
+		}
+	}
 
 	// 1c. Patch memory/empresa.md com o nome da empresa que o admin
 	// digitou. Sem Clara public, este é o único dado de negócio que vem

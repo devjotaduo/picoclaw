@@ -72,6 +72,11 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 	if p.Cfg.TenantImage != "" {
 		t.ContainerImage = p.Cfg.TenantImage
 	}
+	if t.IsPublic {
+		if err := EnsurePublicWebChannelConfig(t.VolumePath); err != nil {
+			return fmt.Errorf("ensure public-web config: %w", err)
+		}
+	}
 	spec, err := p.buildSpec(ctx, t)
 	if err != nil {
 		return fmt.Errorf("build spec: %w", err)

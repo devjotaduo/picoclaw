@@ -1,8 +1,10 @@
 package tenant
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -150,6 +152,96 @@ func TestSanitizeTenantSecurityConfigRemovesLegacyAllowedChannels(t *testing.T) 
 	}
 	if !strings.Contains(text, "tools:") {
 		t.Fatalf("unrelated security config was lost:\n%s", text)
+	}
+}
+
+func TestEnsurePublicWebChannelConfigAddsMissingChannel(t *testing.T) {
+	dst := t.TempDir()
+	path := filepath.Join(dst, "config.json")
+	if err := os.WriteFile(path, []byte(`{"version":3,"channel_list":{}}`+"\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsurePublicWebChannelConfig(dst); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o640 {
+		got := info.Mode().Perm()
+		t.Fatalf("mode = %v, want 0640", got)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(string(raw), "\n") {
+		t.Fatal("expected trailing newline to be preserved")
+	}
+
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	channels := cfg["channel_list"].(map[string]any)
+	publicWeb := channels["public-web"].(map[string]any)
+	if publicWeb["type"] != "public-web" || publicWeb["enabled"] != true {
+		t.Fatalf("public-web channel not enabled correctly: %#v", publicWeb)
+	}
+	settings := publicWeb["settings"].(map[string]any)
+	if settings["rate_limit_per_ip"] != float64(30) ||
+		settings["session_ttl_seconds"] != float64(1800) ||
+		settings["require_captcha_header"] != false {
+		t.Fatalf("unexpected public-web settings: %#v", settings)
+	}
+}
+
+func TestEnsurePublicWebChannelConfigPreservesExistingSettingsAndLegacyChannelsKey(t *testing.T) {
+	dst := t.TempDir()
+	path := filepath.Join(dst, "config.json")
+	if err := os.WriteFile(path, []byte(`{
+  "channels": {
+    "public-web": {
+      "type": "public-web",
+      "enabled": false,
+      "settings": {
+        "rate_limit_per_ip": 9
+      }
+    }
+  }
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsurePublicWebChannelConfig(dst); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cfg["channel_list"]; ok {
+		t.Fatal("legacy config should keep using channels so version-0 migration does not overwrite the patch")
+	}
+	publicWeb := cfg["channels"].(map[string]any)["public-web"].(map[string]any)
+	if publicWeb["enabled"] != true {
+		t.Fatalf("public-web should be forced enabled: %#v", publicWeb)
+	}
+	settings := publicWeb["settings"].(map[string]any)
+	if settings["rate_limit_per_ip"] != float64(9) {
+		t.Fatalf("existing rate limit was overwritten: %#v", settings)
+	}
+	if settings["session_ttl_seconds"] != float64(1800) {
+		t.Fatalf("missing ttl default was not added: %#v", settings)
 	}
 }
 

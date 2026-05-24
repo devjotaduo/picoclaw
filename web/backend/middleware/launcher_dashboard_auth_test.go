@@ -113,6 +113,35 @@ func TestLauncherDashboardAuth_TrustedGatewayAllowsPublicStatic(t *testing.T) {
 	}
 }
 
+func TestLauncherDashboardAuth_TrustedGatewayAllowsPublicChatHealthOnly(t *testing.T) {
+	cfg := LauncherDashboardAuthConfig{
+		AuthMode:             "trusted_gateway",
+		TrustedGatewaySecret: "secret",
+	}
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})
+	h := LauncherDashboardAuth(cfg, next)
+
+	for _, tc := range []struct {
+		method string
+		path   string
+		want   int
+	}{
+		{http.MethodGet, "/api/public/chat/health", http.StatusTeapot},
+		{http.MethodHead, "/api/public/chat/health", http.StatusUnauthorized},
+		{http.MethodPost, "/api/public/chat", http.StatusUnauthorized},
+		{http.MethodGet, "/api/public/chat/stream", http.StatusUnauthorized},
+	} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		h.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Fatalf("%s %s: status = %d, want %d", tc.method, tc.path, rec.Code, tc.want)
+		}
+	}
+}
+
 func TestLauncherDashboardAuth_QueryTokenDoesNotAuthenticate(t *testing.T) {
 	cfg := LauncherDashboardAuthConfig{ExpectedCookie: "deadbeef"}
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
