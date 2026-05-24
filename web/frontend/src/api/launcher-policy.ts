@@ -26,6 +26,18 @@ export interface LauncherPolicyResponse {
    * frontend page rendering no longer blocks on this flag.
    */
   is_saas_admin?: boolean
+  /**
+   * Onboarding state — `incomplete=true` quando memory/empresa.md ainda está
+   * em template (Nome/Segmento vazios ou marker "Status: pendente"). Mesmo
+   * sinal que faz Sofia virar default agent no backend (ver
+   * pkg/agent/onboarding_default.go). Frontend usa pra mostrar banner
+   * "Sofia precisa de você" enquanto incomplete=true.
+   */
+  onboarding?: {
+    incomplete: boolean
+    /** Campos vazios identificados (Nome, Segmento, Horário, …). */
+    pending?: string[]
+  }
 }
 
 export async function getLauncherPolicy(): Promise<LauncherPolicyResponse> {

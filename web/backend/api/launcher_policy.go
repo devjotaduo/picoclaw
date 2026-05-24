@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	saasPolicy "github.com/sipeed/picoclaw/internal/saas/policy"
@@ -65,7 +66,59 @@ func (h *Handler) handleGetLauncherPolicy(w http.ResponseWriter, r *http.Request
 		"features":      saasPolicy.EffectiveFeatures(role, launcherPolicy.RolePolicy),
 		"ui":            launcherUIResponse(h.launcherUIConfig()),
 		"is_saas_admin": saasReady,
+		// onboarding sinaliza pro frontend que o cadastro da empresa
+		// (memory/empresa.md) ainda está em template — banner deve
+		// chamar o operador a completar (com Sofia). Mesmos marcadores
+		// que pkg/agent/onboarding_default.go usa pra promover Sofia
+		// a default agent — mantém consistência entre backend e UI.
+		"onboarding": h.checkOnboardingState(),
 	})
+}
+
+// onboardingState é o que vai no campo "onboarding" da launcher policy.
+// Campos não-vazios são surface-explicito pro banner exibir.
+type onboardingState struct {
+	Incomplete bool     `json:"incomplete"`
+	Pending    []string `json:"pending,omitempty"` // ids amigáveis dos campos vazios
+}
+
+// reOnboardingEmptyField — marca linhas no formato "Chave:" sem valor.
+// Usado pra extrair quais campos exatos faltam (e.g. ["Nome","Segmento"]).
+var reOnboardingEmptyField = regexp.MustCompile(`(?m)^([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][^:\n]{0,40}):\s*$`)
+
+func (h *Handler) checkOnboardingState() onboardingState {
+	state := onboardingState{Incomplete: false}
+	home := h.homeDir()
+	if home == "" {
+		return state
+	}
+	path := filepath.Join(home, "workspace", "memory", "empresa.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// Sem arquivo = sem cadastro. Sofia deve estar como default.
+		if os.IsNotExist(err) {
+			state.Incomplete = true
+		}
+		return state
+	}
+	content := string(data)
+	if strings.Contains(content, "Status: pendente de validação") {
+		state.Incomplete = true
+	}
+	matches := reOnboardingEmptyField.FindAllStringSubmatch(content, -1)
+	for _, m := range matches {
+		field := strings.TrimSpace(m[1])
+		// Filtra rótulos óbvios que não são bloqueantes (subtítulos, headers, etc).
+		// Aceita só campos identificadores que importam pro atendimento.
+		switch field {
+		case "Nome", "Segmento", "Horário", "Endereço", "WhatsApp",
+			"Site", "Instagram", "Formas de pagamento", "Faixa de preço",
+			"Quando chamar humano", "Pode falar preço":
+			state.Pending = append(state.Pending, field)
+			state.Incomplete = true
+		}
+	}
+	return state
 }
 
 func (h *Handler) launcherUIConfig() config.UIConfig {

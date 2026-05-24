@@ -3,6 +3,7 @@ import { Toaster } from "sonner"
 
 import { AppHeader } from "@/components/app-header"
 import { AppSidebar } from "@/components/app-sidebar"
+import { OnboardingBanner } from "@/components/onboarding-banner"
 import { TourGuide } from "@/components/tour/tour-guide"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -20,6 +21,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
         className="flex h-dvh flex-col overflow-hidden"
       >
         <AppHeader />
+        {/* Banner de onboarding: visível enquanto memory/empresa.md está
+            em template (Nome/Segmento vazios). Self-hide quando completar.
+            Mesmo sinal que faz Sofia virar default agent no backend. */}
+        <OnboardingBanner />
 
         <div className="flex flex-1 overflow-hidden">
           <AppSidebar />
