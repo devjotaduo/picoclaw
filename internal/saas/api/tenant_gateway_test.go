@@ -196,6 +196,49 @@ func TestIsPublicTenantStaticAssetsPrefix(t *testing.T) {
 	}
 }
 
+func TestIsPublicOnboardingRootRoute(t *testing.T) {
+	cases := []struct {
+		method string
+		path   string
+		want   bool
+	}{
+		{http.MethodGet, "/", true},
+		{http.MethodHead, "/", true},
+		{http.MethodGet, "", true},
+		{http.MethodGet, "/sofia-onboarding", false},
+		{http.MethodPost, "/", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			if got := isPublicOnboardingRootRoute(tc.method, tc.path); got != tc.want {
+				t.Fatalf("isPublicOnboardingRootRoute(%q, %q) = %v, want %v", tc.method, tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsPublicOnboardingAppRoute(t *testing.T) {
+	cases := []struct {
+		method string
+		path   string
+		want   bool
+	}{
+		{http.MethodGet, "/sofia-onboarding", true},
+		{http.MethodHead, "/sofia-onboarding/", true},
+		{http.MethodGet, "sofia-onboarding", true},
+		{http.MethodGet, "/", false},
+		{http.MethodGet, "/launcher-login", false},
+		{http.MethodPost, "/sofia-onboarding", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			if got := isPublicOnboardingAppRoute(tc.method, tc.path); got != tc.want {
+				t.Fatalf("isPublicOnboardingAppRoute(%q, %q) = %v, want %v", tc.method, tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestIsPublicChatRoute verifies the path matcher used by serveTenantHost to
 // decide whether a request on a public-onboarding tenant is eligible to skip
 // Supabase JWT verification. The matcher must:

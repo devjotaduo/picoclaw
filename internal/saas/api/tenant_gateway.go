@@ -110,6 +110,17 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		// has its own /launcher-login that the legacy local-auth path uses).
 	}
 
+	if t.IsPublic && isPublicOnboardingRootRoute(r.Method, r.URL.Path) {
+		http.Redirect(w, r, "/sofia-onboarding", http.StatusFound)
+		return
+	}
+	if t.IsPublic && isPublicOnboardingAppRoute(r.Method, r.URL.Path) {
+		h.proxyTenantRequest(w, r, target, func(req *http.Request) {
+			h.signPublicTenantRequest(req, t)
+		})
+		return
+	}
+
 	if isPublicTenantRoute(r.Method, r.URL.Path) {
 		h.proxyTenantRequest(w, r, target, nil)
 		return
@@ -164,16 +175,7 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 			}
 		}
 		h.proxyTenantRequest(w, r, target, func(req *http.Request) {
-			gatewayauth.AnnotateRequest(req, h.Cfg.GatewaySharedSecret, gatewayauth.Claims{
-				TenantID: t.ID,
-				// Anonymous visitors don't have a Supabase user; the launcher's
-				// VerifyRequest rejects empty UserID/Role, so we sign with sentinels.
-				// The "public" role is recognized by the public-chat handlers only;
-				// it grants no privileges on regular dashboard routes (which never
-				// hit this code path — they go through authenticateTenantRequest).
-				UserID: "anonymous",
-				Role:   "public",
-			}, time.Now())
+			h.signPublicTenantRequest(req, t)
 		})
 		return
 	}
@@ -272,6 +274,18 @@ func (h *Handler) tenantProxyTarget(ctx context.Context, t *store.Tenant) *url.U
 	}
 	target, _ := url.Parse("http://" + net.JoinHostPort(host, "18800"))
 	return target
+}
+
+func (h *Handler) signPublicTenantRequest(req *http.Request, t *store.Tenant) {
+	gatewayauth.AnnotateRequest(req, h.Cfg.GatewaySharedSecret, gatewayauth.Claims{
+		TenantID: t.ID,
+		// Anonymous visitors don't have a Supabase user; the launcher's
+		// VerifyRequest rejects empty UserID/Role, so we sign with sentinels.
+		// The "public" role is recognized by public tenant routes only; it
+		// grants no privileges on regular dashboard routes.
+		UserID: "anonymous",
+		Role:   "public",
+	}, time.Now())
 }
 
 // authenticateTenantRequest resolves who is making this request and what
@@ -476,6 +490,20 @@ func tenantDashboardAllowed(role string, rolePolicy policy.RolePolicy, method, p
 		return true
 	}
 	return policy.Allowed(role, rolePolicy, feature, required)
+}
+
+func isPublicOnboardingRootRoute(method, rawPath string) bool {
+	if method != http.MethodGet && method != http.MethodHead {
+		return false
+	}
+	return path.Clean("/"+strings.TrimPrefix(rawPath, "/")) == "/"
+}
+
+func isPublicOnboardingAppRoute(method, rawPath string) bool {
+	if method != http.MethodGet && method != http.MethodHead {
+		return false
+	}
+	return path.Clean("/"+strings.TrimPrefix(rawPath, "/")) == "/sofia-onboarding"
 }
 
 func isPublicTenantRoute(method, rawPath string) bool {
