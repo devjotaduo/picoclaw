@@ -84,32 +84,84 @@ FIELD_ALIASES: Dict[str, List[str]] = {
 #                    que o cliente configura SOZINHO pelo painel quando
 #                    quiser ativar o canal (WhatsApp, Instagram, etc.)
 INTEGRATION_PATTERNS: List[Tuple[List[str], str, str, bool]] = [
-    # Não-bloqueantes — cliente configura pelo painel quando ativar canal
+    # Não-bloqueantes — canais que o cliente configura pelo painel quando
+    # ativar (Picoclaw já suporta WhatsApp nativo + Instagram via canais)
     (["whatsapp business", "whatsapp business api", "wa business", "whatsapp"],
      "whatsapp_business_api",
      "Cliente configura no painel (canal WhatsApp)",
      False),
-    (["instagram", "ig"],
+    (["instagram", "ig direct", "ig dm"],
      "instagram",
      "Cliente conecta no painel (canal Instagram)",
      False),
-    # Bloqueantes — admin configura externamente antes de liberar
-    (["shosp"], "shosp",
-     "Connect Shosp scheduling integration", True),
-    (["iclinic", "i-clinic"], "iclinic",
-     "Connect iClinic EHR integration", True),
-    (["calendar", "google calendar", "calendario"],
-     "calendar_integration",
-     "Connect external scheduling system", True),
-    (["crm", "hubspot", "rd station", "pipedrive", "salesforce"],
-     "crm_integration",
-     "Connect CRM system", True),
-    (["pagamento", "stripe", "mercado pago", "mercadopago", "pagseguro"],
-     "payment_gateway",
-     "Configure payment gateway", True),
-    (["asaas"], "asaas",
-     "Configure Asaas billing integration", True),
+
+    # Bloqueantes — sistemas externos de OPERAÇÃO. Sem eles, equipe não
+    # consegue atender clientes sem inventar/redirecionar manualmente.
+
+    # Clínico / saúde
+    (["shosp"], "shosp", "Configure integração Shosp (agenda clínica)", True),
+    (["iclinic", "i-clinic"], "iclinic", "Configure iClinic EHR", True),
+    (["doctoralia"], "doctoralia", "Configure Doctoralia", True),
+    (["feegow"], "feegow", "Configure Feegow", True),
+    (["tasy"], "tasy", "Configure Tasy", True),
+    (["memed"], "memed", "Configure Memed (receita digital)", True),
+
+    # Agenda
+    (["google calendar", "calendario google"],
+     "google_calendar", "Configure Google Calendar", True),
+    (["calendly"], "calendly", "Configure Calendly", True),
+    (["outlook calendar"], "outlook_calendar", "Configure Outlook Calendar", True),
+
+    # CRM
+    (["pipedrive"], "crm_pipedrive", "Configure CRM Pipedrive", True),
+    (["hubspot"], "crm_hubspot", "Configure CRM HubSpot", True),
+    (["rd station", "rdstation"], "crm_rdstation", "Configure RD Station", True),
+    (["salesforce"], "crm_salesforce", "Configure Salesforce", True),
+    (["zoho crm", "zoho"], "crm_zoho", "Configure Zoho CRM", True),
+
+    # ERP / financeiro
+    (["bling"], "erp_bling", "Configure ERP Bling", True),
+    (["tiny erp", "tiny"], "erp_tiny", "Configure ERP Tiny", True),
+    (["omie"], "erp_omie", "Configure ERP Omie", True),
+    (["conta azul", "contaazul"], "erp_contaazul", "Configure Conta Azul", True),
+    ([" sap ", "sap erp", "sap b1"], "erp_sap", "Configure SAP", True),
+
+    # Pagamento
+    (["asaas"], "payment_asaas", "Configure Asaas (cobrança)", True),
+    (["stripe"], "payment_stripe", "Configure Stripe", True),
+    (["mercado pago", "mercadopago"], "payment_mercadopago",
+     "Configure Mercado Pago", True),
+    (["pagseguro"], "payment_pagseguro", "Configure PagSeguro", True),
+    (["pagar.me", "pagarme"], "payment_pagarme", "Configure Pagar.me", True),
+
+    # E-commerce
+    (["shopify"], "ecommerce_shopify", "Configure Shopify", True),
+    (["nuvemshop", "nuvem shop"], "ecommerce_nuvemshop",
+     "Configure Nuvemshop", True),
+    (["woocommerce"], "ecommerce_woocommerce", "Configure WooCommerce", True),
+    (["tray "], "ecommerce_tray", "Configure Tray", True),  # space evita match em palavras
+    (["vtex"], "ecommerce_vtex", "Configure VTEX", True),
+    (["magento"], "ecommerce_magento", "Configure Magento", True),
+
+    # Genérico — captura "banco de dados", "sistema próprio", "API X"
+    (["banco de dados", "database", "db proprio", "db próprio"],
+     "external_database",
+     "Configure integração com banco de dados externo", True),
+    (["sistema proprio", "sistema próprio", "sistema interno"],
+     "external_system_internal",
+     "Configure integração com sistema interno do cliente", True),
+    (["erp"], "erp_generic", "Configure ERP (sistema não identificado)", True),
+    (["crm"], "crm_generic", "Configure CRM (sistema não identificado)", True),
 ]
+
+# Generic regex fallback: catches "integração com X", "conectar X",
+# "API de X", "API do X" mentions in pendências section. These become
+# blocking entries with key=external_system_<slug>.
+GENERIC_INTEGRATION_RE = re.compile(
+    r"(?:integra[cç][aã]o\s+com|conectar(?:\s+ao?)?|api\s+(?:de|do|da)|"
+    r"plugar(?:\s+ao?)?|sincroni[zs]ar\s+com)\s+([a-zA-Z0-9][\w\.\- ]{1,40})",
+    flags=re.IGNORECASE,
+)
 
 
 # --- Helpers ----------------------------------------------------------------
@@ -221,6 +273,8 @@ def detect_integrations(text: str, resolved: set) -> Tuple[List[Dict[str, str]],
     blocking: List[Dict[str, str]] = []
     informativas: List[Dict[str, str]] = []
     seen = set()
+
+    # 1. Match known providers (specific aliases)
     for keywords, key, admin_action, is_blocking in INTEGRATION_PATTERNS:
         if key in seen:
             continue
@@ -238,6 +292,31 @@ def detect_integrations(text: str, resolved: set) -> Tuple[List[Dict[str, str]],
                     informativas.append(entry)
                 seen.add(key)
                 break
+
+    # 2. Generic fallback — catch "integração com X" / "conectar X" / "API de X"
+    # mentions that didn't match any specific provider above. These become
+    # blocking entries since unrecognized external systems must be reviewed.
+    for match in GENERIC_INTEGRATION_RE.finditer(block):
+        raw_name = match.group(1).strip().lower()
+        # Slug: keep alphanumerics + dash
+        slug = re.sub(r"[^a-z0-9]+", "_", raw_name).strip("_")[:30]
+        if not slug:
+            continue
+        key = f"external_system_{slug}"
+        # Skip if already captured by specific pattern (heuristic: provider
+        # name appears in any already-seen key)
+        if any(slug in s or s in slug for s in seen):
+            continue
+        if key in seen:
+            continue
+        status = "resolved" if key in resolved else "pending"
+        blocking.append({
+            "key": key,
+            "status": status,
+            "admin_action": f"Configure integração com {raw_name} (sistema externo identificado em pendências)",
+        })
+        seen.add(key)
+
     return blocking, informativas
 
 

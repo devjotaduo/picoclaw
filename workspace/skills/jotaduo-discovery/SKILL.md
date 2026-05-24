@@ -324,76 +324,186 @@ Além do dossiê, o `save_client.py` registra automaticamente uma linha em
 **Não salve dados sensíveis** (CPF, senhas, tokens, dados clínicos
 detalhados). E-mail e telefone comerciais OK.
 
-## Quando termina o discovery — 8c: GERA RELATÓRIO, NÃO LIBERA
+## Passos finais do discovery — gate-by-gate (8c a 8i)
 
-**IMPORTANTE:** após salvar dossiê + delegar `memory/empresa.md` ao Rafael,
-você roda a skill `tenant-liberation` que GERA o relatório de prontidão —
-mas **NÃO libera o tenant**. A liberação real é decisão exclusiva do admin
-(que vê o relatório no painel adm.jotaduo.com/tenants/discovery e faz as
-integrações externas necessárias antes de liberar).
+Após salvar dossiê + delegar `memory/empresa.md` ao Rafael, você NÃO
+encerra. Ainda faltam 6 passos: validate, decisão de gate, teste com
+Clara, ajustes, aprovação do dono, liberação. **Você** mesma libera se
+não houver impedimento técnico.
 
-### Passo 8c — Gerar relatório (via delegate ao Rafael)
+### Passo 8c — Confirmação bloco a bloco com o dono
 
-⚠️ **Sofia tem sandbox restrito** ao próprio workspace (`agents/sofia/`)
-— o `exec` dela é bloqueado se o cwd ou args apontarem pro workspace raiz.
-**Delegue o validate ao Rafael** (workspace=raiz, sem essa restrição):
+Antes de rodar validate, **confirme com o dono o que você entendeu**.
+Para cada bloco coletado (identidade, operação, sistemas, dores),
+mostre 2-4 bullets do que registrou e pergunte:
+
+> "Antes de eu fechar, confirma se está tudo certo:
+> • <bullet 1>
+> • <bullet 2>
+> • <bullet 3>
+> Algum desses dados eu entendi errado ou faltou algo importante?"
+
+Se dono apontar ajuste, atualize `memory/empresa.md` via delegate ao
+Rafael antes de seguir.
+
+### Passo 8d — Validate via Rafael
+
+⚠️ **Sofia tem sandbox restrito** ao próprio workspace
+(`agents/sofia/`) — o `exec` dela é bloqueado se cwd ou args apontarem
+pra raiz. Delegue ao Rafael (workspace=raiz, sem restrição):
 
 ```
 delegate(
   agent_id="main",
-  task="""Rode o validate de readiness do tenant e me devolva o JSON
-exato (sem comentar nem reformatar). Use a tool exec assim:
+  task="""Rode o validate e me devolva o JSON exato (sem reformatar):
 
 exec(
   action="run",
   command="python skills/tenant-liberation/scripts/validate_workspace.py --workspace .",
-  cwd="<seu workspace raiz, ex: C:/Users/ruthe/Pictures/pico2/picoclaw/workspace>"
+  cwd="<seu workspace raiz>"
 )
-
-O cwd deve ser EXATAMENTE o seu workspace raiz (Rafael) — sem subpasta.
-O argumento --workspace é "." (ponto) pra apontar pro mesmo cwd.
-
-Retorna pra mim só o stdout do comando (o JSON).
 """
 )
 ```
 
-Rafael executa e devolve o JSON via response do subturn. Você processa
-o JSON: lê `missing_summary` e `integracoes_required`.
+Rafael devolve o JSON com `ok`, `universal`, `segmento_*`,
+`integracoes_required` (bloqueantes), `integracoes_informativas`
+(canal cliente configura — não bloqueia), `missing_summary`.
 
-Não tente "consertar" pendências marcadas como admin-action — essas são
-do operador humano, não suas.
+### Passo 8e — Decisão de gate baseada em integrações
 
-### Passo 8d — Notificar admin
+Aqui você bifurca:
+
+**Caminho A — Há integrações TÉCNICAS bloqueantes pendentes:**
+(`integracoes_required` tem item com `status: "pending"`)
+
+NÃO libera. Notifica admin:
 
 ```
 notify_user(
-  kind="data",
-  title="Discovery concluído — <empresa> aguarda liberação",
-  body="<N> pendências p/ admin resolver. Veja em adm.jotaduo.com",
+  kind="warning",
+  title="Discovery <empresa> — aguardando integrações técnicas",
+  body="<N> sistemas externos pendentes (ex: Shosp, CRM). Veja em adm.jotaduo.com/tenants/discovery",
   agent_id="sofia",
   cta_url="/files/memory/jotaduo/clientes/<slug>.md",
   cta_label="Abrir dossiê"
 )
 ```
 
-### Passo 8e — Encerrar com o cliente
+Encerra com dono:
+> "Está tudo registrado. O time vai liberar o painel completo assim
+> que conectarmos <sistema X> — sem isso a equipe não consegue
+> responder com segurança. Te avisamos no e-mail quando estiver
+> pronto."
 
-Mensagem padrão (curta, sem prometer prazo):
+**Caminho B — ZERO integrações técnicas pendentes** (só informativas
+como WhatsApp/Instagram, OU `integracoes_required` vazio): segue pra
+Passo 8f.
 
-> "Já tenho tudo que precisava do nosso primeiro papo. Mandei o resumo
-> pro nosso time avaliar as últimas pendências e fazer as integrações
-> que faltam. Em breve liberamos o painel completo pra você."
+### Passo 8f — Teste de atendimento com Clara
 
-**NÃO** prometa prazo. **NÃO** chame `set_ui_profile` — essa tool é do
-backend admin, não sua. O cliente vê só o chat até o admin liberar.
+Delegue pra Clara simular os 3 cenários típicos do segmento (definidos
+em `references/segments/<seg>.md` na seção "Cenários de teste pra
+Clara simular"):
 
-## O que muda quando o admin libera
+```
+delegate(
+  agent_id="clara",
+  task="""Simule atender como se cliente real perguntasse.
+Responda baseado em memory/empresa.md. Os 3 cenários do segmento
+<X> são:
 
-Quando admin clica "LIBERAR TENANT" no painel:
-1. Backend roda `validate_workspace.py` final
-2. Se `ok: true` → escreve `ui-visibility.json` com `active_profile: "tenant"`
-3. Frontend re-renderiza com painel completo
-4. Cliente entra → vê Rafael como default (override Sofia já desativou
-   antes porque empresa.md está completo)
-5. Catarina (curadora) fica disponível pra aprofundamento posterior
+Cenário 1: "<prompt 1>"
+Cenário 2: "<prompt 2>"
+Cenário 3: "<prompt 3>"
+
+Responda os 3 como atenderia de verdade no WhatsApp. Não invente
+informação — se faltar, diga 'preciso verificar' como faria normal.
+Me devolva as 3 respostas pra Sofia validar com o dono.
+"""
+)
+```
+
+### Passo 8g — Mostra teste pro dono + coleta feedback
+
+Pegue as 3 respostas de Clara e mostre pro dono em UMA mensagem
+(máx 2 SPLITs — use listas, não slideshow):
+
+> "Olha como a Clara vai atender no WhatsApp. Confere se tá no tom
+> certo e se as infos batem:
+>
+> 1. **Cliente:** <prompt 1> → **Clara:** <resposta 1>
+> 2. **Cliente:** <prompt 2> → **Clara:** <resposta 2>
+> 3. **Cliente:** <prompt 3> → **Clara:** <resposta 3>
+>
+> Tá bom assim ou tem algo pra ajustar antes de eu liberar?"
+
+### Passo 8h — Loop de ajustes
+
+Se dono apontar problema (ex: "Clara falou 200 mas é 250", "tom
+muito formal", "esqueceu de mencionar Bradesco"):
+
+1. Identifique QUAL info no `memory/empresa.md` precisa mudar
+2. Delegue pro Rafael atualizar com `write_file overwrite=true`
+3. Re-rode SÓ o(s) cenário(s) afetado(s) com Clara
+4. Mostre nova resposta pro dono
+5. Loop até dono dizer "tá bom"
+
+Se ajuste for de TOM (não de fato), pode ir em `workspace/SOUL.md` ou
+`config/tone-of-voice.md` — delegate pro Rafael ajustar lá.
+
+### Passo 8i — Aprovação final + liberação
+
+Quando dono aprovar o teste, pergunta uma última vez explicitamente:
+
+> "Posso liberar o painel completo pra você e ativar a equipe pra
+> começar a atender de verdade?"
+
+Aguarda confirmação ("sim", "pode liberar", "vai"):
+
+- Se **SIM** → delegue pro Rafael:
+
+  ```
+  delegate(
+    agent_id="main",
+    task="Use a tool set_ui_profile com profile=tenant. Confirme que ui-visibility.json foi atualizado."
+  )
+  ```
+
+  Rafael executa, frontend re-renderiza, painel completo aparece.
+
+  Encerra com dono:
+  > "Pronto. Painel liberado. A Clara já está atendendo seu WhatsApp,
+  > Marcos vai cuidar de vendas, Camila do pós-venda. Qualquer
+  > coisa, o Rafael fica disponível pra você no painel."
+
+- Se **NÃO / mais ajustes** → volta pro Passo 8h (loop)
+
+- Se **dono pedir tempo** ("deixa eu pensar"): registra
+  `notify_user(kind="data", title="Discovery <empresa> aguarda decisão final do dono")`
+  e encerra sem liberar. Quando dono voltar, retoma do 8i.
+
+## O que NUNCA fazer
+
+- **NÃO** chame `set_ui_profile` direto — sempre via delegate ao
+  Rafael (Sofia não tem acesso ao workspace raiz pra escrever
+  `ui-visibility.json`).
+- **NÃO** libere se há integração técnica pendente — espera admin
+  resolver primeiro.
+- **NÃO** pule a confirmação final do dono — liberação tem que ser
+  decisão consciente dele, não automática.
+- **NÃO** invente respostas no teste com Clara — se Clara não soube
+  responder, ISSO É O SINAL que falta info na memória. Conserta antes
+  de liberar.
+- **NÃO** prometa prazo no caminho A (integração pendente) — admin
+  resolve no ritmo dele.
+
+## Pra admin (referência)
+
+Admin vê tenant em `status="discovery"` no painel
+`adm.jotaduo.com/tenants/discovery`. Quando Sofia libera (caminho B),
+status vira `active` automaticamente. Quando Sofia trava em caminho A,
+admin recebe `notify_user` com link pro dossiê, resolve a integração
+(externa), marca como `resolved` no painel, e na próxima sessão da
+Sofia (dono volta) ela detecta `integracoes_required` vazia e
+libera.

@@ -65,3 +65,32 @@ ciclo de venda, decisor.
 - Taxa de qualificação MQL → SQL.
 - Nº de reuniões agendadas/semana.
 - Taxa de fechamento por origem.
+
+## Cenários de teste pra Clara simular (Fase 5 do discovery)
+
+Antes de liberar o tenant, Sofia delega pra Clara simular 3 atendimentos típicos pra dono validar tom + acurácia. Use estes prompts (lead B2B fictício):
+
+### Cenário 1 — Interesse inicial (qualificação)
+> "Vi vocês no LinkedIn, tô interessado. Podemos conversar?"
+
+**O que Clara deve fazer:** consultar `Produtos ou serviços:` e `Canal de agendamento:` em `memory/empresa.md`, fazer 2-3 perguntas curtas de qualificação (tamanho da empresa, contexto, dor) e oferecer agendar reunião com vendedor.
+**Sinal de problema:** Clara já mandou link de pagamento sem qualificar (significa falta regra de "lead novo passa por qualificação antes de proposta") ou não conseguiu marcar reunião (significa `Canal de agendamento:` vazio).
+
+### Cenário 2 — Preço por volume
+> "Quanto custa pra [N] usuários / [N] licenças?"
+
+**O que Clara deve fazer:** consultar `Faixa de preço:` e `Pode falar preço:` em `memory/empresa.md`. Se preço é por proposta, explicar que depende do escopo e oferecer call de diagnóstico. Se há tabela pública, passar a faixa.
+**Sinal de problema:** Clara inventou preço por usuário ou ofereceu desconto (significa `Faixa de preço:` mal cadastrada ou `Pode falar preço:` ambígua).
+
+### Cenário 3 — Demo / prova
+> "Consigo fazer uma demo antes de fechar?"
+
+**O que Clara deve fazer:** consultar política de demo/trial em `memory/empresa.md` (se existir) ou `Canal de agendamento:` e marcar reunião de demo com vendedor. Se não houver demo, explicar como funciona avaliação.
+**Sinal de problema:** Clara prometeu demo sem confirmar disponibilidade (significa falta campo "Política de demo/trial" no `memory/empresa.md`).
+
+## Pra Sofia avaliar com o dono
+
+Depois que Clara responder os 3 cenários, Sofia mostra pro dono assim:
+"Olha como a Clara vai atender. Tá no tom certo? Algo a ajustar?"
+
+Coleta feedback. Se dono apontar problema, Sofia identifica QUAL info no `memory/empresa.md` precisa mudar e delega pro Rafael atualizar. Re-roda só o cenário que mudou.

@@ -66,3 +66,32 @@ particular, no-show, recepção, profissional, especialidade.
 - Tempo de resposta no WhatsApp (meta: < 1 min, 24/7).
 - Taxa de retorno de paciente em 6 meses (meta: +20%).
 - Horas/semana economizadas na recepção.
+
+## Cenários de teste pra Clara simular (Fase 5 do discovery)
+
+Antes de liberar o tenant, Sofia delega pra Clara simular 3 atendimentos típicos pra dono validar tom + acurácia. Use estes prompts (paciente fictício):
+
+### Cenário 1 — Agendamento de consulta
+> "Oi, queria marcar uma consulta pra essa semana, dá pra encaixar?"
+
+**O que Clara deve fazer:** consultar `Canal de agendamento:` e `Horário:` em `memory/empresa.md`, orientar como marcar (link/telefone/transferência humana) sem inventar horário disponível.
+**Sinal de problema:** Clara prometeu horário específico sem checar agenda (significa que `Canal de agendamento:` não está claro ou faltou regra de "nunca confirmar horário sem consultar agenda").
+
+### Cenário 2 — Preço de particular
+> "Quanto custa a consulta particular?"
+
+**O que Clara deve fazer:** consultar `Faixa de preço:` e `Pode falar preço:` em `memory/empresa.md` e responder com o valor exato cadastrado.
+**Sinal de problema:** Clara inventou preço ou disse "depende, vou verificar" (significa `Faixa de preço:` vazia ou `Pode falar preço:` não foi definido).
+
+### Cenário 3 — Convênio (escalação)
+> "Vocês atendem meu convênio? É Amil."
+
+**O que Clara deve fazer:** consultar `Convênios aceitos:` em `memory/empresa.md`. Se o convênio não estiver na lista, dizer que não atende esse e oferecer particular ou encaminhar pro humano.
+**Sinal de problema:** Clara confirmou convênio que não está na lista (significa `Convênios aceitos:` desatualizado ou faltando regra "só confirmar convênios listados").
+
+## Pra Sofia avaliar com o dono
+
+Depois que Clara responder os 3 cenários, Sofia mostra pro dono assim:
+"Olha como a Clara vai atender. Tá no tom certo? Algo a ajustar?"
+
+Coleta feedback. Se dono apontar problema, Sofia identifica QUAL info no `memory/empresa.md` precisa mudar e delega pro Rafael atualizar. Re-roda só o cenário que mudou.
