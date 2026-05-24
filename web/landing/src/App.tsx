@@ -11,74 +11,73 @@ const SUPPORT_EMAIL = "dev@jotaduo.com"
 
 const networkRows = [
   {
-    channel: "WhatsApp",
-    agent: "Clara",
-    state: "Atendendo",
+    channel: "Atendimento",
+    function: "dúvidas e triagem",
+    state: "Respondendo",
     time: "agora",
-    detail: "fila principal",
   },
   {
-    channel: "Instagram",
-    agent: "Marcos",
+    channel: "Vendas",
+    function: "leads e propostas",
     state: "Qualificando",
     time: "2 min",
-    detail: "lead comercial",
   },
   {
-    channel: "Site",
-    agent: "Sofia",
-    state: "Coletando",
+    channel: "Marketing",
+    function: "campanhas e conteúdo",
+    state: "Criando",
     time: "4 min",
-    detail: "cadastro pendente",
   },
   {
-    channel: "Humano",
-    agent: "Rafael",
-    state: "Alerta",
-    time: "quando precisa",
-    detail: "exceções e bloqueios",
+    channel: "Operação",
+    function: "relatórios e alertas",
+    state: "Monitorando",
+    time: "ao vivo",
   },
 ]
 
 const platformCards = [
   {
-    title: "Memória do negócio",
-    body: "Produtos, regras, tom de voz e histórico ficam em arquivos claros para o agente consultar.",
+    title: "Contexto da empresa",
+    body: "Produtos, regras, preços, canais e tom de voz ficam organizados para todos os agentes.",
   },
   {
-    title: "Roteamento por agente",
-    body: "Cada função tem dono: atendimento, vendas, onboarding, alerta e revisão humana.",
+    title: "Execução por função",
+    body: "Cada tarefa vai para o agente certo: vender, atender, comprar, publicar, testar ou alertar.",
   },
   {
-    title: "Canais conectados",
-    body: "WhatsApp primeiro, outros canais depois, com a mesma operação e o mesmo histórico.",
+    title: "Supervisão humana",
+    body: "A IA resolve o fluxo comum e pausa quando precisa de dono, permissão ou decisão sensível.",
   },
 ]
 
 const capabilities = [
-  "Atende dúvidas frequentes",
-  "Qualifica oportunidades",
-  "Agenda próximos passos",
-  "Aciona humano no limite",
-  "Registra histórico",
-  "Aprende com correções",
+  "Responde clientes",
+  "Qualifica vendas",
+  "Resolve suporte",
+  "Pesquisa preços",
+  "Cria campanhas",
+  "Gera relatórios",
+  "Atualiza memória",
+  "Testa fluxos",
+  "Protege dados sensíveis",
 ]
 
 const useCases = [
   {
     eyebrow: "Atendimento",
-    title: "Fila respondida mesmo fora do horário",
-    body: "O agente resolve o comum, organiza o contexto e deixa só os casos sensíveis para a equipe.",
+    title: "Clientes recebem resposta sem fila parada",
+    body: "Dúvidas, triagem, grupos, reclamações simples e encaminhamento humano ficam organizados.",
   },
   {
-    eyebrow: "Vendas",
-    title: "Lead com próxima ação definida",
-    body: "Perguntas, objeções e intenção de compra viram resumo prático para continuar o contato.",
+    eyebrow: "Crescimento",
+    title: "Vendas e marketing trabalham juntos",
+    body: "Leads, propostas, follow-up, campanhas, posts e páginas simples saem do mesmo contexto.",
   },
   {
-    eyebrow: "Onboarding",
-    title: "Cadastro guiado sem formulário frio",
-    body: "Sofia coleta dados em conversa, valida pendências e prepara o painel para começar.",
+    eyebrow: "Operação",
+    title: "A rotina interna vira fluxo automático",
+    body: "Relatórios, compras, memória, testes, alertas e políticas reduzem trabalho repetitivo.",
   },
 ]
 
@@ -113,7 +112,7 @@ function Nav() {
             Rede
           </a>
           <a className="nav-link" href="#operacao">
-            Operação
+            Funções
           </a>
           <a className="nav-link" href="#casos">
             Casos de uso
@@ -124,8 +123,8 @@ function Nav() {
           <a className="button button-secondary hidden sm:inline-flex" href={ADMIN_URL}>
             Entrar
           </a>
-          <a className="button button-primary" href={PRE_CADASTRO_URL}>
-            Criar agente
+            <a className="button button-primary" href={PRE_CADASTRO_URL}>
+            Criar rede
           </a>
         </div>
       </div>
@@ -141,12 +140,12 @@ function Hero() {
         <div className="mx-auto max-w-3xl text-center">
           <FloatingMark />
           <h1 className="mt-12 text-balance text-5xl font-semibold leading-[0.96] tracking-[-0.045em] text-ink-950 sm:text-6xl lg:text-7xl">
-            Uma rede de atendimento autônoma
+            Uma rede de agentes autônoma
           </h1>
           <p className="mx-auto mt-12 max-w-xl text-pretty text-lg leading-8 text-ink-600 sm:mt-24 sm:text-xl lg:mt-28">
-            Configure uma vez. A Jotaduo conversa em todos os canais, mantém
-            contexto, chama humanos no momento certo e deixa a operação visível
-            em tempo real.
+            A camada de execução para empresas: atende, vende, resolve suporte,
+            cria campanhas, consulta memória, gera relatórios e chama humanos
+            quando a decisão exige dono.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <a className="button button-primary button-large" href={PRE_CADASTRO_URL}>
@@ -166,7 +165,7 @@ function NetworkConsole() {
   return (
     <aside
       className="relative z-10 mt-14 overflow-hidden rounded-[28px] border border-ink-950/10 bg-white shadow-[0_40px_100px_-60px_rgba(0,0,0,0.65)] lg:mt-0"
-      aria-label="Prévia da rede de atendimento"
+      aria-label="Prévia da rede de agentes"
     >
       <div className="flex items-center justify-between border-b border-ink-950/10 px-5 py-4">
         <div>
@@ -174,15 +173,15 @@ function NetworkConsole() {
             Rede ativa
           </p>
           <p className="mt-1 text-sm font-semibold text-ink-950">
-            jotaduo.com/operação
+            jotaduo.com/rede
           </p>
         </div>
         <span className="status-dot">ao vivo</span>
       </div>
 
       <div className="grid grid-cols-3 border-b border-ink-950/10">
-        <Metric value="4" label="agentes" />
-        <Metric value="12ms" label="triagem" />
+        <Metric value="9" label="funções" />
+        <Metric value="24h" label="execução" />
         <Metric value="99.9%" label="pronto" />
       </div>
 
@@ -193,10 +192,10 @@ function NetworkConsole() {
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 <p className="truncate text-sm font-semibold text-ink-950">
-                  {row.channel} · {row.agent}
+                  {row.channel}
                 </p>
               </div>
-              <p className="mt-1 truncate text-sm text-ink-500">{row.detail}</p>
+              <p className="mt-1 truncate text-sm text-ink-500">{row.function}</p>
             </div>
             <div className="text-right">
               <p className="text-sm font-medium text-ink-950">{row.state}</p>
@@ -207,10 +206,10 @@ function NetworkConsole() {
       </div>
 
       <div className="bg-ink-950 px-5 py-5 text-white">
-        <p className="text-sm font-medium">Próxima ação sugerida</p>
+        <p className="text-sm font-medium">Próxima decisão</p>
         <p className="mt-2 text-sm leading-6 text-white/68">
-          Sofia precisa finalizar o cadastro. Rafael será chamado se faltar uma
-          regra obrigatória.
+          A rede executa o que é repetível e separa o que precisa de aprovação,
+          contexto novo ou revisão humana.
         </p>
       </div>
     </aside>
@@ -223,8 +222,8 @@ function DeliverySection() {
       <div className="mx-auto grid max-w-7xl gap-0 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
         <SectionHeader
           kicker="Configure uma vez"
-          title="A mesma inteligência em todos os pontos de contato."
-          body="A operação conversa por WhatsApp, site e canais futuros sem duplicar regras. O painel mostra o que está ativo, bloqueado ou precisando de humano."
+          title="Uma base de contexto para todas as áreas."
+          body="A empresa deixa de depender de prompts soltos. Regras, memória, canais e políticas alimentam agentes que executam tarefas reais sem perder controle."
         />
 
         <div className="grid border-t border-ink-950/10 lg:border-l lg:border-t-0">
@@ -254,9 +253,9 @@ function OverheadSection() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-[0.82fr_1.18fr]">
           <SectionHeader
-            kicker="Sem operação pesada"
-            title="O painel vira o centro de controle do atendimento."
-            body="A equipe não precisa entender arquivos, jobs ou integrações técnicas. Ela vê tarefas, pendências, memória e alertas na linguagem da operação."
+            kicker="Execução, não chat genérico"
+            title="Agentes especializados para resolver trabalho da empresa."
+            body="A rede combina atendimento, vendas, suporte, compras, marketing, relatórios, testes e políticas internas em uma operação supervisionada."
           />
 
           <div className="grid border-t border-ink-950/10 lg:border-l lg:border-t-0">
@@ -273,10 +272,10 @@ function OverheadSection() {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-semibold text-ink-950">
-                      Agente pronto para responder
+                      Rede pronta para executar
                     </p>
                     <p className="mt-1 text-sm text-ink-500">
-                      Memória revisada · canais conectados · humano em alerta
+                      Memória revisada · tarefas roteadas · humano em alerta
                     </p>
                   </div>
                   <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -297,14 +296,14 @@ function ProofSection() {
     <section className="border-b border-ink-950/10">
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
         <p className="text-center text-sm font-medium text-ink-500">
-          Feito para equipes que precisam responder rápido, vender melhor e
-          manter controle humano.
+          Feito para empresas que precisam tirar trabalho recorrente da equipe
+          sem abrir mão de controle humano.
         </p>
         <div className="mt-8 grid gap-px overflow-hidden rounded-2xl border border-ink-950/10 bg-ink-950/10 sm:grid-cols-4">
-          <ProofMetric value="24h" label="atendimento ativo" />
+          <ProofMetric value="24h" label="execução contínua" />
           <ProofMetric value="1" label="memória por empresa" />
-          <ProofMetric value="4" label="papéis de agente" />
-          <ProofMetric value="0" label="formulário frio" />
+          <ProofMetric value="9+" label="funções operacionais" />
+          <ProofMetric value="0" label="automação cega" />
         </div>
       </div>
     </section>
@@ -319,7 +318,7 @@ function UseCases() {
           <div>
             <p className="eyebrow">Casos de uso</p>
             <h2 className="mt-5 max-w-3xl text-balance text-4xl font-semibold tracking-[-0.035em] text-ink-950 sm:text-5xl">
-              A mesma base para atendimento, vendas e onboarding.
+              A mesma rede resolve frente, meio e fundo da operação.
             </h2>
           </div>
           <a className="button button-secondary w-fit" href={`mailto:${SUPPORT_EMAIL}`}>
@@ -352,11 +351,11 @@ function CallToAction() {
       <div className="relative z-10 mx-auto max-w-5xl px-4 py-24 text-center sm:px-6 lg:px-8">
         <p className="eyebrow mx-auto">Comece pelo cadastro guiado</p>
         <h2 className="mt-6 text-balance text-5xl font-semibold leading-none tracking-[-0.04em] text-ink-950 sm:text-7xl">
-          Crie o primeiro agente e veja a operação nascer.
+          Crie a rede inicial e veja a empresa ganhar execução.
         </h2>
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-ink-600">
-          Em poucos minutos a Sofia entende seu negócio, identifica pendências e
-          prepara o acesso do painel.
+          Em poucos minutos a Jotaduo entende o negócio, identifica pendências
+          e monta uma operação que começa simples e cresce por função.
         </p>
         <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <a className="button button-primary button-large" href={PRE_CADASTRO_URL}>
@@ -382,7 +381,7 @@ function Footer() {
           <div>
             <p className="text-sm font-semibold text-ink-950">Jotaduo</p>
             <p className="text-sm text-ink-500">
-              Atendimento conversacional com IA
+              Rede de agentes para empresas
             </p>
           </div>
         </div>
