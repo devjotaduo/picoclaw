@@ -11,7 +11,6 @@
  *  - Tipografia hierárquica via peso + opacidade (sem cores extras).
  *  - Chevron único pra toggle, sem badge bg colorido (só número).
  */
-
 import { IconChevronDown, IconChevronRight, IconX } from "@tabler/icons-react"
 import { useEffect, useRef, useState } from "react"
 
@@ -52,13 +51,13 @@ export function NotificationPanel() {
 
   return (
     <div
-      className="mt-auto border-t border-sidebar-border/40 group-data-[collapsible=icon]:hidden"
+      className="border-sidebar-border/40 mt-auto border-t group-data-[collapsible=icon]:hidden"
       data-testid="notification-panel"
     >
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-[12px] text-sidebar-foreground/60 transition-colors hover:text-sidebar-foreground"
+        className="text-sidebar-foreground/60 hover:text-sidebar-foreground flex w-full items-center gap-2 px-3 py-2.5 text-[12px] transition-colors"
         aria-expanded={open}
         aria-controls="notification-list"
       >
@@ -69,16 +68,19 @@ export function NotificationPanel() {
         )}
         <span className="font-medium tracking-tight">Notificações</span>
         {unreadCount > 0 && (
-          <span className="ml-auto text-[11px] font-semibold text-foreground">
+          <span className="text-foreground ml-auto text-[11px] font-semibold">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div id="notification-list" className="border-t border-sidebar-border/30">
+        <div
+          id="notification-list"
+          className="border-sidebar-border/30 border-t"
+        >
           {notifications.length === 0 ? (
-            <div className="px-3 py-5 text-center text-[11px] text-sidebar-foreground/40">
+            <div className="text-sidebar-foreground/40 px-3 py-5 text-center text-[11px]">
               Nada por aqui.
             </div>
           ) : (
@@ -97,7 +99,7 @@ export function NotificationPanel() {
                 <button
                   type="button"
                   onClick={() => markAllRead()}
-                  className="block w-full border-t border-sidebar-border/30 px-3 py-2 text-left text-[11px] text-sidebar-foreground/50 transition-colors hover:text-sidebar-foreground"
+                  className="border-sidebar-border/30 text-sidebar-foreground/50 hover:text-sidebar-foreground block w-full border-t px-3 py-2 text-left text-[11px] transition-colors"
                 >
                   Marcar todas como lidas
                 </button>
@@ -124,7 +126,7 @@ function NotificationItem({
   return (
     <li
       className={cn(
-        "group/notification relative cursor-pointer border-b border-sidebar-border/20 px-3 py-2.5 transition-colors last:border-b-0 hover:bg-sidebar-accent/30",
+        "group/notification border-sidebar-border/20 hover:bg-sidebar-accent/30 relative cursor-pointer border-b px-3 py-2.5 transition-colors last:border-b-0",
         isUnread && "bg-sidebar-accent/15",
       )}
       onClick={() => {
@@ -147,23 +149,23 @@ function NotificationItem({
               className={cn(
                 "truncate text-[12.5px] leading-snug",
                 isUnread
-                  ? "font-medium text-sidebar-foreground"
+                  ? "text-sidebar-foreground font-medium"
                   : "text-sidebar-foreground/80",
               )}
             >
               {n.title}
             </span>
-            <span className="shrink-0 text-[10px] tabular-nums text-sidebar-foreground/40">
+            <span className="text-sidebar-foreground/40 shrink-0 text-[10px] tabular-nums">
               {formatRelativeTime(n.created_at)}
             </span>
           </div>
           {n.body && (
-            <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-sidebar-foreground/55">
+            <p className="text-sidebar-foreground/55 mt-0.5 line-clamp-2 text-[11px] leading-snug">
               {n.body}
             </p>
           )}
           {(n.cta_url || n.agent_id) && (
-            <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-sidebar-foreground/40">
+            <div className="text-sidebar-foreground/40 mt-1 flex items-center justify-between gap-2 text-[10px]">
               {n.cta_url ? (
                 <a
                   href={n.cta_url}
@@ -173,7 +175,7 @@ function NotificationItem({
                     if (isUnread) onClick()
                     e.stopPropagation()
                   }}
-                  className="text-sidebar-foreground/70 underline decoration-sidebar-foreground/20 decoration-1 underline-offset-2 hover:decoration-sidebar-foreground/60"
+                  className="text-sidebar-foreground/70 decoration-sidebar-foreground/20 hover:decoration-sidebar-foreground/60 underline decoration-1 underline-offset-2"
                 >
                   {n.cta_label ?? "abrir"}
                 </a>
@@ -191,7 +193,7 @@ function NotificationItem({
             e.stopPropagation()
             onDismiss()
           }}
-          className="invisible -mr-0.5 -mt-0.5 shrink-0 rounded p-0.5 text-sidebar-foreground/30 transition-colors hover:bg-sidebar-accent/40 hover:text-sidebar-foreground group-hover/notification:visible"
+          className="text-sidebar-foreground/30 hover:bg-sidebar-accent/40 hover:text-sidebar-foreground invisible -mt-0.5 -mr-0.5 shrink-0 rounded p-0.5 transition-colors group-hover/notification:visible"
           aria-label="Dispensar"
         >
           <IconX className="size-3" />

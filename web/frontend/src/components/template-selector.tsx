@@ -17,7 +17,6 @@
  *  - Validar visibility flags do `mock-api/ui-visibility.json`.
  *  - Demo de SaaS para diferentes tiers de tenant em ambiente dev.
  */
-
 import { useCallback } from "react"
 
 import type { LauncherPolicyResponse } from "@/api/launcher-policy"
@@ -77,7 +76,8 @@ export function TemplateSelector({
   // componente precisam ser chamados na mesma ordem em todo render, então
   // useUIVisibility + useCallback ficam aqui no topo, e os early returns
   // (gates) vêm DEPOIS.
-  const { profile, override, setProfileOverride } = useUIVisibility(launcherPolicy)
+  const { profile, override, setProfileOverride } =
+    useUIVisibility(launcherPolicy)
 
   const handleChange = useCallback(
     (value: string) => {

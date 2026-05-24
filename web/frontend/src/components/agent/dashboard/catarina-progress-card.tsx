@@ -122,7 +122,7 @@ export function CatarinaProgressCard({ className }: { className?: string }) {
     >
       <header className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="bg-violet-500/10 text-violet-700 flex h-9 w-9 items-center justify-center rounded-lg dark:text-violet-300">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-700 dark:text-violet-300">
             <IconBook2 className="size-5" />
           </div>
           <div>
@@ -135,7 +135,7 @@ export function CatarinaProgressCard({ className }: { className?: string }) {
           </div>
         </div>
         <div className="text-right">
-          <div className="text-foreground text-2xl font-bold leading-none">
+          <div className="text-foreground text-2xl leading-none font-bold">
             {progress.filled}/{progress.total}
           </div>
           <div className="text-muted-foreground text-xs">

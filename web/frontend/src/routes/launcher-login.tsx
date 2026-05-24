@@ -44,7 +44,10 @@ function readRememberedLauncherLogin(): RememberedLauncherLogin | null {
     const raw = globalThis.localStorage?.getItem(LAUNCHER_REMEMBER_LOGIN_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<RememberedLauncherLogin>
-    if (typeof parsed.email !== "string" || typeof parsed.password !== "string") {
+    if (
+      typeof parsed.email !== "string" ||
+      typeof parsed.password !== "string"
+    ) {
       return null
     }
     return { email: parsed.email, password: parsed.password }

@@ -11,8 +11,8 @@ import { useMemo } from "react"
 
 import {
   DEFAULT_UI_VISIBILITY_POLICY,
-  getLocalUIVisibilityPolicy,
   type UIVisibilityProfile,
+  getLocalUIVisibilityPolicy,
 } from "@/api/ui-visibility"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -84,8 +84,7 @@ const TONE_CLASSES: Record<
 > = {
   discovery:
     "border-amber-500/30 bg-amber-500/5 text-amber-900 dark:text-amber-100",
-  waiting:
-    "border-blue-500/30 bg-blue-500/5 text-blue-900 dark:text-blue-100",
+  waiting: "border-blue-500/30 bg-blue-500/5 text-blue-900 dark:text-blue-100",
   active:
     "border-emerald-500/30 bg-emerald-500/5 text-emerald-900 dark:text-emerald-100",
   admin:
@@ -172,7 +171,7 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
         {readiness ? (
           <div className="flex items-center gap-4 self-start md:self-center">
             <div className="text-right">
-              <div className="text-2xl font-bold leading-none">
+              <div className="text-2xl leading-none font-bold">
                 {readiness.pct}%
               </div>
               <div className="text-xs opacity-70">
@@ -200,9 +199,7 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
       readiness.missing.length > 0 &&
       profile !== "waiting" ? (
         <div className="border-border/60 bg-card/40 text-muted-foreground rounded-xl border px-4 py-3 text-xs">
-          <span className="text-foreground font-medium">
-            Faltam preencher:
-          </span>{" "}
+          <span className="text-foreground font-medium">Faltam preencher:</span>{" "}
           {readiness.missing.slice(0, 5).join(", ")}
           {readiness.missing.length > 5
             ? ` (+${readiness.missing.length - 5} outros)`

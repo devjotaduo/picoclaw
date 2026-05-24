@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next"
 
 import { postLauncherDashboardLogout } from "@/api/launcher-auth"
 import { getLauncherPolicy } from "@/api/launcher-policy"
+import { TemplateSelector } from "@/components/template-selector"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,7 +38,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator.tsx"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { TemplateSelector } from "@/components/template-selector"
 import {
   Tooltip,
   TooltipContent,
