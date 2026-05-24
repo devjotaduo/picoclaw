@@ -1,56 +1,133 @@
-# Do NOT exclude LICENSE or .github — scripts/copydir.go uses them as repo-root anchors
-# during `go generate`, which runs inside `make build` in the Dockerfile.
+# Do NOT exclude LICENSE or .github — scripts/copydir.go uses them as repo-root
+# anchors during `go generate`, which runs inside `make build` in the Dockerfile.
+#
+# Goal: only ship what the Dockerfiles actually compile. Everything else (docs,
+# dev workspaces, IDE/CLI metadata, screenshots, caches) is filtered here so the
+# build context stays small and rebuilds are fast.
+#
+# Convention: leading "/" anchors a pattern to the build-context root, used for
+# top-level files/dirs that legitimately exist at other depths inside the tree
+# (e.g. /public/ at root is dev docs, but web/frontend/public/ holds favicons
+# the Vite build needs).
+
+# -- Source control / CI / agent tooling --
 .git
 .gitignore
-.agents/
-.cache/
-.claude/
-.claude-flow/
-.codex/
-.codex-dev/
-.codex-dev-logs/
-.playwright-mcp/
-.ruflo/
-.swarm/
-.worktrees/
-build/
-.picoclaw/
-config/
-home/
-.env
-.env.example
-*.db
-*.db-shm
-*.db-wal
-*.fbk
-*.rvf
-*.rvf.lock
-*.zip
-/*.png
+.gitattributes
+/.agents/
+/.cache/
+/.claude/
+/.claude-flow/
+/.claude-*.zip
+/.codex/
+/.codex-dev/
+/.codex-dev-logs/
+/.omc/
+/.playwright-mcp/
+/.ralph/
+/ralph/
+/.ruflo/
+/.swarm/
+/.worktrees/
+/agent-skills/
+/ui-ux-pro-max-skill/
+/tasks/
+
+# -- Editor / OS junk --
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+/NUL
+/picoclaw.code-workspace
+
+# -- Dev / release tooling not used by Dockerfiles --
+/.golangci.yaml
+/.goreleaser.yaml
+/.mcp.json
+/skills-lock.json
+
+# -- Build outputs / binaries (root only — dist/ inside web/* is handled below) --
+/build/
+/.picoclaw/
 /*.exe
 /picoclaw
 /picoclaw-saas
 /picoclaw-launcher
 /picoclaw-tenantctl
+*.syso
+
+# -- Local runtime / tenant volumes that accidentally land in the repo root --
+/config/
+/home/
+/frontend/
+/.env
+/.env.example
+/.env.local
+/.env.*.local
+/.security.yml
+/docker/saas/.env.supabase.local
+/docker/data/
+/docker/saas/traefik/dynamic/dev-tls.yml
+
+# -- Runtime databases / locks / archives --
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.fbk
+*.rvf
+*.rvf.lock
+*.zip
+*.pid
+*.sock
+*.lock
+
+# -- Root-level screenshots and dev images --
+/*.png
+
+# -- Node / pnpm caches and build outputs (anywhere in the tree) --
 **/node_modules/
+**/.pnpm-store/
 **/dist/
 **/dist-server/
-web/frontend/node_modules/
-web/saas-admin/node_modules/
-docker/saas/opencrm/node_modules/
-web/saas-admin/dist/
-docker/saas/opencrm/dist/
-docker/saas/opencrm/dist-server/
+**/_tmp_*
+*.vite/
+
+# -- TypeScript incremental build artifacts --
+**/*.tsbuildinfo
+
+# -- Tests / coverage --
+**/coverage.txt
+**/coverage.html
+
+# -- Top-level docs / Markdown / hardware examples (not embedded by any Go
+#    binary; web/*/public/ is left alone so Vite can copy favicons/logos) --
 *.md
-assets/
-workspace/state/
-workspace/sessions/
-workspace/whatsapp/
-workspace/runtime-user-env/
-workspace*/heartbeat.log
-workspace-assistente/
-workspace-marketing/
-workspace-pico/
-workspace-vendas/
+/assets/
+/docs/
+/devs/
+/examples/
+/public/
+
+# -- Dev workspaces / runtime state at repo root.
+#    Never embedded — tenant data lives in $PICOCLAW_HOME bind mounts on
+#    the VPS, not in the image. internal/saas/api/baseline-workspace/ (the
+#    real embed source) is NOT under any of these paths and stays. --
+/workspace/
+/workspace-assistente/
+/workspace-marketing/
+/workspace-onboarding/
+/workspace-pico/
+/workspace-seeds/
+/workspace-vendas/
+cmd/**/workspace/
+
+# -- Telegram dev sandbox (gitignored) --
+/cmd/telegram/
+
+# -- Keep embed placeholders so //go:embed directives stay valid --
 !web/backend/dist/.gitkeep
 !internal/saas/api/dist/.gitkeep

@@ -43,15 +43,13 @@ Rules of thumb for agents:
 - **One topic per commit.** If you touched multiple unrelated areas, run the script multiple times with `--scope`.
 - **For "large" refactors** (>50 files), explain the scope to the user before passing `--yes`.
 
-## SaaS Dev Loop
+## Deploy: GitHub Actions only
 
-When the user asks to develop, debug, or test SaaS/controlplane/tenant launcher
-work in dev mode, prefer `docker/saas/scripts/dev-sync.sh` and the
-`make saas-dev-*` targets before rebuilding Docker images.
-
-Use a Docker image rebuild only when Dockerfiles, base image layers, OS
-packages, image-only assets, or durable production image validation are part of
-the task.
+Production deploys go strictly through `.github/workflows/release-controlplane.yml`
+→ GHCR → VPS `picoclaw-deploy.timer`. Never push binaries, source code, or
+manually-built images onto the prod VPS. For local SaaS dev iteration, spin
+the stack up with `docker compose -f docker/saas/docker-compose.yml -f
+docker/saas/docker-compose.dev.yml --env-file .env up -d --build`.
 
 ## Internal agents & dev skills in Docker
 

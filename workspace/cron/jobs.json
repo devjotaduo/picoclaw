@@ -56,12 +56,12 @@
         "command": "analytics.report.daily"
       },
       "state": {
-        "nextRunAtMs": 1779591540000,
-        "lastRunAtMs": 1779505140012,
+        "nextRunAtMs": 1779677940000,
+        "lastRunAtMs": 1779591540006,
         "lastStatus": "ok"
       },
       "createdAtMs": 0,
-      "updatedAtMs": 1779505140015,
+      "updatedAtMs": 1779591540007,
       "deleteAfterRun": false
     },
     {

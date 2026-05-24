@@ -73,8 +73,24 @@ export function TemplateSelector({
   className,
   launcherPolicy,
 }: TemplateSelectorProps) {
-  // Hooks ANTES de qualquer return (regra do React).
+  // Hooks ANTES de qualquer return (regra do React): TODOS os hooks deste
+  // componente precisam ser chamados na mesma ordem em todo render, então
+  // useUIVisibility + useCallback ficam aqui no topo, e os early returns
+  // (gates) vêm DEPOIS.
   const { profile, override, setProfileOverride } = useUIVisibility(launcherPolicy)
+
+  const handleChange = useCallback(
+    (value: string) => {
+      if (value === AUTO_SENTINEL) {
+        setProfileOverride(null)
+        return
+      }
+      if (value === "admin" || value === "tenant" || value === "public") {
+        setProfileOverride(value)
+      }
+    },
+    [setProfileOverride],
+  )
 
   // Hard gate #1: build de produção nunca expõe o seletor (é dev tool).
   if (!import.meta.env.DEV) {
@@ -89,19 +105,6 @@ export function TemplateSelector({
   if (!isAdmin) {
     return null
   }
-
-  const handleChange = useCallback(
-    (value: string) => {
-      if (value === AUTO_SENTINEL) {
-        setProfileOverride(null)
-        return
-      }
-      if (value === "admin" || value === "tenant" || value === "public") {
-        setProfileOverride(value)
-      }
-    },
-    [setProfileOverride],
-  )
 
   // Show the currently effective profile in the trigger when no explicit
   // override is set, so the operator can see what the resolver picked.

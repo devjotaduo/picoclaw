@@ -34,7 +34,7 @@
   },
   "launcherLogin": {
     "title": "登录 Jota Duo",
-    "description": "使用操作员邮箱和 Jota Duo 控制台密码继续。",
+    "description": "请输入控制台密码以继续。",
     "emailLabel": "邮箱",
     "emailPlaceholder": "operator@company.com",
     "passwordLabel": "密码",
