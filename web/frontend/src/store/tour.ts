@@ -3,6 +3,14 @@ import { atomWithStorage } from "jotai/utils"
 
 export type TourStep = "welcome" | "models" | "gateway" | "docs" | "completed"
 
+export const TOUR_STEP_ORDER: TourStep[] = [
+  "welcome",
+  "models",
+  "gateway",
+  "docs",
+  "completed",
+]
+
 export interface TourState {
   currentStep: TourStep
   isActive: boolean
@@ -34,36 +42,37 @@ export const tourCurrentStepAtom = atom(
   },
 )
 
-export function useTourActions() {
-  const goToNextStep = (currentStep: TourStep): TourStep => {
-    const steps: TourStep[] = [
-      "welcome",
-      "models",
-      "gateway",
-      "docs",
-      "completed",
-    ]
-    const currentIndex = steps.indexOf(currentStep)
-    if (currentIndex < steps.length - 1) {
-      return steps[currentIndex + 1]
+export function getNextTourStep(
+  currentStep: TourStep,
+  isStepAvailable: (step: TourStep) => boolean = () => true,
+): TourStep {
+  const currentIndex = TOUR_STEP_ORDER.indexOf(currentStep)
+  for (let index = currentIndex + 1; index < TOUR_STEP_ORDER.length; index++) {
+    const step = TOUR_STEP_ORDER[index]
+    if (step === "completed" || isStepAvailable(step)) {
+      return step
     }
-    return "completed"
   }
+  return "completed"
+}
 
-  const goToPrevStep = (currentStep: TourStep): TourStep => {
-    const steps: TourStep[] = [
-      "welcome",
-      "models",
-      "gateway",
-      "docs",
-      "completed",
-    ]
-    const currentIndex = steps.indexOf(currentStep)
-    if (currentIndex > 0) {
-      return steps[currentIndex - 1]
+export function getPrevTourStep(
+  currentStep: TourStep,
+  isStepAvailable: (step: TourStep) => boolean = () => true,
+): TourStep {
+  const currentIndex = TOUR_STEP_ORDER.indexOf(currentStep)
+  for (let index = currentIndex - 1; index >= 0; index--) {
+    const step = TOUR_STEP_ORDER[index]
+    if (isStepAvailable(step)) {
+      return step
     }
-    return currentStep
   }
+  return currentStep
+}
+
+export function useTourActions() {
+  const goToNextStep = getNextTourStep
+  const goToPrevStep = getPrevTourStep
 
   return { goToNextStep, goToPrevStep }
 }

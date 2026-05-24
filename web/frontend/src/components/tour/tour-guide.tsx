@@ -4,12 +4,14 @@ import {
   IconChevronRight,
 } from "@tabler/icons-react"
 import { useAtom } from "jotai"
+import * as React from "react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
   type TourStep,
+  TOUR_STEP_ORDER,
   tourAtom,
   tourCurrentStepAtom,
   tourIsActiveAtom,
@@ -32,55 +34,84 @@ export function TourGuide() {
   const [, setIsActive] = useAtom(tourIsActiveAtom)
   const { goToNextStep, goToPrevStep } = useTourActions()
 
-  if (!tourState.isActive || tourState.currentStep === "completed") {
+  const steps = React.useMemo<Record<TourStep, TourStepConfig>>(
+    () => ({
+      welcome: {
+        title: t("tour.welcome.title"),
+        description: t("tour.welcome.description"),
+        position: "bottom",
+      },
+      models: {
+        title: t("tour.models.title"),
+        description: t("tour.models.description"),
+        targetSelector: "[data-tour='chat-nav']",
+        position: "right",
+      },
+      gateway: {
+        title: t("tour.gateway.title"),
+        description: t("tour.gateway.description"),
+        targetSelector: "[data-tour='agents-nav']",
+        position: "right",
+      },
+      docs: {
+        title: t("tour.docs.title"),
+        description: t("tour.docs.description"),
+        targetSelector: "[data-tour='readiness-nav']",
+        position: "left",
+        icon: <IconBook className="size-4" />,
+      },
+      completed: {
+        title: "",
+        description: "",
+        position: "bottom",
+      },
+    }),
+    [t],
+  )
+
+  const isStepAvailable = React.useCallback(
+    (step: TourStep) => {
+      const config = steps[step]
+      if (!config?.targetSelector || step === "completed") return true
+      if (typeof document === "undefined") return false
+      return Boolean(document.querySelector(config.targetSelector))
+    },
+    [steps],
+  )
+
+  React.useEffect(() => {
+    if (!tourState.isActive || tourState.currentStep === "completed") return
+    if (isStepAvailable(tourState.currentStep)) return
+
+    const nextStep = goToNextStep(tourState.currentStep, isStepAvailable)
+    setCurrentStep(nextStep)
+    if (nextStep === "completed") {
+      setIsActive(false)
+    }
+  }, [
+    goToNextStep,
+    isStepAvailable,
+    setCurrentStep,
+    setIsActive,
+    tourState.currentStep,
+    tourState.isActive,
+  ])
+
+  if (
+    !tourState.isActive ||
+    tourState.currentStep === "completed" ||
+    !isStepAvailable(tourState.currentStep)
+  ) {
     return null
   }
 
-  const steps: Record<TourStep, TourStepConfig> = {
-    welcome: {
-      title: t("tour.welcome.title"),
-      description: t("tour.welcome.description"),
-      position: "bottom",
-    },
-    models: {
-      title: t("tour.models.title"),
-      description: t("tour.models.description"),
-      targetSelector: "[data-tour='chat-nav']",
-      position: "right",
-    },
-    gateway: {
-      title: t("tour.gateway.title"),
-      description: t("tour.gateway.description"),
-      targetSelector: "[data-tour='agents-nav']",
-      position: "right",
-    },
-    docs: {
-      title: t("tour.docs.title"),
-      description: t("tour.docs.description"),
-      targetSelector: "[data-tour='readiness-nav']",
-      position: "left",
-      icon: <IconBook className="size-4" />,
-    },
-    completed: {
-      title: "",
-      description: "",
-      position: "bottom",
-    },
-  }
-
   const currentConfig = steps[tourState.currentStep]
-  const stepOrder: TourStep[] = [
-    "welcome",
-    "models",
-    "gateway",
-    "docs",
-    "completed",
-  ]
+  const stepOrder = TOUR_STEP_ORDER.filter(isStepAvailable)
   const currentStepIndex = stepOrder.indexOf(tourState.currentStep)
   const totalSteps = stepOrder.length - 1
 
   const handleNext = () => {
-    const nextStep = goToNextStep(tourState.currentStep)
+    const nextStep = goToNextStep(tourState.currentStep, isStepAvailable)
     setCurrentStep(nextStep)
     if (nextStep === "completed") {
       setIsActive(false)
@@ -88,7 +119,7 @@ export function TourGuide() {
   }
 
   const handlePrev = () => {
-    const prevStep = goToPrevStep(tourState.currentStep)
+    const prevStep = goToPrevStep(tourState.currentStep, isStepAvailable)
     setCurrentStep(prevStep)
   }
 
