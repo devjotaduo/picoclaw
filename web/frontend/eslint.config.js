@@ -27,6 +27,18 @@ export default defineConfig([
         "warn",
         { allowConstantExport: true },
       ],
+      // Allow leading underscore to mark intentionally-unused destructure
+      // bindings (e.g. `({ id: _id, ...rest })` to drop a field via rest).
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+        },
+      ],
     },
   },
   {

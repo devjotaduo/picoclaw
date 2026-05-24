@@ -763,10 +763,12 @@ export function ChatPage() {
               />
             ) : undefined
           }
-          showAssistantDetailsToggle={assistantDetailsVisible}
-          assistantDetailsEnabled={assistantDetailsEnabled}
+          showAssistantDetailsToggle={
+            showAssistantDetailsToggle && canToggleAssistantDetails
+          }
+          assistantDetailsEnabled={showAssistantDetails}
           onAssistantDetailsChange={setShowAssistantDetails}
-          showQualityIndicator={showQualityIndicator}
+          showQualityIndicator={isVisible("chat.quality_indicator")}
           attendantTestActive={
             showAttendantTestButton && testingPublicAttendant
           }
