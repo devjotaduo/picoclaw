@@ -4,9 +4,12 @@
 # defaults to "onboarding" (override via WORKSPACE_ID).
 #
 # Prereqs:
-#   - You created a workspace via adm.<base>/workspaces (or POST
-#     /api/v1/workspaces) populated from `workspace-onboarding/` and gave
-#     it slug "onboarding". See workspace-onboarding/README.md.
+#   - You created a workspace via adm.<base>/workspaces. The recommended
+#     flow is to package the dev workspace at the repo root (`workspace/`)
+#     via `pwsh scripts/build-workspace-zip.ps1 -SourceDir workspace -Slug
+#     onboarding -Upload` — that uploads a validated ZIP and gives you a
+#     workspace_id. Alternative: use the admin UI's "Importar do
+#     $PICOCLAW_HOME" against your local PICOCLAW_HOME.
 #   - You are a platform_admin on the controlplane.
 #   - Your saas-admin session cookie is exported as ADM_SESSION_COOKIE.
 #   - CONTROLPLANE_URL points at the controlplane (default: https://adm.jotaduo.com).

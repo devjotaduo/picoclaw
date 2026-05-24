@@ -211,10 +211,18 @@ Provisioned via `POST /api/v1/tenants/onboarding/bootstrap` (script:
 `workspace_id` to pick a specific workspace; when empty, it looks up the
 workspace whose slug is `"onboarding"`. Operator's expected flow:
 
-1. Admin > Workspaces > New, slug `onboarding`. Edit
-   `home/workspace/AGENT.md` to taste (or import the
-   `workspace-onboarding/` directory in the repo via
-   "Importar do $PICOCLAW_HOME").
+1. Build the workspace ZIP from the repo's `workspace/` tree and
+   upload it via the admin API:
+   ```bash
+   pwsh scripts/build-workspace-zip.ps1 -SourceDir workspace \
+       -Slug onboarding -Name "Onboarding" -Upload
+   ```
+   Sofia is the discovery agent in `workspace/agents/sofia/`, and
+   `channel_list.public-web` is present (disabled by default — the
+   upload flow flips it on for the public variant). Edit
+   `workspace/workspace/AGENT.md` locally before building if you want
+   to customize. Alternative: admin UI → Workspaces → "Novo workspace"
+   with slug `onboarding`.
 2. POST `/api/v1/tenants/onboarding/bootstrap` (or run the bootstrap
    script).
 3. Set `PICOCLAW_ONBOARDING_CALLBACK_SECRET` on the controlplane.

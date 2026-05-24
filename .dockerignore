@@ -121,7 +121,6 @@ Thumbs.db
 #    dev sandboxes that no embed depends on, so they stay excluded. --
 /workspace-assistente/
 /workspace-marketing/
-/workspace-onboarding/
 /workspace-pico/
 /workspace-seeds/
 /workspace-vendas/

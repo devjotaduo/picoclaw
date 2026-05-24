@@ -77,6 +77,14 @@
     pwsh ./scripts/build-workspace-zip.ps1 -Slug clinica -Upload `
         -AdminBase https://admin.jotaduo.com `
         -AdminEmail dev@jotaduo.com -AdminPassword (Read-Host -AsSecureString)
+
+.EXAMPLE
+    # Publish the same dev workspace as the PUBLIC onboarding tenant
+    # template. -Public overlays the public-web channel + resets
+    # memory/empresa.md (so the Sofia onboarding default fires for
+    # anonymous visitors) + drops memory/jotaduo/ client dossiers.
+    pwsh ./scripts/build-workspace-zip.ps1 -SourceDir ./workspace `
+        -Slug onboarding -Name "Onboarding" -Public -Upload
 #>
 
 [CmdletBinding()]
@@ -90,6 +98,13 @@ param(
     [bool]$IsAvailableManual = $true,
     [switch]$GenerateStubs,
     [switch]$KeepSecrets,
+    # Public-tenant overlay: enables the public-web channel + resets
+    # memory/empresa.md (so the Sofia onboarding-default override fires)
+    # + clears memory/jotaduo/ client dossiers. Use when packaging the
+    # workspace for is_public=true tenant provisioning. Local dev
+    # `workspace/` keeps its private state; the overlay is applied only
+    # against the staging copy.
+    [switch]$Public,
     [string]$OutputPath,
     [switch]$Upload,
     [string]$AdminBase = $env:PICOCLAW_SAAS_ADMIN_BASE,
@@ -173,25 +188,38 @@ function Resolve-SourceLayout {
 
 function New-StubConfigJson {
     param([string]$DestPath, [string]$WorkspaceSlug)
+    # Formato V3 canonico (CurrentVersion=3 em pkg/config/config.go:27).
+    # Diferencas que quebram o launcher se erradas:
+    #   - "tenant_id" top-level: rejeitado (struct Config nao tem)
+    #   - "litellm_params" wrapper: rejeitado (V3 eh flat)
+    #   - "api_key" string: precisa virar "api_keys" array
+    #   - model="openai/gpt-4o-mini" ou model="default": LiteLLM 400 (Invalid model name)
+    #     O LiteLLM aceita o nome do modelo sem prefix; o provider field
+    #     ("openai") instrui o roteamento. Em prod, gpt-4o-mini funciona.
+    # ${LITELLM_KEY}/${LITELLM_URL} sao substituidos pelo provisioner via
+    # string replace antes do tenant subir.
     $stub = [pscustomobject]@{
+        version = 3
         agents = [pscustomobject]@{
             defaults = [pscustomobject]@{
-                model_name        = 'gpt-4o-mini'
-                workspace         = 'workspace'
-                active_template_id = $WorkspaceSlug
+                workspace                    = '/root/.picoclaw/workspace'
+                restrict_to_workspace        = $true
+                allow_read_outside_workspace = $false
+                provider                     = 'litellm'
+                model_name                   = 'default'
+                max_tokens                   = 4096
+                active_template_id           = $WorkspaceSlug
             }
         }
         model_list = @(
             [pscustomobject]@{
-                model_name = 'gpt-4o-mini'
-                litellm_params = [pscustomobject]@{
-                    model    = 'openai/gpt-4o-mini'
-                    api_base = '${LITELLM_URL}'
-                    api_key  = '${LITELLM_KEY}'
-                }
+                model_name = 'default'
+                provider   = 'openai'
+                model      = 'gpt-4o-mini'
+                api_base   = '${LITELLM_URL}'
+                api_keys   = @('${LITELLM_KEY}')
             }
         )
-        tenant_id = '${TENANT_ID}'
     }
     ($stub | ConvertTo-Json -Depth 10) | Set-Content -Path $DestPath -Encoding UTF8 -NoNewline
 }
@@ -359,6 +387,95 @@ if ($GenerateStubs) {
     }
 }
 
+# -- 3.5 Overlay -Public (channel_list.public-web + memory reset) -------------
+# Mantem o source dev intacto; aplica somente na copia staged. Justificativa
+# de cada peca esta em docs/architecture/public-onboarding-tenant.md.
+if ($Public) {
+    Write-Section "Aplicando overlay -Public"
+
+    # a) Liga o canal public-web em channel_list. Se ja existir, so flipa
+    #    enabled=true; se nao, injeta a entrada canonica (mesmo shape que
+    #    estava em workspace-onboarding/config.json antes da deprecation).
+    if (Test-Path $configPath) {
+        $cfg = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+        if (-not $cfg.channel_list) {
+            $cfg | Add-Member -NotePropertyName channel_list -NotePropertyValue ([pscustomobject]@{}) -Force
+        }
+        $pubWeb = [pscustomobject]@{
+            type     = 'public-web'
+            enabled  = $true
+            allow_from = @('*')
+            settings = [pscustomobject]@{
+                rate_limit_per_ip       = 30
+                session_ttl_seconds     = 1800
+                require_captcha_header  = $false
+            }
+        }
+        # Idempotente: substitui se ja existir
+        if ($cfg.channel_list.PSObject.Properties.Match('public-web').Count -gt 0) {
+            $cfg.channel_list.'public-web' = $pubWeb
+        } else {
+            $cfg.channel_list | Add-Member -NotePropertyName 'public-web' -NotePropertyValue $pubWeb -Force
+        }
+        ($cfg | ConvertTo-Json -Depth 20) | Set-Content -Path $configPath -Encoding UTF8 -NoNewline
+        Write-Ok "channel_list.public-web habilitado em home/config.json"
+    } else {
+        Write-Warn2 "home/config.json nao encontrado; pula overlay public-web"
+    }
+
+    # b) Reset memory/empresa.md pro estado-template que dispara o Sofia
+    #    override (pkg/agent/onboarding_default.go). Sem isso, qualquer
+    #    visitante anonimo cai no agente default da workspace (Rafael),
+    #    nao na Sofia de discovery.
+    $empresaPath = Join-Path $home_ 'workspace/memory/empresa.md'
+    if (Test-Path (Split-Path -Parent $empresaPath)) {
+        $empresaTemplate = @'
+# Memoria da empresa
+
+Nome:
+Segmento:
+Descricao:
+Produtos ou servicos:
+Horario:
+Enderecho:
+Regioes atendidas:
+WhatsApp:
+Email:
+Instagram:
+Site:
+Formas de pagamento:
+Pode falar preco:
+Faixa de preco:
+Quando chamar humano:
+Informacoes que nunca podem ser inventadas:
+Informacoes proibidas de falar:
+Segmento detectado:
+Status da informacao: pendente de validacao
+
+## Cadastro da empresa
+
+Tenant novo, aguardando discovery com Sofia.
+'@
+        Set-Content -Path $empresaPath -Value $empresaTemplate -Encoding UTF8 -NoNewline
+        Write-Ok "memory/empresa.md resetado pro template (Sofia override ativo)"
+    }
+
+    # c) Limpa memory/jotaduo/ — dossies de clientes locais do operador.
+    #    Nunca devem vazar pra um tenant publico fresco.
+    $jotaduoMemory = Join-Path $home_ 'workspace/memory/jotaduo'
+    if (Test-Path $jotaduoMemory) {
+        Remove-Item -Recurse -Force $jotaduoMemory
+        Write-Ok "memory/jotaduo/ removido"
+    }
+
+    # d) historico-empresa.md tambem zera (eventos de discoveries anteriores)
+    $historicoPath = Join-Path $home_ 'workspace/memory/historico-empresa.md'
+    if (Test-Path $historicoPath) {
+        Set-Content -Path $historicoPath -Value "# Historico`n`nNenhum evento registrado ainda.`n" -Encoding UTF8 -NoNewline
+        Write-Ok "memory/historico-empresa.md zerado"
+    }
+}
+
 # -- 4. Reverse-placeholder em arquivos sensiveis -----------------------------
 Write-Section "Verificando secrets"
 $secretFiles = @($configPath, $securityPath, (Join-Path $home_ 'workspace/behavior.json'), (Join-Path $home_ 'workspace/agent_config.json'))
@@ -494,7 +611,10 @@ Write-Ok "Autenticado como $AdminEmail"
 $boundary = "----picoclaw-" + [Guid]::NewGuid().ToString('N')
 $LF = "`r`n"
 $ms = New-Object IO.MemoryStream
-$sw = New-Object IO.StreamWriter($ms, [Text.Encoding]::UTF8)
+# UTF-8 SEM BOM: [Text.Encoding]::UTF8 emite BOM e o Go multipart parser
+# interpreta os 3 bytes como prefixo do primeiro field name (=> "name is required").
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$sw = New-Object IO.StreamWriter($ms, $utf8NoBom)
 $sw.NewLine = "`r`n"
 
 function Add-FormField($n, $v) {

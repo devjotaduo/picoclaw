@@ -92,7 +92,7 @@ Visitor browser
 | 5. Launcher HTTP endpoints | ✅ | `63aa7ce0` | WebhookHandler + launcher reverse proxy |
 | 6. Skill scripts (HMAC callback) | ✅ | `0dec…` | `mark-qualified.sh`, `submit-intake.sh` |
 | 7. Controlplane callback endpoint | ✅ | `603e436d` | HMAC verify + anti-replay ±5min |
-| 8. workspace-onboarding/ template | ✅ | `f78d7c34`+`21cc044c` | Clara ported as Picoclaw agent |
+| 8. Public-tenant workspace template | ✅ | `f78d7c34`+`21cc044c`+(this) | Originally `workspace-onboarding/` with Clara; superseded by `workspace/` (the full multi-agent dev tree) with Sofia as the discovery default. Build a ZIP via `scripts/build-workspace-zip.ps1` and upload via the admin UI to install. |
 | 9. Bootstrap script + endpoint | ✅ | `889dd4b7` | `POST /api/v1/tenants/onboarding/bootstrap` |
 | 10. Frontend cutover (feature flag) | ✅ | adapter + env-prop + polling-bridge + useClaraChat wire-up | Three building blocks (`onboardingTenantChat.ts`, `pkg/tools.ExecTool` env injection + skill-script env fallback, `onboardingIntakePolling.ts`) plus the `useClaraChat` cutover gated by `VITE_USE_ONBOARDING_TENANT`. |
 | 11. Delete `internal/saas/clara/` | ⏸ | — | wait 1-2 weeks of stable parallel operation |
@@ -138,12 +138,19 @@ VITE_ONBOARDING_TENANT_URL=https://onboarding.jotaduo.com
    automatically; without the secret the skill scripts inside the
    container exit non-zero and Clara has to apologize in chat.
 
-2. Create the onboarding workspace via the admin UI:
-   - `/workspaces` → "Importar do $PICOCLAW_HOME" pointing at
-     `/srv/picoclaw/workspace-onboarding` (or "Novo workspace" + paste
-     the files via the editor), giving it slug `onboarding`.
-   - Click "Compilar frontend" if you want a per-workspace UI build
-     (optional — the embedded launcher dist is the fallback).
+2. Create the onboarding workspace via the admin UI. The recommended flow:
+   ```bash
+   pwsh scripts/build-workspace-zip.ps1 -SourceDir workspace -Slug onboarding \
+       -Name "Onboarding" -Upload
+   ```
+   That packages the repo's `workspace/` tree (Sofia is the discovery agent
+   there; `channel_list.public-web` is present but disabled by default, so
+   the SaaS upload step flips it on for the public variant) and uploads a
+   validated ZIP via the admin API. Alternative: admin UI → `/workspaces` →
+   "Novo workspace" and paste files directly.
+
+   Optional: click "Compilar frontend" if you want a per-workspace UI build
+   (the embedded launcher dist is the fallback otherwise).
 
 3. Run the bootstrap:
    ```bash

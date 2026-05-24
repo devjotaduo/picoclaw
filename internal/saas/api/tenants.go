@@ -263,7 +263,11 @@ type bootstrapOnboardingReq struct {
 }
 
 // handleBootstrapOnboardingTenant provisions the singleton public onboarding
-// tenant (is_public=true) and overlays workspace-onboarding/ into its volume.
+// tenant (is_public=true). The volume is seeded from the workspace whose ID
+// is in the request body, or the workspace whose slug is "onboarding" if no
+// ID is given. The conventional flow is to build the ZIP from the repo's
+// `workspace/` tree via scripts/build-workspace-zip.ps1 and upload it via
+// the admin UI — that workspace then becomes the seed for this endpoint.
 // Idempotent: returns 409 with the existing tenant info if the subdomain is
 // already provisioned, so the bootstrap script can re-run safely.
 func (h *Handler) handleBootstrapOnboardingTenant(w http.ResponseWriter, r *http.Request) {
