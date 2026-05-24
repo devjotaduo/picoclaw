@@ -42,6 +42,7 @@
     "passwordPlaceholder": "Enter the password",
     "showPassword": "Show password",
     "hidePassword": "Hide password",
+    "rememberLogin": "Remember email and password on this device",
     "submit": "Sign in",
     "forgotPassword": "Forgot password",
     "recoverySent": "If this email owns the dashboard, we will send a new password within a few minutes.",

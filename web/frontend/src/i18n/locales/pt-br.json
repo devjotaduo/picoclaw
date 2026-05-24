@@ -42,6 +42,7 @@
     "passwordPlaceholder": "Digite a senha",
     "showPassword": "Mostrar senha",
     "hidePassword": "Ocultar senha",
+    "rememberLogin": "Memorizar email e senha neste dispositivo",
     "submit": "Entrar",
     "forgotPassword": "Esqueci minha senha",
     "recoverySent": "Se esse email for o dono do painel, enviaremos uma nova senha em alguns minutos.",

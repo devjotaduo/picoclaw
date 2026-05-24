@@ -32,11 +32,52 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useTheme } from "@/hooks/use-theme"
 
+const LAUNCHER_REMEMBER_LOGIN_KEY = "jotaduo.launcherLogin.remembered"
+
+type RememberedLauncherLogin = {
+  email: string
+  password: string
+}
+
+function readRememberedLauncherLogin(): RememberedLauncherLogin | null {
+  try {
+    const raw = globalThis.localStorage?.getItem(LAUNCHER_REMEMBER_LOGIN_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<RememberedLauncherLogin>
+    if (typeof parsed.email !== "string" || typeof parsed.password !== "string") {
+      return null
+    }
+    return { email: parsed.email, password: parsed.password }
+  } catch {
+    return null
+  }
+}
+
+function writeRememberedLauncherLogin(credentials: RememberedLauncherLogin) {
+  try {
+    globalThis.localStorage?.setItem(
+      LAUNCHER_REMEMBER_LOGIN_KEY,
+      JSON.stringify(credentials),
+    )
+  } catch {
+    /* Local storage may be unavailable in restricted browser modes. */
+  }
+}
+
+function clearRememberedLauncherLogin() {
+  try {
+    globalThis.localStorage?.removeItem(LAUNCHER_REMEMBER_LOGIN_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
 function LauncherLoginPage() {
   const { t, i18n } = useTranslation()
   const { theme, toggleTheme } = useTheme()
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
+  const [rememberLogin, setRememberLogin] = React.useState(false)
   const [showPassword, setShowPassword] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
   const [recovering, setRecovering] = React.useState(false)
@@ -46,6 +87,13 @@ function LauncherLoginPage() {
   // If no password has been set yet, this is a first-run install — bounce
   // to the setup flow so the operator can create one.
   React.useEffect(() => {
+    const remembered = readRememberedLauncherLogin()
+    if (remembered) {
+      setEmail(remembered.email)
+      setPassword(remembered.password)
+      setRememberLogin(true)
+    }
+
     void getLauncherAuthStatus()
       .then((s) => {
         if (!s.initialized) {
@@ -74,6 +122,11 @@ function LauncherLoginPage() {
     try {
       const result = await postLauncherDashboardLogin(emailValue, pw)
       if (result.ok) {
+        if (rememberLogin) {
+          writeRememberedLauncherLogin({ email: emailValue, password: pw })
+        } else {
+          clearRememberedLauncherLogin()
+        }
         globalThis.location.assign("/")
         return
       }
@@ -211,6 +264,21 @@ function LauncherLoginPage() {
                   </button>
                 </div>
               </div>
+
+              <label className="text-muted-foreground flex cursor-pointer items-start gap-3 text-sm leading-5">
+                <input
+                  type="checkbox"
+                  checked={rememberLogin}
+                  onChange={(e) => {
+                    setRememberLogin(e.target.checked)
+                    if (!e.target.checked) {
+                      clearRememberedLauncherLogin()
+                    }
+                  }}
+                  className="border-input bg-background text-primary focus-visible:ring-ring mt-0.5 size-4 rounded border focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                />
+                <span>{t("launcherLogin.rememberLogin")}</span>
+              </label>
 
               <Button type="submit" disabled={submitting}>
                 {submitting ? t("labels.loading") : t("launcherLogin.submit")}
