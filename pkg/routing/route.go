@@ -25,12 +25,24 @@ type ResolvedRoute struct {
 
 // RouteResolver determines which agent handles a message.
 type RouteResolver struct {
-	cfg *config.Config
+	cfg             *config.Config
+	defaultOverride func() string
 }
 
 // NewRouteResolver creates a new route resolver.
 func NewRouteResolver(cfg *config.Config) *RouteResolver {
 	return &RouteResolver{cfg: cfg}
+}
+
+// SetDefaultAgentOverride registra uma callback que, quando retorna um
+// agent ID não-vazio, vira o "default agent" do resolver — sobrescrevendo
+// a flag `agents.list[].default` do config. Pensado para casos como o
+// onboarding override (pkg/agent/onboarding_default.go) onde o
+// AgentRegistry detecta um estado especial (memory/empresa.md vazio) e
+// quer routar tudo pra um agente específico (Sofia) temporariamente.
+// A callback é consultada a cada ResolveRoute — pode mudar com o tempo.
+func (r *RouteResolver) SetDefaultAgentOverride(fn func() string) {
+	r.defaultOverride = fn
 }
 
 // ResolveRoute determines which agent handles the message from a normalized
@@ -80,6 +92,20 @@ func (r *RouteResolver) pickAgentID(agentID string) string {
 }
 
 func (r *RouteResolver) resolveDefaultAgentID() string {
+	// Onboarding override (ou outro caller que seta) tem precedência sobre
+	// a flag config — mas só se o ID resultar num agent existente em
+	// cfg.Agents.List. Senão ignora e cai pra resolução normal.
+	if r.defaultOverride != nil {
+		if id := strings.TrimSpace(r.defaultOverride()); id != "" {
+			normalized := NormalizeAgentID(id)
+			for _, a := range r.cfg.Agents.List {
+				if a.IsEnabled() && NormalizeAgentID(a.ID) == normalized {
+					return normalized
+				}
+			}
+		}
+	}
+
 	agents := r.cfg.Agents.List
 	if len(agents) == 0 {
 		return DefaultAgentID

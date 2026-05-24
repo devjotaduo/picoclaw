@@ -99,6 +99,17 @@ func NewAgentRegistry(
 		mainWorkspace := cfg.Agents.Defaults.Workspace
 		if mainWorkspace != "" {
 			registry.onboarding = newOnboardingDetector(mainWorkspace)
+			// O RouteResolver tem sua própria resolução de default agent
+			// (lê cfg.Agents.List direto). Sem o override aqui, o resolver
+			// roteia mensagens pro Rafael/main mesmo com Sofia ativa em
+			// GetDefaultAgent. Injetamos um callback que respeita o
+			// mesmo critério de onboarding incompleto.
+			registry.resolver.SetDefaultAgentOverride(func() string {
+				if registry.onboarding != nil && registry.onboarding.IsIncomplete() {
+					return onboardingAgentID
+				}
+				return ""
+			})
 			logger.InfoCF("agent", "Onboarding default-override enabled (Sofia present)", map[string]any{
 				"workspace": mainWorkspace,
 			})
