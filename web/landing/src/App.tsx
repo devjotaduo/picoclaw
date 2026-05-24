@@ -655,14 +655,14 @@ function FlowField() {
     >
       <defs>
         <linearGradient id="flowGreen" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#34d399" stopOpacity="0" />
-          <stop offset="48%" stopColor="#34d399" stopOpacity="0.95" />
-          <stop offset="100%" stopColor="#34d399" stopOpacity="0" />
+          <stop offset="0%" stopColor="#a7f3d0" stopOpacity="0" />
+          <stop offset="48%" stopColor="#a7f3d0" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="#a7f3d0" stopOpacity="0" />
         </linearGradient>
         <linearGradient id="flowRed" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#ef4444" stopOpacity="0" />
-          <stop offset="45%" stopColor="#ef4444" stopOpacity="0.88" />
-          <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
+          <stop offset="0%" stopColor="#fecaca" stopOpacity="0" />
+          <stop offset="45%" stopColor="#fecaca" stopOpacity="0.82" />
+          <stop offset="100%" stopColor="#fecaca" stopOpacity="0" />
         </linearGradient>
         <filter id="flowGlow" x="-40%" y="-40%" width="180%" height="180%">
           <feGaussianBlur stdDeviation="3" result="blur" />
@@ -718,11 +718,6 @@ function FlowField() {
             <mpath href="#flow-context" />
           </animateMotion>
         </circle>
-      </g>
-
-      <g className="flow-beams" filter="url(#flowGlow)">
-        <path d="M350 76 L390 122" />
-        <path d="M690 90 L646 140" />
       </g>
     </svg>
   )

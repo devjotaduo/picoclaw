@@ -557,15 +557,15 @@ body {
 }
 
 .flow-static use {
-  stroke: rgba(255, 255, 255, 0.11);
+  stroke: rgba(255, 255, 255, 0.14);
   stroke-width: 1;
 }
 
 .flow-streak {
-  stroke-width: 4;
+  stroke-width: 2.5;
   stroke-linecap: round;
-  stroke-dasharray: 54 680;
-  animation: flowTravel 5.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  stroke-dasharray: 44 700;
+  animation: flowTravel 6.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 
 .flow-streak-a {
@@ -592,27 +592,14 @@ body {
 }
 
 .flow-packets circle {
-  fill: #10b981;
-  filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.7));
-  opacity: 0.88;
+  fill: #a7f3d0;
+  filter: drop-shadow(0 0 7px rgba(167, 243, 208, 0.55));
+  opacity: 0.82;
 }
 
 .flow-packets circle:nth-child(2) {
-  fill: #ef4444;
-  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.58));
-}
-
-.flow-beams path {
-  stroke: url("#flowRed");
-  stroke-width: 18;
-  stroke-linecap: square;
-  opacity: 0;
-  animation: beamPulse 4.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
-}
-
-.flow-beams path:nth-child(2) {
-  stroke: url("#flowGreen");
-  animation-delay: -2.5s;
+  fill: #fecaca;
+  filter: drop-shadow(0 0 7px rgba(254, 202, 202, 0.48));
 }
 
 @media (max-width: 640px) {
@@ -701,12 +688,8 @@ body {
   }
 
   .flow-streak {
-    stroke-width: 3;
-    stroke-dasharray: 42 690;
-  }
-
-  .flow-beams path {
-    stroke-width: 14;
+    stroke-width: 2;
+    stroke-dasharray: 36 700;
   }
 }
 
@@ -720,7 +703,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .flow-streak,
-  .flow-beams path {
+  .flow-packets {
     animation: none;
   }
 
@@ -748,21 +731,5 @@ body {
   100% {
     stroke-dashoffset: -720;
     opacity: 0;
-  }
-}
-
-@keyframes beamPulse {
-  0%,
-  58%,
-  100% {
-    opacity: 0;
-    transform: translateY(-14px);
-  }
-  14% {
-    opacity: 0.9;
-  }
-  32% {
-    opacity: 0.05;
-    transform: translateY(42px);
   }
 }
