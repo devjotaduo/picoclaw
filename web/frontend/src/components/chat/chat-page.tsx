@@ -366,7 +366,6 @@ export function ChatPage() {
   const showSessionHistoryButton = isVisible("chat.session_history", false)
   const showAttendantTestButton = isVisible("chat.test_attendant")
   const showPendingHandoffsSidebar = isVisible("chat.pending_handoffs_sidebar")
-  const showQualityIndicator = isVisible("chat.quality_indicator")
   const showContextUsage = isVisible("chat.context_usage")
   const showQuickTasks = isVisible("chat.quick_tasks")
   const canShowModelSelector =
@@ -739,7 +738,6 @@ export function ChatPage() {
           showAssistantDetailsToggle={assistantDetailsVisible}
           assistantDetailsEnabled={assistantDetailsEnabled}
           onAssistantDetailsChange={setShowAssistantDetails}
-          showQualityIndicator={showQualityIndicator}
           attendantTestActive={
             showAttendantTestButton && testingPublicAttendant
           }

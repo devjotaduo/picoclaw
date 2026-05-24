@@ -1,7 +1,6 @@
 import {
   IconArrowUp,
   IconBrain,
-  IconChevronDown,
   IconFileText,
   IconMicrophone,
   IconPlayerStopFilled,
@@ -56,7 +55,6 @@ interface ChatComposerProps {
   onAssistantDetailsChange?: (enabled: boolean) => void
   attendantTestActive?: boolean
   onToggleAttendantTest?: () => void
-  showQualityIndicator?: boolean
 }
 
 // Max audio recording length in seconds. Anything longer is auto-stopped to
@@ -106,7 +104,6 @@ export function ChatComposer({
   onAssistantDetailsChange,
   attendantTestActive,
   onToggleAttendantTest,
-  showQualityIndicator = true,
 }: ChatComposerProps) {
   const { t } = useTranslation()
   const canInput = inputDisabledReason === null
@@ -387,20 +384,6 @@ export function ChatComposer({
           <div className="flex shrink-0 items-center gap-1.5">
             {modelSelector ? (
               <div className="min-w-0 max-w-[190px]">{modelSelector}</div>
-            ) : showQualityIndicator ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:bg-muted/55 hover:text-foreground hidden h-8 rounded-full px-2.5 text-xs font-medium whitespace-nowrap sm:inline-flex"
-                disabled={!canInput || isRecording}
-              >
-                <span className="text-foreground/80 font-semibold tabular-nums">
-                  5.5
-                </span>
-                <span>{t("chat.qualityHigh", "Altíssimo")}</span>
-                <IconChevronDown className="size-3.5 opacity-70" />
-              </Button>
             ) : null}
             {showAssistantDetailsToggle && onAssistantDetailsChange ? (
               <Tooltip delayDuration={500}>
