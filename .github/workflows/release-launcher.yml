@@ -24,6 +24,9 @@ on:
       - "pkg/**"
       - "go.mod"
       - "go.sum"
+      - ".dockerignore"
+      - "Makefile"
+      - "scripts/copydir.go"
       - "docker/Dockerfile.launcher"
       - ".github/workflows/release-launcher.yml"
   workflow_dispatch:
