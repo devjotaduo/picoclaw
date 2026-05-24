@@ -53,6 +53,10 @@ interface ChatComposerProps {
   showAssistantDetailsToggle?: boolean
   assistantDetailsEnabled?: boolean
   onAssistantDetailsChange?: (enabled: boolean) => void
+  // Quality indicator badge (response quality classifier) shown in the
+  // composer footer. Controlled by parent based on ui-visibility flag
+  // `chat.quality_indicator`. When false or undefined, the badge is hidden.
+  showQualityIndicator?: boolean
   attendantTestActive?: boolean
   onToggleAttendantTest?: () => void
 }

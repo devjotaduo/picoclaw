@@ -29,6 +29,11 @@ const policy: UIVisibilityPolicy = {
         "sidebar.models": false,
       },
     },
+    waiting: {
+      visibility: {
+        "layout.waiting_screen": true,
+      },
+    },
   },
 }
 
