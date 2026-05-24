@@ -524,11 +524,10 @@ Mailgun, etc. — only `SMTP_HOST/PORT/USER/PASSWORD` change.
    The "Reset password" and "Confirm signup" templates can stay enabled
    if you want those flows to email visitors.
 
-7. **Restart the controlplane**:
+7. **Restart the controlplane** (after the new image lands via the GHA
+   pipeline, or for a local-built image rebuild):
 
    ```bash
-   make saas-dev-controlplane   # dev sync (preferred)
-   # or full restart:
    docker compose -f docker/saas/docker-compose.yml up -d controlplane
    ```
 

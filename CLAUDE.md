@@ -34,23 +34,20 @@ cd web/frontend && pnpm dev          # Vite dev server with hot reload
 cd web/frontend && pnpm build:backend  # builds + copies dist into web/backend/dist for embed
 ```
 
-SaaS dev mode preference: when working on SaaS/controlplane/tenant launcher
-code in dev mode, use the `make saas-dev-*` targets or
-`docker/saas/scripts/dev-sync.sh` to build local binaries, copy them into the
-running containers, and restart only those containers. Avoid Docker image
-rebuilds for this loop unless Dockerfiles, base image layers, OS packages,
-image-only assets, or durable production image validation are part of the task.
-See `docs/operations/saas-dev-mode.md`.
+Deploy: production deploys flow strictly through GitHub Actions. Push to
+`main` → `.github/workflows/release-controlplane.yml` builds and pushes
+4 images to GHCR (controlplane, launcher, browser-sidecar, opencrm) →
+the VPS `picoclaw-deploy.timer` polls every 2 min and recreates only
+services whose image ID changed. There is no supported path to ship
+code to the prod VPS that bypasses this pipeline — do not `scp`/`rsync`
+binaries onto the box and do not run `go build`/`pnpm build` there.
 
-Host runtime for `ia.jotaduo.com` launcher: a single persistent systemd unit
-`picoclaw-main-dev.service` in `/etc/systemd/system/` runs `pnpm dev:api` from
-the repo working tree. Frontend changes hot-reload via Vite without restart.
-Backend Go changes need `systemctl restart picoclaw-main-dev.service` (~30s to
-recompile + open :18800). The legacy `picoclaw-launcher.service` (binary in
-`/usr/local/bin/`) was removed in 2026-05-18 — there is no second binary in
-parallel. SaaS controlplane is in container `controlplane` (:18801); sync new
-code into it with `make saas-dev-controlplane`. See
-`docs/operations/saas-dev-mode.md` for the full SaaS loop.
+Local dev: spin the SaaS stack up on your dev machine with
+`docker compose -f docker/saas/docker-compose.yml -f docker/saas/docker-compose.dev.yml --env-file .env up -d --build`
+(uses `traefik.dev.yml`, localhost domains, no Let's Encrypt). PS1
+launchers in `scripts/dev-*.ps1` cover the picoclaw launcher binary on
+Windows. Rebuild images locally with `docker compose build <service>`
+when you need to test the same image GHA will publish.
 
 Pre-PR: **`make check`** must pass locally. See `.golangci.yaml` for enabled linters.
 
