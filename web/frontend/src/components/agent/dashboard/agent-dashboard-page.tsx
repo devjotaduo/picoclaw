@@ -37,6 +37,8 @@ import {
 } from "@/api/whatsapp"
 import { AIOrbAvatar } from "@/components/chat/ai-orb-avatar"
 import { PageHeader } from "@/components/page-header"
+import { TenantStatusBanner } from "@/components/agent/dashboard/tenant-status-banner"
+import { CatarinaProgressCard } from "@/components/agent/dashboard/catarina-progress-card"
 import { type ApprovalDecision } from "@/components/tool-ui/approval-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -233,6 +235,17 @@ export function AgentDashboardPage() {
             />
           ) : dashboard ? (
             <>
+              {/* Status do tenant — visível sempre. Mostra em qual fase do
+                  ciclo (discovery / waiting / ativo / admin) o tenant está
+                  e quantos campos do empresa.md já estão preenchidos. */}
+              <TenantStatusBanner />
+
+              {/* Progresso de curadoria da Catarina por área temática.
+                  Mostra 0/5, 1/5, etc baseado em quais memory/<area>.md
+                  têm conteúdo. Só renderiza quando a query retorna dados —
+                  silencioso se memory/ ainda não foi populado. */}
+              <CatarinaProgressCard />
+
               {kpisHaveData ? (
                 <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                   <KpiCard

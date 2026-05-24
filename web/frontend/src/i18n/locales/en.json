@@ -11,6 +11,7 @@
     "hub": "Hub",
     "whatsapp_inbox": "WhatsApp inbox",
     "whatsapp_reports": "WhatsApp reports",
+    "reports": "Reports",
     "templates": "Templates",
     "template_editor": "Template editor",
     "skills": "Skills",
@@ -1367,20 +1368,20 @@
     "next": "Próximo",
     "finish": "Concluir",
     "welcome": {
-      "title": "Bem-vindo ao PicoClaw",
-      "description": "PicoClaw é uma plataforma poderosa de assistente de IA. Vamos levar alguns segundos para te ajudar a concluir a configuração básica."
+      "title": "Cadastro incompleto",
+      "description": "Faltam algumas informações da empresa. Este tour mostra onde completar o cadastro, acompanhar os agentes e resolver pendências."
     },
     "models": {
-      "title": "Configurar Modelos",
-      "description": "Clique no menu \"Modelos\" à esquerda para configurar API Keys dos provedores de IA. Apenas modelos configurados podem ser usados no chat."
+      "title": "Chat e cadastro",
+      "description": "Use o Chat para conversar com a Sofia, responder o que falta e manter o atendimento pronto para operar."
     },
     "gateway": {
-      "title": "Iniciar Gateway",
-      "description": "Após configurar modelos, clique no botão \"Iniciar Gateway\" no topo para começar a conversar com a IA."
+      "title": "Painel dos agentes",
+      "description": "Acompanhe o que cada agente está fazendo, veja alertas de operação e identifique próximos passos."
     },
     "docs": {
-      "title": "Ver Documentação",
-      "description": "Precisa de mais ajuda? Clique no botão de documentação no canto superior direito para ver guias detalhados e documentação de configuração."
+      "title": "Prontidão e pendências",
+      "description": "Revise os itens de prontidão e as pendências antes de liberar o atendimento para clientes."
     }
   }
 }
