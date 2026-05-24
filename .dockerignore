@@ -113,16 +113,21 @@ Thumbs.db
 /public/
 
 # -- Dev workspaces / runtime state at repo root.
-#    Never embedded — tenant data lives in $PICOCLAW_HOME bind mounts on
-#    the VPS, not in the image. internal/saas/api/baseline-workspace/ (the
-#    real embed source) is NOT under any of these paths and stays. --
-/workspace/
+#    SaaS tenants get their template from internal/saas/api/baseline-workspace/
+#    (a separate embed source) at provision time, NOT from /workspace/. But the
+#    CLI's `picoclaw onboard` still embeds /workspace/ via go:generate +
+#    //go:embed in cmd/picoclaw/internal/onboard/command.go — so we must let
+#    /workspace/ through to the build context. Sibling `workspace-*` trees are
+#    dev sandboxes that no embed depends on, so they stay excluded. --
 /workspace-assistente/
 /workspace-marketing/
 /workspace-onboarding/
 /workspace-pico/
 /workspace-seeds/
 /workspace-vendas/
+# The generated copy inside cmd/picoclaw/internal/onboard/workspace/ is
+# regenerated during `go generate` from /workspace/, so we don't need to
+# ship the stale committed copy.
 cmd/**/workspace/
 
 # -- Telegram dev sandbox (gitignored) --
