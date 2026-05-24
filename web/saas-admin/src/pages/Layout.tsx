@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
-import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, ClipboardList, UserCog, LayoutDashboard, FileText, Activity, KeyRound, FolderTree, Link2 } from "lucide-react";
+import { LogOut, Users, Briefcase, UserRound, Building2, DollarSign, ClipboardList, UserCog, LayoutDashboard, FileText, Activity, KeyRound, FolderTree, Link2, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -56,9 +56,14 @@ export function Layout() {
               Saúde do servidor
             </SideLink>
           )}
-          <SideLink to="/tenants" icon={<Users className="h-4 w-4" />} active={loc.pathname.startsWith("/tenants")}>
+          <SideLink to="/tenants" icon={<Users className="h-4 w-4" />} active={loc.pathname === "/tenants" || (loc.pathname.startsWith("/tenants/") && loc.pathname !== "/tenants/discovery")}>
             Tenants
           </SideLink>
+          {isPlatformAdmin && (
+            <SideLink to="/tenants/discovery" icon={<Sparkles className="h-4 w-4" />} active={loc.pathname === "/tenants/discovery"}>
+              Discovery
+            </SideLink>
+          )}
 
           {tenantId && tenantData && (
             <div className="mx-4 mb-1 truncate rounded bg-zinc-800/50 px-2 py-1 text-[10px] text-zinc-400">

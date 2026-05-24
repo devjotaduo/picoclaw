@@ -291,6 +291,13 @@ type AgentsConfig struct {
 	Defaults AgentDefaults   `json:"defaults"`
 	List     []AgentConfig   `json:"list,omitempty"`
 	Dispatch *DispatchConfig `json:"dispatch,omitempty"`
+	// SkipSpecialistSeed disables the orchestrator.EnsureSpecialistConfig
+	// seeding logic that injects the canonical 4-agent baseline (Ana/Leo/
+	// Maya/Sofia) and resets main.subagents.allow_agents to ["vendas"].
+	// Set true for single-home tenants with a fully custom agent roster
+	// (the SaaS multi-tenant scenario still needs the seed for guaranteed
+	// orchestration topology). Default false preserves existing behavior.
+	SkipSpecialistSeed bool `json:"skip_specialist_seed,omitempty"`
 }
 
 // AgentModelConfig supports both string and structured model config.

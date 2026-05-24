@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Layout } from "@/pages/Layout";
 import { Login } from "@/pages/Login";
 import { TenantsList } from "@/pages/TenantsList";
+import { TenantsDiscovery } from "@/pages/TenantsDiscovery";
 import { TenantDetail } from "@/pages/TenantDetail";
 import { NewTenant } from "@/pages/NewTenant";
 import { SkillsList } from "@/pages/SkillsList";
@@ -66,6 +67,7 @@ export default function App() {
         }
       >
         <Route path="/tenants" element={<TenantsList />} />
+        <Route path="/tenants/discovery" element={<RequirePlatform><TenantsDiscovery /></RequirePlatform>} />
         <Route path="/tenants/new" element={<RequirePlatform><NewTenant /></RequirePlatform>} />
         <Route path="/tenants/:id" element={<TenantDetail />} />
         <Route path="/tenants/:id/settings" element={<AgentSettings />} />

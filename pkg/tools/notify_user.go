@@ -149,6 +149,14 @@ func (t *NotifyUserTool) Execute(ctx context.Context, args map[string]any) *Tool
 		return ErrorResult(fmt.Sprintf("build request: %v", err))
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// Internal-process auth: launcher exports PICOCLAW_LAUNCHER_INTERNAL_TOKEN
+	// when it spawns the gateway. The launcher's LauncherDashboardAuth
+	// middleware accepts this header as equivalent to a dashboard session
+	// cookie. Without it, /api/notifications returns 401 because the tool
+	// runs in the gateway subprocess and has no browser cookie.
+	if token := strings.TrimSpace(os.Getenv("PICOCLAW_LAUNCHER_INTERNAL_TOKEN")); token != "" {
+		req.Header.Set("X-Picoclaw-Internal-Token", token)
+	}
 
 	resp, err := t.client.Do(req)
 	if err != nil {

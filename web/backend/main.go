@@ -510,6 +510,16 @@ func main() {
 		logger.Fatalf("Dashboard auth setup failed: %v", dashErr)
 	}
 
+	// Internal token for child processes (gateway + its tools) to call back
+	// into /api/* without needing a dashboard cookie. Generated per-launcher
+	// startup; exported via env so cmd.Env = os.Environ() in gateway spawn
+	// carries it forward automatically.
+	launcherInternalToken, intErr := middleware.NewLauncherDashboardSessionCookie()
+	if intErr != nil {
+		logger.Fatalf("Internal token setup failed: %v", intErr)
+	}
+	_ = os.Setenv("PICOCLAW_LAUNCHER_INTERNAL_TOKEN", launcherInternalToken)
+
 	// Open the bcrypt password store (creates the DB file on first run).
 	authStore, authStoreErr := dashboardauth.New(picoHome)
 	var passwordStore api.PasswordStore
@@ -614,6 +624,7 @@ func main() {
 		AuthMode:             os.Getenv("PICOCLAW_AUTH_MODE"),
 		TrustedGatewaySecret: os.Getenv("PICOCLAW_TRUSTED_GATEWAY_SECRET"),
 		LocalAutoLogin:       localAutoLogin,
+		InternalToken:        launcherInternalToken,
 	}, auditedMux)
 
 	// Apply middleware stack

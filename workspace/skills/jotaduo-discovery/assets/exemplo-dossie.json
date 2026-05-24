@@ -1,0 +1,48 @@
+{
+  "empresa": "Clínica Exemplo",
+  "contato": {
+    "nome": "Maria Souza",
+    "cargo": "Sócia",
+    "email": "maria@clinicaexemplo.com.br",
+    "telefone": "+55 11 99999-0000"
+  },
+  "segmento": "clinica",
+  "porte": "pequena",
+  "site": "https://clinicaexemplo.com.br",
+  "stack": ["WhatsApp Business", "iClinic", "Asaas"],
+  "integracoes_necessarias": ["WhatsApp Business API", "iClinic Agenda", "Asaas"],
+  "fluxos_atuais": [
+    "Recepcionista marca consulta por WhatsApp manualmente",
+    "Confirmação de consulta é feita por ligação no dia anterior"
+  ],
+  "dores": [
+    { "descricao": "No-show alto, ~25% das consultas", "prioridade": 1 },
+    { "descricao": "Recepcionista sobrecarregada no WhatsApp", "prioridade": 2 },
+    { "descricao": "Inadimplência em particular", "prioridade": 3 }
+  ],
+  "objetivos": [
+    "Reduzir no-show para abaixo de 10%",
+    "Atender WhatsApp 24/7",
+    "Reduzir inadimplência em particular pela metade"
+  ],
+  "agentes_recomendados": [
+    {
+      "id": "agente-recepcionista",
+      "justificativa": "Atende WhatsApp 24/7, libera a recepcionista (dor 2)."
+    },
+    {
+      "id": "agente-agendador",
+      "justificativa": "Confirma consulta 24h antes e remarca, reduz no-show (dor 1)."
+    },
+    {
+      "id": "agente-cobranca",
+      "justificativa": "Lembra vencimento e cobra particular (dor 3)."
+    }
+  ],
+  "ordem_implantacao": ["agente-recepcionista", "agente-agendador", "agente-cobranca"],
+  "observacoes": "Tem 3 profissionais, atende particular e Unimed. Sem time de TI.",
+  "proximos_passos": [
+    "Validar acesso à API do iClinic",
+    "Agendar reunião técnica de integração"
+  ]
+}

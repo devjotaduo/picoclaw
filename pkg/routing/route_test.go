@@ -71,6 +71,107 @@ func TestResolveRoute_UsesNormalizedInboundContextFields(t *testing.T) {
 	}
 }
 
+func TestResolveRoute_DefaultOverride_RedirectsRuleMatchingDefault(t *testing.T) {
+	// Cenário: agents.dispatch.rules tem uma orchestrator rule que roteia
+	// "pico:agent:main" → main. Override de Sofia ativo (onboarding incompleto).
+	// Esperado: rule matcheia, mas AgentID é redirecionado pra sofia porque
+	// "main" é o config default.
+	cfg := testConfig([]config.AgentConfig{
+		{ID: "main", Default: true},
+		{ID: "sofia"},
+		{ID: "clara"},
+	})
+	cfg.Agents.Dispatch = &config.DispatchConfig{
+		Rules: []config.DispatchRule{
+			{
+				Name:  "orchestrator:pico:main",
+				Agent: "main",
+				When: config.DispatchSelector{
+					Channel: "pico",
+					Space:   "agent:main",
+				},
+			},
+		},
+	}
+	r := NewRouteResolver(cfg)
+	r.SetDefaultAgentOverride(func() string { return "sofia" })
+
+	route := r.ResolveRoute(bus.InboundContext{
+		Channel:   "pico",
+		SpaceID:   "main",
+		SpaceType: "agent",
+		ChatType:  "direct",
+		SenderID:  "user1",
+	})
+
+	if route.AgentID != "sofia" {
+		t.Fatalf("AgentID = %q, want sofia (override deveria redirecionar)", route.AgentID)
+	}
+	if route.MatchedBy != "dispatch.rule:orchestrator:pico:main" {
+		t.Fatalf("MatchedBy = %q, want dispatch.rule:orchestrator:pico:main (rule deveria ter matched antes do override)", route.MatchedBy)
+	}
+}
+
+func TestResolveRoute_DefaultOverride_PreservesExplicitRule(t *testing.T) {
+	// Cenário: orchestrator rule roteia explicitamente pra clara (não pro
+	// default). Override de Sofia ativo. Esperado: AgentID == clara — o
+	// override só substitui rules que vão pro default config, não rules
+	// nomeadas explicitamente.
+	cfg := testConfig([]config.AgentConfig{
+		{ID: "main", Default: true},
+		{ID: "sofia"},
+		{ID: "clara"},
+	})
+	cfg.Agents.Dispatch = &config.DispatchConfig{
+		Rules: []config.DispatchRule{
+			{
+				Name:  "orchestrator:pico:clara",
+				Agent: "clara",
+				When: config.DispatchSelector{
+					Channel: "pico",
+					Space:   "agent:clara",
+				},
+			},
+		},
+	}
+	r := NewRouteResolver(cfg)
+	r.SetDefaultAgentOverride(func() string { return "sofia" })
+
+	route := r.ResolveRoute(bus.InboundContext{
+		Channel:   "pico",
+		SpaceID:   "clara",
+		SpaceType: "agent",
+		ChatType:  "direct",
+		SenderID:  "user1",
+	})
+
+	if route.AgentID != "clara" {
+		t.Fatalf("AgentID = %q, want clara (override NÃO deve substituir rule explícita)", route.AgentID)
+	}
+}
+
+func TestResolveRoute_DefaultOverride_FallbackPathUsesOverride(t *testing.T) {
+	// Cenário: nenhuma rule matcheia, cai no fallback default. Override
+	// "sofia" ativo. Esperado: AgentID == sofia (já testado antes, aqui
+	// só confirma que continua funcionando junto com o fix das rules).
+	cfg := testConfig([]config.AgentConfig{
+		{ID: "main", Default: true},
+		{ID: "sofia"},
+	})
+	r := NewRouteResolver(cfg)
+	r.SetDefaultAgentOverride(func() string { return "sofia" })
+
+	route := r.ResolveRoute(bus.InboundContext{
+		Channel:  "telegram", // sem rule pra esse canal
+		ChatType: "direct",
+		SenderID: "user1",
+	})
+
+	if route.AgentID != "sofia" {
+		t.Fatalf("AgentID = %q, want sofia", route.AgentID)
+	}
+}
+
 func TestResolveRoute_DispatchFirstMatchWins(t *testing.T) {
 	cfg := testConfig([]config.AgentConfig{
 		{ID: "main", Default: true},

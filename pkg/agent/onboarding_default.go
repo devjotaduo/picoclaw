@@ -11,10 +11,13 @@ import (
 	"github.com/sipeed/picoclaw/pkg/logger"
 )
 
-// onboardingAgentID é o ID do agente que assume como default enquanto o
-// onboarding da empresa não está completo. Hardcoded por agora; se um dia
-// houver necessidade de customizar (ex: outro nome de agente por tenant),
-// virar config.
+// onboardingAgentID é o ID do agente que assume como default enquanto
+// memory/empresa.md está vazio/pendente. Hoje o tenant local usa ID
+// "sofia" (vide ~/.picoclaw/config.json) e o baseline SaaS canônico
+// usa "assistente" (internal/saas/api/baseline-workspace/config.json).
+// Quando precisar suportar ambos sem editar config por tenant, virar
+// uma lista ou ler de cfg.Agents.OnboardingAgentID. Por enquanto,
+// alinhado com o config local ativo: "sofia".
 const onboardingAgentID = "sofia"
 
 // onboardingCacheTTL evita ler memory/empresa.md a cada GetDefaultAgent.

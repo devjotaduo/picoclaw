@@ -55,8 +55,35 @@ func (r *RouteResolver) ResolveRoute(inbound bus.InboundContext) ResolvedRoute {
 	view := buildDispatchView(inbound, identityLinks)
 
 	if rule := r.matchDispatchRule(view); rule != nil {
+		// Default-agent override: quando há override ativo (ex: onboarding
+		// incompleto → Sofia), TODAS as rules que resolvem para agentes de
+		// atendimento são redirecionadas pro override. Motivo: nenhum
+		// agente externo (main/Rafael, marketing/Maya, vendas/Leo,
+		// clara/marcos/camila) consegue atender clientes sem o cadastro
+		// da empresa preenchido — só Sofia conduz o onboarding.
+		//
+		// Exceções (sem redirect):
+		//   1. A própria agente do override (anti-ciclo).
+		//   2. [FUTURO] Rules marcadas como técnicas/operador (dev, doc,
+		//      pixel). Quando esses agentes aparecerem em algum tenant,
+		//      adicionar flag `AgentConfig.SkipOnboardingOverride bool`
+		//      ou uma whitelist consultada aqui.
+		agentID := r.pickAgentID(rule.Agent)
+		if r.defaultOverride != nil {
+			if override := strings.TrimSpace(r.defaultOverride()); override != "" {
+				normalizedOverride := NormalizeAgentID(override)
+				if agentID != normalizedOverride {
+					for _, a := range r.cfg.Agents.List {
+						if a.IsEnabled() && NormalizeAgentID(a.ID) == normalizedOverride {
+							agentID = normalizedOverride
+							break
+						}
+					}
+				}
+			}
+		}
 		return ResolvedRoute{
-			AgentID:       r.pickAgentID(rule.Agent),
+			AgentID:       agentID,
 			Channel:       channel,
 			AccountID:     accountID,
 			SessionPolicy: r.sessionPolicy(rule),
@@ -71,6 +98,34 @@ func (r *RouteResolver) ResolveRoute(inbound bus.InboundContext) ResolvedRoute {
 		SessionPolicy: r.sessionPolicy(nil),
 		MatchedBy:     "default",
 	}
+}
+
+// resolveConfigDefaultAgentID returns the default agent ID from the config
+// only, IGNORING any runtime override. Used to detect if a matched rule
+// resolves to the config's default agent — in which case the runtime
+// override should take precedence.
+func (r *RouteResolver) resolveConfigDefaultAgentID() string {
+	agents := r.cfg.Agents.List
+	if len(agents) == 0 {
+		return DefaultAgentID
+	}
+	for _, a := range agents {
+		if a.IsEnabled() && a.Default {
+			id := strings.TrimSpace(a.ID)
+			if id != "" {
+				return NormalizeAgentID(id)
+			}
+		}
+	}
+	for _, a := range agents {
+		if !a.IsEnabled() {
+			continue
+		}
+		if id := strings.TrimSpace(a.ID); id != "" {
+			return NormalizeAgentID(id)
+		}
+	}
+	return DefaultAgentID
 }
 
 func (r *RouteResolver) pickAgentID(agentID string) string {

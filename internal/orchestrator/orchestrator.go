@@ -34,8 +34,18 @@ var sensitivePanelRoles = []string{
 // EnsureSpecialistConfig mutates cfg so the deterministic 4-agent
 // orchestration baseline exists while preserving user-edited agents and
 // custom dispatch rules.
+//
+// Opt-out: setting agents.skip_specialist_seed=true skips ALL mutations.
+// Use this for single-home tenants with a fully custom roster where the
+// canonical Ana/Leo/Maya/Sofia injection would conflict with the local
+// agents (e.g. tenant has its own "marcos" for sales, doesn't want "vendas"
+// added too). SaaS multi-tenant deployments leave this false to keep the
+// guaranteed orchestration topology.
 func EnsureSpecialistConfig(cfg *config.Config) bool {
 	if cfg == nil {
+		return false
+	}
+	if cfg.Agents.SkipSpecialistSeed {
 		return false
 	}
 	changed := false

@@ -312,6 +312,13 @@ func registerSharedTools(
 		if cfg.Tools.IsToolEnabled("notify_user") {
 			agent.Tools.Register(tools.NewNotifyUserTool(""))
 		}
+		// set_ui_profile: lets the agent flip the active UI visibility profile
+		// (public/tenant/admin) written to <workspace>/ui-visibility.json. Cheap
+		// file write, default-on for every agent so the dashboard can react to
+		// agent-driven workspace switches without an extra config flag.
+		if cfg.Tools.IsToolEnabled("set_ui_profile") {
+			agent.Tools.Register(tools.NewSetUIProfileTool(agent.Workspace))
+		}
 
 		if ttsProvider != nil {
 			agent.Tools.Register(tools.NewSendTTSTool(ttsProvider, nil))

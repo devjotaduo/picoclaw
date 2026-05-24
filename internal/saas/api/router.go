@@ -243,6 +243,13 @@ func (h *Handler) Routes() http.Handler {
 				r.Post("/tenants/onboarding/bootstrap", h.handleBootstrapOnboardingTenant)
 				r.Post("/tenants/{id}/clone", h.handleCloneTenant)
 				r.Get("/tenants/{id}/sanity", h.handleTenantSanity)
+				// Discovery-mode liberation: per-tenant checklist + flip.
+				// GET returns the validate_workspace.py checklist (or a stub
+				// when the script isn't installed yet); POST flips
+				// ui-visibility.json's active_profile from "public" -> "tenant"
+				// when the checklist is complete. See admin_tenants_discovery.go.
+				r.Get("/admin/tenants/{id}/discovery-status", h.handleAdminTenantDiscoveryStatus)
+				r.Post("/admin/tenants/{id}/discovery-liberate", h.handleAdminTenantDiscoveryLiberate)
 				r.Get("/tenants/{id}/files/tree", h.handleTenantFilesTree)
 				r.Get("/tenants/{id}/files", h.handleTenantFileRead)
 				r.Put("/tenants/{id}/files", h.handleTenantFileWrite)

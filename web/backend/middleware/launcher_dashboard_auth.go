@@ -64,7 +64,20 @@ type LauncherDashboardAuthConfig struct {
 	LocalAutoLogin *LauncherDashboardLocalAutoLogin
 	// SecureCookie sets the session cookie's Secure flag. If nil, DefaultLauncherDashboardSecureCookie is used.
 	SecureCookie func(*http.Request) bool
+	// InternalToken is a per-launcher-process random token that the launcher
+	// exports via env (PICOCLAW_LAUNCHER_INTERNAL_TOKEN) so child processes
+	// — primarily the gateway and its tools (e.g. notify_user posting to
+	// /api/notifications) — can authenticate against the launcher's local
+	// API without a dashboard cookie. Requests carrying the matching
+	// X-Picoclaw-Internal-Token header bypass the cookie check. Empty
+	// disables the feature.
+	InternalToken string
 }
+
+// LauncherInternalTokenHeader is the request header name child processes
+// send to authenticate against the launcher's internal API without a
+// dashboard session cookie.
+const LauncherInternalTokenHeader = "X-Picoclaw-Internal-Token"
 
 // LauncherDashboardLocalAutoLogin is an in-memory, one-shot startup grant.
 // It is not a reusable credential; it only lets the launcher-opened browser
@@ -193,6 +206,19 @@ func LauncherDashboardAuth(cfg LauncherDashboardAuthConfig, next http.Handler) h
 		if validLauncherDashboardAuth(r, cfg) {
 			next.ServeHTTP(w, r)
 			return
+		}
+		// Internal-token fallback: child processes (gateway + its tools
+		// like notify_user) authenticate by sending the launcher's
+		// per-process token. Token only exists in this launcher's env;
+		// child inherits via os.Environ() at spawn. Constant-time compare
+		// to avoid timing leaks.
+		if cfg.InternalToken != "" {
+			if hdr := strings.TrimSpace(r.Header.Get(LauncherInternalTokenHeader)); hdr != "" {
+				if subtle.ConstantTimeCompare([]byte(hdr), []byte(cfg.InternalToken)) == 1 {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
 		}
 		// Local-mode fallback: signed trusted-gateway headers from the
 		// controlplane are accepted even without a session cookie. The

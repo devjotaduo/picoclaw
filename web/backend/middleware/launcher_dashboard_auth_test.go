@@ -269,6 +269,68 @@ func TestLauncherDashboardAuth_DotDotCannotBypass(t *testing.T) {
 	}
 }
 
+// Internal-token fallback: child processes (gateway + its tools like
+// notify_user) authenticate via X-Picoclaw-Internal-Token header carrying
+// the launcher's per-process random token. Must accept matching token,
+// reject empty/wrong token, and stay disabled when InternalToken="".
+func TestLauncherDashboardAuth_InternalTokenHeader(t *testing.T) {
+	const goodToken = "internal-token-abcdef-xyz-123"
+	cfg := LauncherDashboardAuthConfig{
+		ExpectedCookie: "unrelated-session-cookie",
+		InternalToken:  goodToken,
+	}
+	nextCalls := 0
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalls++
+		w.WriteHeader(http.StatusOK)
+	})
+	h := LauncherDashboardAuth(cfg, next)
+
+	// Matching token → allowed
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/notifications", nil)
+	req.Header.Set(LauncherInternalTokenHeader, goodToken)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("matching internal token: status = %d, want 200", rec.Code)
+	}
+
+	// Wrong token → rejected with JSON 401 (because /api/* prefix)
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodPost, "/api/notifications", nil)
+	req2.Header.Set(LauncherInternalTokenHeader, "wrong-token")
+	h.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong internal token: status = %d, want 401", rec2.Code)
+	}
+
+	// No header at all → rejected (covers the original notify_user bug)
+	rec3 := httptest.NewRecorder()
+	req3 := httptest.NewRequest(http.MethodPost, "/api/notifications", nil)
+	h.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusUnauthorized {
+		t.Fatalf("no header: status = %d, want 401", rec3.Code)
+	}
+
+	// Empty InternalToken disables the feature — even matching header rejected
+	cfgDisabled := LauncherDashboardAuthConfig{
+		ExpectedCookie: "unrelated-session-cookie",
+		InternalToken:  "",
+	}
+	hDisabled := LauncherDashboardAuth(cfgDisabled, next)
+	rec4 := httptest.NewRecorder()
+	req4 := httptest.NewRequest(http.MethodPost, "/api/notifications", nil)
+	req4.Header.Set(LauncherInternalTokenHeader, goodToken)
+	hDisabled.ServeHTTP(rec4, req4)
+	if rec4.Code != http.StatusUnauthorized {
+		t.Fatalf("disabled feature: status = %d, want 401", rec4.Code)
+	}
+
+	if nextCalls != 1 {
+		t.Fatalf("next handler call count = %d, want 1 (only the matching-token case)", nextCalls)
+	}
+}
+
 func TestLauncherDashboardAuth_CookieOnly(t *testing.T) {
 	cookieVal := "session-cookie-value"
 	cfg := LauncherDashboardAuthConfig{ExpectedCookie: cookieVal}
