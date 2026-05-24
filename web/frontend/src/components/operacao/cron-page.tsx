@@ -25,7 +25,7 @@ function fmtTime(ms?: number): string {
 
 function fmtSchedule(job: CronJob): string {
   const s = job.schedule
-  if (s.expr) return s.expr + (s.tz ? ` (${s.tz})` : "")
+  if (s.expr) return fmtCronExpression(s.expr)
   if (s.everyMs) {
     const m = Math.round(s.everyMs / 60000)
     if (m % 1440 === 0)
@@ -34,7 +34,61 @@ function fmtSchedule(job: CronJob): string {
     return `a cada ${m} min`
   }
   if (s.atMs) return `uma vez em ${fmtTime(s.atMs)}`
-  return s.kind || "—"
+  return "Agendamento personalizado"
+}
+
+function fmtCronExpression(expr: string): string {
+  const [minute, hour, dayOfMonth, month, dayOfWeek] = expr.trim().split(/\s+/)
+  if (!minute || !hour || !dayOfMonth || !month || !dayOfWeek) {
+    return "Agendamento personalizado"
+  }
+
+  const time = `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`
+  const weekdays: Record<string, string> = {
+    "0": "domingo",
+    "1": "segunda",
+    "2": "terça",
+    "3": "quarta",
+    "4": "quinta",
+    "5": "sexta",
+    "6": "sábado",
+    "7": "domingo",
+  }
+
+  if (dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
+    return `Todos os dias às ${time}`
+  }
+
+  if (month === "*" && dayOfWeek === "*" && dayOfMonth !== "*") {
+    return `Todo mês, dia ${dayOfMonth}, às ${time}`
+  }
+
+  if (dayOfMonth === "*" && month === "*" && weekdays[dayOfWeek]) {
+    return `Toda ${weekdays[dayOfWeek]}, às ${time}`
+  }
+
+  return "Agendamento personalizado"
+}
+
+function readableJobName(job: CronJob): string {
+  const raw = (job.name || job.id).trim()
+  const normalized = raw.toLowerCase()
+  const known: Record<string, string> = {
+    "heartbeat-rafael-morning": "Rafael — rotina da manhã",
+    "lia-marketing-daily": "Lia — rotina diária de marketing",
+    "marketing-monthly-positioning": "Posicionamento mensal de marketing",
+    "marketing-weekly-proposals": "Ideias semanais de marketing",
+  }
+
+  if (known[normalized]) {
+    return known[normalized]
+  }
+
+  if (/heartbeat/i.test(raw)) {
+    return raw.replace(/heartbeat/i, "Rotina").trim()
+  }
+
+  return raw.replace(/[-_]+/g, " ")
 }
 
 function statusBadge(job: CronJob) {
@@ -42,7 +96,7 @@ function statusBadge(job: CronJob) {
   if (!status) {
     return (
       <span className="text-muted-foreground bg-muted/50 rounded-full px-2 py-0.5 text-xs">
-        nunca rodou
+        Ainda não rodou
       </span>
     )
   }
@@ -50,14 +104,14 @@ function statusBadge(job: CronJob) {
     return (
       <span className="text-success bg-success/15 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
         <IconCheck className="size-3" />
-        ok
+        Concluído
       </span>
     )
   }
   return (
     <span className="text-destructive bg-destructive/15 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
       <IconX className="size-3" />
-      {status}
+      Precisa atenção
     </span>
   )
 }
@@ -73,7 +127,7 @@ export function CronPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader title="Cron / batimentos">
+      <PageHeader title="Agendamentos">
         <Button
           variant="ghost"
           size="sm"
@@ -93,22 +147,22 @@ export function CronPage() {
         {query.isLoading ? (
           <div className="text-muted-foreground flex items-center gap-2 text-sm">
             <IconLoader2 className="size-4 animate-spin" />
-            Carregando jobs...
+            Carregando agendamentos...
           </div>
         ) : query.isError ? (
           <div className="text-destructive flex items-start gap-2 text-sm">
             <IconAlertCircle className="mt-0.5 size-4 shrink-0" />
             <span>
-              {(query.error as Error)?.message || "Erro ao carregar jobs"}
+              {(query.error as Error)?.message ||
+                "Erro ao carregar agendamentos"}
             </span>
           </div>
         ) : jobs.length === 0 ? (
           <div className="border-border/40 text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-16 text-sm">
             <IconCalendarTime className="size-10 opacity-40" />
-            <p className="font-medium">Nenhum job agendado.</p>
+            <p className="font-medium">Nenhuma tarefa agendada.</p>
             <p className="max-w-md text-center text-xs opacity-70">
-              Jobs criados via skill <code>cron</code> ou pelos batimentos
-              automáticos (ex: <code>lia-marketing-daily</code>) aparecem aqui.
+              As rotinas automáticas configuradas para os agentes aparecem aqui.
             </p>
           </div>
         ) : (
@@ -116,22 +170,28 @@ export function CronPage() {
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-muted-foreground text-xs uppercase">
                 <tr>
-                  <th className="px-3 py-2 text-left font-medium">Job</th>
-                  <th className="px-3 py-2 text-left font-medium">Schedule</th>
-                  <th className="px-3 py-2 text-left font-medium">Próximo</th>
-                  <th className="px-3 py-2 text-left font-medium">Último</th>
-                  <th className="px-3 py-2 text-left font-medium">Status</th>
-                  <th className="px-3 py-2 text-left font-medium">Estado</th>
+                  <th className="px-3 py-2 text-left font-medium">Tarefa</th>
+                  <th className="px-3 py-2 text-left font-medium">
+                    Quando roda
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium">
+                    Próxima vez
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium">
+                    Última vez
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium">Resultado</th>
+                  <th className="px-3 py-2 text-left font-medium">Situação</th>
                 </tr>
               </thead>
               <tbody className="divide-border/20 divide-y">
                 {jobs.map((job) => (
                   <tr key={job.id} className={cn(!job.enabled && "opacity-50")}>
                     <td className="px-3 py-2.5">
-                      <div className="font-medium">{job.name || job.id}</div>
+                      <div className="font-medium">{readableJobName(job)}</div>
                       {job.payload.agent_id ? (
                         <div className="text-muted-foreground text-xs">
-                          agente: {job.payload.agent_id}
+                          Responsável: {job.payload.agent_id}
                         </div>
                       ) : null}
                     </td>
@@ -147,11 +207,11 @@ export function CronPage() {
                     <td className="px-3 py-2.5">{statusBadge(job)}</td>
                     <td className="px-3 py-2.5">
                       {job.enabled ? (
-                        <span className="text-success text-xs">ativo</span>
+                        <span className="text-success text-xs">Ativa</span>
                       ) : (
                         <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
                           <IconPlayerPause className="size-3" />
-                          pausado
+                          Pausada
                         </span>
                       )}
                     </td>
@@ -159,11 +219,6 @@ export function CronPage() {
                 ))}
               </tbody>
             </table>
-            {query.data?.store_path ? (
-              <p className="text-muted-foreground border-border/30 border-t px-3 py-2 text-xs">
-                Fonte: <code>{query.data.store_path}</code>
-              </p>
-            ) : null}
           </div>
         )}
       </div>

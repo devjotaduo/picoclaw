@@ -47,8 +47,58 @@ function statusBadge(status: AgentReadinessStatus) {
   }
 }
 
+const sourceLabels: Record<string, string> = {
+  "canais-autorizados": "Canais autorizados",
+  empresa: "Empresa",
+  faq: "Perguntas frequentes",
+  marca: "Marca",
+  marketing: "Marketing",
+}
+
+function readableSource(value: string) {
+  const source = value.replace(/\.md$/i, "")
+  return (
+    sourceLabels[source] ??
+    source
+      .replace(/[-_]+/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase())
+  )
+}
+
+function splitReasonSource(reason: string) {
+  const match = reason.match(/^([^:]+?)(?:\.md)?:\s*(.+)$/i)
+  if (!match) {
+    return { source: "", detail: reason.trim() }
+  }
+  return { source: readableSource(match[1].trim()), detail: match[2].trim() }
+}
+
+function readableReadinessReason(reason: string) {
+  const { source, detail } = splitReasonSource(reason)
+  const fieldEmpty = detail.match(/^campo\s+"([^"]+)"\s+vazio$/i)
+  const quotedEmpty = detail.match(/^"([^"]+)"\s+sem valor$/i)
+  const placeholder = detail.match(/ainda contém placeholder/i)
+
+  let message = detail
+    .replace(/^campo\s+/i, "")
+    .replace(/\s+vazio$/i, " sem preencher")
+    .replace(/\s+sem valor$/i, " sem preencher")
+    .replace(/placeholder/i, "texto temporário")
+
+  if (fieldEmpty) {
+    message = `${fieldEmpty[1]} sem preencher`
+  } else if (quotedEmpty) {
+    message = `${quotedEmpty[1]} sem preencher`
+  } else if (placeholder) {
+    message = "texto temporário ainda aparece"
+  }
+
+  return source ? `${source}: ${message}` : message
+}
+
 function AgentCard({ agent }: { agent: AgentReadiness }) {
   const b = statusBadge(agent.status)
+  const readableOkSources = agent.reads_ok?.map(readableSource) ?? []
   return (
     <article className="border-border/40 bg-card rounded-lg border p-4">
       <header className="mb-2 flex items-start justify-between gap-3">
@@ -65,9 +115,9 @@ function AgentCard({ agent }: { agent: AgentReadiness }) {
           {b.label}
         </span>
       </header>
-      {agent.reads_ok && agent.reads_ok.length > 0 ? (
+      {readableOkSources.length > 0 ? (
         <p className="text-muted-foreground mb-1 text-xs">
-          ✓ {agent.reads_ok.join(", ")}
+          Pronto: {readableOkSources.join(", ")}
         </p>
       ) : null}
       {agent.reasons && agent.reasons.length > 0 ? (
@@ -75,7 +125,7 @@ function AgentCard({ agent }: { agent: AgentReadiness }) {
           {agent.reasons.map((r, i) => (
             <li key={i} className="flex gap-1.5">
               <span className="text-muted-foreground">·</span>
-              <span>{r}</span>
+              <span>{readableReadinessReason(r)}</span>
             </li>
           ))}
         </ul>

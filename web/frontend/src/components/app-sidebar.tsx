@@ -216,8 +216,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         : undefined,
     [isSaasAdmin, launcherRole],
   )
-  const { visible: isVisible, profile: uiVisibilityProfile } =
-    useUIVisibility(visibilityPolicyInput)
+  const { visible: isVisible, profile: uiVisibilityProfile } = useUIVisibility(
+    visibilityPolicyInput,
+  )
   const showAdminSidebarPages = isSaasAdmin || uiVisibilityProfile === "admin"
 
   const canRead = React.useCallback(
@@ -300,20 +301,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             translateTitle: true,
           },
           {
-            title: "navigation.whatsapp_inbox",
+            title: "WhatsApp",
             url: "/agent/whatsapp",
             icon: IconBrandWhatsapp,
             feature: "whatsapp_inbox",
             elementId: "sidebar.whatsapp_inbox",
-            translateTitle: true,
+            translateTitle: false,
           },
           {
-            title: "navigation.whatsapp_reports",
+            title: "Relatório",
             url: "/agent/whatsapp-reports",
             icon: IconChartBar,
             feature: "whatsapp_reports",
             elementId: "sidebar.whatsapp_reports",
-            translateTitle: true,
+            translateTitle: false,
           },
           {
             title: "navigation.hub",

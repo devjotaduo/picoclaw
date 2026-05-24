@@ -512,7 +512,8 @@ function AgentChatCard({
   onDecision?: (decision: ApprovalDecision) => void
 }) {
   const [replyOpen, setReplyOpen] = useState(false)
-  const agentName = friendlyAgentName(item)
+  const rawAgentName = friendlyAgentName(item)
+  const agentName = readableApprovalAgentName(item) || rawAgentName
   const initials = getAgentInitials(agentName)
   const title = friendlyDashboardText(item.title)
   const summary = friendlyDashboardText(item.summary)

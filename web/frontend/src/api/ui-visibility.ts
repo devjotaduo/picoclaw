@@ -45,6 +45,10 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "sidebar.credentials": false,
         "sidebar.agent_hub": false,
         "sidebar.agent_templates": false,
+        "sidebar.config": false,
+        "sidebar.cron": false,
+        "sidebar.integrations": false,
+        "sidebar.memory": false,
         "sidebar.template_editor": false,
         "sidebar.skills": false,
         "sidebar.skill_editor": false,
@@ -132,7 +136,8 @@ export async function getLocalUIVisibilityPolicy(): Promise<UIVisibilityPolicy> 
 // localStorage key used by the runtime template selector to override
 // auto-resolution. Set via setUIVisibilityProfileOverride(); cleared by
 // passing null. Other tabs / hooks observe changes via the "storage" event.
-export const UI_VISIBILITY_OVERRIDE_STORAGE_KEY = "picoclaw.ui-visibility.override"
+export const UI_VISIBILITY_OVERRIDE_STORAGE_KEY =
+  "picoclaw.ui-visibility.override"
 
 export function getUIVisibilityProfileOverride(): UIVisibilityProfile | null {
   if (typeof window === "undefined") return null
@@ -183,18 +188,16 @@ export function resolveUIVisibilityProfile(
     return policy.active_profile
   }
 
-  // Operadores Picoclaw e admins do tenant vêem o template "admin" (UI
-  // completa). Usuários regulares do tenant (owner/operator/viewer) vêem
-  // o "tenant" (UI básica, sem ferramentas técnicas). Anônimos / sem
-  // sessão caem no "public" (visão mínima).
+  // Só o admin SaaS confirmado recebe o template completo. Usuários do tenant,
+  // mesmo com papel administrativo local, ficam no perfil "tenant" para manter
+  // a navegação sem páginas técnicas.
   if (launcherPolicy?.is_saas_admin) {
     return "admin"
   }
 
   switch (launcherPolicy?.role) {
-    case "platform_admin":
     case "tenant_admin":
-      return "admin"
+    case "platform_admin":
     case "tenant_owner":
     case "operator":
     case "viewer":
