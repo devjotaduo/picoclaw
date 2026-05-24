@@ -21,14 +21,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
         className="flex h-dvh flex-col overflow-hidden"
       >
         <AppHeader />
-        {/* Banner de onboarding: visível enquanto memory/empresa.md está
-            em template (Nome/Segmento vazios). Self-hide quando completar.
-            Mesmo sinal que faz Sofia virar default agent no backend. */}
-        <OnboardingBanner />
 
         <div className="flex flex-1 overflow-hidden">
           <AppSidebar />
           <div className="flex w-full flex-col overflow-hidden">
+            {/* Banner de onboarding: visível enquanto memory/empresa.md está
+                em template (Nome/Segmento vazios). Self-hide quando completar.
+                Mesmo sinal que faz Sofia virar default agent no backend. */}
+            <OnboardingBanner />
             <main className="flex min-h-0 w-full max-w-full flex-1 flex-col overflow-hidden">
               {children}
             </main>

@@ -16,8 +16,7 @@
  *    completar o cadastro se preferir
  *  - Desaparece automaticamente quando incomplete = false (sem reload)
  */
-
-import { IconX } from "@tabler/icons-react"
+import { IconArrowRight, IconCircleDot, IconX } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
@@ -84,46 +83,45 @@ export function OnboardingBanner() {
     setDismissedState(true)
   }
 
-  const countText =
+  const detail =
     pending.length > 0
-      ? `${pending.length} campo${pending.length === 1 ? "" : "s"} pendente${pending.length === 1 ? "" : "s"}`
-      : "cadastro pendente"
+      ? pending.length === 1
+        ? "1 informação ainda precisa ser preenchida."
+        : `${pending.length} informações ainda precisam ser preenchidas.`
+      : "Faltam algumas informações da empresa."
 
-  // Refined-minimal: zero gradient, sem ícone categórico, 1 linha, link
-  // sublinhado em vez de botão. Indicador de estado fica num único dot
-  // que pulsa sutilmente (a única microinteração). Hairline border-bottom
-  // separa do conteúdo abaixo sem cards/sombras.
   return (
     <div
       data-testid="onboarding-banner"
-      className="relative flex items-center gap-3 border-b border-border/50 bg-background px-4 py-2 text-[13px]"
+      className="border-border/60 bg-background/95 flex min-h-11 items-center gap-3 border-b px-6 py-2 text-sm"
     >
-      {/* Dot indicador minimal (acento âmbar — único toque de cor) */}
       <span
         aria-hidden="true"
-        className="relative size-1.5 shrink-0 rounded-full bg-amber-500"
+        className="flex size-7 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400"
       >
-        <span className="absolute inset-0 animate-ping rounded-full bg-amber-500 opacity-60" />
+        <IconCircleDot className="size-4" />
       </span>
 
-      <p className="min-w-0 flex-1 truncate text-foreground/80">
-        <span className="font-medium text-foreground">Cadastro pendente</span>
-        <span className="mx-2 text-foreground/30">·</span>
-        <span className="text-foreground/60">{countText}</span>
-      </p>
+      <div className="min-w-0 flex-1">
+        <p className="text-foreground truncate text-sm font-medium">
+          Cadastro incompleto
+        </p>
+        <p className="text-muted-foreground truncate text-xs">{detail}</p>
+      </div>
 
       <Link
         to="/"
-        className="shrink-0 text-[13px] font-medium text-foreground underline decoration-foreground/30 decoration-1 underline-offset-4 transition-colors hover:decoration-foreground"
+        className="border-border bg-card text-foreground hover:bg-muted/60 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors"
       >
-        Conversar com Sofia
+        Completar com Sofia
+        <IconArrowRight className="size-3.5" />
       </Link>
 
       <button
         type="button"
         onClick={handleDismiss}
         aria-label="Dispensar por 24h"
-        className="-mr-1 shrink-0 rounded p-1 text-foreground/40 transition-colors hover:text-foreground/80"
+        className="text-muted-foreground hover:text-foreground -mr-1 shrink-0 rounded p-1 transition-colors"
       >
         <IconX className="size-3.5" />
       </button>
