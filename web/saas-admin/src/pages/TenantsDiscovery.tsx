@@ -193,7 +193,7 @@ function DiscoveryPanel({ tenant, onClose }: { tenant: Tenant; onClose: () => vo
                     <span>
                       <code className="font-mono">validate_workspace.py</code> ainda não está instalado no workspace.
                       O botão de liberação fica desativado até o script aparecer em
-                      <code className="ml-1 font-mono">workspace/skills/validate-workspace/</code>.
+                      <code className="ml-1 font-mono">workspace/skills/tenant-liberation/scripts/</code>.
                     </span>
                   </div>
                 </div>

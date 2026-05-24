@@ -196,9 +196,9 @@ export function NewTenant() {
         </div>
         <div className="rounded border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400">
           O owner recebe por email: <strong>URL</strong>,{" "}
-          <strong>login</strong>, <strong>senha inicial</strong> e{" "}
-          <strong>magic link</strong> — tudo junto. Sem Supabase configurado, o
-          controlplane emite um invite-token tradicional.
+          <strong>login</strong> e <strong>senha inicial</strong>. O fluxo manual
+          usa autenticação do Launcher; magic links ficam restritos a tenants
+          legados ou links gerados na tela do tenant.
         </div>
         <div className="grid grid-cols-3 gap-3">
           <div>
