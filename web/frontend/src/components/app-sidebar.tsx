@@ -532,7 +532,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         onClick={handleNavItemClick}
                         tooltip={title}
                         data-tour={
-                          item.url === "/models" ? "models-nav" : undefined
+                          item.url === "/"
+                            ? "chat-nav"
+                            : item.url === "/agent/dashboard"
+                              ? "agents-nav"
+                              : item.url === "/readiness"
+                                ? "readiness-nav"
+                                : undefined
                         }
                         className={`h-9 px-3 ${isActive ? "bg-accent/80 text-foreground font-medium" : "text-muted-foreground hover:bg-muted/60"}`}
                       >

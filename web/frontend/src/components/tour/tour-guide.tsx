@@ -45,23 +45,21 @@ export function TourGuide() {
     models: {
       title: t("tour.models.title"),
       description: t("tour.models.description"),
-      targetSelector: "[data-tour='models-nav']",
+      targetSelector: "[data-tour='chat-nav']",
       position: "right",
     },
     gateway: {
       title: t("tour.gateway.title"),
       description: t("tour.gateway.description"),
-      targetSelector: "[data-tour='gateway-button']",
-      position: "left",
-      offsetY: 60,
+      targetSelector: "[data-tour='agents-nav']",
+      position: "right",
     },
     docs: {
       title: t("tour.docs.title"),
       description: t("tour.docs.description"),
-      targetSelector: "[data-tour='docs-button']",
+      targetSelector: "[data-tour='readiness-nav']",
       position: "left",
       icon: <IconBook className="size-4" />,
-      offsetY: 60,
     },
     completed: {
       title: "",
