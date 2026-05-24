@@ -12,7 +12,6 @@ import {
   IconLoader2,
   IconPhoto,
   IconRefresh,
-  IconRobot,
   IconSparkles,
   IconUsers,
   IconWorld,
@@ -23,7 +22,6 @@ import { useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import {
-  type AgentDashboardAgent,
   type AgentDashboardArtifact,
   type AgentDashboardItem,
   type AgentDashboardTask,
@@ -122,18 +120,33 @@ export function AgentDashboardPage() {
   const reportItems = recentItems.filter((item) =>
     ["analysis", "report", "metric"].includes(item.type),
   )
-  const suggestionItems = recentItems.filter(
-    (item) => item.type === "suggestion" || item.type === "result",
-  )
   const visibleTasks = [...tasks]
     .sort((a, b) => dashboardTaskStamp(b).localeCompare(dashboardTaskStamp(a)))
     .slice(0, 8)
 
+  // Cada panel só renderiza quando tem conteúdo — modo minimalista.
+  // Não conta `agents.length` (sempre > 0 com agentes registrados) nem
+  // `items.length` cru (pode incluir items não-actionable). Conta apenas
+  // o que de fato vai renderizar.
+  const hasAttention = attentionItems.length > 0
+  const hasReports = reportItems.length > 0
+  const hasArtifacts = artifacts.length > 0
+  const hasTasks = visibleTasks.length > 0
+  const hasWhatsAppPulse = chats.length > 0
   const hasAnyDashboardData =
-    agents.length > 0 ||
-    items.length > 0 ||
-    tasks.length > 0 ||
-    artifacts.length > 0
+    hasAttention || hasReports || hasArtifacts || hasTasks || hasWhatsAppPulse
+
+  // KPIs row só renderiza quando ao menos um número for relevante OU o
+  // WhatsApp estiver offline (estado que vale comunicar).
+  const kpisHaveData =
+    dashboard?.metrics?.pending_items != null && (
+      dashboard.metrics.pending_items > 0 ||
+      dashboard.metrics.reports > 0 ||
+      dashboard.metrics.active_tasks > 0 ||
+      dashboard.metrics.alerts > 0 ||
+      whatsapp.unread > 0 ||
+      chatsQuery.isError
+    )
 
   const handleDraftChange = (item: AgentDashboardItem, value: string) => {
     setDrafts((current) => ({
@@ -223,48 +236,50 @@ export function AgentDashboardPage() {
             />
           ) : dashboard ? (
             <>
-              <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                <KpiCard
-                  icon={IconUsers}
-                  label="Agentes ativos"
-                  value={`${dashboard.metrics.active_agents}/${dashboard.metrics.agents}`}
-                  detail={`${compactDashboardCount(agents.length)} no painel`}
-                />
-                <KpiCard
-                  icon={IconBell}
-                  label="Pendências"
-                  value={dashboard.metrics.pending_items}
-                  detail={`${dashboard.metrics.alerts} alertas`}
-                  tone={dashboard.metrics.alerts > 0 ? "warning" : "default"}
-                />
-                <KpiCard
-                  icon={IconFileAnalytics}
-                  label="Relatórios"
-                  value={dashboard.metrics.reports}
-                  detail="análises salvas"
-                />
-                <KpiCard
-                  icon={IconCalendarEvent}
-                  label="Tarefas ativas"
-                  value={dashboard.metrics.active_tasks}
-                  detail={`${tasks.length} lembretes`}
-                />
-                <KpiCard
-                  icon={IconBrandWhatsapp}
-                  label="WhatsApp"
-                  value={
-                    chatsQuery.isError
-                      ? "offline"
-                      : compactDashboardCount(whatsapp.unread)
-                  }
-                  detail={
-                    chatsQuery.isError
-                      ? "gateway indisponível"
-                      : `${whatsapp.handoffs} pausados`
-                  }
-                  tone={chatsQuery.isError ? "danger" : "default"}
-                />
-              </section>
+              {kpisHaveData ? (
+                <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  <KpiCard
+                    icon={IconUsers}
+                    label="Agentes ativos"
+                    value={`${dashboard.metrics.active_agents}/${dashboard.metrics.agents}`}
+                    detail={`${compactDashboardCount(agents.length)} no painel`}
+                  />
+                  <KpiCard
+                    icon={IconBell}
+                    label="Pendências"
+                    value={dashboard.metrics.pending_items}
+                    detail={`${dashboard.metrics.alerts} alertas`}
+                    tone={dashboard.metrics.alerts > 0 ? "warning" : "default"}
+                  />
+                  <KpiCard
+                    icon={IconFileAnalytics}
+                    label="Relatórios"
+                    value={dashboard.metrics.reports}
+                    detail="análises salvas"
+                  />
+                  <KpiCard
+                    icon={IconCalendarEvent}
+                    label="Tarefas ativas"
+                    value={dashboard.metrics.active_tasks}
+                    detail={`${tasks.length} lembretes`}
+                  />
+                  <KpiCard
+                    icon={IconBrandWhatsapp}
+                    label="WhatsApp"
+                    value={
+                      chatsQuery.isError
+                        ? "offline"
+                        : compactDashboardCount(whatsapp.unread)
+                    }
+                    detail={
+                      chatsQuery.isError
+                        ? "gateway indisponível"
+                        : `${whatsapp.handoffs} pausados`
+                    }
+                    tone={chatsQuery.isError ? "danger" : "default"}
+                  />
+                </section>
+              ) : null}
 
               {dashboard.health.errors.length > 0 ||
               dashboard.health.missing_sources.length > 0 ||
@@ -287,117 +302,99 @@ export function AgentDashboardPage() {
                 />
               ) : null}
 
-              <section className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
-                <Panel
-                  title="Fila de atenção"
-                  icon={<IconBell className="size-4" />}
-                  badge={`${attentionItems.length} itens`}
-                >
-                  {attentionItems.length > 0 ? (
-                    <div className="space-y-4">
-                      <ToolUiApprovalPreview
-                        item={attentionItems[0]!}
-                        choice={
-                          approvalChoices[dashboardItemKey(attentionItems[0]!)]
-                        }
-                        saving={saveResponseMutation.isPending}
-                        onDecision={(decision) =>
-                          handleApprovalDecision(attentionItems[0]!, decision)
-                        }
-                      />
-                      {attentionItems.length > 1 ? (
-                        <AgentChatList
-                          items={attentionItems.slice(1)}
-                          drafts={drafts}
-                          saving={saveResponseMutation.isPending}
-                          onDraftChange={handleDraftChange}
-                          onSave={handleSaveResponse}
-                        />
-                      ) : null}
-                    </div>
-                  ) : (
-                    <EmptyLine text="Sem pendências abertas." />
+              {/*
+                Layout minimalista: cada painel só aparece quando tem
+                conteúdo real. Os 2 painéis removidos eram redundantes —
+                "Resultados dos agentes" listava todos os agentes com
+                "0 itens" (info já no KPI "Agentes ativos"), e "Sugestões
+                e melhorias" só mostrava conteúdo seed das memórias.
+              */}
+              {hasAttention || hasWhatsAppPulse ? (
+                <section
+                  className={cn(
+                    "grid gap-5",
+                    hasAttention && hasWhatsAppPulse
+                      ? "xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]"
+                      : "",
                   )}
-                </Panel>
-
-                <Panel
-                  title="Pulso WhatsApp"
-                  icon={<IconBrandWhatsapp className="size-4" />}
-                  badge={chatsQuery.isError ? "offline" : "ao vivo"}
                 >
-                  <WhatsAppPulse
-                    chats={chats}
-                    unavailable={chatsQuery.isError}
-                    messages={reportQuery.data?.messages}
-                    leads={reportQuery.data?.qualified_leads}
-                  />
-                </Panel>
-              </section>
+                  {hasAttention ? (
+                    <Panel
+                      title="Fila de atenção"
+                      icon={<IconBell className="size-4" />}
+                      badge={`${attentionItems.length} itens`}
+                    >
+                      <div className="space-y-4">
+                        <ToolUiApprovalPreview
+                          item={attentionItems[0]!}
+                          choice={
+                            approvalChoices[
+                              dashboardItemKey(attentionItems[0]!)
+                            ]
+                          }
+                          saving={saveResponseMutation.isPending}
+                          onDecision={(decision) =>
+                            handleApprovalDecision(attentionItems[0]!, decision)
+                          }
+                        />
+                        {attentionItems.length > 1 ? (
+                          <AgentChatList
+                            items={attentionItems.slice(1)}
+                            drafts={drafts}
+                            saving={saveResponseMutation.isPending}
+                            onDraftChange={handleDraftChange}
+                            onSave={handleSaveResponse}
+                          />
+                        ) : null}
+                      </div>
+                    </Panel>
+                  ) : null}
 
-              <section className="grid gap-5 xl:grid-cols-3">
-                <Panel
-                  title="Resultados dos agentes"
-                  icon={<IconRobot className="size-4" />}
-                  className="xl:col-span-1"
-                >
-                  <AgentList agents={agents} />
-                </Panel>
+                  {hasWhatsAppPulse ? (
+                    <Panel
+                      title="Pulso WhatsApp"
+                      icon={<IconBrandWhatsapp className="size-4" />}
+                      badge={chatsQuery.isError ? "offline" : "ao vivo"}
+                    >
+                      <WhatsAppPulse
+                        chats={chats}
+                        unavailable={chatsQuery.isError}
+                        messages={reportQuery.data?.messages}
+                        leads={reportQuery.data?.qualified_leads}
+                      />
+                    </Panel>
+                  ) : null}
+                </section>
+              ) : null}
 
+              {hasReports ? (
                 <Panel
                   title="Relatórios e análises"
                   icon={<IconChartBar className="size-4" />}
-                  className="xl:col-span-1"
                 >
-                  {reportItems.length > 0 ? (
-                    <InsightList items={reportItems.slice(0, 5)} />
-                  ) : (
-                    <EmptyLine text="Sem relatórios publicados." />
-                  )}
+                  <InsightList items={reportItems.slice(0, 5)} />
                 </Panel>
+              ) : null}
 
+              {hasArtifacts ? (
                 <Panel
-                  title="Sugestões e melhorias"
-                  icon={<IconSparkles className="size-4" />}
-                  className="xl:col-span-1"
+                  title="Arquivos e links gerados"
+                  icon={<IconExternalLink className="size-4" />}
+                  badge={`${artifacts.length} entregas`}
                 >
-                  {suggestionItems.length > 0 ? (
-                    <AgentChatList
-                      items={suggestionItems.slice(0, 5)}
-                      drafts={drafts}
-                      saving={saveResponseMutation.isPending}
-                      compact
-                      onDraftChange={handleDraftChange}
-                      onSave={handleSaveResponse}
-                    />
-                  ) : (
-                    <EmptyLine text="Sem sugestões registradas." />
-                  )}
-                </Panel>
-              </section>
-
-              <Panel
-                title="Arquivos e links gerados"
-                icon={<IconExternalLink className="size-4" />}
-                badge={`${artifacts.length} entregas`}
-              >
-                {artifacts.length > 0 ? (
                   <ArtifactGallery artifacts={artifacts} />
-                ) : (
-                  <EmptyLine text="Imagens, documentos e sites criados pelos agentes aparecerão aqui." />
-                )}
-              </Panel>
+                </Panel>
+              ) : null}
 
-              <Panel
-                title="Próximos lembretes"
-                icon={<IconChecklist className="size-4" />}
-                badge={`${visibleTasks.length} ativos`}
-              >
-                {visibleTasks.length > 0 ? (
+              {hasTasks ? (
+                <Panel
+                  title="Próximos lembretes"
+                  icon={<IconChecklist className="size-4" />}
+                  badge={`${visibleTasks.length} ativos`}
+                >
                   <TaskList tasks={visibleTasks} />
-                ) : (
-                  <EmptyLine text="Nenhuma tarefa agendada no cron ou publicada pelos agentes." />
-                )}
-              </Panel>
+                </Panel>
+              ) : null}
             </>
           ) : null}
         </div>
@@ -535,18 +532,12 @@ function ToolUiApprovalPreview({
   }
 
   return (
-    <div className="border-primary/25 bg-primary/5 rounded-lg border p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-primary text-xs font-semibold">POC Tool UI</span>
-        <Badge variant="outline">approval-card</Badge>
-      </div>
-      <ApprovalCard
-        {...payload}
-        disabled={saving}
-        onConfirm={() => onDecision("approved")}
-        onCancel={() => onDecision("denied")}
-      />
-    </div>
+    <ApprovalCard
+      {...payload}
+      disabled={saving}
+      onConfirm={() => onDecision("approved")}
+      onCancel={() => onDecision("denied")}
+    />
   )
 }
 
@@ -671,45 +662,6 @@ function InsightList({ items }: { items: AgentDashboardItem[] }) {
             </div>
           </div>
         </article>
-      ))}
-    </div>
-  )
-}
-
-function AgentList({ agents }: { agents: AgentDashboardAgent[] }) {
-  if (agents.length === 0) {
-    return <EmptyLine text="Nenhum agente encontrado." />
-  }
-  return (
-    <div className="space-y-2">
-      {agents.map((agent) => (
-        <div
-          key={agent.id}
-          className="bg-background/40 flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
-        >
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span
-                className={cn(
-                  "size-2 rounded-full",
-                  agent.active ? "bg-emerald-500" : "bg-muted-foreground/35",
-                )}
-              />
-              <span className="text-foreground truncate text-sm font-medium">
-                {agent.name}
-              </span>
-            </div>
-            <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">
-              {agent.role}
-            </p>
-          </div>
-          <div className="text-right text-xs">
-            <div className="text-foreground font-medium">
-              {agent.item_count + agent.task_count}
-            </div>
-            <div className="text-muted-foreground">itens</div>
-          </div>
-        </div>
       ))}
     </div>
   )
