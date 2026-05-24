@@ -115,6 +115,11 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		return
 	}
 
+	if isTenantLauncherForgotPasswordRoute(r.Method, r.URL.Path) {
+		h.handleTenantLauncherForgotPassword(w, r, t)
+		return
+	}
+
 	// Magic link click: /m/<token> → validate, set cookie, redirect. Handled
 	// BEFORE auth so visitors arriving via a shared link don't bounce off
 	// the dashboard login page.
@@ -530,6 +535,13 @@ func isPublicChatRoute(rawPath string) bool {
 // targets actual chat traffic (POST + SSE GET).
 func isPublicChatHealthRoute(rawPath string) bool {
 	return path.Clean("/"+strings.TrimPrefix(rawPath, "/")) == "/api/public/chat/health"
+}
+
+func isTenantLauncherForgotPasswordRoute(method, rawPath string) bool {
+	if method != http.MethodPost {
+		return false
+	}
+	return path.Clean("/"+strings.TrimPrefix(rawPath, "/")) == "/api/auth/forgot-password"
 }
 
 // rejectTenantGatewayAuth handles unauthenticated tenant requests in the

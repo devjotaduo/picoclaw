@@ -43,6 +43,8 @@
     "showPassword": "Show password",
     "hidePassword": "Hide password",
     "submit": "Sign in",
+    "forgotPassword": "Forgot password",
+    "recoverySent": "If this email owns the dashboard, we will send a new password within a few minutes.",
     "errorEmailRequired": "Enter a valid email.",
     "errorPasswordRequired": "Enter the password.",
     "errorInvalid": "Incorrect email or password. Try again.",

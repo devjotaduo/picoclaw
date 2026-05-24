@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/sipeed/picoclaw/internal/saas/config"
@@ -275,5 +276,51 @@ func TestIsPublicChatHealthRoute(t *testing.T) {
 				t.Errorf("isPublicChatHealthRoute(%q) = %v, want %v", tc.path, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestIsTenantLauncherForgotPasswordRoute(t *testing.T) {
+	cases := []struct {
+		method string
+		path   string
+		want   bool
+	}{
+		{http.MethodPost, "/api/auth/forgot-password", true},
+		{http.MethodPost, "api/auth/forgot-password", true},
+		{http.MethodPost, "/api/auth/forgot-password/", true},
+		{http.MethodGet, "/api/auth/forgot-password", false},
+		{http.MethodPost, "/api/auth/login", false},
+		{http.MethodPost, "/api/auth/forgot-password/../login", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			if got := isTenantLauncherForgotPasswordRoute(tc.method, tc.path); got != tc.want {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestHandleTenantLauncherForgotPasswordIsGenericWithoutMailer(t *testing.T) {
+	h := &Handler{}
+	tenant := &store.Tenant{
+		ID:          "tenant-1",
+		DisplayName: "Tenant",
+		OwnerEmail:  "owner@example.com",
+		Subdomain:   "acme",
+		AuthBackend: "launcher",
+	}
+
+	for _, body := range []string{
+		`{"email":"owner@example.com"}`,
+		`{"email":"other@example.com"}`,
+		`{bad json`,
+	} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", strings.NewReader(body))
+		h.handleTenantLauncherForgotPassword(rec, req, tenant)
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("body %q: status = %d, want %d", body, rec.Code, http.StatusNoContent)
+		}
 	}
 }

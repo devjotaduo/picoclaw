@@ -316,6 +316,8 @@ func isPublicLauncherDashboardPath(method, p string) bool {
 	switch p {
 	case "/api/auth/login":
 		return method == http.MethodPost
+	case "/api/auth/forgot-password":
+		return method == http.MethodPost
 	case "/api/auth/logout":
 		return method == http.MethodPost
 	case "/api/auth/status":

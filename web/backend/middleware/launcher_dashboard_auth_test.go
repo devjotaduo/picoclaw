@@ -71,6 +71,7 @@ func TestLauncherDashboardAuth_AllowsPublicPaths(t *testing.T) {
 		{http.MethodGet, "/site.webmanifest", http.StatusTeapot},
 		{http.MethodHead, "/web-app-manifest-192x192.png", http.StatusTeapot},
 		{http.MethodPost, "/api/auth/login", http.StatusTeapot},
+		{http.MethodPost, "/api/auth/forgot-password", http.StatusTeapot},
 		{http.MethodGet, "/api/auth/status", http.StatusTeapot},
 		{http.MethodPost, "/api/auth/setup", http.StatusTeapot},
 		{http.MethodPost, "/api/auth/logout", http.StatusTeapot},

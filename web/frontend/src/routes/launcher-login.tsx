@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next"
 import {
   getLauncherAuthStatus,
   postLauncherDashboardLogin,
+  postLauncherPasswordRecovery,
 } from "@/api/launcher-auth"
 import { Button } from "@/components/ui/button"
 import {
@@ -38,6 +39,8 @@ function LauncherLoginPage() {
   const [password, setPassword] = React.useState("")
   const [showPassword, setShowPassword] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
+  const [recovering, setRecovering] = React.useState(false)
+  const [recoverySent, setRecoverySent] = React.useState(false)
   const [error, setError] = React.useState("")
 
   // If no password has been set yet, this is a first-run install — bounce
@@ -87,6 +90,25 @@ function LauncherLoginPage() {
       setError(t("launcherLogin.errorNetwork"))
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const onRecoverPassword = async () => {
+    setError("")
+    setRecoverySent(false)
+    const emailValue = email.trim()
+    if (!emailValue) {
+      setError(t("launcherLogin.errorEmailRequired"))
+      return
+    }
+    setRecovering(true)
+    try {
+      await postLauncherPasswordRecovery(emailValue)
+      setRecoverySent(true)
+    } catch {
+      setError(t("launcherLogin.errorNetwork"))
+    } finally {
+      setRecovering(false)
     }
   }
 
@@ -193,6 +215,29 @@ function LauncherLoginPage() {
               <Button type="submit" disabled={submitting}>
                 {submitting ? t("labels.loading") : t("launcherLogin.submit")}
               </Button>
+
+              <Button
+                type="button"
+                variant="link"
+                className="h-auto px-0"
+                disabled={recovering}
+                onClick={() => void onRecoverPassword()}
+              >
+                {recovering
+                  ? t("labels.loading")
+                  : t("launcherLogin.forgotPassword", {
+                      defaultValue: "Esqueci minha senha",
+                    })}
+              </Button>
+
+              {recoverySent ? (
+                <p className="text-muted-foreground text-sm" role="status">
+                  {t("launcherLogin.recoverySent", {
+                    defaultValue:
+                      "Se esse email for o dono do painel, enviaremos uma nova senha em alguns minutos.",
+                  })}
+                </p>
+              ) : null}
 
               {error ? (
                 <p className="text-destructive text-sm" role="alert">

@@ -43,6 +43,8 @@
     "showPassword": "Mostrar senha",
     "hidePassword": "Ocultar senha",
     "submit": "Entrar",
+    "forgotPassword": "Esqueci minha senha",
+    "recoverySent": "Se esse email for o dono do painel, enviaremos uma nova senha em alguns minutos.",
     "errorEmailRequired": "Digite um email válido.",
     "errorPasswordRequired": "Digite a senha.",
     "errorInvalid": "Email ou senha incorretos. Tente novamente.",

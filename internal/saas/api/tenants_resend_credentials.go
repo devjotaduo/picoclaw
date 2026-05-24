@@ -1,9 +1,12 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -11,6 +14,10 @@ import (
 	"github.com/sipeed/picoclaw/internal/saas/auth"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 )
+
+type tenantLauncherForgotPasswordReq struct {
+	Email string `json:"email"`
+}
 
 // handleResendCredentials rotates the tenant owner's password and emails the
 // owner with URL + login + new password. Supports two backends:
@@ -152,4 +159,63 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		"short_magic_link":    shortMagicLink,
 		"info":                "Senha rotacionada. Email enfileirado para " + t.OwnerEmail + " — se demorar, copie a senha/link diretamente abaixo.",
 	})
+}
+
+// handleTenantLauncherForgotPassword is the self-service recovery flow used by
+// the tenant-owned /launcher-login page. It intentionally returns 204 for
+// malformed, unknown, or non-owner emails so the endpoint cannot enumerate
+// tenants or owners. A matching launcher-native tenant rotates the dashboard
+// password and emails the owner with the new credentials.
+func (h *Handler) handleTenantLauncherForgotPassword(w http.ResponseWriter, r *http.Request, t *store.Tenant) {
+	if h.LoginAttempts != nil && !h.LoginAttempts.allow(clientIP(r)) {
+		writeError(w, http.StatusTooManyRequests, "too many attempts; try again later")
+		return
+	}
+
+	var req tenantLauncherForgotPasswordReq
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil && err != io.EOF {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+	ownerEmail := strings.TrimSpace(strings.ToLower(t.OwnerEmail))
+	if email == "" || ownerEmail == "" || email != ownerEmail {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if t.AuthBackend == "supabase" || t.IsPublic {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if h.Mailer == nil || !h.Mailer.Enabled() {
+		log.Printf("tenant forgot-password: SMTP disabled for tenant %s; not rotating password", t.ID)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if h.Provisioner == nil {
+		log.Printf("tenant forgot-password: provisioner unavailable for tenant %s", t.ID)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	newPassword, err := h.Provisioner.RotatePassword(r.Context(), t.ID)
+	if err != nil {
+		log.Printf("tenant forgot-password: rotate launcher password for tenant %s failed: %v", t.ID, err)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	dashboardURL := "https://" + t.Subdomain + "." + h.Cfg.TenantBaseDomain + "/"
+	go h.Mailer.SendCredentialsEmail(
+		t.OwnerEmail,
+		t.DisplayName,
+		dashboardURL,
+		t.OwnerEmail,
+		newPassword,
+		"",
+	)
+	if h.Audit != nil {
+		_ = h.Audit.Insert(r.Context(), nil, &t.ID, "tenant.password.recovery.request", "tenant", t.Subdomain)
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

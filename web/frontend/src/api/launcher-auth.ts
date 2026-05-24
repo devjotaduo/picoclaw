@@ -28,6 +28,20 @@ export async function postLauncherDashboardLogin(
   }
 }
 
+export async function postLauncherPasswordRecovery(
+  email: string,
+): Promise<void> {
+  const res = await fetch("/api/auth/forgot-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ email: email?.trim() }),
+  })
+  if (!res.ok && res.status !== 204) {
+    throw new Error(await readLauncherAuthError(res))
+  }
+}
+
 export type LauncherAuthStatus = {
   authenticated: boolean
   /** true when a bcrypt password has been stored in the DB */

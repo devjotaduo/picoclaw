@@ -275,6 +275,33 @@ func TestLauncherAuthStoreUnavailableFailsClosed(t *testing.T) {
 	}
 }
 
+func TestLauncherAuthForgotPasswordIsGeneric(t *testing.T) {
+	store := &fakePasswordStore{initialized: true, email: "owner@example.com", password: "correct-password"}
+	mux := http.NewServeMux()
+	RegisterLauncherAuthRoutes(mux, LauncherAuthRouteOpts{
+		SessionCookie: "session-cookie-value",
+		PasswordStore: store,
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", strings.NewReader(`{"email":"owner@example.com"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "127.0.0.1:12345"
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("code = %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", strings.NewReader(`{bad json`))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "127.0.0.2:12345"
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("bad json code = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestLauncherAuthLogoutRequiresPostAndJSON(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterLauncherAuthRoutes(mux, LauncherAuthRouteOpts{

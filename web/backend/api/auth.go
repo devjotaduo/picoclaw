@@ -49,6 +49,10 @@ type launcherAuthLoginBody struct {
 	Password string `json:"password"`
 }
 
+type launcherAuthForgotPasswordBody struct {
+	Email string `json:"email"`
+}
+
 type launcherAuthSetupBody struct {
 	Password string `json:"password"`
 	Confirm  string `json:"confirm"`
@@ -74,6 +78,7 @@ func RegisterLauncherAuthRoutes(mux *http.ServeMux, opts LauncherAuthRouteOpts) 
 		authMode:      opts.AuthMode,
 	}
 	mux.HandleFunc("POST /api/auth/login", h.handleLogin)
+	mux.HandleFunc("POST /api/auth/forgot-password", h.handleForgotPassword)
 	mux.HandleFunc("POST /api/auth/logout", h.handleLogout)
 	mux.HandleFunc("GET /api/auth/status", h.handleStatus)
 	mux.HandleFunc("POST /api/auth/setup", h.handleSetup)
@@ -162,6 +167,24 @@ func (h *launcherAuthHandlers) handleLogin(w http.ResponseWriter, r *http.Reques
 	middleware.SetLauncherDashboardSessionCookie(w, r, h.sessionCookie, h.secureCookie)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok"}`))
+}
+
+func (h *launcherAuthHandlers) handleForgotPassword(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var body launcherAuthForgotPasswordBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil && err != io.EOF {
+		// Match the controlplane recovery contract: don't reveal whether the
+		// email or request body could map to an account.
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	ip := clientIPForLimiter(r)
+	if !h.loginLimit.allow(ip) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":"too many login attempts"}`))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *launcherAuthHandlers) handleLogout(w http.ResponseWriter, r *http.Request) {
