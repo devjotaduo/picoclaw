@@ -1,7 +1,8 @@
 {
   "session": {
     "dimensions": [
-      "chat"
+      "chat",
+      "sender"
     ]
   },
   "version": 3,
@@ -12,31 +13,31 @@
     "show_model_selector": true
   },
   "agents": {
+    "skip_specialist_seed": true,
     "defaults": {
       "workspace": "/root/.picoclaw/workspace",
       "restrict_to_workspace": true,
       "allow_read_outside_workspace": false,
       "provider": "litellm",
       "model_name": "default",
-      "max_tokens": 8192,
-      "context_window": 131072,
+      "max_tokens": 32768,
       "max_tool_iterations": 50,
       "summarize_message_threshold": 20,
       "summarize_token_percent": 75,
       "steering_mode": "one-at-a-time",
       "subturn": {
-        "max_depth": 0,
-        "max_concurrent": 0,
-        "default_timeout_minutes": 0,
-        "default_token_budget": 0,
-        "concurrency_timeout_sec": 0
+        "max_depth": 2,
+        "max_concurrent": 3,
+        "default_timeout_minutes": 10,
+        "default_token_budget": 8000,
+        "concurrency_timeout_sec": 30
       },
       "tool_feedback": {
         "enabled": false,
         "max_args_length": 300,
         "separate_messages": false
       },
-      "split_on_marker": false,
+      "split_on_marker": true,
       "max_llm_retries": 2,
       "llm_retry_backoff_secs": 2
     },
@@ -44,18 +45,97 @@
       {
         "id": "main",
         "default": true,
-        "name": "Ana",
+        "name": "Rafael",
         "avatar": {
           "type": "preset",
           "icon": "headset",
-          "initials": "AN",
+          "initials": "RA",
           "background": "#2563eb",
           "foreground": "#ffffff"
         },
         "workspace": "/root/.picoclaw/workspace",
         "subagents": {
           "allow_agents": [
-            "vendas"
+            "clara",
+            "luna",
+            "marcos",
+            "camila",
+            "lia",
+            "sofia",
+            "catarina",
+            "operador",
+            "qa-tester"
+          ]
+        },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "tenant_owner",
+            "tenant_admin",
+            "platform_admin"
+          ],
+          "whatsapp_direct_enabled": true
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "assistant",
+          "description": "Assistente interno do dono — proativo, monitora operação, alerta, resume conversas, chama os outros agentes. Atua apenas em números e grupos internos autorizados (memory/canais-autorizados.md).",
+          "assistant": {
+            "authorized_scopes": [
+              "workspace",
+              "agents",
+              "reports",
+              "documents",
+              "agenda",
+              "orchestration",
+              "memory_reads",
+              "memory_writes"
+            ],
+            "report_cadence": [
+              "daily",
+              "weekly",
+              "monthly",
+              "on_demand"
+            ],
+            "can_edit_agents": false,
+            "can_call_agents": [
+              "clara",
+              "luna",
+              "marcos",
+              "camila",
+              "lia",
+              "sofia",
+              "catarina",
+              "operador"
+            ],
+            "requires_confirmation": [
+              "publicar conteúdo",
+              "enviar mensagem externa",
+              "fechar venda",
+              "alterar preço",
+              "apagar arquivos",
+              "comando destrutivo"
+            ],
+            "audit_level": "high"
+          }
+        }
+      },
+      {
+        "id": "clara",
+        "name": "Clara",
+        "avatar": {
+          "type": "preset",
+          "icon": "headset",
+          "initials": "CL",
+          "background": "#0ea5e9",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace",
+        "subagents": {
+          "allow_agents": [
+            "marcos",
+            "camila",
+            "lia"
           ]
         },
         "access": {
@@ -70,12 +150,12 @@
         "role_config": {
           "version": 1,
           "kind": "attendant",
-          "description": "Atendente principal para informacoes, triagem, duvidas, encaminhamento e agendamento.",
+          "description": "Atendente principal (horário comercial) — recebe cliente, faz triagem, responde dúvidas simples consultando memória, encaminha para Marcos (vendas), Camila (suporte) ou Atendimento Humano. Persona: agents/clara-atendente.md.",
           "attendant": {
             "departments": [
+              "atendimento",
               "vendas",
               "suporte",
-              "financeiro",
               "agendamento",
               "humano"
             ],
@@ -91,24 +171,83 @@
               "risco juridico",
               "cancelamento sensivel",
               "desconto ou excecao",
-              "informacao nao confirmada"
+              "informacao nao confirmada",
+              "cliente irritado"
             ],
             "scheduling_enabled": true,
-            "faq_source": "company_context"
+            "faq_source": "memory/faq.md"
           }
         }
       },
       {
-        "id": "vendas",
-        "name": "Leo",
+        "id": "luna",
+        "name": "Luna",
+        "avatar": {
+          "type": "preset",
+          "icon": "headset",
+          "initials": "LU",
+          "background": "#6366f1",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace",
+        "subagents": {
+          "allow_agents": [
+            "camila"
+          ]
+        },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "tenant_owner",
+            "tenant_admin",
+            "platform_admin"
+          ],
+          "whatsapp_direct_enabled": true
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "attendant",
+          "description": "Atendente noturna / fim-de-semana — assume o turno fora do horário comercial. Triagem + FAQ + SLA realista ('o time retorna pela manhã'). Não faz venda nem suporte profundo. Briefing matinal em memory/atendimentos.md. Persona: agents/luna-atendente.md.",
+          "attendant": {
+            "departments": [
+              "atendimento",
+              "triagem",
+              "humano"
+            ],
+            "triage_fields": [
+              "nome",
+              "contato",
+              "assunto",
+              "urgencia"
+            ],
+            "escalation_rules": [
+              "reclamacao grave",
+              "ameaca explicita",
+              "urgencia medica",
+              "duvida juridica",
+              "Procon mencionado"
+            ],
+            "scheduling_enabled": false,
+            "faq_source": "memory/faq.md"
+          }
+        }
+      },
+      {
+        "id": "marcos",
+        "name": "Marcos",
         "avatar": {
           "type": "preset",
           "icon": "target",
-          "initials": "LE",
+          "initials": "MA",
           "background": "#16a34a",
           "foreground": "#ffffff"
         },
-        "workspace": "/root/.picoclaw/workspace-vendas",
+        "workspace": "/root/.picoclaw/workspace",
+        "subagents": {
+          "allow_agents": [
+            "camila"
+          ]
+        },
         "access": {
           "panel_enabled": true,
           "panel_roles": [
@@ -120,7 +259,7 @@
         "role_config": {
           "version": 1,
           "kind": "sales",
-          "description": "Consultor comercial para qualificar leads, vender, registrar oportunidades e fazer follow-up.",
+          "description": "Consultor comercial — qualifica leads, classifica frio/morno/quente, explica benefícios, agenda reunião. Consulta memory/empresa.md e memory/faq.md antes de citar preço/prazo. Persona: agents/marcos-vendas.md.",
           "sales": {
             "funnel_stages": [
               "novo",
@@ -144,27 +283,29 @@
               "D+7"
             ],
             "crm_integration": "future",
-            "price_policy_source": "memory/pricing.md",
+            "price_policy_source": "memory/empresa.md",
             "handoff_rules": [
               "lead qualificado com prazo",
               "pedido de contrato",
               "excecao comercial",
+              "desconto fora da regra",
+              "negociacao sensivel",
               "duvida tecnica fora do escopo"
             ]
           }
         }
       },
       {
-        "id": "marketing",
-        "name": "Maya",
+        "id": "camila",
+        "name": "Camila",
         "avatar": {
           "type": "preset",
-          "icon": "sparkles",
-          "initials": "MA",
-          "background": "#f43f5e",
+          "icon": "support",
+          "initials": "CA",
+          "background": "#0d9488",
           "foreground": "#ffffff"
         },
-        "workspace": "/root/.picoclaw/workspace-marketing",
+        "workspace": "/root/.picoclaw/workspace",
         "access": {
           "panel_enabled": true,
           "panel_roles": [
@@ -175,8 +316,59 @@
         },
         "role_config": {
           "version": 1,
+          "kind": "attendant",
+          "description": "Suporte e pós-venda — entende problema, coleta dados, consulta histórico, orienta cliente, registra recorrência, encaminha para humano em caso grave. Persona: agents/camila-suporte.md.",
+          "attendant": {
+            "departments": [
+              "suporte",
+              "pos_venda",
+              "reclamacao",
+              "humano"
+            ],
+            "triage_fields": [
+              "problema",
+              "urgencia",
+              "historico",
+              "pedido_ou_contrato",
+              "contato"
+            ],
+            "escalation_rules": [
+              "reclamacao grave",
+              "dano material",
+              "urgencia alta",
+              "cliente irritado",
+              "risco juridico",
+              "informacao nao confirmada"
+            ],
+            "scheduling_enabled": false,
+            "faq_source": "memory/faq.md"
+          }
+        }
+      },
+      {
+        "id": "lia",
+        "name": "Lia",
+        "avatar": {
+          "type": "preset",
+          "icon": "sparkles",
+          "initials": "LI",
+          "background": "#f43f5e",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace/agents/lia",
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "tenant_owner",
+            "tenant_admin",
+            "platform_admin"
+          ],
+          "whatsapp_direct_enabled": true
+        },
+        "role_config": {
+          "version": 1,
           "kind": "marketing",
-          "description": "Especialista de marketing para posts, campanhas, catalogos, sites simples, tendencias e materiais visuais.",
+          "description": "Marketing digital — posts Instagram (feed/story/reel/carrossel), catálogo HTML, mini-sites, calendário sazonal, campanhas. Não publica sem aprovação humana. Não fala com cliente final.",
           "marketing": {
             "platforms": [
               "instagram",
@@ -195,7 +387,23 @@
             ],
             "approval_mode": "owner_required",
             "public_publish_dir": "public/marketing",
-            "brand_kit": {},
+            "brand_kit": {
+              "tone": "natural, prática, sem jargão de marketing",
+              "forbidden_terms": [
+                "alavancar",
+                "engajar",
+                "potencializar",
+                "viralizar",
+                "boost",
+                "ROI"
+              ],
+              "dont": [
+                "usar emoji",
+                "usar rosto de pessoa real sem autorização",
+                "prometer resultado de campanha",
+                "criar conteúdo político ou religioso sem pedido explícito"
+              ]
+            },
             "cadence": {
               "posts_per_week": 3,
               "campaigns_per_month": 1,
@@ -216,7 +424,7 @@
         }
       },
       {
-        "id": "assistente",
+        "id": "sofia",
         "name": "Sofia",
         "avatar": {
           "type": "preset",
@@ -225,12 +433,12 @@
           "background": "#7c3aed",
           "foreground": "#ffffff"
         },
-        "workspace": "/root/.picoclaw/workspace-assistente",
+        "workspace": "/root/.picoclaw/workspace/agents/sofia",
         "subagents": {
           "allow_agents": [
             "main",
-            "vendas",
-            "marketing"
+            "operador",
+            "clara"
           ]
         },
         "access": {
@@ -245,35 +453,173 @@
         "role_config": {
           "version": 1,
           "kind": "assistant",
-          "description": "Assistente do dono para agenda, relatorios, documentos, workspace e coordenacao dos agentes.",
+          "description": "Consultora de discovery e onboarding — conduz entrevista consultiva via skill jotaduo-discovery, identifica segmento/sistemas/dores, recomenda time de agentes do roster local (clara/luna/marcos/camila/lia), marca gaps de integração como 'a validar'. Grava dossiê estruturado (JSON+MD) em memory/jotaduo/clientes/ + memory/empresa.md no formato que destrava o resto da equipe.",
+          "assistant": {
+            "authorized_scopes": [
+              "workspace",
+              "memory_reads",
+              "memory_writes",
+              "onboarding",
+              "playbooks",
+              "web_search"
+            ],
+            "report_cadence": [
+              "on_demand"
+            ],
+            "can_edit_agents": false,
+            "can_call_agents": [
+              "operador",
+              "main",
+              "clara"
+            ],
+            "requires_confirmation": [
+              "alterar canais autorizados",
+              "sobrescrever memory/empresa.md existente",
+              "encerrar onboarding sem confirmação do dono"
+            ],
+            "audit_level": "high"
+          }
+        }
+      },
+      {
+        "id": "catarina",
+        "name": "Catarina",
+        "avatar": {
+          "type": "preset",
+          "icon": "sparkles",
+          "initials": "CT",
+          "background": "#9333ea",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace/agents/catarina",
+        "subagents": {
+          "allow_agents": [
+            "main"
+          ]
+        },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "tenant_owner",
+            "tenant_admin",
+            "platform_admin"
+          ],
+          "whatsapp_direct_enabled": false
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "assistant",
+          "description": "Curadora de conhecimento — aprofunda o cadastro da empresa em sessões curtas pós-discovery. Não atende cliente final.",
+          "assistant": {
+            "authorized_scopes": [
+              "workspace",
+              "memory_reads",
+              "memory_writes"
+            ],
+            "report_cadence": [
+              "on_demand"
+            ],
+            "can_edit_agents": false,
+            "can_call_agents": [
+              "main"
+            ],
+            "audit_level": "medium"
+          }
+        }
+      },
+      {
+        "id": "operador",
+        "name": "Operador",
+        "avatar": {
+          "type": "preset",
+          "icon": "terminal",
+          "initials": "OP",
+          "background": "#475569",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace/agents/operador",
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "platform_admin"
+          ],
+          "whatsapp_direct_enabled": false
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "assistant",
+          "description": "Operador técnico / dev — diagnóstico (health/logs/canais), GitHub (issues/PRs via gh CLI), tmux, skill-creator, agent-browser. NUNCA fala com cliente final. Chamado por dono, Rafael, ou cron administrativo.",
           "assistant": {
             "authorized_scopes": [
               "workspace",
               "agents",
-              "reports",
-              "documents",
-              "agenda",
-              "orchestration"
+              "github",
+              "terminal",
+              "browser_cdp",
+              "skill_creator",
+              "summarize",
+              "diagnostics",
+              "memory_reads",
+              "memory_writes"
             ],
             "report_cadence": [
-              "daily",
-              "weekly",
-              "monthly"
+              "on_demand"
             ],
             "can_edit_agents": true,
             "can_call_agents": [
               "main",
-              "vendas",
-              "marketing"
+              "qa-tester"
             ],
             "requires_confirmation": [
-              "editar agentes",
-              "alterar permissoes",
-              "publicar materiais",
-              "apagar arquivos",
-              "enviar relatorios externos"
+              "git push",
+              "git push --force",
+              "gh pr merge",
+              "rm -rf",
+              "tmux kill-server",
+              "comando SQL destrutivo",
+              "edição de config.json em produção",
+              "criação ou alteração de skill"
             ],
             "audit_level": "high"
+          }
+        }
+      },
+      {
+        "id": "qa-tester",
+        "name": "QA Tester",
+        "avatar": {
+          "type": "preset",
+          "icon": "code",
+          "initials": "QA",
+          "background": "#f59e0b",
+          "foreground": "#0b0b0b"
+        },
+        "workspace": "/root/.picoclaw/workspace/agents/qa-tester",
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "platform_admin"
+          ],
+          "whatsapp_direct_enabled": false
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "assistant",
+          "description": "Testador interno — valida skills e agentes em ambiente simulado, gera cenários de 20+ interações cliente↔equipe, orquestra múltiplos agentes (Clara→Marcos→Camila), produz relatório por skill/agente em workspace/tests/relatorios/ com nota 0-10. Não fala com cliente final.",
+          "assistant": {
+            "authorized_scopes": [
+              "workspace",
+              "agents",
+              "tests",
+              "diagnostics",
+              "memory_reads"
+            ],
+            "report_cadence": [
+              "on_demand"
+            ],
+            "can_edit_agents": false,
+            "can_call_agents": [],
+            "audit_level": "medium"
           }
         }
       }
@@ -315,11 +661,11 @@
           ]
         },
         {
-          "name": "orchestrator:panel:vendas",
-          "agent": "vendas",
+          "name": "orchestrator:panel:clara",
+          "agent": "clara",
           "when": {
             "channel": "panel",
-            "space": "agent:vendas"
+            "space": "agent:clara"
           },
           "session_dimensions": [
             "space",
@@ -327,11 +673,11 @@
           ]
         },
         {
-          "name": "orchestrator:pico:vendas",
-          "agent": "vendas",
+          "name": "orchestrator:pico:clara",
+          "agent": "clara",
           "when": {
             "channel": "pico",
-            "space": "agent:vendas"
+            "space": "agent:clara"
           },
           "session_dimensions": [
             "space",
@@ -339,11 +685,11 @@
           ]
         },
         {
-          "name": "orchestrator:panel:marketing",
-          "agent": "marketing",
+          "name": "orchestrator:panel:luna",
+          "agent": "luna",
           "when": {
             "channel": "panel",
-            "space": "agent:marketing"
+            "space": "agent:luna"
           },
           "session_dimensions": [
             "space",
@@ -351,11 +697,11 @@
           ]
         },
         {
-          "name": "orchestrator:pico:marketing",
-          "agent": "marketing",
+          "name": "orchestrator:pico:luna",
+          "agent": "luna",
           "when": {
             "channel": "pico",
-            "space": "agent:marketing"
+            "space": "agent:luna"
           },
           "session_dimensions": [
             "space",
@@ -363,11 +709,11 @@
           ]
         },
         {
-          "name": "orchestrator:panel:assistente",
-          "agent": "assistente",
+          "name": "orchestrator:panel:marcos",
+          "agent": "marcos",
           "when": {
             "channel": "panel",
-            "space": "agent:assistente"
+            "space": "agent:marcos"
           },
           "session_dimensions": [
             "space",
@@ -375,11 +721,23 @@
           ]
         },
         {
-          "name": "orchestrator:panel:gerente",
-          "agent": "assistente",
+          "name": "orchestrator:pico:marcos",
+          "agent": "marcos",
+          "when": {
+            "channel": "pico",
+            "space": "agent:marcos"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:panel:camila",
+          "agent": "camila",
           "when": {
             "channel": "panel",
-            "space": "agent:gerente"
+            "space": "agent:camila"
           },
           "session_dimensions": [
             "space",
@@ -387,11 +745,11 @@
           ]
         },
         {
-          "name": "orchestrator:pico:assistente",
-          "agent": "assistente",
+          "name": "orchestrator:pico:camila",
+          "agent": "camila",
           "when": {
             "channel": "pico",
-            "space": "agent:assistente"
+            "space": "agent:camila"
           },
           "session_dimensions": [
             "space",
@@ -399,11 +757,119 @@
           ]
         },
         {
-          "name": "orchestrator:pico:gerente",
-          "agent": "assistente",
+          "name": "orchestrator:panel:lia",
+          "agent": "lia",
+          "when": {
+            "channel": "panel",
+            "space": "agent:lia"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:pico:lia",
+          "agent": "lia",
           "when": {
             "channel": "pico",
-            "space": "agent:gerente"
+            "space": "agent:lia"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:panel:sofia",
+          "agent": "sofia",
+          "when": {
+            "channel": "panel",
+            "space": "agent:sofia"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:pico:sofia",
+          "agent": "sofia",
+          "when": {
+            "channel": "pico",
+            "space": "agent:sofia"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:panel:catarina",
+          "agent": "catarina",
+          "when": {
+            "channel": "panel",
+            "space": "agent:catarina"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:pico:catarina",
+          "agent": "catarina",
+          "when": {
+            "channel": "pico",
+            "space": "agent:catarina"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:panel:operador",
+          "agent": "operador",
+          "when": {
+            "channel": "panel",
+            "space": "agent:operador"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:pico:operador",
+          "agent": "operador",
+          "when": {
+            "channel": "pico",
+            "space": "agent:operador"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:panel:qa-tester",
+          "agent": "qa-tester",
+          "when": {
+            "channel": "panel",
+            "space": "agent:qa-tester"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:pico:qa-tester",
+          "agent": "qa-tester",
+          "when": {
+            "channel": "pico",
+            "space": "agent:qa-tester"
           },
           "session_dimensions": [
             "space",
@@ -414,137 +880,15 @@
     }
   },
   "evolution": {
+    "enabled": true,
+    "mode": "apply",
     "min_task_count": 2,
-    "min_success_ratio": 0.7
+    "min_success_ratio": 0.7,
+    "cold_path_trigger": "after_turn"
   },
   "channel_list": {
-    "dingtalk": {
-      "enabled": false,
-      "type": "dingtalk",
-      "reasoning_channel_id": "",
-      "group_trigger": {},
-      "typing": {},
-      "placeholder": {
-        "enabled": false
-      },
-      "settings": {
-        "client_id": ""
-      }
-    },
-    "discord": {
-      "enabled": false,
-      "type": "discord",
-      "reasoning_channel_id": "",
-      "group_trigger": {},
-      "typing": {},
-      "placeholder": {
-        "enabled": false
-      },
-      "settings": {
-        "proxy": "",
-        "mention_only": false
-      }
-    },
-    "feishu": {
-      "enabled": false,
-      "type": "feishu",
-      "reasoning_channel_id": "",
-      "group_trigger": {},
-      "typing": {},
-      "placeholder": {
-        "enabled": false
-      },
-      "settings": {
-        "app_id": "",
-        "random_reaction_emoji": null,
-        "is_lark": false
-      }
-    },
-    "irc": {
-      "enabled": false,
-      "type": "irc",
-      "reasoning_channel_id": "",
-      "group_trigger": {},
-      "typing": {},
-      "placeholder": {
-        "enabled": false
-      },
-      "settings": {
-        "server": "",
-        "tls": true,
-        "nick": "picoclaw",
-        "sasl_user": "",
-        "channels": []
-      }
-    },
-    "line": {
-      "enabled": false,
-      "type": "line",
-      "reasoning_channel_id": "",
-      "group_trigger": {
-        "mention_only": true
-      },
-      "typing": {},
-      "placeholder": {
-        "enabled": false
-      },
-      "settings": {
-        "webhook_host": "0.0.0.0",
-        "webhook_port": 18791,
-        "webhook_path": "/webhook/line"
-      }
-    },
-    "maixcam": {
-      "enabled": false,
-      "type": "maixcam",
-      "reasoning_channel_id": "",
-      "group_trigger": {},
-      "typing": {},
-      "placeholder": {
-        "enabled": false
-      },
-      "settings": {
-        "host": "0.0.0.0",
-        "port": 18790
-      }
-    },
-    "matrix": {
-      "enabled": false,
-      "type": "matrix",
-      "reasoning_channel_id": "",
-      "group_trigger": {
-        "mention_only": true
-      },
-      "typing": {},
-      "placeholder": {
-        "enabled": true,
-        "text": [
-          "Thinking... 💭"
-        ]
-      },
-      "settings": {
-        "homeserver": "https://matrix.org",
-        "user_id": "",
-        "join_on_invite": true
-      }
-    },
-    "onebot": {
-      "enabled": false,
-      "type": "onebot",
-      "reasoning_channel_id": "",
-      "group_trigger": {},
-      "typing": {},
-      "placeholder": {
-        "enabled": false
-      },
-      "settings": {
-        "ws_url": "ws://127.0.0.1:3001",
-        "reconnect_interval": 5,
-        "group_trigger_prefix": null
-      }
-    },
     "pico": {
-      "enabled": false,
+      "enabled": true,
       "type": "pico",
       "reasoning_channel_id": "",
       "group_trigger": {},
@@ -559,105 +903,8 @@
         "max_connections": 100
       }
     },
-    "public-web": {
-      "enabled": false,
-      "type": "public-web",
-      "reasoning_channel_id": "",
-      "group_trigger": {},
-      "typing": {},
-      "placeholder": {
-        "enabled": false
-      },
-      "settings": {
-        "rate_limit_per_ip": 30,
-        "session_ttl_seconds": 1800
-      }
-    },
-    "qq": {
-      "enabled": false,
-      "type": "qq",
-      "reasoning_channel_id": "",
-      "group_trigger": {},
-      "typing": {},
-      "placeholder": {
-        "enabled": false
-      },
-      "settings": {
-        "app_id": "",
-        "max_message_length": 2000,
-        "max_base64_file_size_mib": 0,
-        "send_markdown": false
-      }
-    },
-    "slack": {
-      "enabled": false,
-      "type": "slack",
-      "reasoning_channel_id": "",
-      "group_trigger": {},
-      "typing": {},
-      "placeholder": {
-        "enabled": false
-      },
-      "settings": {}
-    },
-    "telegram": {
-      "enabled": false,
-      "type": "telegram",
-      "reasoning_channel_id": "",
-      "group_trigger": {},
-      "typing": {
-        "enabled": true
-      },
-      "placeholder": {
-        "enabled": true,
-        "text": [
-          "Thinking... 💭"
-        ]
-      },
-      "settings": {
-        "base_url": "",
-        "proxy": "",
-        "streaming": {
-          "enabled": true,
-          "throttle_seconds": 3,
-          "min_growth_chars": 200
-        },
-        "use_markdown_v2": false,
-        "media_group_delay_ms": 500
-      }
-    },
-    "wecom": {
-      "enabled": false,
-      "type": "wecom",
-      "reasoning_channel_id": "",
-      "group_trigger": {},
-      "typing": {},
-      "placeholder": {
-        "enabled": false
-      },
-      "settings": {
-        "bot_id": "",
-        "websocket_url": "wss://openws.work.weixin.qq.com",
-        "send_thinking_message": true
-      }
-    },
-    "weixin": {
-      "enabled": false,
-      "type": "weixin",
-      "reasoning_channel_id": "",
-      "group_trigger": {},
-      "typing": {},
-      "placeholder": {
-        "enabled": false
-      },
-      "settings": {
-        "base_url": "https://ilinkai.weixin.qq.com/",
-        "cdn_base_url": "https://novac2c.cdn.weixin.qq.com/c2c",
-        "proxy": ""
-      }
-    },
     "whatsapp": {
-      "enabled": false,
+      "enabled": true,
       "type": "whatsapp_native",
       "reasoning_channel_id": "",
       "group_trigger": {},
@@ -675,17 +922,19 @@
   "model_list": [
     {
       "model_name": "default",
-      "provider": "litellm",
-      "model": "gpt-4o-mini",
-      "api_base": "http://litellm:4000/v1",
-      "enabled": true
+      "provider": "openai",
+      "model": "gpt-5.4",
+      "api_base": "${LITELLM_URL}",
+      "api_keys": [
+        "${LITELLM_KEY}"
+      ]
     }
   ],
   "gateway": {
-    "host": "0.0.0.0",
+    "host": "localhost",
     "port": 18790,
     "hot_reload": false,
-    "log_level": "error"
+    "log_level": "info"
   },
   "events": {
     "logging": {
@@ -725,7 +974,7 @@
         "max_results": 5
       },
       "duckduckgo": {
-        "enabled": false,
+        "enabled": true,
         "max_results": 5
       },
       "gemini": {
@@ -767,8 +1016,8 @@
       "enabled": true,
       "enable_deny_patterns": true,
       "allow_remote": true,
-      "custom_deny_patterns": null,
-      "custom_allow_patterns": null,
+      "custom_deny_patterns": [],
+      "custom_allow_patterns": [],
       "timeout_seconds": 60
     },
     "skills": {
@@ -796,13 +1045,13 @@
       "interval_minutes": 5
     },
     "mcp": {
-      "enabled": false,
+      "enabled": true,
       "discovery": {
-        "enabled": false,
+        "enabled": true,
         "ttl": 5,
         "max_search_results": 5,
         "use_bm25": true,
-        "use_regex": false
+        "use_regex": true
       },
       "max_inline_text_chars": 16384
     },
@@ -845,7 +1094,7 @@
       "enabled": true
     },
     "send_tts": {
-      "enabled": false
+      "enabled": true
     },
     "spawn": {
       "enabled": true
@@ -890,12 +1139,12 @@
     "monitor_usb": true
   },
   "voice": {
-    "echo_transcription": false
+    "echo_transcription": true
   },
   "build_info": {
-    "version": "dev",
-    "git_commit": "dev",
-    "build_time": "2026-05-20T17:41:21+0000",
-    "go_version": "go1.25.10"
+    "version": "0.2.8",
+    "git_commit": "6e1fab80",
+    "build_time": "2026-04-30T14:52:03Z",
+    "go_version": "1.25.9"
   }
 }
