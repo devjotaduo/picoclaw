@@ -356,6 +356,10 @@ export function ChatPage() {
     "chat.assistant_details_toggle",
     false,
   )
+  const assistantDetailsVisible =
+    showAssistantDetailsToggle && canToggleAssistantDetails
+  const assistantDetailsEnabled =
+    assistantDetailsVisible && showAssistantDetails
   const showNewChatButton = isVisible("chat.new_chat", false)
   const showSessionHistoryButton = isVisible("chat.session_history", false)
   const showAttendantTestButton = isVisible("chat.test_attendant")
@@ -627,10 +631,10 @@ export function ChatPage() {
               const isAssistantToolCall = msg.kind === "tool_calls"
               const showAssistantDetailContent =
                 (isAssistantReasoning &&
-                  showAssistantDetails &&
+                  assistantDetailsEnabled &&
                   canShowReasoning) ||
                 (isAssistantToolCall &&
-                  showAssistantDetails &&
+                  assistantDetailsEnabled &&
                   canShowToolCalls) ||
                 (!isAssistantReasoning && !isAssistantToolCall)
               const isAssistantInternalMessage =
@@ -730,10 +734,8 @@ export function ChatPage() {
               />
             ) : undefined
           }
-          showAssistantDetailsToggle={
-            showAssistantDetailsToggle && canToggleAssistantDetails
-          }
-          assistantDetailsEnabled={showAssistantDetails}
+          showAssistantDetailsToggle={assistantDetailsVisible}
+          assistantDetailsEnabled={assistantDetailsEnabled}
           onAssistantDetailsChange={setShowAssistantDetails}
           showQualityIndicator={showQualityIndicator}
           attendantTestActive={
