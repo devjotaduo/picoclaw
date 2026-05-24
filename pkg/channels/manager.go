@@ -799,7 +799,11 @@ func (m *Manager) registerHTTPHandlersLocked() {
 // single channel onto m.mux.
 func (m *Manager) registerChannelHTTPHandler(name string, ch Channel) {
 	if wh, ok := ch.(WebhookHandler); ok {
-		m.mux.Handle(wh.WebhookPath(), wh)
+		webhookPath := wh.WebhookPath()
+		m.mux.Handle(webhookPath, wh)
+		if !strings.HasSuffix(webhookPath, "/") {
+			m.mux.Handle(webhookPath+"/", wh)
+		}
 		m.publishChannelEvent(
 			runtimeevents.KindChannelWebhookRegistered,
 			name,
@@ -809,7 +813,7 @@ func (m *Manager) registerChannelHTTPHandler(name string, ch Channel) {
 		)
 		logger.InfoCF("channels", "Webhook handler registered", map[string]any{
 			"channel": name,
-			"path":    wh.WebhookPath(),
+			"path":    webhookPath,
 		})
 	}
 	if hc, ok := ch.(HealthChecker); ok {
@@ -825,7 +829,11 @@ func (m *Manager) registerChannelHTTPHandler(name string, ch Channel) {
 // single channel from m.mux.
 func (m *Manager) unregisterChannelHTTPHandler(name string, ch Channel) {
 	if wh, ok := ch.(WebhookHandler); ok {
-		m.mux.Unhandle(wh.WebhookPath())
+		webhookPath := wh.WebhookPath()
+		m.mux.Unhandle(webhookPath)
+		if !strings.HasSuffix(webhookPath, "/") {
+			m.mux.Unhandle(webhookPath + "/")
+		}
 		m.publishChannelEvent(
 			runtimeevents.KindChannelWebhookUnregistered,
 			name,
@@ -835,7 +843,7 @@ func (m *Manager) unregisterChannelHTTPHandler(name string, ch Channel) {
 		)
 		logger.InfoCF("channels", "Webhook handler unregistered", map[string]any{
 			"channel": name,
-			"path":    wh.WebhookPath(),
+			"path":    webhookPath,
 		})
 	}
 	if hc, ok := ch.(HealthChecker); ok {

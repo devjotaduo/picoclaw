@@ -34,6 +34,20 @@ type mockChannel struct {
 	lastPlaceholderID string
 }
 
+type mockWebhookChannel struct {
+	mockChannel
+	path string
+}
+
+func (m *mockWebhookChannel) WebhookPath() string {
+	return m.path
+}
+
+func (m *mockWebhookChannel) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusAccepted)
+	_, _ = w.Write([]byte("webhook"))
+}
+
 func (m *mockChannel) Send(ctx context.Context, msg bus.OutboundMessage) ([]string, error) {
 	m.sentMessages = append(m.sentMessages, msg)
 	if m.sendFn == nil {
@@ -340,6 +354,25 @@ func TestSharedHealthReadyTracksManagerLifecycle(t *testing.T) {
 		t.Fatalf("StopAll() error = %v", err)
 	}
 	assertSharedReadyStatus(t, m, http.StatusServiceUnavailable)
+}
+
+func TestSetupHTTPServerRegistersWebhookSubpaths(t *testing.T) {
+	m := newTestManager()
+	m.channels["public-web"] = &mockWebhookChannel{path: "/api/public/chat"}
+
+	m.SetupHTTPServerListeners(nil, "127.0.0.1:0", nil)
+	m.httpServer = nil
+
+	for _, path := range []string{"/api/public/chat", "/api/public/chat/health", "/api/public/chat/stream"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+
+		m.mux.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("%s status = %d, want %d; body=%s", path, rec.Code, http.StatusAccepted, rec.Body.String())
+		}
+	}
 }
 
 func assertSharedReadyStatus(t *testing.T, m *Manager, want int) {
