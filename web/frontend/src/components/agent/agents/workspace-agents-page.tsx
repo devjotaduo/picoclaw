@@ -1,5 +1,4 @@
 import {
-  IconArrowUp,
   IconBolt,
   IconBulb,
   IconClipboardList,
@@ -11,12 +10,7 @@ import {
   IconUsersGroup,
 } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
-import {
-  type CSSProperties,
-  type ComponentType,
-  type FormEvent,
-  useState,
-} from "react"
+import { type CSSProperties, type ComponentType, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -26,7 +20,6 @@ import {
 } from "@/api/workspace-agents"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 
 import { WorkspaceAgentDetailSheet } from "./workspace-agent-detail-sheet"
 
@@ -68,10 +61,6 @@ export function WorkspaceAgentsPage() {
   const [selectedAgent, setSelectedAgent] = useState<WorkspaceAgent | null>(
     null,
   )
-  const [drafts, setDrafts] = useState<Record<string, string>>({})
-  const [startedPrompts, setStartedPrompts] = useState<Record<string, string>>(
-    {},
-  )
   const agentsQuery = useQuery({
     queryKey: ["workspace-agents"],
     queryFn: getWorkspaceAgents,
@@ -81,19 +70,6 @@ export function WorkspaceAgentsPage() {
     selectedAgent?.content !== undefined
       ? { ...selectedAgent, content: selectedAgent.content }
       : undefined
-
-  const handleDraftChange = (agentID: string, value: string) => {
-    setDrafts((current) => ({ ...current, [agentID]: value }))
-  }
-
-  const handleStart = (agent: WorkspaceAgent, prompt: string) => {
-    const trimmed = prompt.trim()
-    if (!trimmed) {
-      return
-    }
-    setStartedPrompts((current) => ({ ...current, [agent.id]: trimmed }))
-    setDrafts((current) => ({ ...current, [agent.id]: "" }))
-  }
 
   return (
     <div className="bg-background flex h-full flex-col">
@@ -130,10 +106,6 @@ export function WorkspaceAgentsPage() {
                   key={agent.id}
                   agent={agent}
                   index={index}
-                  draft={drafts[agent.id] ?? ""}
-                  startedPrompt={startedPrompts[agent.id] ?? ""}
-                  onDraftChange={(value) => handleDraftChange(agent.id, value)}
-                  onStart={(prompt) => handleStart(agent, prompt)}
                   onOpen={() => setSelectedAgent(agent)}
                 />
               ))}
@@ -161,18 +133,10 @@ export function WorkspaceAgentsPage() {
 function AgentMiniChatCard({
   agent,
   index,
-  draft,
-  startedPrompt,
-  onDraftChange,
-  onStart,
   onOpen,
 }: {
   agent: WorkspaceAgent
   index: number
-  draft: string
-  startedPrompt: string
-  onDraftChange: (value: string) => void
-  onStart: (prompt: string) => void
   onOpen: () => void
 }) {
   const palette = agentPalettes[index % agentPalettes.length]
@@ -183,15 +147,10 @@ function AgentMiniChatCard({
   } as CSSProperties
   const quickActions = getAgentQuickActions(agent)
 
-  const submitDraft = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    onStart(draft)
-  }
-
   return (
     <article
       style={paletteStyle}
-      className="border-border/70 bg-card text-card-foreground relative flex min-h-[252px] flex-col overflow-hidden rounded-lg border p-4 shadow-sm transition duration-200 hover:border-[color-mix(in_oklab,var(--agent-accent)_28%,var(--border))] hover:shadow-md"
+      className="border-border/70 bg-card text-card-foreground relative flex min-h-[184px] flex-col overflow-hidden rounded-lg border p-4 shadow-sm transition duration-200 hover:border-[color-mix(in_oklab,var(--agent-accent)_28%,var(--border))] hover:shadow-md"
     >
       <div className="absolute top-3 right-3 z-10">
         <Button
@@ -221,54 +180,16 @@ function AgentMiniChatCard({
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
-          {quickActions.slice(0, 2).map(({ label, Icon }) => (
-            <button
+        <div className="mt-auto flex flex-wrap gap-1.5">
+          {quickActions.slice(0, 3).map(({ label, Icon }) => (
+            <span
               key={label}
-              type="button"
-              className="border-border/70 bg-muted/25 text-foreground hover:border-border hover:bg-muted/45 inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition"
-              onClick={() => onStart(label)}
+              className="border-border/70 bg-muted/25 text-foreground inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium"
             >
               <Icon className="text-muted-foreground size-4" />
               <span className="truncate">{label}</span>
-            </button>
+            </span>
           ))}
-        </div>
-
-        <div className="mt-auto space-y-3">
-          <div className="flex items-center gap-1.5 px-1">
-            <span className="bg-muted-foreground/35 size-2 rounded-full" />
-            <span className="bg-muted-foreground/20 size-2 rounded-full" />
-            <span className="bg-muted-foreground/10 size-2 rounded-full" />
-          </div>
-
-          {startedPrompt ? (
-            <div className="bg-muted/35 text-muted-foreground line-clamp-1 rounded-lg px-3 py-2 text-sm leading-5">
-              <span className="text-foreground font-medium">{agent.name}</span>{" "}
-              iniciou: {startedPrompt}
-            </div>
-          ) : null}
-
-          <form
-            className="border-border/70 bg-muted/20 flex items-center gap-2 rounded-lg border px-2 py-1 transition focus-within:border-[color-mix(in_oklab,var(--agent-accent)_34%,var(--border))]"
-            onSubmit={submitDraft}
-          >
-            <Input
-              value={draft}
-              onChange={(event) => onDraftChange(event.target.value)}
-              placeholder="Iniciar ação..."
-              className="h-7 border-0 bg-transparent px-1 text-sm shadow-none focus-visible:ring-0"
-              aria-label={`Iniciar ação com ${agent.name}`}
-            />
-            <Button
-              type="submit"
-              size="icon-xs"
-              disabled={!draft.trim()}
-              aria-label={`Iniciar ação com ${agent.name}`}
-            >
-              <IconArrowUp className="size-3.5" />
-            </Button>
-          </form>
         </div>
       </div>
     </article>
@@ -281,7 +202,7 @@ function AgentsSkeleton() {
       {Array.from({ length: 5 }).map((_, index) => (
         <div
           key={index}
-          className="border-border bg-card/70 h-[252px] animate-pulse rounded-lg border"
+          className="border-border bg-card/70 h-[184px] animate-pulse rounded-lg border"
         />
       ))}
     </div>
