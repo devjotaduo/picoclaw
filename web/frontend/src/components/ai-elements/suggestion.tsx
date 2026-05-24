@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, type ComponentProps } from "react"
+import { type ComponentProps, useCallback } from "react"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -22,10 +22,7 @@ export function Suggestions({
   )
 }
 
-export type SuggestionProps = Omit<
-  ComponentProps<typeof Button>,
-  "onClick"
-> & {
+export type SuggestionProps = Omit<ComponentProps<typeof Button>, "onClick"> & {
   suggestion: string
   onClick?: (suggestion: string) => void
 }

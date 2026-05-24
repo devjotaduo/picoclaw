@@ -261,7 +261,12 @@ func (h *Handler) tenantProxyTarget(ctx context.Context, t *store.Tenant) *url.U
 		if t.ContainerID != nil && strings.TrimSpace(*t.ContainerID) != "" {
 			ref = *t.ContainerID
 		}
-		if ip, ipErr := h.Provisioner.Docker.ContainerAddress(ctx, ref, h.Cfg.TenantNetworkEdge); ipErr == nil && ip != "" {
+		if ip, ipErr := h.Provisioner.Docker.ContainerAddress(
+			ctx,
+			ref,
+			h.Cfg.TenantNetworkEdge,
+		); ipErr == nil &&
+			ip != "" {
 			host = ip
 		}
 	}

@@ -128,7 +128,11 @@ func TestSubstituteConfigPlaceholders_MissingFileIsOk(t *testing.T) {
 func TestSanitizeTenantSecurityConfigRemovesLegacyAllowedChannels(t *testing.T) {
 	dst := t.TempDir()
 	path := filepath.Join(dst, ".security.yml")
-	if err := os.WriteFile(path, []byte("channels:\n  allowed: []\ntools:\n  exec:\n    enabled: false\n"), 0o600); err != nil {
+	if err := os.WriteFile(
+		path,
+		[]byte("channels:\n  allowed: []\ntools:\n  exec:\n    enabled: false\n"),
+		0o600,
+	); err != nil {
 		t.Fatal(err)
 	}
 

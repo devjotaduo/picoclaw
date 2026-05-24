@@ -1,9 +1,6 @@
 import { IconFileText } from "@tabler/icons-react"
 
-import {
-  Message,
-  MessageContent,
-} from "@/components/ai-elements/message"
+import { Message, MessageContent } from "@/components/ai-elements/message"
 import { cn } from "@/lib/utils"
 import type { ChatAttachment } from "@/store/chat"
 
