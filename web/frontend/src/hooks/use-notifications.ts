@@ -10,17 +10,16 @@
  * (404/500), retorna lista vazia em vez de quebrar a UI. Operadores
  * acompanham via console.warn.
  */
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useCallback } from "react"
 
 import {
+  type Notification,
+  type NotificationListResponse,
   dismissNotification,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
-  type Notification,
-  type NotificationListResponse,
 } from "@/api/notifications"
 
 const QUERY_KEY = ["notifications", "list"] as const
@@ -38,7 +37,10 @@ export function useNotifications(opts: { unreadOnly?: boolean } = {}) {
     queryKey: opts.unreadOnly ? [...QUERY_KEY, "unread"] : QUERY_KEY,
     queryFn: async () => {
       try {
-        return await listNotifications({ unreadOnly: opts.unreadOnly, limit: 50 })
+        return await listNotifications({
+          unreadOnly: opts.unreadOnly,
+          limit: 50,
+        })
       } catch (err) {
         // Backend ainda pode não estar montado — não quebra a UI, só loga.
         console.warn("[notifications] fetch falhou, retornando vazio:", err)
@@ -56,7 +58,8 @@ export function useNotifications(opts: { unreadOnly?: boolean } = {}) {
     // Optimistic update: marca como lida na lista local antes do round-trip.
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: QUERY_KEY })
-      const previous = queryClient.getQueryData<NotificationListResponse>(QUERY_KEY)
+      const previous =
+        queryClient.getQueryData<NotificationListResponse>(QUERY_KEY)
       if (previous) {
         const now = new Date().toISOString()
         queryClient.setQueryData<NotificationListResponse>(QUERY_KEY, {
@@ -80,7 +83,8 @@ export function useNotifications(opts: { unreadOnly?: boolean } = {}) {
     mutationFn: () => markAllNotificationsRead(),
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: QUERY_KEY })
-      const previous = queryClient.getQueryData<NotificationListResponse>(QUERY_KEY)
+      const previous =
+        queryClient.getQueryData<NotificationListResponse>(QUERY_KEY)
       if (previous) {
         const now = new Date().toISOString()
         queryClient.setQueryData<NotificationListResponse>(QUERY_KEY, {
@@ -104,7 +108,8 @@ export function useNotifications(opts: { unreadOnly?: boolean } = {}) {
     mutationFn: (id: string) => dismissNotification(id),
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: QUERY_KEY })
-      const previous = queryClient.getQueryData<NotificationListResponse>(QUERY_KEY)
+      const previous =
+        queryClient.getQueryData<NotificationListResponse>(QUERY_KEY)
       if (previous) {
         const filtered = previous.notifications.filter((n) => n.id !== id)
         const removedUnread = previous.notifications.some(
@@ -112,7 +117,10 @@ export function useNotifications(opts: { unreadOnly?: boolean } = {}) {
         )
         queryClient.setQueryData<NotificationListResponse>(QUERY_KEY, {
           notifications: filtered,
-          unread_count: Math.max(0, previous.unread_count - (removedUnread ? 1 : 0)),
+          unread_count: Math.max(
+            0,
+            previous.unread_count - (removedUnread ? 1 : 0),
+          ),
         })
       }
       return { previous }
@@ -133,7 +141,10 @@ export function useNotifications(opts: { unreadOnly?: boolean } = {}) {
     [markRead],
   )
 
-  const handleDismiss = useCallback((id: string) => dismiss.mutate(id), [dismiss])
+  const handleDismiss = useCallback(
+    (id: string) => dismiss.mutate(id),
+    [dismiss],
+  )
   const handleMarkAllRead = useCallback(
     () => markAllRead.mutate(),
     [markAllRead],

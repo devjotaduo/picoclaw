@@ -73,10 +73,7 @@ function abbreviateModelName(modelName: string): string {
 
   if (modelSegments[0]?.toLowerCase() === "gpt" && modelSegments[1]) {
     const variant = modelSegments[1]
-    const suffix = modelSegments
-      .slice(2)
-      .map(formatModelToken)
-      .join(" ")
+    const suffix = modelSegments.slice(2).map(formatModelToken).join(" ")
     return [provider, `GPT-${variant}`, suffix].filter(Boolean).join(" ")
   }
 

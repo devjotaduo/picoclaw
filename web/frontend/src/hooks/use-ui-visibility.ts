@@ -4,13 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import type { LauncherPolicyResponse } from "@/api/launcher-policy"
 import {
   DEFAULT_UI_VISIBILITY_POLICY,
+  type UIVisibilityProfile,
+  UI_VISIBILITY_OVERRIDE_STORAGE_KEY,
   getLocalUIVisibilityPolicy,
   getUIVisibilityProfileOverride,
   isUIElementVisible,
   resolveUIVisibilityProfile,
   setUIVisibilityProfileOverride,
-  UI_VISIBILITY_OVERRIDE_STORAGE_KEY,
-  type UIVisibilityProfile,
 } from "@/api/ui-visibility"
 
 export function useUIVisibility(
@@ -52,12 +52,9 @@ export function useUIVisibility(
     [policy, profile],
   )
 
-  const setProfileOverride = useCallback(
-    (next: UIVisibilityProfile | null) => {
-      setUIVisibilityProfileOverride(next)
-    },
-    [],
-  )
+  const setProfileOverride = useCallback((next: UIVisibilityProfile | null) => {
+    setUIVisibilityProfileOverride(next)
+  }, [])
 
   return {
     policy,

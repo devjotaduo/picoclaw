@@ -35,10 +35,10 @@ import {
   getWhatsAppReport,
   listWhatsAppChats,
 } from "@/api/whatsapp"
+import { CatarinaProgressCard } from "@/components/agent/dashboard/catarina-progress-card"
+import { TenantStatusBanner } from "@/components/agent/dashboard/tenant-status-banner"
 import { AIOrbAvatar } from "@/components/chat/ai-orb-avatar"
 import { PageHeader } from "@/components/page-header"
-import { TenantStatusBanner } from "@/components/agent/dashboard/tenant-status-banner"
-import { CatarinaProgressCard } from "@/components/agent/dashboard/catarina-progress-card"
 import { type ApprovalDecision } from "@/components/tool-ui/approval-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"

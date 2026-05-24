@@ -22,7 +22,10 @@ export function CredentialStatusDetails({
 
   React.useEffect(() => {
     if (!status?.expires_at) return
-    const timer = window.setInterval(() => setTick((value) => value + 1), 60_000)
+    const timer = window.setInterval(
+      () => setTick((value) => value + 1),
+      60_000,
+    )
     return () => window.clearInterval(timer)
   }, [status?.expires_at])
 

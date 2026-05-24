@@ -383,7 +383,7 @@ export function ChatComposer({
 
           <div className="flex shrink-0 items-center gap-1.5">
             {modelSelector ? (
-              <div className="min-w-0 max-w-[190px]">{modelSelector}</div>
+              <div className="max-w-[190px] min-w-0">{modelSelector}</div>
             ) : null}
             {showAssistantDetailsToggle && onAssistantDetailsChange ? (
               <Tooltip delayDuration={500}>
@@ -407,7 +407,9 @@ export function ChatComposer({
                     <IconBrain className="size-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>{t("chat.showAssistantDetails")}</TooltipContent>
+                <TooltipContent>
+                  {t("chat.showAssistantDetails")}
+                </TooltipContent>
               </Tooltip>
             ) : null}
             <Button

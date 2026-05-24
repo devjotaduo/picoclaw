@@ -21,18 +21,17 @@ export function WaitingScreen() {
             Está tudo sendo preparado
           </h1>
           <p className="text-muted-foreground text-base leading-relaxed">
-            Nosso time recebeu seu cadastro e já está trabalhando nas
-            últimas configurações pra equipe operar com segurança.
+            Nosso time recebeu seu cadastro e já está trabalhando nas últimas
+            configurações pra equipe operar com segurança.
           </p>
           <p className="text-muted-foreground text-base leading-relaxed">
-            Em breve você vai receber um contato nosso com os próximos
-            passos.
+            Em breve você vai receber um contato nosso com os próximos passos.
           </p>
         </div>
 
         <div className="border-border/60 text-muted-foreground w-full border-t pt-5 text-xs">
-          Você pode fechar esta janela. Vamos avisar pelo WhatsApp ou
-          e-mail cadastrado quando o painel estiver liberado.
+          Você pode fechar esta janela. Vamos avisar pelo WhatsApp ou e-mail
+          cadastrado quando o painel estiver liberado.
         </div>
       </div>
     </div>
