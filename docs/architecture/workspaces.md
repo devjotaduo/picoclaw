@@ -206,28 +206,35 @@ duplicate.
 
 ## Onboarding tenant (`is_public=true`)
 
-Provisioned via `POST /api/v1/tenants/onboarding/bootstrap` (script:
-`scripts/provision-onboarding-tenant.sh`). The body accepts
-`workspace_id` to pick a specific workspace; when empty, it looks up the
-workspace whose slug is `"onboarding"`. Operator's expected flow:
+> **PR #104 (2026-05-25)** removed the dedicated bootstrap endpoint
+> (`POST /api/v1/tenants/onboarding/bootstrap`) and the
+> `scripts/provision-onboarding-tenant.sh` script is now broken. The
+> singleton public tenant is created through the **normal "New tenant"
+> wizard** with `tenant_type=publico` — which sets `IsPublic=true`,
+> `SkipDashboardPassword=true`, and writes `active_profile=public` into
+> `ui-visibility.json`. The flow below is the new one.
+
+Operator's expected flow:
 
 1. Build the workspace ZIP from the repo's `workspace/` tree and
-   upload it via the admin API:
+   upload it via the admin UI (Workspaces → Upload .zip):
    ```bash
    pwsh scripts/build-workspace-zip.ps1 -SourceDir workspace \
-       -Slug onboarding -Name "Onboarding" -Upload
+       -Slug onboarding -Name "Onboarding"
    ```
    Sofia is the discovery agent in `workspace/agents/sofia/`, and
    `channel_list.public-web` is present (disabled by default — the
    upload flow flips it on for the public variant). Edit
    `workspace/workspace/AGENT.md` locally before building if you want
-   to customize. Alternative: admin UI → Workspaces → "Novo workspace"
-   with slug `onboarding`.
-2. POST `/api/v1/tenants/onboarding/bootstrap` (or run the bootstrap
-   script).
-3. Set `PICOCLAW_ONBOARDING_CALLBACK_SECRET` on the controlplane.
-   The bootstrap response returns a `warning` field when this is unset
-   so the misconfig is loud.
+   to customize. The upload runs `validateWorkspaceConfigSemantics`
+   (see "Workspace upload validation" below) — fix any blockers it
+   reports before continuing.
+2. Admin UI → New tenant → pick the **`Público`** card →
+   workspace = the one from step 1 → submit. No owner email needed.
+3. Set `PICOCLAW_ONBOARDING_CALLBACK_SECRET` on the controlplane so the
+   skill callbacks from inside the tenant can authenticate. There is
+   no longer a warning surfaced at provision time — the misconfig
+   shows up as a 503 from `POST /api/v1/onboarding-callback` instead.
 
 See [`public-onboarding-tenant.md`](public-onboarding-tenant.md) for the
 visitor flow, public-web channel internals, and Turnstile gating.

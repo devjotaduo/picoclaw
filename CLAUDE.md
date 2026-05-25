@@ -163,6 +163,63 @@ mkdir volume → `CopyWorkspaceHome` (single authoritative copy) → optional
 re-attaches the frontend bind on every `Recreate` / `lifecycle.Restart` so
 visual customizations survive container recreation.
 
+### Tenant type → ui-visibility profile (PR #104, 2026-05-25)
+
+The "New tenant" wizard is a two-step picker:
+
+1. Pick a **type** card: `publico`, `admin`, or `cliente` (default).
+2. Fill the form (owner_email is hidden for `publico` since there's no human owner).
+
+`resolveUIProfile(tenant_type)` in `internal/saas/api/tenants.go` maps the
+admin vocabulary to the runtime `tenant.UIVisibilityProfile` enum:
+
+| `tenant_type` | `active_profile` written | `IsPublic` | Dashboard password |
+|---|---|---|---|
+| `publico` | `public` | `true` | skipped (`SkipDashboardPassword`) |
+| `admin` | `admin` | `false` | seeded |
+| `cliente` / `""` | `tenant` | `false` | seeded |
+
+The provisioner calls `SetUIVisibilityActiveProfile(volumePath, profile)`
+right after `CopyWorkspaceHome`, rewriting `ui-visibility.json` in the
+volume root so the frontend's `useUIVisibility` hook returns the correct
+profile from the first page load. Existing tenants provisioned before
+this feature have `active_profile` blank → use
+`scripts/maintenance/backfill-ui-visibility.sh` (default `"tenant"`) to
+backfill. `waiting` is a separate profile set programmatically when the
+tenant has done discovery but is awaiting operator liberation (see
+`handleAdminTenantDiscoveryLiberate`).
+
+The single-purpose `POST /tenants/onboarding/bootstrap` endpoint was
+removed in PR #104 — the public onboarding tenant is now created through
+the normal wizard with `tenant_type=publico` like any other tenant.
+
+### Strict config mode for SaaS tenants (PR #104)
+
+The provisioner injects `PICOCLAW_CONFIG_STRICT=true` into every tenant
+container. `pkg/config.IsStrictConfigMode()` then gates two behaviors:
+
+- `loadConfig` starts from an empty `Config{}` instead of `DefaultConfig()`
+  → no leak of the standalone launcher's 25-provider `model_list` into
+  tenant config.
+- The three post-migration `defer SaveConfig(...)` paths in
+  `pkg/config/config.go` (versions 0→1, 1→2, 2→3) are skipped on disk;
+  migration happens in-memory only. Workspace `config.json` stays
+  authoritative.
+
+This closes the bug where `default-business` workspace had
+`model_name: "default"` and the first tenant boot silently rewrote it to
+`"openrouter-gpt-5.4"` (the first "real" model in DefaultConfig).
+
+To enforce upload-time validity, `internal/saas/api/workspaces_upload.go`
+runs `validateWorkspaceConfigSemantics` on every ZIP:
+
+- **Blocks upload** when `home/config.json` has empty `model_list`,
+  empty `model_name`/`provider` in any entry, or
+  `agents.defaults.model_name` doesn't resolve to a `model_list` entry.
+- **Warns (but allows)** missing optional fields; the admin upload
+  dialog surfaces warnings in an amber panel.
+- `is_raw=true` bypasses the validator (operator explicitly opting out).
+
 Role policy is enforced twice: the SaaS controlplane blocks proxied
 tenant API calls before forwarding to `tenant-<id>:18800`, and the
 launcher blocks local trusted-gateway requests with the same feature
@@ -208,7 +265,7 @@ Sofia public-onboarding contract (must not regress when touching `internal/saas/
 - `POST /api/v1/public/company-intakes/{id}/submit` is where `AutoProvisioner.Run` is actually invoked, AFTER ClaraFinalize collected `contact_email` and `contact_whatsapp`. The response carries `tenant_provisioned`, `url`, `login_mode` (always `"password"` when Supabase is on), `check_email: true`, and `initial_password` — the SSE handler emits the password to the chat AND signals that an email also went out with the magic link included.
 - `ClaraMaxTurns` defaults to 120 (`~60 user turns`). The frontend warns at 50 / hard-stops at 56 to give a buffer before the backend cap. Don't reintroduce a lower cap without bumping both.
 - Both Clara (public) and Sofia (workspace persona inside tenant) exist. Do not collapse them — `internal/saas/clara/clara_system.txt` is the public marketing voice, `workspace/agents/sofia/AGENT.md` is the in-tenant onboarding agent that takes over post-provision.
-- **Public onboarding tenant (in flight, branch `feat/public-onboarding-tenant`)**: the legacy in-controlplane Clara is being migrated to a Picoclaw tenant flagged `tenants.is_public=true`. New ingress path goes through `pkg/channels/publicweb/` (anonymous SSE), bypasses Supabase JWT on `/api/public/chat*` only, and routes skill callbacks (`onboarding-mark-qualified`, `onboarding-submit-intake`) back to the controlplane via HMAC-authenticated `POST /api/v1/onboarding-callback`. Bootstrap: `./scripts/provision-onboarding-tenant.sh`. Architecture deep-dive: `docs/architecture/public-onboarding-tenant.md`. Frontend cutover (Phase 10) is a stub — flag scaffold present (`VITE_USE_ONBOARDING_TENANT`) but the real fetch path still hits the legacy endpoint until an SSE event-shape adapter lands.
+- **Public onboarding tenant** (`feat/public-onboarding-tenant`, mostly merged): the legacy in-controlplane Clara is being replaced by a Picoclaw tenant flagged `tenants.is_public=true`. Ingress goes through `pkg/channels/publicweb/` (anonymous SSE), bypasses Supabase JWT on `/api/public/chat*` only, and routes skill callbacks (`onboarding-mark-qualified`, `onboarding-submit-intake`) back to the controlplane via HMAC-authenticated `POST /api/v1/onboarding-callback`. The dedicated bootstrap endpoint + `scripts/provision-onboarding-tenant.sh` were removed in PR #104 — provision the singleton public tenant through the normal wizard with `tenant_type=publico` instead. Architecture deep-dive: `docs/architecture/public-onboarding-tenant.md`. Frontend cutover (Phase 10) is still a stub — `VITE_USE_ONBOARDING_TENANT` flag exists but the real fetch path still hits the legacy `/api/v1/public/company-intakes/*` endpoints until an SSE event-shape adapter lands. The legacy `company_intakes*.go` chain stays in place until Phase 11 deletes it after 1-2 weeks of stable parallel operation.
 
 ### Admin panel embutido em `web/frontend`
 
