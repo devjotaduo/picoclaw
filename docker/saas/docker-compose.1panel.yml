@@ -22,7 +22,6 @@ services:
       # admin.<domain> and <tenant>.<domain> through the central gateway.
       COOKIE_DOMAIN: ${SAAS_BASE_DOMAIN}
       COOKIE_SECURE: "true"
-      TENANT_CERT_RESOLVER: ""
       # Workspaces directory — single source of truth for tenant content.
       # See docs/architecture/workspaces.md for the on-disk layout.
       PICOCLAW_WORKSPACE_DIR: /srv/picoclaw-workspaces

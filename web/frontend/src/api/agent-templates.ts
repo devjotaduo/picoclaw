@@ -163,10 +163,6 @@ export interface AgentEditorStateResponse {
   assistant_whatsapp_chats?: string[]
 }
 
-export interface AgentsResponse {
-  agents: AgentSummary[]
-}
-
 export interface CreateAgentInput {
   id: string
   name: string
@@ -179,28 +175,6 @@ export interface UpdateAgentInput {
   avatar?: AgentSummary["avatar"]
   default?: boolean
   active?: boolean
-}
-
-export async function getAgentConfig(
-  agentId?: string,
-): Promise<AgentConfigResponse> {
-  const path =
-    agentId && agentId.trim() !== ""
-      ? `/api/agent/config?agent_id=${encodeURIComponent(agentId)}`
-      : "/api/agent/config"
-  const res = await launcherFetch(path)
-  if (!res.ok) {
-    throw new Error(await extractErrorMessage(res))
-  }
-  return res.json() as Promise<AgentConfigResponse>
-}
-
-export async function listAgents(): Promise<AgentsResponse> {
-  const res = await launcherFetch("/api/agents")
-  if (!res.ok) {
-    throw new Error(await extractErrorMessage(res))
-  }
-  return res.json() as Promise<AgentsResponse>
 }
 
 export async function getAgentEditorState(): Promise<AgentEditorStateResponse> {

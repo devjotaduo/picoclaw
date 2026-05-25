@@ -5,8 +5,6 @@
 # Differences from prod:
 #   - Traefik uses traefik.dev.yml (no LE, no DNS-01)
 #   - Traefik mounts a local certs/ dir (created by docker/saas/scripts/dev-setup.sh)
-#   - Controlplane sets TENANT_CERT_RESOLVER='' so tenant routers don't
-#     reference 'letsencrypt' (Traefik uses the default cert instead)
 #   - Cookies not Secure (so http://admin.picoclaw.localhost works during dev
 #     even if you skip HTTPS — though https is still the primary path)
 
@@ -21,5 +19,4 @@ services:
 
   controlplane:
     environment:
-      TENANT_CERT_RESOLVER: ""
       COOKIE_SECURE: "true"
