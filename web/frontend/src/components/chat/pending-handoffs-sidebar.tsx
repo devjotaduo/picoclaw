@@ -21,7 +21,6 @@ import {
   getWhatsAppConversationInsight,
   listWhatsAppChats,
 } from "@/api/whatsapp"
-import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
 import { formatJID, formatRelativeTS } from "@/lib/whatsapp/format"
@@ -352,15 +351,6 @@ function CompanyOnboardingCard({ className }: { className?: string }) {
           ))}
         </ul>
       </div>
-
-      <Button
-        asChild
-        variant="outline"
-        size="sm"
-        className="mt-3 h-8 rounded-full text-xs"
-      >
-        <Link to="/sofia-onboarding">Completar com Sofia</Link>
-      </Button>
     </section>
   )
 }

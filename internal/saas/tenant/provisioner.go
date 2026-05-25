@@ -65,12 +65,14 @@ type Provisioner struct {
 	Cfg        *config.Config
 	Tenants    *store.TenantStore
 	Workspaces *store.WorkspaceStore
+	Sessions   *store.SessionStore // optional; used by RotatePassword to revoke active sessions
 	Docker     *DockerClient
 	LiteLLM    *litellm.Client // optional; when nil the tenant is provisioned without an LLM key
-	// Supabase is the (optional) handle used during Delete() to remove the
-	// Supabase Auth user for tenants with auth_backend='supabase'. Nil when
-	// Supabase isn't configured — cleanup of those tenants is a no-op.
-	Supabase SupabaseDeleter
+	// Supabase is the (optional) handle used during Delete() and RotatePassword()
+	// to remove or update the Supabase Auth user for tenants with
+	// auth_backend='supabase'. Nil when Supabase isn't configured — those calls
+	// degrade to no-op + best-effort logging.
+	Supabase SupabaseManager
 }
 
 func NewProvisioner(cfg *config.Config, db *store.DB, dk *DockerClient, ll *litellm.Client) *Provisioner {
@@ -78,6 +80,7 @@ func NewProvisioner(cfg *config.Config, db *store.DB, dk *DockerClient, ll *lite
 		Cfg:        cfg,
 		Tenants:    &store.TenantStore{DB: db},
 		Workspaces: &store.WorkspaceStore{DB: db},
+		Sessions:   &store.SessionStore{DB: db},
 		Docker:     dk,
 		LiteLLM:    ll,
 	}
@@ -111,6 +114,11 @@ type CreateInput struct {
 	// resulting Tenant row has is_public=true so the gateway can later
 	// dispense with Supabase JWT verification on /api/public/* routes.
 	IsPublic bool
+	// UIProfile selects which named visibility preset (in the workspace's
+	// ui-visibility.json) the new tenant boots with. Empty = leave the
+	// workspace's baseline active_profile untouched. Set by the admin form
+	// when the operator picks a "tenant type" card (publico/admin/cliente).
+	UIProfile UIVisibilityProfile
 }
 
 // normalize applies CreateInput defaults and consistency rules. Currently
@@ -193,7 +201,7 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		return nil, fmt.Errorf("insert tenant: %w", err)
 	}
 
-	if err := p.runProvision(ctx, t, password, ws, in.SkipDashboardPassword); err != nil {
+	if err := p.runProvision(ctx, t, password, ws, in.SkipDashboardPassword, in.UIProfile); err != nil {
 		msg := err.Error()
 		_ = p.Tenants.SetStatus(ctx, id, store.StatusError, &msg)
 		return nil, err
@@ -218,6 +226,7 @@ func (p *Provisioner) runProvision(
 	password string,
 	ws *store.Workspace,
 	skipDashboardPassword bool,
+	uiProfile UIVisibilityProfile,
 ) (err error) {
 	success := false
 	volumeCreated := false
@@ -237,7 +246,10 @@ func (p *Provisioner) runProvision(
 		}
 	}()
 
-	if err := os.MkdirAll(t.VolumePath, 0o755); err != nil {
+	// 0o700: per-tenant volume should not be world-listable on the host.
+	// Files inside are 0o600 but a 0o755 parent leaks tenant inventory to
+	// any process running on the box.
+	if err := os.MkdirAll(t.VolumePath, 0o700); err != nil {
 		return fmt.Errorf("mkdir volume: %w", err)
 	}
 	volumeCreated = true
@@ -248,6 +260,16 @@ func (p *Provisioner) runProvision(
 	}
 	if err := SanitizeTenantSecurityConfig(t.VolumePath); err != nil {
 		return fmt.Errorf("sanitize security config: %w", err)
+	}
+	// 1b. Tenant TYPE → active_profile in ui-visibility.json. Drives every
+	// sidebar/header/chat element the frontend hides for this tenant. Done
+	// AFTER CopyWorkspaceHome so we rewrite the workspace's baseline file
+	// in place. No-op when the workspace ships without ui-visibility.json
+	// (the frontend falls back to DEFAULT_UI_VISIBILITY_POLICY).
+	if uiProfile != "" {
+		if err := SetUIVisibilityActiveProfile(t.VolumePath, uiProfile); err != nil {
+			return fmt.Errorf("set ui-visibility active_profile: %w", err)
+		}
 	}
 	if t.IsPublic {
 		if err := EnsurePublicWebChannelConfig(t.VolumePath); err != nil {
@@ -485,7 +507,10 @@ func (p *Provisioner) runProvisionClone(ctx context.Context, t *store.Tenant, sr
 		}
 	}()
 
-	if err := os.MkdirAll(t.VolumePath, 0o755); err != nil {
+	// 0o700: per-tenant volume should not be world-listable on the host.
+	// Files inside are 0o600 but a 0o755 parent leaks tenant inventory to
+	// any process running on the box.
+	if err := os.MkdirAll(t.VolumePath, 0o700); err != nil {
 		return fmt.Errorf("mkdir volume: %w", err)
 	}
 	volumeCreated = true
@@ -569,11 +594,26 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 	}
 
 	env := map[string]string{
-		"PICOCLAW_HOME":                   "/root/.picoclaw",
-		"PICOCLAW_LAUNCHER_HOST":          "0.0.0.0",
-		"PICOCLAW_GATEWAY_HOST":           "0.0.0.0",
+		"PICOCLAW_HOME": "/root/.picoclaw",
+		// Launcher listens on 0.0.0.0 so the controlplane can reach it via
+		// the docker bridge — that's the legitimate ingress path.
+		"PICOCLAW_LAUNCHER_HOST": "0.0.0.0",
+		// Gateway is the launcher's INTERNAL subprocess; it's only ever
+		// called by the launcher itself from inside the container. Binding
+		// it to 0.0.0.0 exposed inbox/send/disconnect endpoints
+		// unauthenticated on saas_edge — any peer tenant could send
+		// WhatsApp messages or read history as the victim. Keep loopback.
+		"PICOCLAW_GATEWAY_HOST":           "127.0.0.1",
 		"PICOCLAW_AUTH_MODE":              authMode,
 		"PICOCLAW_TRUSTED_GATEWAY_SECRET": p.Cfg.GatewaySharedSecret,
+		"PICOCLAW_CONFIG_STRICT":          "true",
+		// Identity of THIS tenant — the launcher MUST compare incoming HMAC
+		// claims.TenantID against this value and reject mismatches.
+		// Without it, any tenant on the shared docker network can forge
+		// requests addressed to any other tenant (the HMAC secret is
+		// fleet-wide). Defense-in-depth pending per-tenant secret derivation.
+		"PICOCLAW_TENANT_ID":        t.ID,
+		"PICOCLAW_TENANT_SUBDOMAIN": t.Subdomain,
 		// pico powers the in-browser WebSocket chat — required for the
 		// launcher's local-mode dashboard. Without it EnsurePicoChannel
 		// auto-disables the channel on every startup (via

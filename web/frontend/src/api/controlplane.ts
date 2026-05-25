@@ -39,11 +39,25 @@ export interface Tenant {
   launcher_profile_version_applied?: number | null
 }
 
+/**
+ * Admin-facing tenant type. Maps to ui-visibility.json active_profile on the
+ * backend:
+ *   publico → "public"  (anonymous chat surface, no owner login)
+ *   admin   → "admin"   (full SaaS admin tooling visible in the sidebar)
+ *   cliente → "tenant"  (regular paying customer; default)
+ *
+ * The full visibility matrix lives in the workspace's ui-visibility.json.
+ * This field only picks which preset that file's active_profile is set to.
+ */
+export type TenantType = "publico" | "admin" | "cliente"
+
 export interface CreateTenantInput {
   display_name: string
   owner_email: string
   subdomain: string
-  launcher_profile_id?: string
+  workspace_id?: string
+  /** Defaults to "cliente" on the server when omitted. */
+  tenant_type?: TenantType
   monthly_budget_usd?: number
   mem_limit_mb?: number
   cpu_quota?: number

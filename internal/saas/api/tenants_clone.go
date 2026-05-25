@@ -116,5 +116,8 @@ func (h *Handler) handleCloneTenant(w http.ResponseWriter, r *http.Request) {
 		"sanity_checks":      checks,
 		"info":               "Raw clone preserves the source dashboard password and secrets. Rotate them from the admin UI if intended for a different operator.",
 	}
+	// Audit the clone with the source tenant captured in the action verb so
+	// it stays queryable even if the source is later deleted.
+	h.auditTenantOp(r, out.TenantID, "tenant.clone.from."+srcID)
 	writeJSON(w, http.StatusCreated, resp)
 }

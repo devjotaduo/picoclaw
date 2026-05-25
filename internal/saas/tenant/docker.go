@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/strslice"
 	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
 )
@@ -87,13 +88,38 @@ func (d *DockerClient) CreateAndStart(ctx context.Context, spec ContainerSpec) (
 		})
 	}
 	hostCfg := &container.HostConfig{
-		RestartPolicy: container.RestartPolicy{Name: container.RestartPolicyUnlessStopped},
-		Mounts:        mounts,
+		// on-failure with cap on retries: a launcher that crashloops forever
+		// (corrupt config, missing secret, OOM loop) spams the journal and
+		// wastes IO. After 5 failures, leave it Exited and surface the error
+		// to the operator instead of masking it.
+		RestartPolicy: container.RestartPolicy{
+			Name:              container.RestartPolicyOnFailure,
+			MaximumRetryCount: 5,
+		},
+		Mounts: mounts,
 		Resources: container.Resources{
 			Memory:    int64(spec.MemLimitMB) * 1024 * 1024,
 			NanoCPUs:  int64(spec.CPUQuota * 1e9),
 			PidsLimit: ptrInt64(200),
 		},
+		// Hardening: tenant containers run agent code with tool execution —
+		// any prompt-injection / arbitrary file read / RCE in a skill must
+		// stay confined.
+		CapDrop: strslice.StrSlice{"ALL"},
+		SecurityOpt: []string{
+			"no-new-privileges:true",
+		},
+		// Prefer killing the tenant before host processes under memory pressure.
+		OomScoreAdj: 500,
+		// /tmp must remain writable for go runtime, sqlite WAL, etc.; keep it
+		// in tmpfs so it doesn't leave residue on the bind-mounted volume.
+		Tmpfs: map[string]string{
+			"/tmp": "rw,size=64m,mode=1777,nosuid,nodev,noexec",
+		},
+		// NOTE: ReadonlyRootfs not enabled — launcher writes transient state
+		// outside the bind-mount (/root/.config, package caches). Enabling
+		// requires auditing every write path. With CapDrop=ALL +
+		// no-new-privs the residual attack surface is already much smaller.
 	}
 	netCfg := &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{

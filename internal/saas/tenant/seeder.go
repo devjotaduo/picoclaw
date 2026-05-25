@@ -15,6 +15,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -79,6 +80,51 @@ func SeedDashboardCredentials(ctx context.Context, volumeDir, ownerEmail, passwo
 
 func normalizeEmail(email string) string {
 	return strings.TrimSpace(strings.ToLower(email))
+}
+
+// UIVisibilityProfile is the enum of named visibility presets baked into the
+// workspace's ui-visibility.json. The frontend's resolveUIVisibilityProfile
+// picks active_profile first, so this is what the admin choice ("público /
+// admin / cliente") translates to at provisioning time.
+type UIVisibilityProfile string
+
+const (
+	UIProfilePublic  UIVisibilityProfile = "public"
+	UIProfileTenant  UIVisibilityProfile = "tenant"
+	UIProfileAdmin   UIVisibilityProfile = "admin"
+	UIProfileWaiting UIVisibilityProfile = "waiting"
+)
+
+// SetUIVisibilityActiveProfile rewrites ui-visibility.json in the tenant
+// volume with active_profile=profile. Idempotent. No-op (returns nil) if the
+// file doesn't exist — workspaces without ui-visibility.json just inherit the
+// frontend's DEFAULT_UI_VISIBILITY_POLICY at runtime, so we don't force a
+// scaffold here.
+func SetUIVisibilityActiveProfile(volumeDir string, profile UIVisibilityProfile) error {
+	if profile == "" {
+		return nil
+	}
+	path := filepath.Join(volumeDir, "ui-visibility.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("read ui-visibility: %w", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return fmt.Errorf("parse ui-visibility: %w", err)
+	}
+	doc["active_profile"] = string(profile)
+	out, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal ui-visibility: %w", err)
+	}
+	if err := os.WriteFile(path, out, 0o600); err != nil {
+		return fmt.Errorf("write ui-visibility: %w", err)
+	}
+	return nil
 }
 
 // WriteLauncherPolicy writes launcher_policy.json into the tenant volume so

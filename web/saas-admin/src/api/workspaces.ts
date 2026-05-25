@@ -208,5 +208,20 @@ export async function uploadWorkspace(input: {
     const text = await r.text();
     throw new Error(text || `HTTP ${r.status}`);
   }
-  return (await r.json()) as Workspace;
+  // Response shape changed: backend now returns { workspace, validation }
+  // when home/config.json was parsed. We accept either shape so this client
+  // keeps working against the old endpoint during rollout. The new shape
+  // surfaces warnings (yellow badge in the UI) without blocking the upload.
+  const body = (await r.json()) as
+    | Workspace
+    | { workspace: Workspace; validation?: WorkspaceValidationReport };
+  if ("workspace" in body) {
+    return { workspace: body.workspace, validation: body.validation };
+  }
+  return { workspace: body, validation: undefined };
 }
+
+export type WorkspaceValidationReport = {
+  warnings: string[];
+  config_checksum?: string;
+};

@@ -312,6 +312,20 @@ func (s *SessionStore) Revoke(ctx context.Context, raw string) error {
 	return err
 }
 
+// RevokeAllForTenant invalidates every active session owned by any member of
+// the tenant. Use after operations that should boot existing logins —
+// password rotation, suspension, owner change, security incidents.
+func (s *SessionStore) RevokeAllForTenant(ctx context.Context, tenantID string) error {
+	const q = `
+		UPDATE sessions SET revoked_at = now()
+		WHERE revoked_at IS NULL
+		  AND user_id IN (
+		    SELECT user_id FROM tenant_memberships WHERE tenant_id = $1
+		  )`
+	_, err := s.DB.Pool.Exec(ctx, q, tenantID)
+	return err
+}
+
 func randomToken(bytes int) (string, error) {
 	buf := make([]byte, bytes)
 	if _, err := rand.Read(buf); err != nil {

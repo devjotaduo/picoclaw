@@ -3,6 +3,9 @@ package api
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -123,6 +126,19 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Semantic validation: catch broken config.json BEFORE the workspace
+	// reaches any tenant volume. The old behavior was "upload whatever, fail
+	// at boot when the launcher can't resolve agents.defaults.model_name" —
+	// admins didn't know why their default agent silently 'didn't work'.
+	// Raw uploads opt out: by design, raw is "operator owns the bytes,
+	// validation off". The semantic report is returned in the success body
+	// even when there are warnings, so the UI can surface them.
+	semanticReport, semanticErr := validateWorkspaceConfigSemantics(zipReader)
+	if !isRaw && semanticErr != nil {
+		writeError(w, http.StatusBadRequest, "workspace config: "+semanticErr.Error())
+		return
+	}
+
 	hostPath := filepath.Join(h.Cfg.WorkspaceDir, slug)
 
 	// Reject if the slug is already in use on disk — overwriting an existing
@@ -182,7 +198,146 @@ func (h *Handler) handleUploadWorkspace(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, "insert workspace: "+err.Error())
 		return
 	}
-	writeJSON(w, http.StatusCreated, summarizeWorkspace(ws))
+	resp := map[string]any{
+		"workspace": summarizeWorkspace(ws),
+	}
+	if semanticReport != nil {
+		resp["validation"] = semanticReport
+	}
+	writeJSON(w, http.StatusCreated, resp)
+}
+
+// WorkspaceValidationReport summarises what the upload-time semantic check
+// found. Errors are blocking (returned via 400 instead, never reach this
+// struct); warnings are informational but allow the upload through so the
+// admin UI can flag the workspace with a yellow badge.
+type WorkspaceValidationReport struct {
+	Warnings []string `json:"warnings"`
+	// Hash of home/config.json for cache-busting on the UI side. Optional.
+	ConfigChecksum string `json:"config_checksum,omitempty"`
+}
+
+// minimalConfig is the subset of home/config.json we inspect at upload
+// time. We deliberately avoid pulling in the full pkg/config schema (which
+// would couple workspace validation to launcher internals) — anything the
+// validator can't recognise just becomes a warning, not an error.
+type minimalConfig struct {
+	Agents struct {
+		Defaults struct {
+			ModelName string `json:"model_name"`
+			Provider  string `json:"provider"`
+			Workspace string `json:"workspace"`
+		} `json:"defaults"`
+	} `json:"agents"`
+	ModelList []struct {
+		ModelName string `json:"model_name"`
+		Provider  string `json:"provider"`
+		Model     string `json:"model"`
+		APIBase   string `json:"api_base"`
+		Enabled   *bool  `json:"enabled,omitempty"`
+	} `json:"model_list"`
+}
+
+// validateWorkspaceConfigSemantics parses home/config.json (if present)
+// and rejects workspaces that would silently boot a broken tenant:
+//   - model_list with zero entries → launcher has nothing to route to
+//   - agents.defaults.model_name doesn't match any model_list[].model_name
+//   - empty agents.defaults.provider AND no model_list entry to derive from
+//
+// Returns (report, nil) if the workspace passes (possibly with warnings).
+// Returns (nil, err) if the workspace is unusable.
+// Returns (nil, nil) if home/config.json doesn't exist — that's a valid
+// workspace shape (operator may ship a "config.json is whatever the
+// launcher's bootstrap writes" raw workspace).
+func validateWorkspaceConfigSemantics(zr *zip.Reader) (*WorkspaceValidationReport, error) {
+	configBytes, ok, err := readZipEntry(zr, tenant.WorkspaceHomeSubdir+"/config.json")
+	if err != nil {
+		return nil, fmt.Errorf("read home/config.json: %w", err)
+	}
+	if !ok {
+		return nil, nil
+	}
+	var cfg minimalConfig
+	if err := json.Unmarshal(configBytes, &cfg); err != nil {
+		return nil, fmt.Errorf("home/config.json is not valid JSON: %w", err)
+	}
+
+	if len(cfg.ModelList) == 0 {
+		return nil, errors.New("home/config.json: model_list must contain at least one entry")
+	}
+
+	modelNames := make(map[string]struct{}, len(cfg.ModelList))
+	for i, m := range cfg.ModelList {
+		if strings.TrimSpace(m.ModelName) == "" {
+			return nil, fmt.Errorf("home/config.json: model_list[%d].model_name is empty", i)
+		}
+		if strings.TrimSpace(m.Provider) == "" {
+			return nil, fmt.Errorf("home/config.json: model_list[%d].provider is empty (need 'litellm', 'openai', 'anthropic', etc.)", i)
+		}
+		modelNames[m.ModelName] = struct{}{}
+	}
+
+	report := &WorkspaceValidationReport{
+		ConfigChecksum: sha256HexShort(configBytes),
+	}
+
+	defaultName := strings.TrimSpace(cfg.Agents.Defaults.ModelName)
+	if defaultName == "" {
+		report.Warnings = append(report.Warnings,
+			"agents.defaults.model_name is empty — launcher will pick whatever model_list[0] is on boot, which may surprise the user")
+	} else if _, ok := modelNames[defaultName]; !ok {
+		return nil, fmt.Errorf(
+			"home/config.json: agents.defaults.model_name=%q is not in model_list (available: %s)",
+			defaultName, strings.Join(modelNamesList(cfg), ", "),
+		)
+	}
+
+	if strings.TrimSpace(cfg.Agents.Defaults.Provider) == "" {
+		report.Warnings = append(report.Warnings,
+			"agents.defaults.provider is empty — launcher will inherit from the selected model")
+	}
+	return report, nil
+}
+
+func modelNamesList(cfg minimalConfig) []string {
+	out := make([]string, 0, len(cfg.ModelList))
+	for _, m := range cfg.ModelList {
+		out = append(out, m.ModelName)
+	}
+	return out
+}
+
+// readZipEntry returns the raw bytes of the first zip entry whose name
+// matches path (forward-slash normalized). ok=false when no such entry
+// exists. Files larger than 1 MiB are rejected — home/config.json shouldn't
+// approach anywhere near that.
+func readZipEntry(zr *zip.Reader, path string) (data []byte, ok bool, err error) {
+	const maxConfigBytes = 1 << 20
+	for _, f := range zr.File {
+		name := filepath.ToSlash(f.Name)
+		if name != path {
+			continue
+		}
+		if f.UncompressedSize64 > maxConfigBytes {
+			return nil, false, fmt.Errorf("%s is %d bytes (cap %d)", path, f.UncompressedSize64, maxConfigBytes)
+		}
+		rc, oerr := f.Open()
+		if oerr != nil {
+			return nil, false, oerr
+		}
+		defer rc.Close()
+		buf, rerr := io.ReadAll(io.LimitReader(rc, maxConfigBytes+1))
+		if rerr != nil {
+			return nil, false, rerr
+		}
+		return buf, true, nil
+	}
+	return nil, false, nil
+}
+
+func sha256HexShort(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:8])
 }
 
 // workspaceTopLevelSubdirs lists the directories an admin-managed

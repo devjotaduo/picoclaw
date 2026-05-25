@@ -102,17 +102,30 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 	return p.Tenants.SetStatus(ctx, id, store.StatusActive, nil)
 }
 
-// SupabaseDeleter is the narrow interface the provisioner uses to remove the
-// Supabase Auth user when a tenant is deleted. Lifecycle code stays decoupled
-// from the concrete *auth.SupabaseClient (and from Supabase being configured
-// at all — nil is a valid value, meaning "skip the call").
-type SupabaseDeleter interface {
+// SupabaseManager is the narrow interface the provisioner uses to mutate the
+// Supabase Auth user during destructive ops (delete, password rotate).
+// Lifecycle code stays decoupled from the concrete *auth.SupabaseClient (and
+// from Supabase being configured at all — nil is a valid value, meaning
+// "skip the call").
+type SupabaseManager interface {
 	DeleteTenantUser(userID string) error
+	UpdateUserPassword(userID, newPassword string) error
 }
 
-// Delete marks the tenant deleting, removes all runtime resources, then hard
-// deletes the row so database relationships cascade. If the process dies after
-// SoftDelete, the reconciler resumes the same cleanup pipeline.
+// SupabaseDeleter is kept as an alias of SupabaseManager so existing call
+// sites that only need delete remain compilable.
+type SupabaseDeleter = SupabaseManager
+
+// Delete marks the tenant deleting, removes all runtime resources, and marks
+// the cleanup as completed. The row stays in the DB with deleted_at set and
+// cleanup_completed_at set — historical, but recoverable from the archived
+// volume tarball when Cfg.TenantBackupDir is configured. A separate
+// retention job is responsible for the final DeleteCascade after the
+// retention window (rows with cleanup_completed_at NOT NULL are candidates).
+//
+// If the process dies between SoftDelete and MarkCleanupCompleted, the
+// reconciler picks the row up via ListPendingCleanup and resumes the same
+// cleanup pipeline.
 func (p *Provisioner) Delete(ctx context.Context, id string) error {
 	t, err := p.Tenants.Get(ctx, id)
 	if err != nil {
@@ -124,8 +137,8 @@ func (p *Provisioner) Delete(ctx context.Context, id string) error {
 	if err := p.cleanupDeletedTenant(ctx, t); err != nil {
 		return err
 	}
-	if err := p.Tenants.DeleteCascade(ctx, id); err != nil && !errors.Is(err, store.ErrTenantNotFound) {
-		return err
+	if err := p.Tenants.MarkCleanupCompleted(ctx, id); err != nil {
+		return fmt.Errorf("mark cleanup completed: %w", err)
 	}
 	return nil
 }
@@ -153,15 +166,32 @@ func (p *Provisioner) cleanupDeletedTenant(ctx context.Context, t *store.Tenant)
 		_ = p.Supabase.DeleteTenantUser(*t.SupabaseUserID)
 	}
 	if t.VolumePath != "" {
-		if err := RemoveVolume(ctx, t.VolumePath); err != nil {
+		// Prefer archive-then-remove so a misclick is recoverable. Falls back
+		// to plain RemoveVolume when no backup dir is configured.
+		if p.Cfg != nil && p.Cfg.TenantBackupDir != "" {
+			if err := ArchiveAndRemoveVolume(ctx, t.ID, t.VolumePath, p.Cfg.TenantBackupDir); err != nil {
+				return fmt.Errorf("archive volume: %w", err)
+			}
+		} else if err := RemoveVolume(ctx, t.VolumePath); err != nil {
 			return fmt.Errorf("volume cleanup: %w", err)
 		}
 	}
 	return nil
 }
 
-// RotatePassword reseeds the launcher-auth.db with a new password. Returns the
-// plaintext password to the caller exactly once.
+// RotatePassword issues a new credential for the tenant and invalidates the
+// old one EVERYWHERE it could still be honored:
+//   - launcher-auth.db (local bcrypt hash) is reseeded for local-mode tenants
+//   - Supabase Auth user has its password reset for auth_backend='supabase'
+//   - all active sessions for the tenant's members are revoked
+//   - the container is restarted so in-memory caches drop the old hash
+//
+// Returns the plaintext password to the caller exactly once.
+//
+// Without these extra steps the function was cosmetic: for Supabase tenants
+// the launcher never reads launcher-auth.db, so the old password kept
+// working until the user manually changed it; and for local tenants the
+// existing session cookie stayed valid until its TTL.
 func (p *Provisioner) RotatePassword(ctx context.Context, id string) (string, error) {
 	t, err := p.Tenants.Get(ctx, id)
 	if err != nil {
@@ -171,20 +201,48 @@ func (p *Provisioner) RotatePassword(ctx context.Context, id string) (string, er
 	if err != nil {
 		return "", err
 	}
-	if err := SeedDashboardCredentials(ctx, t.VolumePath, t.OwnerEmail, password); err != nil {
-		return "", err
+
+	// 1. Update wherever the password is actually checked.
+	switch t.AuthBackend {
+	case "supabase":
+		if p.Supabase == nil {
+			return "", errors.New("rotate password: Supabase manager not configured for supabase-backed tenant")
+		}
+		if t.SupabaseUserID == nil || *t.SupabaseUserID == "" {
+			return "", errors.New("rotate password: tenant has no Supabase user id recorded")
+		}
+		if err := p.Supabase.UpdateUserPassword(*t.SupabaseUserID, password); err != nil {
+			return "", fmt.Errorf("supabase update password: %w", err)
+		}
+		// Legacy launcher-auth.db is irrelevant for this backend; do not
+		// write it (would just leave a stale hash on disk pretending to be
+		// live).
+	default:
+		// Local backend: rewrite the on-disk bcrypt hash.
+		if err := SeedDashboardCredentials(ctx, t.VolumePath, t.OwnerEmail, password); err != nil {
+			return "", err
+		}
 	}
-	// Restart container so any in-memory state in picoclaw picks up the new hash.
+
+	// 2. Revoke any currently-active sessions for any member of this tenant.
+	// If we skip this, the attacker who triggered the rotation keeps the
+	// session cookie they already captured.
+	if p.Sessions != nil {
+		if err := p.Sessions.RevokeAllForTenant(ctx, id); err != nil {
+			return "", fmt.Errorf("revoke sessions: %w", err)
+		}
+	}
+
+	// 3. Restart the container so in-process caches drop the old credential.
 	if t.ContainerID != nil && *t.ContainerID != "" {
 		_ = p.Docker.Stop(ctx, *t.ContainerID, 10)
 		if err := p.Docker.Start(ctx, *t.ContainerID); err != nil {
 			return "", fmt.Errorf("restart: %w", err)
 		}
-		if _, err := p.Tenants.Get(ctx, id); err != nil {
-			return "", err
-		}
 	}
-	// Mark not-yet-delivered so admin UI flags it again.
+
+	// 4. Re-flag admin UI so the operator knows the new password is pending
+	// re-delivery to the owner.
 	const q = `UPDATE tenants SET initial_password_delivered = false WHERE id = $1`
 	if _, err := p.Tenants.DB.Pool.Exec(ctx, q, id); err != nil {
 		return "", err
