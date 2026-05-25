@@ -81,9 +81,40 @@ func migrateLegacyAgentDefaultsModel(m map[string]any) {
 	delete(defaults, "model")
 }
 
-// loadConfigV1 loads a version 1 config (current schema)
+// IsStrictConfigMode returns true when the runtime asked us to treat the
+// workspace's config.json as the AUTHORITATIVE source — no DefaultConfig
+// merge, no implicit field injection, no automatic SaveConfig after
+// migration. The SaaS provisioner sets PICOCLAW_CONFIG_STRICT=true in the
+// tenant container's env (see internal/saas/tenant/provisioner.go buildSpec)
+// so multi-tenant deployments don't inherit the standalone launcher's
+// hardcoded ModelList (GPT/Claude/OpenRouter providers the operator may
+// not even have keys for).
+//
+// Exported (and lives in the same file as loadConfig) so other config
+// codepaths — migrations, SaveConfig gating in LoadConfig — can check the
+// same flag without re-reading the env every time.
+func IsStrictConfigMode() bool {
+	return os.Getenv("PICOCLAW_CONFIG_STRICT") == "true"
+}
+
+// loadConfigV1 loads a version 1 config (current schema).
+//
+// Two modes:
+//   - permissive (standalone launcher, default): start from DefaultConfig()
+//     so the operator's local install ships with a reasonable model_list
+//     out of the box.
+//   - strict (SaaS tenant, PICOCLAW_CONFIG_STRICT=true): start from an EMPTY
+//     Config. The workspace's config.json is the only source of truth. If
+//     it's missing model_list or model_name, that's a workspace bug — fail
+//     loudly instead of silently filling in 25 unrelated providers.
 func loadConfig(data []byte) (*Config, error) {
-	cfg := DefaultConfig()
+	strict := IsStrictConfigMode()
+	var cfg *Config
+	if strict {
+		cfg = &Config{Version: CurrentVersion}
+	} else {
+		cfg = DefaultConfig()
+	}
 	evolutionModeExplicit := configObjectHasField(data, "evolution", "mode")
 	evolutionExplicitWithoutMode := configObjectHasTopLevelField(data, "evolution") && !evolutionModeExplicit
 
@@ -97,7 +128,10 @@ func loadConfig(data []byte) (*Config, error) {
 	if err := decodeJSONWithDiagnostics(data, &tmp, "config.json"); err != nil {
 		return nil, err
 	}
-	if len(tmp.ModelList) > 0 {
+	if strict || len(tmp.ModelList) > 0 {
+		// strict: ModelList is whatever the workspace says (possibly empty).
+		// permissive + user provided: reset before re-decoding to avoid the
+		// slice index-merge gotcha above.
 		cfg.ModelList = nil
 	}
 

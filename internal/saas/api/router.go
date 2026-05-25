@@ -240,7 +240,6 @@ func (h *Handler) Routes() http.Handler {
 				r.Get("/workspaces/{id}/validate", h.handleValidateWorkspace)
 				r.Put("/workspaces/{id}/files", h.handleWriteWorkspaceFile)
 				r.Post("/workspaces/{id}/frontend/build", h.handleBuildWorkspaceFrontend)
-				r.Post("/tenants/onboarding/bootstrap", h.handleBootstrapOnboardingTenant)
 				r.Post("/tenants/{id}/clone", h.handleCloneTenant)
 				r.Get("/tenants/{id}/sanity", h.handleTenantSanity)
 				// Discovery-mode liberation: per-tenant checklist + flip.

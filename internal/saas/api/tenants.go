@@ -3,7 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"io"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -24,6 +24,31 @@ type createTenantReq struct {
 	// WorkspaceID is required: selects the Workspace whose home/ subtree
 	// seeds the tenant volume and whose frontend-dist/ is bind-mounted.
 	WorkspaceID string `json:"workspace_id"`
+	// TenantType is the UX-level type the admin picked in the wizard:
+	//   "publico" → ui-visibility active_profile = "public"
+	//   "admin"   → ui-visibility active_profile = "admin"
+	//   "cliente" → ui-visibility active_profile = "tenant" (default)
+	// Empty defaults to "cliente". Anything else is rejected. The mapping
+	// to the underlying ui-visibility profile name is done in this handler
+	// — the frontend speaks the admin vocabulary, the volume speaks the
+	// runtime vocabulary, and we translate at the boundary.
+	TenantType string `json:"tenant_type,omitempty"`
+}
+
+// resolveUIProfile maps the admin-facing tenant type to the runtime
+// ui-visibility profile name. Returns error for unknown values so typos
+// fail fast at the API edge instead of silently boot wrong UI.
+func resolveUIProfile(tenantType string) (tenant.UIVisibilityProfile, error) {
+	switch strings.ToLower(strings.TrimSpace(tenantType)) {
+	case "", "cliente", "tenant":
+		return tenant.UIProfileTenant, nil
+	case "publico", "public":
+		return tenant.UIProfilePublic, nil
+	case "admin":
+		return tenant.UIProfileAdmin, nil
+	default:
+		return "", fmt.Errorf("unknown tenant_type %q (expected publico, admin, or cliente)", tenantType)
+	}
 }
 
 func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
@@ -40,6 +65,11 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := tenant.ValidateSubdomain(req.Subdomain); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	uiProfile, err := resolveUIProfile(req.TenantType)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -80,8 +110,10 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		MemLimitMB:            req.MemLimitMB,
 		CPUQuota:              req.CPUQuota,
 		WorkspaceID:           req.WorkspaceID,
-		SkipDashboardPassword: false,
+		SkipDashboardPassword: uiProfile == tenant.UIProfilePublic, // público não tem owner password
 		AuthBackend:           authBackend,
+		IsPublic:              uiProfile == tenant.UIProfilePublic,
+		UIProfile:             uiProfile,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -138,7 +170,24 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	h.auditTenantOp(r, out.TenantID, "tenant.create")
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+// auditTenantOp records a destructive/sensitive tenant operation in audit_logs.
+// Best-effort: errors are swallowed because the caller has already done the
+// actual work. Action verbs follow the "tenant.<verb>" convention used by
+// members.go and admin_auth.go for tenant.member.* and tenant.invite.*.
+func (h *Handler) auditTenantOp(r *http.Request, tenantID, action string) {
+	if h.Audit == nil {
+		return
+	}
+	var actorID *int64
+	if actor, ok := userFromContext(r.Context()); ok {
+		actorID = &actor.ID
+	}
+	tid := tenantID
+	_ = h.Audit.Insert(r.Context(), actorID, &tid, action, "tenant", tenantID)
 }
 
 func splitName(displayName string) (first, last string) {
@@ -199,6 +248,7 @@ func (h *Handler) handleSuspendTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.auditTenantOp(r, id, "tenant.recreate")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -208,6 +258,7 @@ func (h *Handler) handleResumeTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.auditTenantOp(r, id, "tenant.restart")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -217,6 +268,7 @@ func (h *Handler) handleRestartTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.auditTenantOp(r, id, "tenant.resume")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -226,6 +278,7 @@ func (h *Handler) handleRecreateTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.auditTenantOp(r, id, "tenant.suspend")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -235,6 +288,10 @@ func (h *Handler) handleDeleteTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Audit BEFORE response — at this point the cascade has run and the row
+	// is about to be deleted, but the audit row is FK-protected
+	// (audit_logs.tenant_id ON DELETE SET NULL keeps the action verb intact).
+	h.auditTenantOp(r, id, "tenant.delete")
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -245,124 +302,10 @@ func (h *Handler) handleRotatePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.auditTenantOp(r, id, "tenant.password.rotate")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"initial_password": password,
 		"warning":          "Save this password now — it will not be shown again.",
-	})
-}
-
-// bootstrapOnboardingReq is the body of POST /tenants/onboarding/bootstrap.
-// All fields default to sane onboarding-tenant values, so callers (typically
-// scripts/provision-onboarding-tenant.sh) can POST an empty body.
-type bootstrapOnboardingReq struct {
-	DisplayName string `json:"display_name"`
-	Subdomain   string `json:"subdomain"`
-	// WorkspaceID picks the workspace to seed the onboarding tenant from.
-	// When empty, falls back to a workspace whose slug is "onboarding".
-	WorkspaceID string `json:"workspace_id"`
-}
-
-// handleBootstrapOnboardingTenant provisions the singleton public onboarding
-// tenant (is_public=true). The volume is seeded from the workspace whose ID
-// is in the request body, or the workspace whose slug is "onboarding" if no
-// ID is given. The conventional flow is to build the ZIP from the repo's
-// `workspace/` tree via scripts/build-workspace-zip.ps1 and upload it via
-// the admin UI — that workspace then becomes the seed for this endpoint.
-// Idempotent: returns 409 with the existing tenant info if the subdomain is
-// already provisioned, so the bootstrap script can re-run safely.
-func (h *Handler) handleBootstrapOnboardingTenant(w http.ResponseWriter, r *http.Request) {
-	var req bootstrapOnboardingReq
-	// Decode is best-effort: an empty body is OK (script may not send any
-	// overrides). io.EOF is the canonical "empty body" signal from json.Decoder.
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-		writeError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	req.DisplayName = strings.TrimSpace(req.DisplayName)
-	req.Subdomain = strings.TrimSpace(strings.ToLower(req.Subdomain))
-	if req.DisplayName == "" {
-		req.DisplayName = "Onboarding"
-	}
-	if req.Subdomain == "" {
-		req.Subdomain = "onboarding"
-	}
-
-	// Dedup by subdomain — the onboarding tenant is a singleton. Surface a
-	// 409 so the script can short-circuit cleanly instead of hitting the
-	// downstream "subdomain already taken" path with an opaque body.
-	if existing, err := h.Tenants.GetBySubdomain(r.Context(), req.Subdomain); err == nil && existing != nil {
-		writeJSON(w, http.StatusConflict, map[string]any{
-			"error":     "onboarding tenant already exists",
-			"tenant_id": existing.ID,
-			"subdomain": existing.Subdomain,
-			"url":       tenantURL(h.Cfg, existing.Subdomain),
-		})
-		return
-	} else if err != nil && !errors.Is(err, store.ErrTenantNotFound) {
-		writeError(w, http.StatusInternalServerError, "db error")
-		return
-	}
-
-	if err := tenant.ValidateSubdomain(req.Subdomain); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	// The onboarding tenant has no human owner — derive an ops mailbox from
-	// the configured TenantBaseDomain so the owner_email column has a stable
-	// non-empty value the controlplane can audit later.
-	ownerEmail := "ops@" + strings.Trim(h.Cfg.TenantBaseDomain, ".")
-
-	// Resolve the workspace that seeds the onboarding tenant. Explicit id
-	// wins; otherwise we look up by the conventional "onboarding" slug. If
-	// the operator hasn't created either, bail with a clear message so the
-	// bootstrap script doesn't half-provision a tenant pointing at nothing.
-	wsID := strings.TrimSpace(req.WorkspaceID)
-	if wsID == "" {
-		ws, lerr := h.Workspaces.GetBySlug(r.Context(), "onboarding")
-		if lerr != nil {
-			writeError(
-				w,
-				http.StatusBadRequest,
-				"create a workspace with slug 'onboarding' first, or pass workspace_id in the body",
-			)
-			return
-		}
-		wsID = ws.ID
-	}
-
-	out, err := h.Provisioner.Create(r.Context(), tenant.CreateInput{
-		DisplayName: req.DisplayName,
-		OwnerEmail:  ownerEmail,
-		Subdomain:   req.Subdomain,
-		MemLimitMB:  512,
-		CPUQuota:    0.5,
-		IsPublic:    true,
-		AuthBackend: "local", // public tenant has no Supabase user
-		WorkspaceID: wsID,
-	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// Surface a clear warning when the HMAC secret is unset on the
-	// controlplane — without it, the skill scripts inside the container
-	// exit non-zero and Clara can't mark intakes qualified. Container
-	// boots either way, so the bootstrap doesn't fail.
-	var warning string
-	if h.Cfg.OnboardingCallbackSecret == "" {
-		warning = "PICOCLAW_ONBOARDING_CALLBACK_SECRET is unset on the controlplane — the onboarding skills will exit with a `required` env error. Set it and `Restart` this tenant before flipping VITE_USE_ONBOARDING_TENANT."
-	}
-
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"tenant_id":    out.TenantID,
-		"url":          out.URL,
-		"subdomain":    req.Subdomain,
-		"is_public":    true,
-		"workspace_id": wsID,
-		"warning":      warning,
-		"info":         "Onboarding tenant provisioned. Content is now driven by the chosen workspace — edit it via /workspaces in the admin.",
 	})
 }
 

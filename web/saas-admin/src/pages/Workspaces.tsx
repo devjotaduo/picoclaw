@@ -127,6 +127,11 @@ export function Workspaces() {
   const [uploadRaw, setUploadRaw] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string>("");
+  // Warnings produced by the backend's semantic validator (model_list shape,
+  // agents.defaults.model_name resolution, etc.). Empty string = no warnings
+  // OR the upload didn't run the validator (raw workspace, or older backend).
+  // Cleared on the next upload attempt.
+  const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
 
   const uploadM = useMutation({
     mutationFn: () => {
@@ -142,19 +147,28 @@ export function Workspaces() {
         archive: uploadFile,
       });
     },
-    onSuccess: async (ws) => {
+    onSuccess: async (result) => {
       await qc.invalidateQueries({ queryKey: ["workspaces"] });
-      setSelectedId(ws.id);
-      setUploadOpen(false);
-      setUploadName("");
-      setUploadSlug("");
-      setUploadDescription("");
-      setUploadDefaultAuto(false);
-      setUploadRaw(false);
-      setUploadFile(null);
+      setSelectedId(result.workspace.id);
+      const warnings = result.validation?.warnings ?? [];
+      setUploadWarnings(warnings);
+      // Keep the dialog open if there are warnings so the operator sees
+      // them and acknowledges. They can click "Fechar" to dismiss.
+      if (warnings.length === 0) {
+        setUploadOpen(false);
+        setUploadName("");
+        setUploadSlug("");
+        setUploadDescription("");
+        setUploadDefaultAuto(false);
+        setUploadRaw(false);
+        setUploadFile(null);
+      }
       setUploadError("");
     },
-    onError: (e: Error) => setUploadError(e.message || "Falha no upload"),
+    onError: (e: Error) => {
+      setUploadError(e.message || "Falha no upload");
+      setUploadWarnings([]);
+    },
   });
 
   return (
@@ -205,13 +219,16 @@ export function Workspaces() {
           file={uploadFile}
           setFile={setUploadFile}
           error={uploadError}
+          warnings={uploadWarnings}
           isPending={uploadM.isPending}
           onCancel={() => {
             setUploadOpen(false);
             setUploadError("");
+            setUploadWarnings([]);
           }}
           onSubmit={() => {
             setUploadError("");
+            setUploadWarnings([]);
             uploadM.mutate();
           }}
         />
@@ -675,6 +692,7 @@ function UploadWorkspaceDialog(props: {
   file: File | null;
   setFile: (f: File | null) => void;
   error: string;
+  warnings: string[];
   isPending: boolean;
   onCancel: () => void;
   onSubmit: () => void;
@@ -813,6 +831,17 @@ function UploadWorkspaceDialog(props: {
         {props.error && (
           <div className="rounded border border-red-800 bg-red-950/50 px-3 py-2 text-xs text-red-300">
             {props.error}
+          </div>
+        )}
+
+        {props.warnings.length > 0 && (
+          <div className="rounded border border-amber-800 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
+            <div className="mb-1 font-semibold">Workspace criado com avisos:</div>
+            <ul className="list-disc space-y-0.5 pl-4">
+              {props.warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
           </div>
         )}
 

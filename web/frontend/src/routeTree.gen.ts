@@ -9,7 +9,6 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SofiaOnboardingRouteImport } from './routes/sofia-onboarding'
 import { Route as ReadinessRouteImport } from './routes/readiness'
 import { Route as PendenciasRouteImport } from './routes/pendencias'
 import { Route as ModelsRouteImport } from './routes/models'
@@ -44,11 +43,6 @@ import { Route as AdminTenantsIndexRouteImport } from './routes/admin/tenants/in
 import { Route as AdminTenantsNewRouteImport } from './routes/admin/tenants/new'
 import { Route as AdminTenantsIdRouteImport } from './routes/admin/tenants/$id'
 
-const SofiaOnboardingRoute = SofiaOnboardingRouteImport.update({
-  id: '/sofia-onboarding',
-  path: '/sofia-onboarding',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ReadinessRoute = ReadinessRouteImport.update({
   id: '/readiness',
   path: '/readiness',
@@ -230,7 +224,6 @@ export interface FileRoutesByFullPath {
   '/models': typeof ModelsRoute
   '/pendencias': typeof PendenciasRoute
   '/readiness': typeof ReadinessRoute
-  '/sofia-onboarding': typeof SofiaOnboardingRoute
   '/admin/clone': typeof AdminCloneRoute
   '/agent/agents': typeof AgentAgentsRoute
   '/agent/dashboard': typeof AgentDashboardRoute
@@ -266,7 +259,6 @@ export interface FileRoutesByTo {
   '/models': typeof ModelsRoute
   '/pendencias': typeof PendenciasRoute
   '/readiness': typeof ReadinessRoute
-  '/sofia-onboarding': typeof SofiaOnboardingRoute
   '/admin/clone': typeof AdminCloneRoute
   '/agent/agents': typeof AgentAgentsRoute
   '/agent/dashboard': typeof AgentDashboardRoute
@@ -303,7 +295,6 @@ export interface FileRoutesById {
   '/models': typeof ModelsRoute
   '/pendencias': typeof PendenciasRoute
   '/readiness': typeof ReadinessRoute
-  '/sofia-onboarding': typeof SofiaOnboardingRoute
   '/admin/clone': typeof AdminCloneRoute
   '/agent/agents': typeof AgentAgentsRoute
   '/agent/dashboard': typeof AgentDashboardRoute
@@ -341,7 +332,6 @@ export interface FileRouteTypes {
     | '/models'
     | '/pendencias'
     | '/readiness'
-    | '/sofia-onboarding'
     | '/admin/clone'
     | '/agent/agents'
     | '/agent/dashboard'
@@ -377,7 +367,6 @@ export interface FileRouteTypes {
     | '/models'
     | '/pendencias'
     | '/readiness'
-    | '/sofia-onboarding'
     | '/admin/clone'
     | '/agent/agents'
     | '/agent/dashboard'
@@ -413,7 +402,6 @@ export interface FileRouteTypes {
     | '/models'
     | '/pendencias'
     | '/readiness'
-    | '/sofia-onboarding'
     | '/admin/clone'
     | '/agent/agents'
     | '/agent/dashboard'
@@ -450,7 +438,6 @@ export interface RootRouteChildren {
   ModelsRoute: typeof ModelsRoute
   PendenciasRoute: typeof PendenciasRoute
   ReadinessRoute: typeof ReadinessRoute
-  SofiaOnboardingRoute: typeof SofiaOnboardingRoute
   AdminCloneRoute: typeof AdminCloneRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminTenantsIdRoute: typeof AdminTenantsIdRoute
@@ -460,13 +447,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sofia-onboarding': {
-      id: '/sofia-onboarding'
-      path: '/sofia-onboarding'
-      fullPath: '/sofia-onboarding'
-      preLoaderRoute: typeof SofiaOnboardingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/readiness': {
       id: '/readiness'
       path: '/readiness'
@@ -771,7 +751,6 @@ const rootRouteChildren: RootRouteChildren = {
   ModelsRoute: ModelsRoute,
   PendenciasRoute: PendenciasRoute,
   ReadinessRoute: ReadinessRoute,
-  SofiaOnboardingRoute: SofiaOnboardingRoute,
   AdminCloneRoute: AdminCloneRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminTenantsIdRoute: AdminTenantsIdRoute,

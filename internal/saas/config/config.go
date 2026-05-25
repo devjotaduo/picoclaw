@@ -43,6 +43,7 @@ type Config struct {
 	TenantImage        string
 	TenantBaseDomain   string
 	TenantHostDataDir  string
+	TenantBackupDir    string // where Delete archives tenant volumes before removing them; empty = no archive
 	TenantNetworkEdge  string
 	TenantNetworkLLM   string
 	TenantCertResolver string // empty = no resolver label (Traefik falls back to default cert)
@@ -146,6 +147,7 @@ func Load() (*Config, error) {
 		TenantImage:         envOr("TENANT_IMAGE", "picoclaw-launcher:latest"),
 		TenantBaseDomain:    os.Getenv("TENANT_BASE_DOMAIN"),
 		TenantHostDataDir:   envOr("TENANT_HOST_DATA_DIR", "/srv/saas/tenants"),
+		TenantBackupDir:     envOr("TENANT_BACKUP_DIR", "/srv/saas/backups/tenants"),
 		TenantNetworkEdge:   envOr("TENANT_NETWORK_EDGE", "saas_edge"),
 		TenantNetworkLLM:    envOr("TENANT_NETWORK_LLM", "saas_llm"),
 		TenantCertResolver:  envOr("TENANT_CERT_RESOLVER", "letsencrypt"),

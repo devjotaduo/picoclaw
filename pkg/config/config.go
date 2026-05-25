@@ -1406,9 +1406,18 @@ func LoadConfig(path string) (*Config, error) {
 			return nil, err
 		}
 
-		defer func(cfg *Config) {
-			_ = SaveConfig(path, cfg)
-		}(cfg)
+		// Persist the migrated config back to disk so the next boot doesn't
+		// repeat the migration. In strict mode (SaaS tenant), the
+		// authoritative copy is the workspace's home/config.json; rewriting
+		// the tenant's config.json on every migration would clobber the
+		// workspace template with the launcher's permissive defaults.
+		// Strict tenants accept the in-memory migrated copy and leave disk
+		// alone.
+		if !IsStrictConfigMode() {
+			defer func(cfg *Config) {
+				_ = SaveConfig(path, cfg)
+			}(cfg)
+		}
 	case 1:
 		// V1→V3 migration: rename channels→channel_list, infer Enabled, migrate channel configs
 		logger.InfoF(
@@ -1460,9 +1469,18 @@ func LoadConfig(path string) (*Config, error) {
 			return nil, err
 		}
 
-		defer func(cfg *Config) {
-			_ = SaveConfig(path, cfg)
-		}(cfg)
+		// Persist the migrated config back to disk so the next boot doesn't
+		// repeat the migration. In strict mode (SaaS tenant), the
+		// authoritative copy is the workspace's home/config.json; rewriting
+		// the tenant's config.json on every migration would clobber the
+		// workspace template with the launcher's permissive defaults.
+		// Strict tenants accept the in-memory migrated copy and leave disk
+		// alone.
+		if !IsStrictConfigMode() {
+			defer func(cfg *Config) {
+				_ = SaveConfig(path, cfg)
+			}(cfg)
+		}
 		logger.InfoF(
 			"config migrate success",
 			map[string]any{"from": versionInfo.Version, "to": CurrentVersion},
@@ -1512,9 +1530,18 @@ func LoadConfig(path string) (*Config, error) {
 			return nil, err
 		}
 
-		defer func(cfg *Config) {
-			_ = SaveConfig(path, cfg)
-		}(cfg)
+		// Persist the migrated config back to disk so the next boot doesn't
+		// repeat the migration. In strict mode (SaaS tenant), the
+		// authoritative copy is the workspace's home/config.json; rewriting
+		// the tenant's config.json on every migration would clobber the
+		// workspace template with the launcher's permissive defaults.
+		// Strict tenants accept the in-memory migrated copy and leave disk
+		// alone.
+		if !IsStrictConfigMode() {
+			defer func(cfg *Config) {
+				_ = SaveConfig(path, cfg)
+			}(cfg)
+		}
 		logger.InfoF(
 			"config migrate success",
 			map[string]any{"from": versionInfo.Version, "to": CurrentVersion},
