@@ -93,7 +93,7 @@ Visitor browser
 | 6. Skill scripts (HMAC callback) | ✅ | `0dec…` | `mark-qualified.sh`, `submit-intake.sh` |
 | 7. Controlplane callback endpoint | ✅ | `603e436d` | HMAC verify + anti-replay ±5min |
 | 8. Public-tenant workspace template | ✅ | `f78d7c34`+`21cc044c`+(this) | Originally `workspace-onboarding/` with Clara; superseded by `workspace/` (the full multi-agent dev tree) with Sofia as the discovery default. Build a ZIP via `scripts/build-workspace-zip.ps1` and upload via the admin UI to install. |
-| 9. Bootstrap script + endpoint | ✅ | `889dd4b7` | `POST /api/v1/tenants/onboarding/bootstrap` |
+| 9. Bootstrap script + endpoint | ❌ removed in PR #104 | `889dd4b7` (added), PR #104 (removed) | Singleton public tenant now created through the normal wizard with `tenant_type=publico`. Script `scripts/provision-onboarding-tenant.sh` is broken. |
 | 10. Frontend cutover (feature flag) | ✅ | adapter + env-prop + polling-bridge + useClaraChat wire-up | Three building blocks (`onboardingTenantChat.ts`, `pkg/tools.ExecTool` env injection + skill-script env fallback, `onboardingIntakePolling.ts`) plus the `useClaraChat` cutover gated by `VITE_USE_ONBOARDING_TENANT`. |
 | 11. Delete `internal/saas/clara/` | ⏸ | — | wait 1-2 weeks of stable parallel operation |
 | 12. Docs + memory | ✅ | (this commit) | |
@@ -132,34 +132,37 @@ VITE_ONBOARDING_TENANT_URL=https://onboarding.jotaduo.com
 
 ## Bootstrap (one-time per environment)
 
+> **Updated 2026-05-25 (PR #104).** The dedicated bootstrap endpoint +
+> script were removed. Use the normal wizard with `tenant_type=publico`.
+
 1. Set `PICOCLAW_ONBOARDING_CALLBACK_SECRET` on the controlplane (and
-   recommended `PICOCLAW_ONBOARDING_CALLBACK_URL`). `buildSpec`
-   propagates both into every `is_public=true` tenant container
-   automatically; without the secret the skill scripts inside the
-   container exit non-zero and Clara has to apologize in chat.
+   recommended `PICOCLAW_ONBOARDING_CALLBACK_URL`). **TODO:** `buildSpec`
+   in `internal/saas/tenant/provisioner.go` does not yet propagate these
+   into the tenant container env — currently has to be added manually to
+   the container or via a parallel mechanism. Without the secret the
+   skill scripts inside the container exit non-zero and Clara has to
+   apologize in chat.
 
 2. Create the onboarding workspace via the admin UI. The recommended flow:
    ```bash
    pwsh scripts/build-workspace-zip.ps1 -SourceDir workspace -Slug onboarding \
-       -Name "Onboarding" -Upload
+       -Name "Onboarding"
    ```
    That packages the repo's `workspace/` tree (Sofia is the discovery agent
    there; `channel_list.public-web` is present but disabled by default, so
-   the SaaS upload step flips it on for the public variant) and uploads a
-   validated ZIP via the admin API. Alternative: admin UI → `/workspaces` →
-   "Novo workspace" and paste files directly.
+   the SaaS upload step flips it on for the public variant). Upload via
+   admin UI → `/workspaces` → "Upload .zip". The upload runs
+   `validateWorkspaceConfigSemantics` — fix any blockers before continuing.
 
    Optional: click "Compilar frontend" if you want a per-workspace UI build
    (the embedded launcher dist is the fallback otherwise).
 
-3. Run the bootstrap:
-   ```bash
-   export ADM_SESSION_COOKIE="<your platform_admin session cookie>"
-   ./scripts/provision-onboarding-tenant.sh
-   ```
-   The endpoint resolves the workspace by `slug="onboarding"` (override
-   by passing `workspace_id` in the body). When the controlplane has no
-   HMAC secret set, the JSON response includes a `warning` field.
+3. Create the singleton public tenant via the admin "New tenant" wizard:
+   - Pick the **Público** card (step 1 of the wizard).
+   - Workspace = the one from step 2.
+   - Submit. No owner email required — `resolveUIProfile("publico")`
+     translates to `IsPublic=true` + `SkipDashboardPassword=true` +
+     `active_profile=public` written into `ui-visibility.json`.
 
 4. Verify:
    ```bash

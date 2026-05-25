@@ -15,8 +15,8 @@ import {
   type AgentReadinessStatus,
   getReadiness,
 } from "@/api/readiness"
-import { PageHeader } from "@/components/page-header"
 import { ValidateReadinessCard } from "@/components/operacao/validate-readiness-card"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 
 function statusBadge(status: AgentReadinessStatus) {

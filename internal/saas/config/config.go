@@ -40,13 +40,12 @@ type Config struct {
 	// flow stays available regardless so we can A/B compare.
 	ClaraEnabled bool
 
-	TenantImage        string
-	TenantBaseDomain   string
-	TenantHostDataDir  string
-	TenantBackupDir    string // where Delete archives tenant volumes before removing them; empty = no archive
-	TenantNetworkEdge  string
-	TenantNetworkLLM   string
-	TenantCertResolver string // empty = no resolver label (Traefik falls back to default cert)
+	TenantImage       string
+	TenantBaseDomain  string
+	TenantHostDataDir string
+	TenantBackupDir   string // where Delete archives tenant volumes before removing them; empty = no archive
+	TenantNetworkEdge string
+	TenantNetworkLLM  string
 
 	CompanyIntakeUploadDir string
 
@@ -150,12 +149,11 @@ func Load() (*Config, error) {
 		TenantBackupDir:     envOr("TENANT_BACKUP_DIR", "/srv/saas/backups/tenants"),
 		TenantNetworkEdge:   envOr("TENANT_NETWORK_EDGE", "saas_edge"),
 		TenantNetworkLLM:    envOr("TENANT_NETWORK_LLM", "saas_llm"),
-		TenantCertResolver:  envOr("TENANT_CERT_RESOLVER", "letsencrypt"),
 		CompanyIntakeUploadDir: envOr(
 			"COMPANY_INTAKE_UPLOAD_DIR",
 			"/var/lib/picoclaw-saas/company-intakes/uploads",
 		),
-		CookieDomain: os.Getenv("COOKIE_DOMAIN"),
+		CookieDomain:  os.Getenv("COOKIE_DOMAIN"),
 		CookieSecure:  envBool("COOKIE_SECURE", true),
 		OpenCRMURL:    envOr("OPENCRM_URL", "http://opencrm:8787"),
 		BrowserCDPURL: envOr("BROWSER_CDP_URL", "http://browser-sidecar:9222"),
