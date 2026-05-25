@@ -4,9 +4,9 @@ import * as React from "react"
 
 import {
   ControlplaneError,
+  type TenantType,
   createTenant,
   listLauncherProfiles,
-  type TenantType,
 } from "@/api/controlplane"
 import { AdminGuard } from "@/components/admin/AdminGuard"
 import { Button } from "@/components/ui/button"
@@ -124,8 +124,9 @@ function NewTenantForm() {
             <h1 className="text-2xl font-semibold">Novo tenant</h1>
             <p className="text-muted-foreground text-sm">
               Escolha o tipo. Isso define o que o usuário vai ver (a UI inteira
-              sai de <code className="font-mono text-xs">ui-visibility.json</code>{" "}
-              do workspace; o tipo selecionado vira o{" "}
+              sai de{" "}
+              <code className="font-mono text-xs">ui-visibility.json</code> do
+              workspace; o tipo selecionado vira o{" "}
               <code className="font-mono text-xs">active_profile</code>).
             </p>
           </header>

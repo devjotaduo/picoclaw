@@ -16,12 +16,7 @@ import {
   getValidateReadiness,
 } from "@/api/validate-readiness"
 import { Badge } from "@/components/ui/badge"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 
 // ---------------------------------------------------------------------------
@@ -207,9 +202,7 @@ export function ValidateReadinessCard() {
   const universalDone = Object.values(resp.universal).filter(Boolean).length
   const universalTotal = Object.values(resp.universal).length
 
-  const segDone = seg
-    ? Object.values(seg.checks).filter(Boolean).length
-    : 0
+  const segDone = seg ? Object.values(seg.checks).filter(Boolean).length : 0
   const segTotal = seg ? Object.values(seg.checks).length : 0
 
   const integracoes = resp.integracoes_required ?? []
@@ -246,15 +239,15 @@ export function ValidateReadinessCard() {
           count={{ done: universalDone, total: universalTotal }}
         >
           <ul className="space-y-1.5">
-            {(Object.keys(resp.universal) as (keyof typeof resp.universal)[]).map(
-              (k) => (
-                <CheckRow
-                  key={k}
-                  label={universalLabels[k] ?? humanizeKey(k)}
-                  done={resp.universal[k]}
-                />
-              ),
-            )}
+            {(
+              Object.keys(resp.universal) as (keyof typeof resp.universal)[]
+            ).map((k) => (
+              <CheckRow
+                key={k}
+                label={universalLabels[k] ?? humanizeKey(k)}
+                done={resp.universal[k]}
+              />
+            ))}
           </ul>
         </CollapsibleSection>
 

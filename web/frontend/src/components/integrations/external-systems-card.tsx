@@ -14,6 +14,7 @@ import {
   markIntegrationResolved,
 } from "@/api/validate-readiness"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -21,7 +22,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 
 const VALIDATE_READINESS_KEY = ["workspace-validate-readiness"] as const
 
@@ -101,7 +101,10 @@ export function ExternalSystemsCard() {
   const mutation = useMutation({
     mutationFn: (key: string) => markIntegrationResolved(key),
     onSuccess: (updated, key) => {
-      qc.setQueryData<ValidateReadinessResponse>(VALIDATE_READINESS_KEY, updated)
+      qc.setQueryData<ValidateReadinessResponse>(
+        VALIDATE_READINESS_KEY,
+        updated,
+      )
       toast.success("Integração marcada como resolvida", {
         description: humanizeKey(key),
       })
@@ -158,9 +161,7 @@ export function ExternalSystemsCard() {
                 key={item.key}
                 item={item}
                 onResolve={(key) => mutation.mutate(key)}
-                pending={
-                  mutation.isPending && mutation.variables === item.key
-                }
+                pending={mutation.isPending && mutation.variables === item.key}
               />
             ))}
           </ul>
