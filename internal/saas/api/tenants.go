@@ -77,7 +77,11 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.DisplayName == "" || req.Subdomain == "" || req.OwnerEmail == "" {
-		writeError(w, http.StatusBadRequest, "display_name and subdomain are required (owner_email also required for non-public tenants)")
+		writeError(
+			w,
+			http.StatusBadRequest,
+			"display_name and subdomain are required (owner_email also required for non-public tenants)",
+		)
 		return
 	}
 	if err := tenant.ValidateSubdomain(req.Subdomain); err != nil {
