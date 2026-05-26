@@ -114,6 +114,91 @@ export async function suspendTenant(id: string) {
   return api<void>(`/api/v1/tenants/${id}/suspend`, { method: "POST" });
 }
 
+// PromoteTenantInput — body for POST /api/v1/tenants/{id}/promote.
+// All fields optional: handler reads owner_email from workspace state
+// (Sofia's capture) by default. Force bypasses the promotion.ready
+// gate for tenants where the onboarding state machine never ran.
+export type PromoteTenantInput = {
+  force?: boolean;
+  owner_email?: string;
+};
+
+export type PromoteTenantResponse = {
+  tenant_id: string;
+  url: string;
+  owner_email: string;
+  initial_password: string;
+  login_mode: "password";
+  info?: string;
+  warning?: string;
+};
+
+// promoteTenant migrates a public tenant to a regular cliente: creates
+// the owner user, generates a password, flips ui-visibility to "tenant",
+// and recreates the container with PICOCLAW_AUTH_MODE=launcher. Sends
+// the credentials email when SMTP is configured.
+export async function promoteTenant(id: string, input: PromoteTenantInput = {}) {
+  return api<PromoteTenantResponse>(`/api/v1/tenants/${id}/promote`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+// OnboardingState mirrors workspace/state/onboarding.json produced by
+// the onboarding-state skill (Sofia + Catarina write to it; backend
+// promote reads it). Used by the admin panel to show "Aguardando
+// promoção" badge and to pre-fill owner_email in the promote modal.
+export type OnboardingState = {
+  phase:
+    | "discovery_in_progress"
+    | "discovery_done"
+    | "deepening_in_progress"
+    | "ready_for_promotion"
+    | "promoted";
+  discovery: {
+    started_at: string | null;
+    completed_at: string | null;
+    segment: string | null;
+    summary: string | null;
+    agent: string;
+  };
+  deepening: {
+    started_at: string | null;
+    areas_covered: string[];
+    areas_required: string[];
+    completed_at: string | null;
+    agent: string;
+    forced_completion_reason?: string;
+  };
+  owner_captured: {
+    name: string | null;
+    email: string | null;
+    whatsapp: string | null;
+    captured_by: string | null;
+    captured_at: string | null;
+  };
+  promotion: {
+    ready: boolean;
+    blocked_by: string[];
+    promoted_at: string | null;
+    promoted_by: string | null;
+  };
+};
+
+// getTenantOnboardingState returns the state machine JSON written by
+// Sofia/Catarina via the onboarding-state skill. Returns null when the
+// tenant hasn't been touched by the skill yet (404 from backend).
+export async function getTenantOnboardingState(id: string): Promise<OnboardingState | null> {
+  try {
+    return await api<OnboardingState>(`/api/v1/tenants/${id}/onboarding-state`);
+  } catch (e: unknown) {
+    if (typeof e === "object" && e !== null && "status" in e && (e as { status?: number }).status === 404) {
+      return null;
+    }
+    throw e;
+  }
+}
+
 export async function resumeTenant(id: string) {
   return api<void>(`/api/v1/tenants/${id}/resume`, { method: "POST" });
 }
