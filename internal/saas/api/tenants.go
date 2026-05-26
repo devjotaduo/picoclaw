@@ -60,32 +60,48 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	req.DisplayName = strings.TrimSpace(req.DisplayName)
 	req.OwnerEmail = strings.TrimSpace(strings.ToLower(req.OwnerEmail))
 	req.Subdomain = strings.TrimSpace(strings.ToLower(req.Subdomain))
-	if req.DisplayName == "" || req.OwnerEmail == "" || req.Subdomain == "" {
-		writeError(w, http.StatusBadRequest, "display_name, owner_email and subdomain are required")
+
+	uiProfile, err := resolveUIProfile(req.TenantType)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	isPublic := uiProfile == tenant.UIProfilePublic
+
+	// Public tenants have no human owner — derive a stable ops mailbox from
+	// TenantBaseDomain so the owner_email column has a non-empty value the
+	// controlplane can audit, and the operator never has to invent one in the
+	// wizard. Mirrors what the retired handleBootstrapOnboardingTenant did.
+	if isPublic && req.OwnerEmail == "" {
+		req.OwnerEmail = "ops@" + strings.Trim(h.Cfg.TenantBaseDomain, ".")
+	}
+
+	if req.DisplayName == "" || req.Subdomain == "" || req.OwnerEmail == "" {
+		writeError(w, http.StatusBadRequest, "display_name and subdomain are required (owner_email also required for non-public tenants)")
 		return
 	}
 	if err := tenant.ValidateSubdomain(req.Subdomain); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	uiProfile, err := resolveUIProfile(req.TenantType)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
+
 	// Dedup by owner email — mirrors AutoProvisioner.Run. Surfaced as 409 with
 	// the existing tenant info so the admin UI can deep-link instead of
-	// silently no-op'ing a destructive click.
-	if existing, err := h.Tenants.GetByOwnerEmail(r.Context(), req.OwnerEmail); err == nil && existing != nil {
-		writeJSON(w, http.StatusConflict, map[string]any{
-			"error":     "owner already has a tenant",
-			"tenant_id": existing.ID,
-			"url":       tenantURL(h.Cfg, existing.Subdomain),
-		})
-		return
-	} else if err != nil && !errors.Is(err, store.ErrTenantNotFound) {
-		writeError(w, http.StatusInternalServerError, "db error")
-		return
+	// silently no-op'ing a destructive click. Skipped for public tenants
+	// because they all share the same synthetic ops@<base> address; subdomain
+	// uniqueness below catches the real "already provisioned" case.
+	if !isPublic {
+		if existing, err := h.Tenants.GetByOwnerEmail(r.Context(), req.OwnerEmail); err == nil && existing != nil {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"error":     "owner already has a tenant",
+				"tenant_id": existing.ID,
+				"url":       tenantURL(h.Cfg, existing.Subdomain),
+			})
+			return
+		} else if err != nil && !errors.Is(err, store.ErrTenantNotFound) {
+			writeError(w, http.StatusInternalServerError, "db error")
+			return
+		}
 	}
 	if _, err := h.Tenants.GetBySubdomain(r.Context(), req.Subdomain); err == nil {
 		writeError(w, http.StatusConflict, "subdomain already taken")
@@ -123,6 +139,22 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	// tenant content now; the provisioner's runProvision already copies
 	// home/ into the volume and substitutes ${LITELLM_KEY} during Create.
 
+	resp := map[string]any{
+		"tenant_id": out.TenantID,
+		"url":       out.URL,
+	}
+
+	// Public tenants have no human owner — skip user/membership creation,
+	// credentials email, and CRM contact. The ops sentinel email is just an
+	// audit anchor, not a real recipient.
+	if isPublic {
+		resp["is_public"] = true
+		resp["info"] = "Tenant público criado. Acesso é anônimo (sem login). Use ui-visibility.json para customizar o que o visitante vê."
+		h.auditTenantOp(r, out.TenantID, "tenant.create")
+		writeJSON(w, http.StatusCreated, resp)
+		return
+	}
+
 	// Controlplane membership stays per-tenant regardless of dashboard auth
 	// backend — the platform admin still needs a row to manage memberships
 	// from adm.<base>/users.
@@ -134,11 +166,6 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	if err := h.Memberships.Upsert(r.Context(), owner.ID, out.TenantID, store.RoleTenantOwner); err != nil {
 		writeError(w, http.StatusInternalServerError, "owner membership error")
 		return
-	}
-
-	resp := map[string]any{
-		"tenant_id": out.TenantID,
-		"url":       out.URL,
 	}
 
 	resp["initial_password"] = out.InitialPassword
