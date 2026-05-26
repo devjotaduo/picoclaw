@@ -178,6 +178,47 @@ services:
     labels:
       - "traefik.enable=false"
 
+  # Owns Jotaduo's institutional WhatsApp pairing and exposes a tiny HTTP API
+  # so multiple public tenants can send/receive on its behalf. Runs whatsmeow
+  # (one active device per WA pairing — bind-mounting the same store.db into N
+  # tenant containers would trigger duplicate-device disconnects on the real
+  # number). See cmd/jotaduo-wa-sidecar and internal/jotaduowa for details.
+  #
+  # Operator pairs the WA once via https://adm.${SAAS_BASE_DOMAIN}/jotaduo-wa/pair
+  # (admin-token gated). Public tenants get JOTADUO_WA_URL +
+  # JOTADUO_WA_HMAC_SECRET via the provisioner so the
+  # `enviar-whatsapp-jotaduo` skill can POST /internal/wa/send.
+  jotaduo-wa:
+    image: picoclaw/jotaduo-wa:latest
+    build:
+      context: ../..
+      dockerfile: docker/saas/Dockerfile.jotaduo-wa
+    container_name: jotaduo-wa
+    restart: unless-stopped
+    environment:
+      JOTADUO_WA_LISTEN: ":18810"
+      JOTADUO_WA_STORE_DIR: "/var/lib/jotaduo-wa"
+      JOTADUO_WA_HMAC_SECRET: ${JOTADUO_WA_HMAC_SECRET}
+      JOTADUO_WA_ADMIN_TOKEN: ${JOTADUO_WA_ADMIN_TOKEN}
+    volumes:
+      - /srv/picoclaw/jotaduo-wa:/var/lib/jotaduo-wa
+    networks:
+      # saas_edge so Traefik can route /jotaduo-wa/pair to it under the admin
+      # subdomain, AND so public tenant containers (also on saas_edge) can
+      # reach jotaduo-wa:18810 internally without a published host port.
+      - saas_edge
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=saas_edge"
+      # Pairing UI is only reachable through the admin host. Path-prefix is
+      # stripped so the in-binary handler sees /pair instead of /jotaduo-wa/pair.
+      - "traefik.http.routers.jotaduo-wa-pair.rule=Host(`adm.${SAAS_BASE_DOMAIN}`) && PathPrefix(`/jotaduo-wa/`)"
+      - "traefik.http.routers.jotaduo-wa-pair.entrypoints=websecure"
+      - "traefik.http.routers.jotaduo-wa-pair.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.jotaduo-wa-pair.middlewares=jotaduo-wa-stripprefix@docker,security-headers@file"
+      - "traefik.http.middlewares.jotaduo-wa-stripprefix.stripprefix.prefixes=/jotaduo-wa"
+      - "traefik.http.services.jotaduo-wa.loadbalancer.server.port=18810"
+
   opencrm:
     image: picoclaw/opencrm:latest
     build:

@@ -1,0 +1,48 @@
+# ============================================================
+# jotaduo-wa-sidecar — owns Jotaduo's institutional WhatsApp
+# pairing and exposes a tiny HTTP API so multiple public
+# tenants can send/receive on its behalf.
+#
+# Built with the `whatsapp_native` tag so whatsmeow is linked
+# in. Stays a separate image from the controlplane to keep
+# the controlplane lean (whatsmeow adds ~30 MiB) and isolate
+# the WA session lifecycle from controlplane restarts.
+# ============================================================
+FROM golang:1.25-alpine AS builder
+
+RUN apk add --no-cache git
+
+WORKDIR /src
+
+COPY go.mod go.sum* ./
+RUN go mod download
+
+COPY . .
+
+# CGO_ENABLED=0 keeps the binary statically linked + portable.
+# modernc.org/sqlite is the pure-Go driver, so no cgo needed.
+RUN CGO_ENABLED=0 go build -tags whatsapp_native,stdjson \
+    -ldflags "-s -w" \
+    -o /out/jotaduo-wa-sidecar \
+    ./cmd/jotaduo-wa-sidecar
+
+# ============================================================
+# Stage 2: minimal runtime
+# ============================================================
+FROM alpine:3.23
+
+RUN apk add --no-cache ca-certificates tzdata wget
+
+COPY --from=builder /out/jotaduo-wa-sidecar /usr/local/bin/jotaduo-wa-sidecar
+
+# Store dir is bind-mounted at runtime (compose mounts
+# /srv/picoclaw/jotaduo-wa here). Pre-create so the first
+# run doesn't fail on mkdir when the host dir is empty.
+RUN mkdir -p /var/lib/jotaduo-wa
+
+EXPOSE 18810
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -q --spider http://127.0.0.1:18810/healthz || exit 1
+
+ENTRYPOINT ["/usr/local/bin/jotaduo-wa-sidecar"]
