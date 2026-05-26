@@ -268,6 +268,43 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 // Used so an empty {} doesn't trip the "invalid json" branch.
 var errEmptyBody = errors.New("EOF")
 
+// handleGetTenantOnboardingState exposes workspace/state/onboarding.json
+// as JSON so the admin panel can render the current phase + pre-fill the
+// promote modal with the captured owner email. Returns 404 when the
+// state file doesn't exist (tenant created but Sofia never ran).
+func (h *Handler) handleGetTenantOnboardingState(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "tenant id é obrigatório")
+		return
+	}
+	t, err := h.Tenants.Get(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrTenantNotFound) {
+			writeError(w, http.StatusNotFound, "tenant não encontrado")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "db error: "+err.Error())
+		return
+	}
+	if t.VolumePath == "" {
+		writeError(w, http.StatusUnprocessableEntity, "tenant sem volume_path")
+		return
+	}
+	state, err := readOnboardingState(t.VolumePath)
+	if err != nil {
+		// Distinguish "not yet" (404) from "corrupt" (500). The reader
+		// embeds the os.ErrNotExist match in the message — cheap check.
+		if strings.Contains(err.Error(), "não existe") {
+			http.NotFound(w, r)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "read state: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, state)
+}
+
 // readOnboardingState reads volumePath/workspace/state/onboarding.json
 // produced by the onboarding-state skill. Returns (nil, err) when the
 // file is missing or unparseable; the caller decides whether to abort

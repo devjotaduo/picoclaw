@@ -39,6 +39,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { CopyText } from "@/components/ui/copy-text";
 import { CopyableField } from "@/components/ui/copyable-field";
 import { SkeletonCard } from "@/components/ui/skeleton";
+import { PromoteTenantCard } from "@/components/tenant/promote-tenant-card";
 import { ResendCredentialsDialog } from "@/components/tenant/resend-credentials-dialog";
 import { RotatedPasswordDialog } from "@/components/tenant/rotated-password-dialog";
 import { formatDate, formatInt, formatUSD, relativeTime } from "@/lib/utils";
@@ -609,6 +610,12 @@ export function TenantDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {isPlatformAdmin && tenant.is_public && (
+        <div className="mt-4">
+          <PromoteTenantCard tenant={tenant} />
+        </div>
+      )}
 
       {isPlatformAdmin && tenant.workspace_id && (
         <Card className="mt-4">
