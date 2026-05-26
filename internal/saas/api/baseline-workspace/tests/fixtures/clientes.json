@@ -1,0 +1,80 @@
+{
+  "clientes": [
+    {
+      "id": "cli-001",
+      "nome": "Ana Lima",
+      "empresa": "Clínica Bella Vida",
+      "telefone": "+55 11 99876-5432",
+      "email": "ana@bellavida.com.br",
+      "segmento": "saúde",
+      "intencao": "contratar sistema de agendamento",
+      "orcamento": "R$ 500/mês",
+      "urgencia": "alta",
+      "historico": "primeiro contato"
+    },
+    {
+      "id": "cli-002",
+      "nome": "Bruno Costa",
+      "empresa": "Distribuidora Costa",
+      "telefone": "+55 21 98765-4321",
+      "email": "bruno@distribuidoracosta.com",
+      "segmento": "distribuição",
+      "intencao": "suporte técnico — sistema lento",
+      "urgencia": "crítica",
+      "historico": "cliente ativo há 8 meses"
+    },
+    {
+      "id": "cli-003",
+      "nome": "Carla Mendes",
+      "empresa": "Loja Vitrine Moda",
+      "telefone": "+55 31 97654-3210",
+      "email": "carla@vitrinemoda.com",
+      "segmento": "varejo",
+      "intencao": "informações sobre planos e preços",
+      "urgencia": "baixa",
+      "historico": "lead novo via Instagram"
+    },
+    {
+      "id": "cli-004",
+      "nome": "Diego Ferreira",
+      "empresa": "Consultoria DF",
+      "telefone": "+55 41 96543-2109",
+      "email": "diego@consultoriadf.com.br",
+      "segmento": "serviços B2B",
+      "intencao": "devolução de produto — insatisfeito",
+      "urgencia": "média",
+      "historico": "cliente ativo há 3 meses, segunda reclamação"
+    },
+    {
+      "id": "cli-005",
+      "nome": "Fernanda Rocha",
+      "empresa": "Espaço Bem-Estar",
+      "telefone": "+55 51 95432-1098",
+      "email": "fernanda@espacobemestar.com",
+      "segmento": "bem-estar",
+      "intencao": "onboarding — nova empresa",
+      "urgencia": "média",
+      "historico": "indicada por parceiro"
+    }
+  ],
+  "produtos": [
+    {
+      "id": "prod-001",
+      "nome": "Plano Starter",
+      "descricao": "Até 3 agentes, 1000 mensagens/mês",
+      "preco": "R$ 297/mês"
+    },
+    {
+      "id": "prod-002",
+      "nome": "Plano Business",
+      "descricao": "Até 10 agentes, 10000 mensagens/mês, suporte prioritário",
+      "preco": "R$ 697/mês"
+    },
+    {
+      "id": "prod-003",
+      "nome": "Plano Enterprise",
+      "descricao": "Agentes ilimitados, mensagens ilimitadas, SLA 4h",
+      "preco": "sob consulta"
+    }
+  ]
+}

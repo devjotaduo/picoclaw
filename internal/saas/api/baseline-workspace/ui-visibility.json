@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "source": "baseline",
+  "source": "workspace",
   "active_profile": "public",
   "default_profile": "public",
   "default_visibility": false,

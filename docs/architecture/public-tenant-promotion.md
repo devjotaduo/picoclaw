@@ -436,6 +436,67 @@ iniciou).
 Quando V2 ficar saturado (latência de 15min vira problema), migrar pra
 Opção B.
 
+## Como o conteúdo de `workspace/` chega aos novos tenants
+
+Pipeline com 3 caminhos. Sem entender isso, mudanças em Sofia/Catarina/skills viram regressões silenciosas:
+
+```
+workspace/  (repo, source-of-truth)
+    │
+    │  scripts/sync-baseline-workspace.py (via make sync-baseline
+    │    OR go generate ./internal/saas/api/...)
+    ▼
+internal/saas/api/baseline-workspace/  (auto-gerado, não editar à mão)
+    │
+    │  //go:embed all:baseline-workspace
+    │  embedded em controlplane binary
+    ▼
+GHA push → GHCR → VPS timer pull → controlplane recreate
+    │
+    │  EnsureDefaultWorkspace() na startup
+    │  extractEmbeddedBaseline() → escreve em
+    │  /srv/picoclaw-workspaces/default-business/home/
+    ▼
+DB workspaces row (slug=default-business, is_default_auto=true)
+    │
+    │  Provisioner.Create(workspace_id=default-business)
+    │  CopyWorkspaceHome(host_path → tenant volume)
+    ▼
+Novo tenant em /srv/saas/tenants/<id>/ com TUDO de workspace/ presente
+```
+
+### Os 3 caminhos pra conteúdo chegar em novo tenant
+
+| Caminho | Como | Quando |
+|---|---|---|
+| **A. Workspace existente no DB** | Admin escolhe `workspace_id` no wizard, Provisioner copia `/srv/picoclaw-workspaces/<slug>/home/` direto | Workspace já criado (manual ou auto-bootstrap) com conteúdo no host_path |
+| **B. Baseline embed (auto-bootstrap)** | Primeira start sem `is_default_auto=true` → `EnsureDefaultWorkspace` extrai baseline embed | Deploys novos ou após reset do DB |
+| **C. Upload manual** | `pwsh scripts/build-workspace-zip.ps1 -Upload` ou UI Workspaces → "Upload .zip" | Workspace customizado fora do baseline (variant por segmento) |
+
+### O sync (`scripts/sync-baseline-workspace.py`)
+
+1. Wipe `baseline-workspace/` preservando só `README.md`, `SYNCED_FROM`, `*.gitkeep`
+2. Copy `workspace/` filtrando: drop runtime (sessions/, *.log), drop secrets (auth.json), drop scratch (mamiferos_*, etc.)
+3. Empty `memory/` contents (filenames preserved como stubs — sem dados de cliente no binário)
+4. Normalize `config.json`: `api_keys=["${LITELLM_KEY}"]`, paths Linux
+5. Escreve `SYNCED_FROM` com commit hash + timestamp
+
+### Quando rodar
+
+- **Manual** após editar `workspace/`: `make sync-baseline && git add internal/saas/api/baseline-workspace/`
+- **Automático** via `make generate`/`make build` (go generate dispara o sync)
+- **CI guard**: `make check-baseline-sync` (parte de `make check`) falha se você esqueceu de regenerar
+
+### Imutabilidade vs propagação
+
+Trade-off central:
+
+- Workspaces EXISTENTES (no host_path) são imutáveis pra novos tenants — assim como tenants são imutáveis pra workspace updates. Garante que clientes em produção não recebam mudanças surpresa.
+- Baseline embed é o canal de PROPAGAÇÃO automática pra deploys novos — quem instala fresh hoje pega estado canônico de hoje.
+- Sync via `go generate` mantém baseline ↔ repo sempre consistentes — CI falha se desincronizar.
+
+Resultado: dev edita workspace/ → PR → mergeia → GHA builda controlplane → deploys novos pegam tudo. Mudança chega em tenants pré-existentes? Não automaticamente — operador decide caso a caso se vale re-upload + recreate.
+
 ## Quando alterar este fluxo
 
 Esse fluxo é o **core product mechanic**. Alterações precisam
