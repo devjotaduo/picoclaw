@@ -644,11 +644,15 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 		if u := p.Cfg.OnboardingCallbackURL; u != "" {
 			env["PICOCLAW_ONBOARDING_CALLBACK_URL"] = u
 		}
-		// publicweb is the entire reason this tenant exists — make sure
-		// the channel allowlist reflects that. Without this override the
-		// tenant container ignores public-web messages (default allowlist
-		// is whatsapp_native, kept intact above for non-public tenants).
-		env["PICOCLAW_ALLOWED_CHANNELS"] = "public-web"
+		// publicweb is the channel anonymous visitors use via /api/public/chat*
+		// (SSE, no auth). pico stays in the allowlist because the launcher's
+		// embedded React SPA still renders for visitors on the tenant subdomain
+		// and falls back to /pico/ws for chat — disabling it makes the SPA
+		// show "Pico token unavailable" + WebSocket connection failed. The
+		// pico token is launcher-internal, not user-level auth, so anonymous
+		// access via WS is the same effective trust boundary as publicweb SSE.
+		// whatsapp_native stays as the legacy default for outbound messaging.
+		env["PICOCLAW_ALLOWED_CHANNELS"] = "whatsapp_native,pico,public-web"
 	}
 
 	spec := ContainerSpec{
