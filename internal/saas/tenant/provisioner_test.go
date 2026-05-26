@@ -69,8 +69,8 @@ func TestBuildSpec_PublicTenantInjectsOnboardingEnv(t *testing.T) {
 		if got := spec.Env["PICOCLAW_ONBOARDING_CALLBACK_URL"]; got != "https://adm.example.com" {
 			t.Errorf("CALLBACK_URL = %q, want %q", got, "https://adm.example.com")
 		}
-		if got := spec.Env["PICOCLAW_ALLOWED_CHANNELS"]; got != "public-web" {
-			t.Errorf("ALLOWED_CHANNELS = %q, want %q", got, "public-web")
+		if got := spec.Env["PICOCLAW_ALLOWED_CHANNELS"]; got != "whatsapp_native,pico,public-web" {
+			t.Errorf("ALLOWED_CHANNELS = %q, want %q", got, "whatsapp_native,pico,public-web")
 		}
 	})
 
