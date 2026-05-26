@@ -37,6 +37,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
 import { CopyText } from "@/components/ui/copy-text";
+import { CopyableField } from "@/components/ui/copyable-field";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { ResendCredentialsDialog } from "@/components/tenant/resend-credentials-dialog";
 import { RotatedPasswordDialog } from "@/components/tenant/rotated-password-dialog";
@@ -75,7 +76,14 @@ export function TenantDetail() {
   const [rotatedPwd, setRotatedPwd] = useState<string | null>(null);
   // copy-feedback state for RotatedPasswordDialog lives inside the component now.
   const [magicLinkOpen, setMagicLinkOpen] = useState(false);
-  const [magicLinkData, setMagicLinkData] = useState<{ url: string; expires_at: string; token: string } | null>(null);
+  const [magicLinkData, setMagicLinkData] = useState<{
+    url: string;
+    expires_at: string;
+    token: string;
+    short_magic_link?: string;
+    access_link?: string;
+    warning?: string;
+  } | null>(null);
   const [magicLinkCopied, setMagicLinkCopied] = useState(false);
   const [magicLinkSummary, setMagicLinkSummary] = useState("");
   const [magicLinkConsumed, setMagicLinkConsumed] = useState(false);
@@ -197,7 +205,14 @@ export function TenantDetail() {
     mutationFn: (roleOverride?: MagicLinkRole) =>
       generateTenantMagicLink(id, undefined, roleOverride ?? magicLinkRole),
     onSuccess: (r) => {
-      setMagicLinkData({ url: r.url, expires_at: r.expires_at, token: r.token });
+      setMagicLinkData({
+        url: r.url,
+        expires_at: r.expires_at,
+        token: r.token,
+        short_magic_link: r.short_magic_link,
+        access_link: r.access_link,
+        warning: r.warning,
+      });
       setMagicLinkConsumed(false);
       setMagicLinkSummary("");
     },
@@ -255,7 +270,7 @@ export function TenantDetail() {
   });
   const copyMagicLink = async () => {
     if (!magicLinkData) return;
-    await navigator.clipboard.writeText(magicLinkData.url);
+    await navigator.clipboard.writeText(magicLinkData.access_link ?? magicLinkData.short_magic_link ?? magicLinkData.url);
     setMagicLinkCopied(true);
     setTimeout(() => setMagicLinkCopied(false), 2000);
   };
@@ -827,18 +842,25 @@ export function TenantDetail() {
           </p>
           {magicLinkData && (
             <>
-              <div className="space-y-1">
-                <div className="text-xs uppercase tracking-wider text-zinc-500">URL</div>
-                <div className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-950 p-2">
-                  <code className="flex-1 truncate font-mono text-xs text-emerald-300">
-                    {magicLinkData.url}
-                  </code>
-                  <Button size="sm" variant="outline" onClick={copyMagicLink}>
-                    {magicLinkCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                    {magicLinkCopied ? "Copiado" : "Copiar"}
-                  </Button>
+              {magicLinkData.warning && (
+                <div className="rounded-md border border-amber-700/50 bg-amber-950/30 p-2 text-xs text-amber-300">
+                  {magicLinkData.warning}
                 </div>
-              </div>
+              )}
+              <CopyableField
+                label="Link recomendado"
+                value={magicLinkData.access_link ?? magicLinkData.short_magic_link ?? magicLinkData.url}
+                accent="emerald"
+                variant="tight"
+                hint="O shortlink é usado automaticamente quando o encurtador está disponível."
+              />
+              {magicLinkData.short_magic_link && magicLinkData.short_magic_link !== magicLinkData.url && (
+                <CopyableField label="Magic link completo" value={magicLinkData.url} variant="tight" />
+              )}
+              <Button size="sm" variant="outline" onClick={copyMagicLink} className="w-fit">
+                {magicLinkCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                {magicLinkCopied ? "Copiado" : "Copiar link recomendado"}
+              </Button>
               <div className="text-xs text-zinc-400">
                 Expira em <b>{new Date(magicLinkData.expires_at).toLocaleString("pt-BR")}</b>.
                 Quem tiver o link consegue entrar até esse horário — pra revogar

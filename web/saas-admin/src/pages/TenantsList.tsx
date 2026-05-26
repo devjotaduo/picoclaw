@@ -1,27 +1,61 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import {
+  IconDotsVertical,
+  IconPlus,
+  IconRefresh,
+  IconSearch,
+  IconTrash,
+} from "@tabler/icons-react";
+
 import { deleteTenant, listTenants, type Tenant } from "@/api/tenants";
+import { PageHeader } from "@/components/page-header";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/badge";
-import { SkeletonRow } from "@/components/ui/skeleton";
 import { Dialog } from "@/components/ui/dialog";
-import { relativeTime, formatUSD } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { SkeletonRow } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { useAuth } from "@/hooks/useAuth";
+import { formatUSD, relativeTime } from "@/lib/utils";
 
 type TenantStatus = "all" | "active" | "suspended" | "error" | "provisioning" | "deleting";
 
 const VALID_STATUSES: TenantStatus[] = ["all", "active", "suspended", "error", "provisioning", "deleting"];
 
 const STATUS_OPTIONS: { value: TenantStatus; label: string }[] = [
-  { value: "all", label: "All statuses" },
-  { value: "active", label: "Active" },
-  { value: "suspended", label: "Suspended" },
-  { value: "error", label: "Error" },
-  { value: "provisioning", label: "Provisioning" },
-  { value: "deleting", label: "Deleting" },
+  { value: "all", label: "Todos os status" },
+  { value: "active", label: "Ativo" },
+  { value: "suspended", label: "Suspenso" },
+  { value: "error", label: "Erro" },
+  { value: "provisioning", label: "Provisionando" },
+  { value: "deleting", label: "Deletando" },
 ];
 
 function isValidStatus(v: string | null): v is TenantStatus {
@@ -54,7 +88,6 @@ export function TenantsList() {
     onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to delete tenant." }),
   });
 
-  // Read status filter from URL; fall back to "all"
   const rawStatus = searchParams.get("status");
   const statusFilter: TenantStatus = isValidStatus(rawStatus) ? rawStatus : "all";
 
@@ -73,6 +106,11 @@ export function TenantsList() {
     setSearchParams(value === "all" ? {} : { status: value }, { replace: true });
   };
 
+  const clearFilters = () => {
+    setSearch("");
+    setSearchParams({}, { replace: true });
+  };
+
   const closeDeleteDialog = () => {
     if (deleteM.isPending) return;
     setDeleteTarget(null);
@@ -80,194 +118,203 @@ export function TenantsList() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
-      <header className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Tenants</h1>
-          <p className="text-xs text-zinc-500">
-            {q.isLoading ? "Loading…" : filtered.length === tenants.length
+    <div className="flex min-h-full flex-col">
+      <PageHeader
+        title="Tenants"
+        description={
+          q.isLoading
+            ? "Carregando tenants..."
+            : filtered.length === tenants.length
               ? `${tenants.length} total`
-              : `${filtered.length} of ${tenants.length}`}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => q.refetch()} disabled={q.isFetching}>
-            <RefreshCw className={q.isFetching ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} /> Refresh
-          </Button>
-          {isPlatformAdmin && (
+              : `${filtered.length} de ${tenants.length}`
+        }
+      >
+        <Button variant="outline" size="sm" onClick={() => q.refetch()} disabled={q.isFetching}>
+          <IconRefresh data-icon="inline-start" className={q.isFetching ? "animate-spin" : undefined} />
+          Atualizar
+        </Button>
+        {isPlatformAdmin ? (
+          <Button size="sm" asChild>
             <Link to="/tenants/new">
-              <Button size="sm">
-                <Plus className="h-3.5 w-3.5" /> New tenant
-              </Button>
+              <IconPlus data-icon="inline-start" />
+              Novo tenant
             </Link>
-          )}
+          </Button>
+        ) : null}
+      </PageHeader>
+
+      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 p-4 lg:p-6">
+        <div className="grid gap-3 rounded-xl border bg-card p-4 shadow-xs md:grid-cols-[1fr_240px]">
+          <Field>
+            <FieldLabel className="sr-only" htmlFor="tenant-search">Buscar tenant</FieldLabel>
+            <div className="relative">
+              <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="tenant-search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por subdomínio, email ou nome..."
+                className="pl-8"
+              />
+            </div>
+          </Field>
+          <Field>
+            <FieldLabel className="sr-only">Status</FieldLabel>
+            <Select value={statusFilter} onValueChange={(value) => handleStatusFilterChange(value as TenantStatus)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {STATUS_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
         </div>
-      </header>
 
-      {/* Search + filter bar */}
-      <div className="mb-4 flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by subdomain, email or name…"
-            className="h-8 w-full rounded-md border border-zinc-700 bg-zinc-900 pl-8 pr-3 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-brand-500 focus:outline-none"
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => handleStatusFilterChange(e.target.value as TenantStatus)}
-          className="h-8 rounded-md border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-100 focus:border-brand-500 focus:outline-none"
-        >
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      </div>
+        {q.isError ? (
+          <Alert className="border-destructive/40 bg-destructive/10">
+            <AlertDescription>Falha ao carregar tenants.</AlertDescription>
+          </Alert>
+        ) : null}
 
-      {q.isError && (
-        <div className="rounded bg-red-950/50 p-3 text-xs text-red-300">Failed to load tenants.</div>
-      )}
+        {!q.isLoading && tenants.length === 0 ? (
+          <Empty>
+            <EmptyTitle>Nenhum tenant ainda</EmptyTitle>
+            <EmptyDescription>Crie o primeiro tenant com workspace e pacote de acesso em um único fluxo.</EmptyDescription>
+            {isPlatformAdmin ? (
+              <Button size="sm" asChild>
+                <Link to="/tenants/new">
+                  <IconPlus data-icon="inline-start" />
+                  Criar primeiro tenant
+                </Link>
+              </Button>
+            ) : null}
+          </Empty>
+        ) : null}
 
-      {!q.isLoading && tenants.length === 0 && (
-        <div className="rounded-lg border border-dashed border-zinc-800 p-8 text-center text-sm text-zinc-500">
-          No tenants yet.
-          <div className="mt-3">
-            {isPlatformAdmin && (
-              <Link to="/tenants/new">
-                <Button size="sm">Create the first one</Button>
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
+        {!q.isLoading && tenants.length > 0 && filtered.length === 0 ? (
+          <Empty>
+            <EmptyTitle>Nenhum tenant combina com o filtro</EmptyTitle>
+            <EmptyDescription>Ajuste a busca ou limpe os filtros aplicados.</EmptyDescription>
+            <Button variant="outline" size="sm" onClick={clearFilters}>Limpar filtros</Button>
+          </Empty>
+        ) : null}
 
-      {!q.isLoading && tenants.length > 0 && filtered.length === 0 && (
-        <div className="rounded-lg border border-zinc-800 p-6 text-center text-sm text-zinc-500">
-          No tenants match your filter.
-          <button
-            className="ml-2 text-xs text-brand-500 hover:underline"
-            onClick={() => { setSearch(""); setSearchParams({}, { replace: true }); }}
-          >
-            Clear
-          </button>
-        </div>
-      )}
-
-      <div className="overflow-hidden rounded-lg border border-zinc-800">
-        <table className="w-full text-sm">
-          <thead className="bg-zinc-900/80 text-left text-xs uppercase tracking-wide text-zinc-500">
-            <tr>
-              <th className="px-3 py-2 font-medium">Subdomain</th>
-              <th className="px-3 py-2 font-medium">Name</th>
-              <th className="px-3 py-2 font-medium">Owner</th>
-              <th className="px-3 py-2 font-medium">Status</th>
-              <th className="px-3 py-2 font-medium">Auth</th>
-              <th className="px-3 py-2 font-medium">Budget/mo</th>
-              <th className="px-3 py-2 font-medium">Created</th>
-              <th className="px-3 py-2 font-medium">Delivered?</th>
-              <th className="px-3 py-2 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800/60">
-            {q.isLoading && (
-              <>
-                <SkeletonRow cols={9} />
-                <SkeletonRow cols={9} />
-                <SkeletonRow cols={9} />
-                <SkeletonRow cols={9} />
-                <SkeletonRow cols={9} />
-              </>
-            )}
-            {filtered.map((t) => (
-              <tr
-                key={t.id}
-                className="cursor-pointer hover:bg-zinc-900/40"
-                onClick={() => nav(`/tenants/${t.id}`)}
-              >
-                <td className="px-3 py-2">
-                  <Link
-                    className="font-medium text-brand-500 hover:underline"
-                    to={`/tenants/${t.id}`}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {t.subdomain}
-                  </Link>
-                  <div className="text-[10px] text-zinc-600">{t.id}</div>
-                </td>
-                <td className="px-3 py-2 text-zinc-300">{t.display_name || "—"}</td>
-                <td className="px-3 py-2 text-zinc-400">{t.owner_email}</td>
-                <td className="px-3 py-2"><StatusBadge status={t.status} /></td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-wrap items-center gap-1 text-[10px]">
-                    <span
-                      className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono uppercase tracking-wider text-zinc-300"
-                      title={`auth_backend = ${t.auth_backend} (local = launcher bcrypt; supabase = JWT)`}
-                    >
-                      {t.auth_backend}
-                    </span>
-                    {t.is_public && (
-                      <span
-                        className="rounded bg-blue-500/15 px-1.5 py-0.5 font-semibold uppercase tracking-wider text-blue-300"
-                        title="Public tenant: aceita /api/public/chat anônimo. Provisioned em modo trusted_gateway."
+        {(q.isLoading || filtered.length > 0) ? (
+          <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Subdomínio</TableHead>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Owner</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Auth</TableHead>
+                  <TableHead>Budget/mês</TableHead>
+                  <TableHead>Criado</TableHead>
+                  <TableHead>Entrega</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {q.isLoading ? (
+                  <>
+                    <SkeletonRow cols={9} />
+                    <SkeletonRow cols={9} />
+                    <SkeletonRow cols={9} />
+                    <SkeletonRow cols={9} />
+                    <SkeletonRow cols={9} />
+                  </>
+                ) : null}
+                {filtered.map((t) => (
+                  <TableRow key={t.id} className="cursor-pointer" onClick={() => nav(`/tenants/${t.id}`)}>
+                    <TableCell>
+                      <Link
+                        className="font-medium text-primary hover:underline"
+                        to={`/tenants/${t.id}`}
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        public
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-3 py-2 text-zinc-400">{formatUSD(t.monthly_budget_usd)}</td>
-                <td className="px-3 py-2 text-zinc-500">{relativeTime(t.created_at)}</td>
-                <td className="px-3 py-2">
-                  {t.initial_password_delivered ? (
-                    <span className="text-xs text-emerald-400">yes</span>
-                  ) : (
-                    <span className="text-xs text-amber-400">pending</span>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right">
-                  {isPlatformAdmin && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-zinc-500 hover:text-red-300"
-                      aria-label={`Delete ${t.subdomain}`}
-                      title={`Delete ${t.subdomain}`}
-                      disabled={t.status === "deleting"}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget(t);
-                        setDeleteConfirm("");
-                      }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                        {t.subdomain}
+                      </Link>
+                      <div className="text-[10px] text-muted-foreground">{t.id}</div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{t.display_name || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{t.owner_email || "—"}</TableCell>
+                    <TableCell><StatusBadge status={t.status} /></TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Badge className="font-mono text-[10px] uppercase tracking-wide">
+                          {t.auth_backend}
+                        </Badge>
+                        {t.is_public ? (
+                          <Badge className="border-chart-1/30 bg-chart-1/10 text-chart-1">public</Badge>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{formatUSD(t.monthly_budget_usd)}</TableCell>
+                    <TableCell className="text-muted-foreground">{relativeTime(t.created_at)}</TableCell>
+                    <TableCell>
+                      {t.initial_password_delivered ? (
+                        <Badge className="border-chart-2/30 bg-chart-2/10 text-chart-2">entregue</Badge>
+                      ) : (
+                        <Badge className="border-chart-3/30 bg-chart-3/10 text-chart-3">pendente</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {isPlatformAdmin ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon-sm" aria-label={`Ações para ${t.subdomain}`}>
+                              <IconDotsVertical />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              disabled={t.status === "deleting"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteTarget(t);
+                                setDeleteConfirm("");
+                              }}
+                            >
+                              <IconTrash data-icon="inline-start" />
+                              Deletar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : null}
       </div>
 
       <Dialog open={!!deleteTarget} onClose={closeDeleteDialog} title="Delete tenant?" size="sm" closable={!deleteM.isPending}>
-        {deleteTarget && (
-          <div className="space-y-4 text-sm">
-            <p className="text-zinc-300">
-              This removes the Docker container, LiteLLM key, tenant volume, and related Picoclaw database records.
-            </p>
-            <div>
-              <label className="mb-1 block text-xs text-zinc-400">Type {deleteTarget.subdomain}</label>
-              <input
+        {deleteTarget ? (
+          <div className="flex flex-col gap-4 text-sm">
+            <Alert className="border-destructive/40 bg-destructive/10">
+              <AlertDescription>
+                This removes the Docker container, LiteLLM key, tenant volume, and related Picoclaw database records.
+              </AlertDescription>
+            </Alert>
+            <Field>
+              <FieldLabel htmlFor="delete-confirm">Type {deleteTarget.subdomain}</FieldLabel>
+              <Input
+                id="delete-confirm"
                 value={deleteConfirm}
                 onChange={(e) => setDeleteConfirm(e.target.value)}
-                className="h-9 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-red-500"
                 autoComplete="off"
                 autoFocus
               />
-            </div>
+            </Field>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={closeDeleteDialog} disabled={deleteM.isPending}>Cancel</Button>
               <Button
@@ -275,11 +322,11 @@ export function TenantsList() {
                 onClick={() => deleteM.mutate(deleteTarget)}
                 disabled={deleteConfirm !== deleteTarget.subdomain || deleteM.isPending}
               >
-                {deleteM.isPending ? "Deleting…" : "Delete forever"}
+                {deleteM.isPending ? "Deleting..." : "Delete forever"}
               </Button>
             </div>
           </div>
-        )}
+        ) : null}
       </Dialog>
     </div>
   );

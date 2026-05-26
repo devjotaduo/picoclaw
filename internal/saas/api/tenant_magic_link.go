@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -159,9 +160,102 @@ type magicLinkGenerateRequest struct {
 
 // magicLinkGenerateResponse is what the admin UI gets back.
 type magicLinkGenerateResponse struct {
-	URL       string    `json:"url"`
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
+	URL            string    `json:"url"`
+	Token          string    `json:"token"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	ShortMagicLink string    `json:"short_magic_link,omitempty"`
+	AccessLink     string    `json:"access_link,omitempty"`
+	Role           string    `json:"role,omitempty"`
+	Warning        string    `json:"warning,omitempty"`
+}
+
+type tenantMagicAccessBundle struct {
+	URL            string
+	Token          string
+	ExpiresAt      time.Time
+	ShortMagicLink string
+	AccessLink     string
+	Role           string
+	Warning        string
+	Nonce          string
+}
+
+func (h *Handler) createTenantMagicAccessBundle(
+	ctx context.Context,
+	t *store.Tenant,
+	role string,
+	ttl time.Duration,
+	intakeID string,
+) (*tenantMagicAccessBundle, error) {
+	if h.Cfg.GatewaySharedSecret == "" {
+		return nil, errors.New("controlplane has no PICOCLAW_SAAS_GATEWAY_SECRET configured; magic links require it")
+	}
+	role, ok := normalizeMagicLinkRole(role)
+	if !ok {
+		return nil, errors.New("role must be one of: public, tenant_owner, tenant_admin")
+	}
+	if ttl <= 0 {
+		ttl = defaultMagicLinkTTL
+	}
+	if cap := magicLinkRoleTTLCap(role); ttl > cap {
+		ttl = cap
+	}
+
+	nonceBytes := make([]byte, 12)
+	if _, err := rand.Read(nonceBytes); err != nil {
+		return nil, fmt.Errorf("rand: %w", err)
+	}
+	claims := magicLinkClaims{
+		TenantID: t.ID,
+		Exp:      time.Now().Add(ttl).Unix(),
+		Nonce:    base64.RawURLEncoding.EncodeToString(nonceBytes),
+		Role:     role,
+	}
+	token, err := signMagicLinkToken(h.Cfg.GatewaySharedSecret, claims)
+	if err != nil {
+		return nil, fmt.Errorf("sign: %w", err)
+	}
+
+	storeRow := &store.MagicLink{
+		Nonce:     claims.Nonce,
+		TenantID:  t.ID,
+		ExpiresAt: time.Unix(claims.Exp, 0).UTC(),
+	}
+	if intakeID != "" {
+		storeRow.IntakeID = &intakeID
+	}
+	if h.MagicLinks != nil {
+		if err := h.MagicLinks.Insert(ctx, storeRow); err != nil {
+			return nil, fmt.Errorf("track link: %w", err)
+		}
+	}
+
+	subdomain := t.Subdomain
+	if subdomain == "" {
+		subdomain = t.ID
+	}
+	linkURL := url.URL{
+		Scheme: "https",
+		Host:   subdomain + "." + h.Cfg.TenantBaseDomain,
+		Path:   "/m/" + token,
+	}
+
+	longURL := linkURL.String()
+	out := &tenantMagicAccessBundle{
+		URL:        longURL,
+		Token:      token,
+		ExpiresAt:  time.Unix(claims.Exp, 0).UTC(),
+		Role:       role,
+		AccessLink: longURL,
+		Nonce:      claims.Nonce,
+	}
+	if shortURL, err := h.CreateShortlinkInternal(ctx, longURL, "magic-link tenant="+t.ID, ttl); err == nil {
+		out.ShortMagicLink = shortURL
+		out.AccessLink = shortURL
+	} else {
+		out.Warning = "Shortlink não foi criado; use o magic link completo."
+	}
+	return out, nil
 }
 
 // handleGenerateMagicLink mints a fresh signed magic link for the tenant
@@ -181,78 +275,22 @@ func (h *Handler) handleGenerateMagicLink(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, "db: "+err.Error())
 		return
 	}
-	if h.Cfg.GatewaySharedSecret == "" {
-		writeError(
-			w,
-			http.StatusServiceUnavailable,
-			"controlplane has no PICOCLAW_SAAS_GATEWAY_SECRET configured; magic links require it",
-		)
-		return
-	}
-
 	var req magicLinkGenerateRequest
 	// Body is optional; ignore decode errors for empty bodies.
 	_ = json.NewDecoder(r.Body).Decode(&req)
-
-	role, ok := normalizeMagicLinkRole(req.Role)
-	if !ok {
-		writeError(w, http.StatusBadRequest, "role must be one of: public, tenant_owner, tenant_admin")
-		return
-	}
 
 	ttl := defaultMagicLinkTTL
 	if req.TTLSeconds > 0 {
 		ttl = time.Duration(req.TTLSeconds) * time.Second
 	}
-	if cap := magicLinkRoleTTLCap(role); ttl > cap {
-		ttl = cap
-	}
-
-	nonceBytes := make([]byte, 12)
-	if _, err := rand.Read(nonceBytes); err != nil {
-		writeError(w, http.StatusInternalServerError, "rand: "+err.Error())
-		return
-	}
-	claims := magicLinkClaims{
-		TenantID: t.ID,
-		Exp:      time.Now().Add(ttl).Unix(),
-		Nonce:    base64.RawURLEncoding.EncodeToString(nonceBytes),
-		Role:     role,
-	}
-	token, err := signMagicLinkToken(h.Cfg.GatewaySharedSecret, claims)
+	bundle, err := h.createTenantMagicAccessBundle(r.Context(), t, req.Role, ttl, req.IntakeID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "sign: "+err.Error())
-		return
-	}
-
-	// Persist a tracking row so we can flip the link to "consumed" on
-	// intake submit (and revoke individually later). The HMAC signature
-	// still gates access — this row is a side-channel for state changes
-	// the client can't be trusted to obey.
-	storeRow := &store.MagicLink{
-		Nonce:     claims.Nonce,
-		TenantID:  t.ID,
-		ExpiresAt: time.Unix(claims.Exp, 0).UTC(),
-	}
-	if req.IntakeID != "" {
-		intakeID := req.IntakeID
-		storeRow.IntakeID = &intakeID
-	}
-	if h.MagicLinks != nil {
-		if err := h.MagicLinks.Insert(r.Context(), storeRow); err != nil {
-			writeError(w, http.StatusInternalServerError, "track link: "+err.Error())
+		if strings.HasPrefix(err.Error(), "role must") {
+			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-	}
-
-	subdomain := t.Subdomain
-	if subdomain == "" {
-		subdomain = t.ID
-	}
-	linkURL := url.URL{
-		Scheme: "https",
-		Host:   subdomain + "." + h.Cfg.TenantBaseDomain,
-		Path:   "/m/" + token,
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	// Audit. Elevated roles (tenant_owner / tenant_admin) get the role
@@ -267,16 +305,20 @@ func (h *Handler) handleGenerateMagicLink(w http.ResponseWriter, r *http.Request
 			actorID = &actor.ID
 		}
 		action := "tenant.magic_link.generate"
-		if role != "" && role != "public" {
-			action = "tenant.magic_link.generate." + role
+		if bundle.Role != "" && bundle.Role != "public" {
+			action = "tenant.magic_link.generate." + bundle.Role
 		}
-		_ = h.Audit.Insert(r.Context(), actorID, &t.ID, action, "magic_link", claims.Nonce)
+		_ = h.Audit.Insert(r.Context(), actorID, &t.ID, action, "magic_link", bundle.Nonce)
 	}
 
 	writeJSON(w, http.StatusOK, magicLinkGenerateResponse{
-		URL:       linkURL.String(),
-		Token:     token,
-		ExpiresAt: time.Unix(claims.Exp, 0).UTC(),
+		URL:            bundle.URL,
+		Token:          bundle.Token,
+		ExpiresAt:      bundle.ExpiresAt,
+		ShortMagicLink: bundle.ShortMagicLink,
+		AccessLink:     bundle.AccessLink,
+		Role:           bundle.Role,
+		Warning:        bundle.Warning,
 	})
 }
 
