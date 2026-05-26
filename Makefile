@@ -409,6 +409,34 @@ fmt:
 lint-docs:
 	@./scripts/lint-docs.sh
 
+## sync-baseline: Sync internal/saas/api/baseline-workspace/ from repo workspace/
+##   Run this after editing anything in workspace/ that should reach newly-bootstrapped
+##   tenants on the next image build. Also runs automatically via `go generate`
+##   (and therefore via `make generate` and `make build`).
+sync-baseline:
+	@python3 ./scripts/sync-baseline-workspace.py
+
+## check-baseline-sync: CI guard — fails if baseline-workspace is stale relative to workspace/
+##   Runs the sync, then `git diff` for the baseline tree (excluding SYNCED_FROM
+##   which has a timestamp that always changes between runs). Non-zero exit if
+##   any other file changed, meaning the developer forgot to commit the
+##   regenerated baseline after touching workspace/.
+check-baseline-sync:
+	@python3 ./scripts/sync-baseline-workspace.py
+	@git diff --quiet --exit-code -- \
+		'internal/saas/api/baseline-workspace/' \
+		':!internal/saas/api/baseline-workspace/SYNCED_FROM' \
+		|| ( \
+			echo ""; \
+			echo "ERROR: baseline-workspace is out of sync with workspace/"; \
+			echo "Run 'make sync-baseline' and commit the resulting changes."; \
+			echo ""; \
+			git diff --stat -- \
+				'internal/saas/api/baseline-workspace/' \
+				':!internal/saas/api/baseline-workspace/SYNCED_FROM'; \
+			exit 1; \
+		)
+
 ## lint: Run linters
 lint:
 	@$(GOLANGCI_LINT) run --build-tags $(GO_BUILD_TAGS)
@@ -428,8 +456,8 @@ update-deps:
 	@$(GO) get -u ./...
 	@$(GO) mod tidy
 
-## check: Run deps, fmt, vet, tests, and docs consistency checks
-check: deps fmt vet test lint-docs
+## check: Run deps, fmt, vet, tests, baseline sync check, and docs consistency
+check: deps fmt vet test lint-docs check-baseline-sync
 
 ## run: Build and run picoclaw
 run: build

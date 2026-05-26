@@ -13,13 +13,12 @@
     "show_model_selector": true
   },
   "agents": {
-    "skip_specialist_seed": true,
     "defaults": {
       "workspace": "/root/.picoclaw/workspace",
       "restrict_to_workspace": true,
       "allow_read_outside_workspace": false,
-      "provider": "litellm",
-      "model_name": "default",
+      "provider": "",
+      "model_name": "openrouter-gpt-5.4",
       "max_tokens": 32768,
       "max_tool_iterations": 50,
       "summarize_message_threshold": 20,
@@ -57,14 +56,14 @@
         "subagents": {
           "allow_agents": [
             "clara",
-            "luna",
             "marcos",
             "camila",
             "lia",
             "sofia",
-            "catarina",
             "operador",
-            "qa-tester"
+            "pixel",
+            "doc",
+            "dev"
           ]
         },
         "access": {
@@ -100,12 +99,10 @@
             "can_edit_agents": false,
             "can_call_agents": [
               "clara",
-              "luna",
               "marcos",
               "camila",
               "lia",
               "sofia",
-              "catarina",
               "operador"
             ],
             "requires_confirmation": [
@@ -150,7 +147,7 @@
         "role_config": {
           "version": 1,
           "kind": "attendant",
-          "description": "Atendente principal (horário comercial) — recebe cliente, faz triagem, responde dúvidas simples consultando memória, encaminha para Marcos (vendas), Camila (suporte) ou Atendimento Humano. Persona: agents/clara-atendente.md.",
+          "description": "Atendente principal — recebe cliente, faz triagem, responde dúvidas simples consultando memória, encaminha para Marcos (vendas), Camila (suporte) ou Atendimento Humano. Persona: agents/clara-atendente.md.",
           "attendant": {
             "departments": [
               "atendimento",
@@ -175,59 +172,6 @@
               "cliente irritado"
             ],
             "scheduling_enabled": true,
-            "faq_source": "memory/faq.md"
-          }
-        }
-      },
-      {
-        "id": "luna",
-        "name": "Luna",
-        "avatar": {
-          "type": "preset",
-          "icon": "headset",
-          "initials": "LU",
-          "background": "#6366f1",
-          "foreground": "#ffffff"
-        },
-        "workspace": "/root/.picoclaw/workspace",
-        "subagents": {
-          "allow_agents": [
-            "camila"
-          ]
-        },
-        "access": {
-          "panel_enabled": true,
-          "panel_roles": [
-            "tenant_owner",
-            "tenant_admin",
-            "platform_admin"
-          ],
-          "whatsapp_direct_enabled": true
-        },
-        "role_config": {
-          "version": 1,
-          "kind": "attendant",
-          "description": "Atendente noturna / fim-de-semana — assume o turno fora do horário comercial. Triagem + FAQ + SLA realista ('o time retorna pela manhã'). Não faz venda nem suporte profundo. Briefing matinal em memory/atendimentos.md. Persona: agents/luna-atendente.md.",
-          "attendant": {
-            "departments": [
-              "atendimento",
-              "triagem",
-              "humano"
-            ],
-            "triage_fields": [
-              "nome",
-              "contato",
-              "assunto",
-              "urgencia"
-            ],
-            "escalation_rules": [
-              "reclamacao grave",
-              "ameaca explicita",
-              "urgencia medica",
-              "duvida juridica",
-              "Procon mencionado"
-            ],
-            "scheduling_enabled": false,
             "faq_source": "memory/faq.md"
           }
         }
@@ -355,7 +299,7 @@
           "background": "#f43f5e",
           "foreground": "#ffffff"
         },
-        "workspace": "/root/.picoclaw/workspace/agents/lia",
+        "workspace": "/root/.picoclaw/workspace",
         "access": {
           "panel_enabled": true,
           "panel_roles": [
@@ -433,12 +377,10 @@
           "background": "#7c3aed",
           "foreground": "#ffffff"
         },
-        "workspace": "/root/.picoclaw/workspace/agents/sofia",
+        "workspace": "/root/.picoclaw/workspace",
         "subagents": {
           "allow_agents": [
-            "main",
-            "operador",
-            "clara"
+            "main"
           ]
         },
         "access": {
@@ -453,68 +395,14 @@
         "role_config": {
           "version": 1,
           "kind": "assistant",
-          "description": "Consultora de discovery e onboarding — conduz entrevista consultiva via skill jotaduo-discovery, identifica segmento/sistemas/dores, recomenda time de agentes do roster local (clara/luna/marcos/camila/lia), marca gaps de integração como 'a validar'. Grava dossiê estruturado (JSON+MD) em memory/jotaduo/clientes/ + memory/empresa.md no formato que destrava o resto da equipe.",
+          "description": "Especialista em onboarding — conversa com o dono sem jargão técnico, escolhe playbook por segmento (saude/alimentacao/varejo/servicos/beleza/educacao/imobiliaria/default), preenche memory/empresa.md e memórias correlatas. Chama Rafael ao concluir. Não atende cliente externo.",
           "assistant": {
             "authorized_scopes": [
               "workspace",
               "memory_reads",
               "memory_writes",
               "onboarding",
-              "playbooks",
-              "web_search"
-            ],
-            "report_cadence": [
-              "on_demand"
-            ],
-            "can_edit_agents": false,
-            "can_call_agents": [
-              "operador",
-              "main",
-              "clara"
-            ],
-            "requires_confirmation": [
-              "alterar canais autorizados",
-              "sobrescrever memory/empresa.md existente",
-              "encerrar onboarding sem confirmação do dono"
-            ],
-            "audit_level": "high"
-          }
-        }
-      },
-      {
-        "id": "catarina",
-        "name": "Catarina",
-        "avatar": {
-          "type": "preset",
-          "icon": "sparkles",
-          "initials": "CT",
-          "background": "#9333ea",
-          "foreground": "#ffffff"
-        },
-        "workspace": "/root/.picoclaw/workspace/agents/catarina",
-        "subagents": {
-          "allow_agents": [
-            "main"
-          ]
-        },
-        "access": {
-          "panel_enabled": true,
-          "panel_roles": [
-            "tenant_owner",
-            "tenant_admin",
-            "platform_admin"
-          ],
-          "whatsapp_direct_enabled": false
-        },
-        "role_config": {
-          "version": 1,
-          "kind": "assistant",
-          "description": "Curadora de conhecimento — aprofunda o cadastro da empresa em sessões curtas pós-discovery. Não atende cliente final.",
-          "assistant": {
-            "authorized_scopes": [
-              "workspace",
-              "memory_reads",
-              "memory_writes"
+              "playbooks"
             ],
             "report_cadence": [
               "on_demand"
@@ -523,7 +411,12 @@
             "can_call_agents": [
               "main"
             ],
-            "audit_level": "medium"
+            "requires_confirmation": [
+              "alterar canais autorizados",
+              "sobrescrever memory/empresa.md existente",
+              "encerrar onboarding sem confirmação do dono"
+            ],
+            "audit_level": "high"
           }
         }
       },
@@ -537,7 +430,7 @@
           "background": "#475569",
           "foreground": "#ffffff"
         },
-        "workspace": "/root/.picoclaw/workspace/agents/operador",
+        "workspace": "/root/.picoclaw/workspace",
         "access": {
           "panel_enabled": true,
           "panel_roles": [
@@ -568,7 +461,9 @@
             "can_edit_agents": true,
             "can_call_agents": [
               "main",
-              "qa-tester"
+              "pixel",
+              "doc",
+              "dev"
             ],
             "requires_confirmation": [
               "git push",
@@ -585,16 +480,100 @@
         }
       },
       {
-        "id": "qa-tester",
-        "name": "QA Tester",
+        "id": "pixel",
+        "name": "Pixel",
+        "avatar": {
+          "type": "preset",
+          "icon": "image",
+          "initials": "PX",
+          "background": "#7c3aed",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace",
+        "subagents": {
+          "allow_agents": []
+        },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "platform_admin",
+            "tenant_admin"
+          ],
+          "whatsapp_direct_enabled": false
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "assistant",
+          "description": "Agente interno de geração de imagens. Delega para Claude CLI > Codex CLI; fallback local só se nenhum CLI responder.",
+          "assistant": {
+            "authorized_scopes": [
+              "workspace",
+              "image_generation",
+              "memory_reads",
+              "memory_writes"
+            ],
+            "report_cadence": [
+              "on_demand"
+            ],
+            "audit_level": "medium"
+          }
+        }
+      },
+      {
+        "id": "doc",
+        "name": "Doc",
+        "avatar": {
+          "type": "preset",
+          "icon": "file-text",
+          "initials": "DC",
+          "background": "#0ea5e9",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace",
+        "subagents": {
+          "allow_agents": []
+        },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "platform_admin",
+            "tenant_admin"
+          ],
+          "whatsapp_direct_enabled": false
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "assistant",
+          "description": "Agente interno de geração de documentos (PDF/DOCX/MD/HTML). Delega para Claude CLI > Codex CLI; converte localmente com pandoc/weasyprint.",
+          "assistant": {
+            "authorized_scopes": [
+              "workspace",
+              "documents",
+              "summarize",
+              "memory_reads",
+              "memory_writes"
+            ],
+            "report_cadence": [
+              "on_demand"
+            ],
+            "audit_level": "medium"
+          }
+        }
+      },
+      {
+        "id": "dev",
+        "name": "Dev",
         "avatar": {
           "type": "preset",
           "icon": "code",
-          "initials": "QA",
-          "background": "#f59e0b",
-          "foreground": "#0b0b0b"
+          "initials": "DV",
+          "background": "#16a34a",
+          "foreground": "#ffffff"
         },
-        "workspace": "/root/.picoclaw/workspace/agents/qa-tester",
+        "workspace": "/root/.picoclaw/workspace",
+        "subagents": {
+          "allow_agents": []
+        },
         "access": {
           "panel_enabled": true,
           "panel_roles": [
@@ -605,22 +584,135 @@
         "role_config": {
           "version": 1,
           "kind": "assistant",
-          "description": "Testador interno — valida skills e agentes em ambiente simulado, gera cenários de 20+ interações cliente↔equipe, orquestra múltiplos agentes (Clara→Marcos→Camila), produz relatório por skill/agente em workspace/tests/relatorios/ com nota 0-10. Não fala com cliente final.",
+          "description": "Agente interno de programação (implementar, revisar, refatorar, debugar). Delega para Claude CLI > Codex CLI; valida com go vet/pnpm test antes de entregar.",
           "assistant": {
             "authorized_scopes": [
               "workspace",
-              "agents",
-              "tests",
-              "diagnostics",
-              "memory_reads"
+              "github",
+              "terminal",
+              "code_generation",
+              "memory_reads",
+              "memory_writes"
             ],
             "report_cadence": [
               "on_demand"
             ],
             "can_edit_agents": false,
-            "can_call_agents": [],
-            "audit_level": "medium"
+            "requires_confirmation": [
+              "git push",
+              "git push --force",
+              "gh pr merge",
+              "rm -rf"
+            ],
+            "audit_level": "high"
           }
+        }
+      },
+      {
+        "id": "luna",
+        "name": "Luna",
+        "avatar": {
+          "type": "preset",
+          "icon": "moon",
+          "initials": "LU",
+          "background": "#1e293b",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace",
+        "subagents": {
+          "allow_agents": [
+            "marcos",
+            "camila"
+          ]
+        },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "tenant_owner",
+            "tenant_admin",
+            "platform_admin"
+          ],
+          "whatsapp_direct_enabled": true
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "attendant",
+          "description": "Atendente especializada para janelas off-hours e fim de semana. Faz triagem, anota tudo, confirma SLA, consolida briefing pra Clara cobrir no horário comercial. Persona: agents/luna-atendente.md.",
+          "attendant": {
+            "departments": [
+              "atendimento",
+              "humano"
+            ],
+            "triage_fields": [
+              "nome",
+              "contato",
+              "assunto",
+              "urgencia"
+            ],
+            "escalation_rules": [
+              "urgencia critica fora de horario",
+              "cliente em crise",
+              "necessidade de humano imediato"
+            ],
+            "scheduling_enabled": false,
+            "faq_source": "memory/faq.md"
+          }
+        }
+      },
+      {
+        "id": "catarina",
+        "name": "Catarina",
+        "avatar": {
+          "type": "preset",
+          "icon": "heart",
+          "initials": "CA",
+          "background": "#be123c",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace",
+        "subagents": {
+          "allow_agents": []
+        },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "tenant_owner",
+            "tenant_admin",
+            "platform_admin"
+          ],
+          "whatsapp_direct_enabled": true
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "curator",
+          "description": "Curadora de conhecimento pos-discovery. Apos Sofia liberar o tenant, conduz sessoes curtas via WhatsApp pra capturar 5 areas universais (equipe, casos-excecao, FAQs, historico, regras tacitas). Delega resumos pra Rafael atualizar memory/empresa.md. Persona: agents/catarina/AGENT.md."
+        }
+      },
+      {
+        "id": "qa-tester",
+        "name": "QA Tester",
+        "avatar": {
+          "type": "preset",
+          "icon": "shield",
+          "initials": "QA",
+          "background": "#7c3aed",
+          "foreground": "#ffffff"
+        },
+        "workspace": "/root/.picoclaw/workspace",
+        "subagents": {
+          "allow_agents": []
+        },
+        "access": {
+          "panel_enabled": true,
+          "panel_roles": [
+            "platform_admin"
+          ],
+          "whatsapp_direct_enabled": false
+        },
+        "role_config": {
+          "version": 1,
+          "kind": "validator",
+          "description": "Auditor de qualidade dos agentes do workspace. Simula cenarios, valida adherencia ao SOUL/AGENT, verifica que skills/memorias citadas existem, produz relatorios em workspace/tests/relatorios/. Invocacao manual via panel. Persona: agents/qa-tester/AGENT.md."
         }
       }
     ],
@@ -678,30 +770,6 @@
           "when": {
             "channel": "pico",
             "space": "agent:clara"
-          },
-          "session_dimensions": [
-            "space",
-            "chat"
-          ]
-        },
-        {
-          "name": "orchestrator:panel:luna",
-          "agent": "luna",
-          "when": {
-            "channel": "panel",
-            "space": "agent:luna"
-          },
-          "session_dimensions": [
-            "space",
-            "chat"
-          ]
-        },
-        {
-          "name": "orchestrator:pico:luna",
-          "agent": "luna",
-          "when": {
-            "channel": "pico",
-            "space": "agent:luna"
           },
           "session_dimensions": [
             "space",
@@ -805,30 +873,6 @@
           ]
         },
         {
-          "name": "orchestrator:panel:catarina",
-          "agent": "catarina",
-          "when": {
-            "channel": "panel",
-            "space": "agent:catarina"
-          },
-          "session_dimensions": [
-            "space",
-            "chat"
-          ]
-        },
-        {
-          "name": "orchestrator:pico:catarina",
-          "agent": "catarina",
-          "when": {
-            "channel": "pico",
-            "space": "agent:catarina"
-          },
-          "session_dimensions": [
-            "space",
-            "chat"
-          ]
-        },
-        {
           "name": "orchestrator:panel:operador",
           "agent": "operador",
           "when": {
@@ -846,6 +890,54 @@
           "when": {
             "channel": "pico",
             "space": "agent:operador"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:panel:luna",
+          "agent": "luna",
+          "when": {
+            "channel": "panel",
+            "space": "agent:luna"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:pico:luna",
+          "agent": "luna",
+          "when": {
+            "channel": "pico",
+            "space": "agent:luna"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:panel:catarina",
+          "agent": "catarina",
+          "when": {
+            "channel": "panel",
+            "space": "agent:catarina"
+          },
+          "session_dimensions": [
+            "space",
+            "chat"
+          ]
+        },
+        {
+          "name": "orchestrator:pico:catarina",
+          "agent": "catarina",
+          "when": {
+            "channel": "pico",
+            "space": "agent:catarina"
           },
           "session_dimensions": [
             "space",
@@ -887,6 +979,131 @@
     "cold_path_trigger": "after_turn"
   },
   "channel_list": {
+    "dingtalk": {
+      "enabled": false,
+      "type": "dingtalk",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "client_id": ""
+      }
+    },
+    "discord": {
+      "enabled": false,
+      "type": "discord",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "proxy": "",
+        "mention_only": false
+      }
+    },
+    "feishu": {
+      "enabled": false,
+      "type": "feishu",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "app_id": "",
+        "random_reaction_emoji": null,
+        "is_lark": false
+      }
+    },
+    "irc": {
+      "enabled": false,
+      "type": "irc",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "server": "",
+        "tls": true,
+        "nick": "picoclaw",
+        "sasl_user": "",
+        "channels": []
+      }
+    },
+    "line": {
+      "enabled": false,
+      "type": "line",
+      "reasoning_channel_id": "",
+      "group_trigger": {
+        "mention_only": true
+      },
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "webhook_host": "0.0.0.0",
+        "webhook_port": 18791,
+        "webhook_path": "/webhook/line"
+      }
+    },
+    "maixcam": {
+      "enabled": false,
+      "type": "maixcam",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "host": "0.0.0.0",
+        "port": 18790
+      }
+    },
+    "matrix": {
+      "enabled": false,
+      "type": "matrix",
+      "reasoning_channel_id": "",
+      "group_trigger": {
+        "mention_only": true
+      },
+      "typing": {},
+      "placeholder": {
+        "enabled": true,
+        "text": [
+          "Pensando..."
+        ]
+      },
+      "settings": {
+        "homeserver": "https://matrix.org",
+        "user_id": "",
+        "join_on_invite": true
+      }
+    },
+    "onebot": {
+      "enabled": false,
+      "type": "onebot",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "ws_url": "ws://127.0.0.1:3001",
+        "reconnect_interval": 5,
+        "group_trigger_prefix": null
+      }
+    },
     "pico": {
       "enabled": true,
       "type": "pico",
@@ -903,6 +1120,101 @@
         "max_connections": 100
       }
     },
+    "public-web": {
+      "type": "public-web",
+      "enabled": false,
+      "allow_from": [
+        "*"
+      ],
+      "settings": {
+        "rate_limit_per_ip": 30,
+        "session_ttl_seconds": 1800,
+        "require_captcha_header": false
+      }
+    },
+    "qq": {
+      "enabled": false,
+      "type": "qq",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "app_id": "",
+        "max_message_length": 2000,
+        "max_base64_file_size_mib": 0,
+        "send_markdown": false
+      }
+    },
+    "slack": {
+      "enabled": false,
+      "type": "slack",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {}
+    },
+    "telegram": {
+      "enabled": false,
+      "type": "telegram",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {
+        "enabled": true
+      },
+      "placeholder": {
+        "enabled": true,
+        "text": [
+          "Pensando..."
+        ]
+      },
+      "settings": {
+        "base_url": "",
+        "proxy": "",
+        "streaming": {
+          "enabled": true,
+          "throttle_seconds": 3,
+          "min_growth_chars": 200
+        },
+        "use_markdown_v2": false,
+        "media_group_delay_ms": 0
+      }
+    },
+    "wecom": {
+      "enabled": false,
+      "type": "wecom",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "bot_id": "",
+        "websocket_url": "wss://openws.work.weixin.qq.com",
+        "send_thinking_message": true
+      }
+    },
+    "weixin": {
+      "enabled": false,
+      "type": "weixin",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "base_url": "https://ilinkai.weixin.qq.com/",
+        "cdn_base_url": "https://novac2c.cdn.weixin.qq.com/c2c",
+        "proxy": ""
+      }
+    },
     "whatsapp": {
       "enabled": true,
       "type": "whatsapp_native",
@@ -917,17 +1229,230 @@
         "use_native": true,
         "session_store_path": ""
       }
+    },
+    "whatsapp_native": {
+      "enabled": false,
+      "type": "whatsapp_native",
+      "reasoning_channel_id": "",
+      "group_trigger": {},
+      "typing": {},
+      "placeholder": {
+        "enabled": false
+      },
+      "settings": {
+        "bridge_url": "",
+        "use_native": false,
+        "session_store_path": ""
+      }
     }
   },
   "model_list": [
     {
-      "model_name": "default",
-      "provider": "openai",
+      "model_name": "glm-4.7",
+      "provider": "zhipu",
+      "model": "glm-4.7",
+      "api_base": "https://open.bigmodel.cn/api/paas/v4"
+    },
+    {
+      "model_name": "gpt-5.4",
+      "provider": "openrouter",
+      "model": "openai/gpt-5.4",
+      "api_base": "https://openrouter.ai/api/v1"
+    },
+    {
+      "model_name": "claude-sonnet-4.6",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4.6",
+      "api_base": "https://api.anthropic.com/v1"
+    },
+    {
+      "model_name": "deepseek-chat",
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "api_base": "https://api.deepseek.com/v1"
+    },
+    {
+      "model_name": "venice-uncensored",
+      "provider": "venice",
+      "model": "venice-uncensored",
+      "api_base": "https://api.venice.ai/api/v1"
+    },
+    {
+      "model_name": "gemini-2.0-flash",
+      "provider": "gemini",
+      "model": "gemini-2.0-flash-exp",
+      "api_base": "https://generativelanguage.googleapis.com/v1beta"
+    },
+    {
+      "model_name": "qwen-plus",
+      "provider": "qwen-portal",
+      "model": "qwen-plus",
+      "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    },
+    {
+      "model_name": "moonshot-v1-8k",
+      "provider": "moonshot",
+      "model": "moonshot-v1-8k",
+      "api_base": "https://api.moonshot.cn/v1"
+    },
+    {
+      "model_name": "llama-3.3-70b",
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "api_base": "https://api.groq.com/openai/v1",
+      "enabled": true
+    },
+    {
+      "model_name": "llama-4-scout",
+      "provider": "groq",
+      "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+      "api_base": "https://api.groq.com/openai/v1",
+      "enabled": true
+    },
+    {
+      "model_name": "qwen3-32b",
+      "provider": "groq",
+      "model": "qwen/qwen3-32b",
+      "api_base": "https://api.groq.com/openai/v1",
+      "enabled": true
+    },
+    {
+      "model_name": "llama-3.1-8b",
+      "provider": "groq",
+      "model": "llama-3.1-8b-instant",
+      "api_base": "https://api.groq.com/openai/v1",
+      "enabled": true
+    },
+    {
+      "model_name": "gpt-oss-120b",
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "api_base": "https://api.groq.com/openai/v1",
+      "enabled": true
+    },
+    {
+      "model_name": "openrouter-auto",
+      "provider": "openrouter",
+      "model": "auto",
+      "api_base": "https://openrouter.ai/api/v1"
+    },
+    {
+      "model_name": "openrouter-gpt-5.4",
+      "provider": "openrouter",
+      "model": "openai/gpt-5.4",
+      "api_base": "https://openrouter.ai/api/v1"
+    },
+    {
+      "model_name": "nemotron-4-340b",
+      "provider": "nvidia",
+      "model": "nemotron-4-340b-instruct",
+      "api_base": "https://integrate.api.nvidia.com/v1"
+    },
+    {
+      "model_name": "cerebras-llama-3.3-70b",
+      "provider": "cerebras",
+      "model": "llama-3.3-70b",
+      "api_base": "https://api.cerebras.ai/v1"
+    },
+    {
+      "model_name": "vivgrid-auto",
+      "provider": "vivgrid",
+      "model": "auto",
+      "api_base": "https://api.vivgrid.com/v1"
+    },
+    {
+      "model_name": "ark-code-latest",
+      "provider": "volcengine",
+      "model": "ark-code-latest",
+      "api_base": "https://ark.cn-beijing.volces.com/api/v3"
+    },
+    {
+      "model_name": "doubao-pro",
+      "provider": "volcengine",
+      "model": "doubao-pro-32k",
+      "api_base": "https://ark.cn-beijing.volces.com/api/v3"
+    },
+    {
+      "model_name": "deepseek-v3",
+      "provider": "shengsuanyun",
+      "model": "deepseek-v3",
+      "api_base": "https://api.shengsuanyun.com/v1"
+    },
+    {
+      "model_name": "gemini-flash",
+      "provider": "antigravity",
+      "model": "gemini-3-flash",
+      "auth_method": "oauth"
+    },
+    {
+      "model_name": "copilot-gpt-5.4",
+      "provider": "github-copilot",
       "model": "gpt-5.4",
-      "api_base": "${LITELLM_URL}",
-      "api_keys": [
-        "${LITELLM_KEY}"
-      ]
+      "api_base": "http://localhost:4321",
+      "auth_method": "oauth"
+    },
+    {
+      "model_name": "llama3",
+      "provider": "ollama",
+      "model": "llama3",
+      "api_base": "http://localhost:11434/v1"
+    },
+    {
+      "model_name": "mistral-small",
+      "provider": "mistral",
+      "model": "mistral-small-latest",
+      "api_base": "https://api.mistral.ai/v1"
+    },
+    {
+      "model_name": "deepseek-v3.2",
+      "provider": "avian",
+      "model": "deepseek/deepseek-v3.2",
+      "api_base": "https://api.avian.io/v1"
+    },
+    {
+      "model_name": "kimi-k2.5",
+      "provider": "avian",
+      "model": "moonshotai/kimi-k2.5",
+      "api_base": "https://api.avian.io/v1"
+    },
+    {
+      "model_name": "MiniMax-M2.5",
+      "provider": "minimax",
+      "model": "MiniMax-M2.5",
+      "api_base": "https://api.minimaxi.com/v1",
+      "extra_body": {
+        "reasoning_split": true
+      }
+    },
+    {
+      "model_name": "LongCat-Flash-Thinking",
+      "provider": "longcat",
+      "model": "LongCat-Flash-Thinking",
+      "api_base": "https://api.longcat.chat/openai"
+    },
+    {
+      "model_name": "modelscope-qwen",
+      "provider": "modelscope",
+      "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+      "api_base": "https://api-inference.modelscope.cn/v1"
+    },
+    {
+      "model_name": "local-model",
+      "provider": "vllm",
+      "model": "custom-model",
+      "api_base": "http://localhost:8000/v1"
+    },
+    {
+      "model_name": "lmstudio-local",
+      "provider": "lmstudio",
+      "model": "openai/gpt-oss-20b",
+      "api_base": "http://localhost:1234/v1"
+    },
+    {
+      "model_name": "azure-gpt5",
+      "provider": "azure",
+      "model": "my-gpt5-deployment",
+      "api_base": "https://your-resource.openai.azure.com"
     }
   ],
   "gateway": {

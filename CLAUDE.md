@@ -35,9 +35,15 @@ Componentes envolvidos (visão rápida, deep dive no doc):
 - `internal/saas/api/tenants_promote.go` — endpoint `/promote` (10 steps)
 - `internal/saas/store/tenants.go::Promote` — DB UPDATE atômica
 - `web/saas-admin/src/components/tenant/promote-tenant-card.tsx` — UI admin
-- `internal/saas/api/launcher_ui_visibility.go` (não, isso é launcher) +
-  `web/backend/api/launcher_ui_visibility.go` — endpoint que serve o
+- `web/backend/api/launcher_ui_visibility.go` — endpoint que serve o
   `ui-visibility.json` per-tenant pro SPA renderizar o profile correto
+
+**⚠️ Mexeu em `workspace/`? Rode `make sync-baseline` antes de commitar.**
+O `internal/saas/api/baseline-workspace/` é auto-gerado pelo script
+`scripts/sync-baseline-workspace.py` (também invocado via `go generate`).
+Sem isso, novos tenants criados a partir do `default-business` workspace
+ficam com versão velha do conteúdo. `make check-baseline-sync` falha o
+CI se você esquecer.
 
 ## Commands
 
