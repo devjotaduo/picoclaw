@@ -55,7 +55,19 @@ atual.
 5. **Priorização de dores** → ranking 1-3 (Fase 5)
 6. **Objetivos e expectativas (90 dias)** → Fase 6
 7. **Recomendação do time de agentes** → `references/agent-catalog.md`
-8. **Confirmação e salvamento** → `scripts/save_client.py` + atualizar `memory/empresa.md`
+7.5. **Captura das credenciais do dono** → pergunta email + WhatsApp + chama `onboarding-state.set_owner`
+8. **Confirmação e salvamento** → `scripts/save_client.py` + atualizar `memory/empresa.md` + chama `onboarding-state.mark_discovery_done`
+
+## State machine do onboarding
+
+Esta skill **escreve em `workspace/state/onboarding.json`** via a skill
+`onboarding-state` em 3 momentos:
+
+- **Turno 1** (logo no init): chama `onboarding-state` com `{"action":"init"}` pra criar o arquivo se for tenant publico fresh. Idempotente.
+- **Fase 7.5** (captura credenciais): chama `{"action":"set_owner","name":"...","email":"...","whatsapp":"..."}` depois que o dono confirmar os 3.
+- **Fase 8** (fim do discovery): chama `{"action":"mark_discovery_done","segment":"clinica","summary":"..."}` depois de gravar empresa.md.
+
+O backend de promoção (`POST /api/v1/tenants/{id}/promote` no controlplane) **só libera** o tenant quando `onboarding.json::promotion.ready=true`. Sem `mark_discovery_done` + `set_owner`, esse flag fica `false` e o admin não consegue promover. Por isso seguir as 3 chamadas é não-negociável.
 
 ## Como escolher o arquivo de segmento
 
@@ -90,6 +102,55 @@ Após coletar dores e sistemas:
    `agente-agendador` integrado), sinalize a **pendência de criação** e
    ofereça workaround com agentes existentes (ex: Rafael+cron pra cobrança).
 6. Sugira **ordem de implantação** — quem entra primeiro e por quê.
+
+## Captura das credenciais do dono (Fase 7.5)
+
+Antes de fechar (Fase 8), eu preciso de **3 coisas pessoais do dono** pra
+que o admin consiga promover esse tenant pra cliente normal depois:
+
+1. **Nome do dono** (não da empresa — pessoa física que vai assumir)
+2. **Melhor email** pra mandar o pacote de acesso (URL + senha)
+3. **WhatsApp** pra Catarina conseguir falar com ele depois pra aprofundar
+
+**Como puxo isso na conversa (postura natural, não formulário):**
+
+> "Beleza, tenho um time recomendado e o esqueleto da operação aqui.
+> Pra eu deixar tudo organizado e meu time conseguir te procurar
+> depois pra aprofundar uns detalhes técnicos, qual o seu nome (a
+> pessoa que vai cuidar disso)?"
+
+Aguarde resposta. Aí:
+
+> "E o melhor email pra eu te mandar o link de acesso + senha
+> quando ficar pronto?"
+
+Aguarde + valide formato. Aí:
+
+> "E o WhatsApp? Não é pro cliente final — é só pra Catarina (a
+> curadora do meu time) te chamar nos próximos dias pra entender
+> uns detalhes técnicos que a equipe vai precisar quando tiver
+> atendendo de verdade."
+
+Aguarde + valide (10+ dígitos com DDI ou DDD).
+
+**Confirme antes de gravar:**
+
+> "Conferindo: <Nome>, email <email@x.com>, WhatsApp <+55...>. Tá certo?"
+
+**Quando confirmar, grave via `onboarding-state`:**
+
+```
+exec(
+  action="run",
+  command="python skills/onboarding-state/scripts/state.py",
+  cwd="<workspace_root>",
+  stdin='{"action":"set_owner","name":"Eduardo Silva","email":"eduardo@x.com","whatsapp":"+5511999998888","captured_by":"sofia"}'
+)
+```
+
+**Erros tratados:** se o script retornar `email inválido`, repita a pergunta de email só. Não recapture os outros. Se `whatsapp tem menos dígitos`, pede de novo.
+
+**Por que aqui e não antes:** se o dono não confirmar o time recomendado (Fase 7), o discovery pode pivotar — e aí captura de email seria prematura. Captura DEPOIS de Fase 7 = confirma intenção real.
 
 ## Salvamento (Fase 8) — duas escritas
 
@@ -327,9 +388,30 @@ detalhados). E-mail e telefone comerciais OK.
 ## Passos finais do discovery — gate-by-gate (8c a 8i)
 
 Após salvar dossiê + delegar `memory/empresa.md` ao Rafael, você NÃO
-encerra. Ainda faltam 6 passos: validate, decisão de gate, teste com
-Clara, ajustes, aprovação do dono, liberação. **Você** mesma libera se
-não houver impedimento técnico.
+encerra. Ainda faltam 7 passos: validate, decisão de gate, teste com
+Clara, ajustes, aprovação do dono, **marcar discovery_done na state
+machine**, e (opcionalmente) liberação.
+
+### Passo 8b.5 — Marcar discovery_done
+
+**ASSIM QUE** terminar de gravar `memory/empresa.md` (via Rafael), chame:
+
+```
+exec(
+  action="run",
+  command="python skills/onboarding-state/scripts/state.py",
+  cwd="<workspace_root>",
+  stdin='{"action":"mark_discovery_done","segment":"<segment_detectado>","summary":"<resumo executivo de 2-3 linhas do negocio>"}'
+)
+```
+
+Isso é o que sinaliza pro backend de promoção que o discovery acabou. Sem
+isso, mesmo que `empresa.md` esteja perfeito, `onboarding.json` continua em
+`discovery_in_progress` e a Catarina/admin não sabem que pode prosseguir.
+
+O script retorna o JSON novo do `onboarding.json`. Confira mentalmente que
+`phase` virou `discovery_done` (ou `deepening_in_progress` se você já tinha
+chamado `set_owner` antes da Fase 7.5 — improvável).
 
 ### Passo 8c — Confirmação bloco a bloco com o dono
 
