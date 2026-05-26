@@ -31,10 +31,20 @@ export type Tenant = {
   is_public: boolean;
 };
 
+// TenantType drives the UI visibility profile written into the tenant volume:
+//   "publico" → active_profile=public  → no owner password, anonymous chat
+//   "admin"   → active_profile=admin   → full SaaS admin sidebar
+//   "cliente" → active_profile=tenant  → owner dashboard, no admin tools (default)
+// Maps in internal/saas/api/tenants.go::resolveUIProfile.
+export type TenantType = "publico" | "admin" | "cliente";
+
 export type CreateTenantInput = {
   display_name: string;
   owner_email: string;
   subdomain: string;
+  // tenant_type is optional for backwards compat — controlplane defaults to
+  // "cliente" when missing. New tenants from this UI always send it.
+  tenant_type?: TenantType;
   monthly_budget_usd?: number;
   mem_limit_mb?: number;
   cpu_quota?: number;

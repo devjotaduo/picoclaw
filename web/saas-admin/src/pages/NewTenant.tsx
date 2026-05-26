@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Check, Loader2 } from "lucide-react";
-import { createTenant, getTenant, markPasswordDelivered, type CreateTenantInput, type CreateTenantResponse } from "@/api/tenants";
+import { createTenant, getTenant, markPasswordDelivered, type CreateTenantInput, type CreateTenantResponse, type TenantType } from "@/api/tenants";
 import { listWorkspaces } from "@/api/workspaces";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -17,9 +17,61 @@ function validateSubdomain(value: string): string | null {
   return null;
 }
 
+interface TypeCard {
+  id: TenantType;
+  title: string;
+  tagline: string;
+  bullets: string[];
+  subdomainHint: string;
+  displayNameHint: string;
+}
+
+// Step 1 cards. Order: publico, admin, cliente (default last so the eye lands
+// on the safe option after scanning the two specialised choices). Mirrors the
+// launcher's web/frontend/src/routes/admin/tenants/new.tsx wizard.
+const TYPE_CARDS: TypeCard[] = [
+  {
+    id: "publico",
+    title: "Público",
+    tagline: "Chat anônimo, sem login",
+    bullets: [
+      "Visitante interage sem cadastro",
+      "Sem owner, sem senha, sem painel",
+      "Usado para landing / discovery / Sofia",
+    ],
+    subdomainHint: "onboarding",
+    displayNameHint: "Onboarding",
+  },
+  {
+    id: "admin",
+    title: "Admin",
+    tagline: "Painel SaaS interno",
+    bullets: [
+      "Sidebar /admin/* habilitada",
+      "Owner é membro do time",
+      "Tudo visível: skills, tools, logs, config",
+    ],
+    subdomainHint: "ops",
+    displayNameHint: "Operações",
+  },
+  {
+    id: "cliente",
+    title: "Cliente",
+    tagline: "Cliente pagante (default)",
+    bullets: [
+      "Owner recebe credenciais por email",
+      "Vê chat, agente, WhatsApp, config básica",
+      "Sem ferramentas de admin",
+    ],
+    subdomainHint: "acme",
+    displayNameHint: "Acme Corp",
+  },
+];
+
 export function NewTenant() {
   const nav = useNavigate();
   const qc = useQueryClient();
+  const [tenantType, setTenantType] = useState<TenantType | null>(null);
   const [form, setForm] = useState<CreateTenantInput>({
     display_name: "",
     owner_email: "",
@@ -88,15 +140,23 @@ export function NewTenant() {
         }
       : null;
 
+  // Públicos não têm owner — email é hidden e não vai pra API.
+  const needsOwnerEmail = tenantType !== "publico";
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!tenantType) return;
     const err = validateSubdomain(form.subdomain);
     if (err) {
       setSubdomainError(err);
       subdomainRef.current?.focus();
       return;
     }
-    m.mutate(form);
+    m.mutate({
+      ...form,
+      tenant_type: tenantType,
+      owner_email: needsOwnerEmail ? form.owner_email : "",
+    });
   };
 
   const copyValue = async (value: string | undefined) => {
@@ -112,9 +172,72 @@ export function NewTenant() {
     nav(`/tenants/${result.tenant_id}`);
   };
 
+  // Step 1: type picker. Nothing else renders until the admin chooses.
+  if (!tenantType) {
+    return (
+      <div className="mx-auto max-w-3xl p-6">
+        <header className="mb-6 flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold">Novo tenant</h1>
+          <p className="text-sm text-zinc-400">
+            Escolha o tipo. Isso define o que o usuário vai ver (a UI inteira
+            sai de <code className="font-mono text-xs">ui-visibility.json</code>{" "}
+            do workspace; o tipo selecionado vira o{" "}
+            <code className="font-mono text-xs">active_profile</code>).
+          </p>
+        </header>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {TYPE_CARDS.map((card) => (
+            <button
+              key={card.id}
+              type="button"
+              onClick={() => setTenantType(card.id)}
+              className="group flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 text-left transition hover:border-zinc-600 hover:bg-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+            >
+              <div>
+                <div className="text-lg font-semibold text-zinc-100">
+                  {card.title}
+                </div>
+                <div className="text-xs text-zinc-500">{card.tagline}</div>
+              </div>
+              <ul className="flex flex-col gap-1.5 text-sm text-zinc-400">
+                {card.bullets.map((b) => (
+                  <li key={b} className="flex gap-2">
+                    <span className="text-zinc-600">·</span>
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+            </button>
+          ))}
+        </div>
+        <div className="mt-6 flex justify-start">
+          <Button type="button" variant="outline" onClick={() => nav("/tenants")}>
+            Cancelar
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Step 2: form for the chosen type.
+  const card = TYPE_CARDS.find((c) => c.id === tenantType)!;
   return (
     <div className="mx-auto max-w-xl p-6">
-      <h1 className="mb-4 text-xl font-semibold">New tenant</h1>
+      <header className="mb-4 flex flex-col gap-1">
+        <div className="flex items-center gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => setTenantType(null)}
+            className="text-zinc-500 underline hover:text-zinc-200"
+          >
+            ← tipo
+          </button>
+          <span className="text-zinc-600">/</span>
+          <span className="text-sm font-medium text-zinc-200">{card.title}</span>
+        </div>
+        <h1 className="text-xl font-semibold">Novo tenant — {card.title}</h1>
+        <p className="text-xs text-zinc-500">{card.tagline}</p>
+      </header>
 
       <form onSubmit={submit} className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900/50 p-5">
         <div>
@@ -124,18 +247,26 @@ export function NewTenant() {
             required
             value={form.display_name}
             onChange={(e) => setForm({ ...form, display_name: e.target.value })}
+            placeholder={card.displayNameHint}
           />
         </div>
-        <div>
-          <Label htmlFor="owner_email">Owner email</Label>
-          <Input
-            id="owner_email"
-            type="email"
-            required
-            value={form.owner_email}
-            onChange={(e) => setForm({ ...form, owner_email: e.target.value })}
-          />
-        </div>
+        {needsOwnerEmail && (
+          <div>
+            <Label htmlFor="owner_email">Owner email</Label>
+            <Input
+              id="owner_email"
+              type="email"
+              required
+              value={form.owner_email}
+              onChange={(e) => setForm({ ...form, owner_email: e.target.value })}
+            />
+            {tenantType === "admin" && (
+              <p className="mt-1 text-[11px] text-zinc-500">
+                Será membro do time interno com role tenant_owner.
+              </p>
+            )}
+          </div>
+        )}
         <div>
           <Label htmlFor="subdomain">Subdomain (lowercase, 3–30 chars)</Label>
           <Input
@@ -151,6 +282,10 @@ export function NewTenant() {
             }}
             onBlur={() => setSubdomainError(validateSubdomain(form.subdomain))}
             className={subdomainError ? "border-red-500 focus:border-red-500" : undefined}
+            placeholder={card.subdomainHint}
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
           />
           {subdomainError && (
             <p className="mt-1 text-xs text-red-400">{subdomainError}</p>
@@ -194,12 +329,14 @@ export function NewTenant() {
             </>
           )}
         </div>
-        <div className="rounded border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400">
-          O owner recebe por email: <strong>URL</strong>,{" "}
-          <strong>login</strong> e <strong>senha inicial</strong>. O fluxo manual
-          usa autenticação do Launcher; magic links ficam restritos a tenants
-          legados ou links gerados na tela do tenant.
-        </div>
+        {needsOwnerEmail && (
+          <div className="rounded border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400">
+            O owner recebe por email: <strong>URL</strong>,{" "}
+            <strong>login</strong> e <strong>senha inicial</strong>. O fluxo manual
+            usa autenticação do Launcher; magic links ficam restritos a tenants
+            legados ou links gerados na tela do tenant.
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-3">
           <div>
             <Label htmlFor="budget">Budget USD/mo</Label>
@@ -269,7 +406,9 @@ export function NewTenant() {
         )}
 
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => nav("/tenants")}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={() => setTenantType(null)}>
+            Voltar
+          </Button>
           <Button type="submit" disabled={m.isPending}>
             {m.isPending ? "Provisioning…" : "Create tenant"}
           </Button>
