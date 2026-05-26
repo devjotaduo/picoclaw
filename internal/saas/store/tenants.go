@@ -286,6 +286,27 @@ func (s *TenantStore) MarkSuspended(ctx context.Context, id string) error {
 	return err
 }
 
+// Promote flips a public tenant to a private one with a designated owner
+// email. Used by POST /api/v1/tenants/{id}/promote after the onboarding
+// state machine in the tenant volume reports promotion.ready=true.
+// Atomic at the SQL level (single UPDATE), but the caller must coordinate
+// the subsequent filesystem + container recreate work.
+func (s *TenantStore) Promote(ctx context.Context, id, ownerEmail, authBackend string) error {
+	const q = `UPDATE tenants
+	           SET is_public = false,
+	               owner_email = $2,
+	               auth_backend = $3
+	           WHERE id = $1`
+	tag, err := s.DB.Pool.Exec(ctx, q, id, ownerEmail, authBackend)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrTenantNotFound
+	}
+	return nil
+}
+
 func (s *TenantStore) MarkResumed(ctx context.Context, id string) error {
 	const q = `UPDATE tenants SET status = 'active', suspended_at = NULL WHERE id = $1`
 	_, err := s.DB.Pool.Exec(ctx, q, id)
