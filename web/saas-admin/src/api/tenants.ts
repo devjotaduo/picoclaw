@@ -56,7 +56,12 @@ export type CreateTenantInput = {
 export type CreateTenantResponse = {
   tenant_id: string;
   url: string;
+  access_link?: string;
   magic_link?: string;
+  short_magic_link?: string;
+  magic_link_expires_at?: string;
+  magic_link_role?: MagicLinkRole;
+  access_warning?: string;
   initial_password?: string;
   supabase_user_id?: string;
   owner_invite_token?: string;
@@ -321,6 +326,10 @@ export type MagicLink = {
   url: string;
   token: string;
   expires_at: string;
+  short_magic_link?: string;
+  access_link?: string;
+  role?: MagicLinkRole;
+  warning?: string;
 };
 
 // MagicLinkRole values accepted by the controlplane. Empty / undefined =

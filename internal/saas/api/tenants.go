@@ -174,6 +174,30 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 
 	resp["initial_password"] = out.InitialPassword
 	resp["login_mode"] = "password"
+	mailMagicLink := ""
+	if createdTenant, err := h.Tenants.Get(r.Context(), out.TenantID); err != nil {
+		log.Printf("tenant create: reload tenant %s for access link failed: %v", out.TenantID, err)
+		resp["access_warning"] = "Tenant criado, mas não foi possível carregar dados para gerar magic link."
+	} else if bundle, err := h.createTenantMagicAccessBundle(
+		r.Context(),
+		createdTenant,
+		string(store.RoleTenantOwner),
+		defaultMagicLinkTTL,
+		"",
+	); err != nil {
+		log.Printf("tenant create: access bundle generation failed for tenant %s: %v", out.TenantID, err)
+		resp["access_warning"] = "Tenant criado, mas magic link/shortlink não foram gerados. Use URL + senha inicial como fallback."
+	} else {
+		resp["magic_link"] = bundle.URL
+		resp["short_magic_link"] = bundle.ShortMagicLink
+		resp["access_link"] = bundle.AccessLink
+		resp["magic_link_expires_at"] = bundle.ExpiresAt
+		resp["magic_link_role"] = string(store.RoleTenantOwner)
+		if bundle.Warning != "" {
+			resp["access_warning"] = bundle.Warning
+		}
+		mailMagicLink = bundle.AccessLink
+	}
 	if h.Mailer != nil && h.Mailer.Enabled() {
 		go h.Mailer.SendCredentialsEmail(
 			req.OwnerEmail,
@@ -181,9 +205,9 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 			out.URL,
 			req.OwnerEmail,
 			out.InitialPassword,
-			"", // magic link not used in the launcher-native flow
+			mailMagicLink,
 		)
-		resp["info"] = "Email com URL, login e senha enviado para o owner."
+		resp["info"] = "Email com URL, login, senha e link de acesso enviado para o owner."
 	} else {
 		resp["info"] = "Tenant criado. Salve as credenciais agora — elas não serão exibidas de novo."
 		resp["warning"] = "SMTP não configurado — entregue email + senha manualmente."
