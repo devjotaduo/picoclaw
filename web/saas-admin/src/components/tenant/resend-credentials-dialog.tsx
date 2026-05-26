@@ -32,8 +32,8 @@ export function ResendCredentialsDialog(props: {
             (ou cair no spam), copie a senha e o link daqui mesmo.
           </p>
 
-          <CopyableField label="URL do painel" value={data.dashboard_url} />
-          <CopyableField label="Email de login" value={data.sent_to} />
+          <CopyableField label="Endereço do painel" value={data.dashboard_url} />
+          <CopyableField label="Email de acesso" value={data.sent_to} />
           <CopyableField
             label="Senha nova"
             value={data.initial_password}
@@ -47,11 +47,11 @@ export function ResendCredentialsDialog(props: {
                   label="Link curto (WhatsApp / SMS · 24h)"
                   value={data.short_magic_link}
                   accent="emerald"
-                  hint="Redirect 302 → magic link Supabase. Expira em 24h. Bom pra compartilhar por canais com limite de caracteres."
+                  hint="Expira em 24h. Bom para compartilhar em canais com limite de caracteres."
                 />
               )}
               <CopyableField
-                label="Magic link completo (Supabase)"
+                label="Link de acesso completo"
                 value={data.magic_link}
                 variant="tight"
               />

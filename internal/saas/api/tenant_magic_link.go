@@ -188,11 +188,11 @@ func (h *Handler) createTenantMagicAccessBundle(
 	intakeID string,
 ) (*tenantMagicAccessBundle, error) {
 	if h.Cfg.GatewaySharedSecret == "" {
-		return nil, errors.New("controlplane has no PICOCLAW_SAAS_GATEWAY_SECRET configured; magic links require it")
+		return nil, errors.New("o painel não está configurado para gerar link de acesso")
 	}
 	role, ok := normalizeMagicLinkRole(role)
 	if !ok {
-		return nil, errors.New("role must be one of: public, tenant_owner, tenant_admin")
+		return nil, errors.New("tipo de acesso inválido")
 	}
 	if ttl <= 0 {
 		ttl = defaultMagicLinkTTL
@@ -253,7 +253,7 @@ func (h *Handler) createTenantMagicAccessBundle(
 		out.ShortMagicLink = shortURL
 		out.AccessLink = shortURL
 	} else {
-		out.Warning = "Shortlink não foi criado; use o magic link completo."
+		out.Warning = "Link curto não foi criado; use o link de acesso completo."
 	}
 	return out, nil
 }
@@ -263,13 +263,13 @@ func (h *Handler) createTenantMagicAccessBundle(
 func (h *Handler) handleGenerateMagicLink(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		writeError(w, http.StatusBadRequest, "tenant id required")
+		writeError(w, http.StatusBadRequest, "cliente obrigatório")
 		return
 	}
 	t, err := h.Tenants.Get(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrTenantNotFound) {
-			writeError(w, http.StatusNotFound, "tenant not found")
+			writeError(w, http.StatusNotFound, "cliente não encontrado")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "db: "+err.Error())
@@ -342,11 +342,11 @@ func (h *Handler) consumeMagicLink(w http.ResponseWriter, r *http.Request, t *st
 	token := strings.TrimPrefix(r.URL.Path, magicLinkPath)
 	// Allow tokens with embedded slashes? No — our format has none, reject.
 	if strings.Contains(token, "/") || token == "" {
-		http.Error(w, "invalid magic link", http.StatusBadRequest)
+		http.Error(w, "link de acesso inválido", http.StatusBadRequest)
 		return true
 	}
 	if h.Cfg.GatewaySharedSecret == "" {
-		http.Error(w, "controlplane misconfigured (no gateway secret)", http.StatusServiceUnavailable)
+		http.Error(w, "painel não configurado para link de acesso", http.StatusServiceUnavailable)
 		return true
 	}
 	claims, ok := verifyMagicLinkToken(h.Cfg.GatewaySharedSecret, token)
@@ -359,7 +359,7 @@ func (h *Handler) consumeMagicLink(w http.ResponseWriter, r *http.Request, t *st
 		// subdomain must not authenticate. Should be impossible to forge a
 		// valid HMAC for tenant B with A's payload (HMAC binds payload),
 		// but explicit rejection beats silent acceptance.
-		http.Error(w, "this access link is not valid for this tenant", http.StatusUnauthorized)
+		http.Error(w, "este link de acesso não é válido para este cliente", http.StatusUnauthorized)
 		return true
 	}
 
@@ -375,7 +375,7 @@ func (h *Handler) consumeMagicLink(w http.ResponseWriter, r *http.Request, t *st
 			return true
 		}
 		if err != nil {
-			http.Error(w, "magic link lookup failed", http.StatusInternalServerError)
+			http.Error(w, "falha ao consultar link de acesso", http.StatusInternalServerError)
 			return true
 		}
 		if row.ConsumedAt != nil {
@@ -568,14 +568,14 @@ func (h *Handler) handleConsumeMagicLink(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if h.MagicLinks == nil {
-		writeError(w, http.StatusServiceUnavailable, "magic links store not configured")
+		writeError(w, http.StatusServiceUnavailable, "links de acesso não configurados")
 		return
 	}
 	var req magicLinkConsumeRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
 	if err := h.MagicLinks.MarkConsumed(r.Context(), nonce, req.Summary); err != nil {
 		if err == store.ErrMagicLinkNotFound {
-			writeError(w, http.StatusNotFound, "magic link not found")
+			writeError(w, http.StatusNotFound, "link de acesso não encontrado")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "mark consumed: "+err.Error())
@@ -617,7 +617,7 @@ type magicLinkListResponse struct {
 func (h *Handler) handleListMagicLinks(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		writeError(w, http.StatusBadRequest, "tenant id required")
+		writeError(w, http.StatusBadRequest, "cliente obrigatório")
 		return
 	}
 	if h.MagicLinks == nil {
@@ -626,7 +626,7 @@ func (h *Handler) handleListMagicLinks(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := h.MagicLinks.ListByTenant(r.Context(), id, 50)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "list magic links: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "listar links de acesso: "+err.Error())
 		return
 	}
 	now := time.Now()

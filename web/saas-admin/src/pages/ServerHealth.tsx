@@ -27,7 +27,7 @@ export function ServerHealth() {
         <div>
           <h1 className="text-xl font-semibold">Saúde do servidor</h1>
           <p className="text-xs text-zinc-500">
-            Atualiza a cada 15 s · host, processo controlplane, Docker, tenants
+            Atualiza a cada 15 s · servidor, painel, Docker e clientes
           </p>
         </div>
         <div className="text-xs text-zinc-500">
@@ -83,7 +83,7 @@ function Sections({ data }: { data: ServerHealthData }) {
           icon={<Clock className="h-4 w-4 text-zinc-400" />}
         />
         <StatCard
-          label="Tenants ativos"
+          label="Clientes ativos"
           value={data.tenants.active}
           sub={`susp ${data.tenants.suspended} · erro ${data.tenants.errors}`}
           icon={
@@ -176,7 +176,7 @@ function Sections({ data }: { data: ServerHealthData }) {
       </Section>
 
       <Section
-        title="Containers gerenciados (tenants)"
+        title="Áreas de clientes gerenciadas"
         icon={<Activity className="h-4 w-4 text-zinc-400" />}
       >
         {data.containers.length === 0 ? (
@@ -186,8 +186,8 @@ function Sections({ data }: { data: ServerHealthData }) {
             <table className="w-full text-xs">
               <thead className="bg-zinc-900/60 text-left text-[10px] uppercase text-zinc-500">
                 <tr>
-                  <th className="px-3 py-2">Container</th>
-                  <th className="px-3 py-2">Tenant</th>
+                  <th className="px-3 py-2">Área</th>
+                  <th className="px-3 py-2">Cliente</th>
                   <th className="px-3 py-2 text-right">Estado</th>
                 </tr>
               </thead>
@@ -198,9 +198,9 @@ function Sections({ data }: { data: ServerHealthData }) {
                     <td className="px-3 py-1.5 text-zinc-400">{c.tenant_id || "—"}</td>
                     <td className="px-3 py-1.5 text-right">
                       {c.running ? (
-                        <span className="text-emerald-400">running</span>
+                        <span className="text-emerald-400">rodando</span>
                       ) : (
-                        <span className="text-red-400">stopped</span>
+                        <span className="text-red-400">parado</span>
                       )}
                     </td>
                   </tr>
@@ -211,7 +211,7 @@ function Sections({ data }: { data: ServerHealthData }) {
         )}
       </Section>
 
-      <Section title="Processo controlplane" icon={<Cpu className="h-4 w-4 text-zinc-400" />}>
+      <Section title="Processo do painel" icon={<Cpu className="h-4 w-4 text-zinc-400" />}>
         <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
           <KV k="PID" v={data.process.pid} />
           <KV k="Goroutines" v={data.process.num_goroutine} />

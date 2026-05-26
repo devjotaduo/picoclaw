@@ -44,22 +44,22 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: "Operação",
     items: [
-      { label: "Dashboard", to: "/dashboard", icon: IconLayoutDashboard, platformOnly: true },
+      { label: "Resumo", to: "/dashboard", icon: IconLayoutDashboard, platformOnly: true },
       { label: "Saúde do servidor", to: "/server-health", icon: IconActivity, platformOnly: true },
     ],
   },
   {
-    label: "Tenants",
+    label: "Clientes",
     items: [
-      { label: "Tenants", to: "/tenants", icon: IconUsers, match: (p) => p === "/tenants" || (p.startsWith("/tenants/") && p !== "/tenants/discovery" && p !== "/tenants/new") },
-      { label: "Novo tenant", to: "/tenants/new", icon: IconPlus, platformOnly: true },
-      { label: "Discovery", to: "/tenants/discovery", icon: IconSparkles, platformOnly: true },
+      { label: "Clientes", to: "/tenants", icon: IconUsers, match: (p) => p === "/tenants" || (p.startsWith("/tenants/") && p !== "/tenants/discovery" && p !== "/tenants/new") },
+      { label: "Novo cliente", to: "/tenants/new", icon: IconPlus, platformOnly: true },
+      { label: "Descoberta", to: "/tenants/discovery", icon: IconSparkles, platformOnly: true },
     ],
   },
   {
-    label: "Workspace",
+    label: "Modelos",
     items: [
-      { label: "Workspaces", to: "/workspaces", icon: IconFolder, platformOnly: true, match: (p) => p.startsWith("/workspaces") },
+      { label: "Modelos", to: "/workspaces", icon: IconFolder, platformOnly: true, match: (p) => p.startsWith("/workspaces") },
     ],
   },
   {
@@ -72,9 +72,9 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: "Plataforma",
     items: [
-      { label: "Shortlinks", to: "/shortlinks", icon: IconLink, platformOnly: true },
-      { label: "Audit log", to: "/audit", icon: IconClipboardList, platformOnly: true },
-      { label: "Users", to: "/users", icon: IconUserShield, platformOnly: true },
+      { label: "Links curtos", to: "/shortlinks", icon: IconLink, platformOnly: true },
+      { label: "Histórico", to: "/audit", icon: IconClipboardList, platformOnly: true },
+      { label: "Equipe", to: "/users", icon: IconUserShield, platformOnly: true },
     ],
   },
 ];
@@ -106,14 +106,14 @@ export function AppSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild size="lg" tooltip="Picoclaw SaaS">
+            <SidebarMenuButton asChild size="lg" tooltip="Jota Duo">
               <Link to="/tenants" onClick={closeMobile}>
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
                   <IconSparkles className="size-4" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">Picoclaw SaaS</span>
-                  <span className="truncate text-xs text-muted-foreground">control plane</span>
+                  <span className="truncate font-semibold">Jota Duo</span>
+                  <span className="truncate text-xs text-muted-foreground">painel administrativo</span>
                 </div>
               </Link>
             </SidebarMenuButton>
@@ -124,7 +124,7 @@ export function AppSidebar() {
       <SidebarContent>
         {tenantQuery.data ? (
           <SidebarGroup>
-            <SidebarGroupLabel>Tenant aberto</SidebarGroupLabel>
+            <SidebarGroupLabel>Cliente aberto</SidebarGroupLabel>
             <SidebarGroupContent>
               <div className="mx-2 flex flex-col gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 p-2">
                 <div className="min-w-0">

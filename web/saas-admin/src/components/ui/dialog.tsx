@@ -42,7 +42,7 @@ function Dialog(props: LegacyDialogProps | DialogRootProps) {
               <DialogTitle className="text-sm">{title}</DialogTitle>
               {closable ? (
                 <DialogPrimitive.Close asChild>
-                  <Button variant="ghost" size="icon-sm" aria-label="Close">
+                  <Button variant="ghost" size="icon-sm" aria-label="Fechar">
                     <IconX />
                   </Button>
                 </DialogPrimitive.Close>
@@ -114,7 +114,7 @@ function DialogContent({
         {children}
         {showCloseButton ? (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
-            <Button variant="ghost" className="absolute right-4 top-4" size="icon-sm" aria-label="Close">
+            <Button variant="ghost" className="absolute right-4 top-4" size="icon-sm" aria-label="Fechar">
               <IconX />
             </Button>
           </DialogPrimitive.Close>

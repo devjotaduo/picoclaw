@@ -31,15 +31,15 @@ export function ChangePassword() {
     e.preventDefault();
     setClientError(null);
     if (next.length < 8) {
-      setClientError("New password must be at least 8 characters.");
+      setClientError("A nova senha precisa ter pelo menos 8 caracteres.");
       return;
     }
     if (next !== confirm) {
-      setClientError("New password and confirmation do not match.");
+      setClientError("A nova senha e a confirmação não conferem.");
       return;
     }
     if (next === current) {
-      setClientError("New password must differ from the current password.");
+      setClientError("A nova senha precisa ser diferente da senha atual.");
       return;
     }
     m.mutate();
@@ -49,10 +49,10 @@ export function ChangePassword() {
     <div className="h-full overflow-y-auto p-6">
       <div className="mx-auto max-w-md">
         <div className="mb-4">
-          <h1 className="text-lg font-semibold text-zinc-100">Change password</h1>
+          <h1 className="text-lg font-semibold text-zinc-100">Alterar senha</h1>
           <p className="mt-1 text-xs text-zinc-500">
-            Update the password used to sign in to the SaaS admin. You'll stay
-            signed in on this device after the change.
+            Atualize a senha usada para entrar no painel. Você continuará
+            conectado neste dispositivo depois da alteração.
           </p>
         </div>
         <form
@@ -61,7 +61,7 @@ export function ChangePassword() {
         >
           <div className="space-y-3">
             <div>
-              <Label htmlFor="current">Current password</Label>
+              <Label htmlFor="current">Senha atual</Label>
               <Input
                 id="current"
                 type="password"
@@ -72,7 +72,7 @@ export function ChangePassword() {
               />
             </div>
             <div>
-              <Label htmlFor="next">New password</Label>
+              <Label htmlFor="next">Nova senha</Label>
               <Input
                 id="next"
                 type="password"
@@ -84,7 +84,7 @@ export function ChangePassword() {
               />
             </div>
             <div>
-              <Label htmlFor="confirm">Confirm new password</Label>
+              <Label htmlFor="confirm">Confirmar nova senha</Label>
               <Input
                 id="confirm"
                 type="password"
@@ -102,7 +102,7 @@ export function ChangePassword() {
             )}
             {m.isSuccess && !clientError && (
               <div className="rounded bg-emerald-950/50 px-3 py-2 text-xs text-emerald-300">
-                Password updated.
+                Senha atualizada.
               </div>
             )}
             <div className="flex gap-2 pt-1">
@@ -112,10 +112,10 @@ export function ChangePassword() {
                 onClick={() => nav(-1)}
                 disabled={m.isPending}
               >
-                Back
+                Voltar
               </Button>
               <Button type="submit" className="flex-1" disabled={m.isPending}>
-                {m.isPending ? "Saving..." : "Save new password"}
+                {m.isPending ? "Salvando..." : "Salvar nova senha"}
               </Button>
             </div>
           </div>

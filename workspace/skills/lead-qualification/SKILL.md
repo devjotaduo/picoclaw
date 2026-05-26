@@ -1,16 +1,8 @@
 ---
-name: lead-qualification
-description: Avalia se um lead é quente, morno ou frio com base em sinais conversacionais e ICP do tenant.
-visibility: atendimento
+name: lead-qualifier
+description: Scores leads using deterministic BANT fields and selects the next Jotaduo handoff agent.
 ---
 
-# Skill: Lead Qualification
+# lead-qualifier
 
-**Stub minimal** — este SKILL.md existe pra satisfazer o teste
-`TestTemplateCatalogRecommendedSkillsExist` que valida que toda skill
-referenciada em `recommended_skills` dos templates exista no
-`workspace/skills/`. Conteúdo completo (objetivo + processo + scripts)
-será desenvolvido conforme a feature for priorizada pelo time.
-
-Esta skill é referenciada pelos templates em
-`web/frontend/src/components/agent/templates/catalog.ts`.
+Use this skill according to its description. Scripts read JSON from stdin, write one JSON object to stdout, support `--help`, reject sensitive keys, and keep customer state inside the active workspace.

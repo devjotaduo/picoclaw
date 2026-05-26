@@ -54,8 +54,8 @@ const STATUS_OPTIONS: { value: TenantStatus; label: string }[] = [
   { value: "active", label: "Ativo" },
   { value: "suspended", label: "Suspenso" },
   { value: "error", label: "Erro" },
-  { value: "provisioning", label: "Provisionando" },
-  { value: "deleting", label: "Deletando" },
+  { value: "provisioning", label: "Preparando" },
+  { value: "deleting", label: "Excluindo" },
 ];
 
 function isValidStatus(v: string | null): v is TenantStatus {
@@ -83,9 +83,9 @@ export function TenantsList() {
       setDeleteTarget(null);
       setDeleteConfirm("");
       await qc.invalidateQueries({ queryKey: ["tenants"] });
-      toast({ type: "success", message: `${tenant.subdomain} deleted.` });
+      toast({ type: "success", message: `${tenant.subdomain} excluído.` });
     },
-    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to delete tenant." }),
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Falha ao excluir cliente." }),
   });
 
   const rawStatus = searchParams.get("status");
@@ -120,10 +120,10 @@ export function TenantsList() {
   return (
     <div className="flex min-h-full flex-col">
       <PageHeader
-        title="Tenants"
+        title="Clientes"
         description={
           q.isLoading
-            ? "Carregando tenants..."
+            ? "Carregando clientes..."
             : filtered.length === tenants.length
               ? `${tenants.length} total`
               : `${filtered.length} de ${tenants.length}`
@@ -137,7 +137,7 @@ export function TenantsList() {
           <Button size="sm" asChild>
             <Link to="/tenants/new">
               <IconPlus data-icon="inline-start" />
-              Novo tenant
+              Novo cliente
             </Link>
           </Button>
         ) : null}
@@ -146,14 +146,14 @@ export function TenantsList() {
       <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 p-4 lg:p-6">
         <div className="grid gap-3 rounded-xl border bg-card p-4 shadow-xs md:grid-cols-[1fr_240px]">
           <Field>
-            <FieldLabel className="sr-only" htmlFor="tenant-search">Buscar tenant</FieldLabel>
+            <FieldLabel className="sr-only" htmlFor="tenant-search">Buscar cliente</FieldLabel>
             <div className="relative">
               <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="tenant-search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por subdomínio, email ou nome..."
+                placeholder="Buscar por endereço, email ou nome..."
                 className="pl-8"
               />
             </div>
@@ -177,19 +177,19 @@ export function TenantsList() {
 
         {q.isError ? (
           <Alert className="border-destructive/40 bg-destructive/10">
-            <AlertDescription>Falha ao carregar tenants.</AlertDescription>
+            <AlertDescription>Falha ao carregar clientes.</AlertDescription>
           </Alert>
         ) : null}
 
         {!q.isLoading && tenants.length === 0 ? (
           <Empty>
-            <EmptyTitle>Nenhum tenant ainda</EmptyTitle>
-            <EmptyDescription>Crie o primeiro tenant com workspace e pacote de acesso em um único fluxo.</EmptyDescription>
+            <EmptyTitle>Nenhum cliente ainda</EmptyTitle>
+            <EmptyDescription>Crie o primeiro cliente com modelo base e pacote de acesso em um único fluxo.</EmptyDescription>
             {isPlatformAdmin ? (
               <Button size="sm" asChild>
                 <Link to="/tenants/new">
                   <IconPlus data-icon="inline-start" />
-                  Criar primeiro tenant
+                  Criar primeiro cliente
                 </Link>
               </Button>
             ) : null}
@@ -198,7 +198,7 @@ export function TenantsList() {
 
         {!q.isLoading && tenants.length > 0 && filtered.length === 0 ? (
           <Empty>
-            <EmptyTitle>Nenhum tenant combina com o filtro</EmptyTitle>
+            <EmptyTitle>Nenhum cliente combina com o filtro</EmptyTitle>
             <EmptyDescription>Ajuste a busca ou limpe os filtros aplicados.</EmptyDescription>
             <Button variant="outline" size="sm" onClick={clearFilters}>Limpar filtros</Button>
           </Empty>
@@ -209,12 +209,12 @@ export function TenantsList() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Subdomínio</TableHead>
+                  <TableHead>Endereço</TableHead>
                   <TableHead>Nome</TableHead>
-                  <TableHead>Owner</TableHead>
+                  <TableHead>Responsável</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Auth</TableHead>
-                  <TableHead>Budget/mês</TableHead>
+                  <TableHead>Acesso</TableHead>
+                  <TableHead>Limite/mês</TableHead>
                   <TableHead>Criado</TableHead>
                   <TableHead>Entrega</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -283,7 +283,7 @@ export function TenantsList() {
                               }}
                             >
                               <IconTrash data-icon="inline-start" />
-                              Deletar
+                          Excluir
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -297,16 +297,16 @@ export function TenantsList() {
         ) : null}
       </div>
 
-      <Dialog open={!!deleteTarget} onClose={closeDeleteDialog} title="Delete tenant?" size="sm" closable={!deleteM.isPending}>
+      <Dialog open={!!deleteTarget} onClose={closeDeleteDialog} title="Excluir cliente?" size="sm" closable={!deleteM.isPending}>
         {deleteTarget ? (
           <div className="flex flex-col gap-4 text-sm">
             <Alert className="border-destructive/40 bg-destructive/10">
               <AlertDescription>
-                This removes the Docker container, LiteLLM key, tenant volume, and related Picoclaw database records.
+                Isso remove a área do cliente, os arquivos vinculados e os registros da Jota Duo relacionados.
               </AlertDescription>
             </Alert>
             <Field>
-              <FieldLabel htmlFor="delete-confirm">Type {deleteTarget.subdomain}</FieldLabel>
+              <FieldLabel htmlFor="delete-confirm">Digite {deleteTarget.subdomain}</FieldLabel>
               <Input
                 id="delete-confirm"
                 value={deleteConfirm}
@@ -316,13 +316,13 @@ export function TenantsList() {
               />
             </Field>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={closeDeleteDialog} disabled={deleteM.isPending}>Cancel</Button>
+              <Button variant="outline" onClick={closeDeleteDialog} disabled={deleteM.isPending}>Cancelar</Button>
               <Button
                 variant="danger"
                 onClick={() => deleteM.mutate(deleteTarget)}
                 disabled={deleteConfirm !== deleteTarget.subdomain || deleteM.isPending}
               >
-                {deleteM.isPending ? "Deleting..." : "Delete forever"}
+                {deleteM.isPending ? "Excluindo..." : "Excluir definitivamente"}
               </Button>
             </div>
           </div>

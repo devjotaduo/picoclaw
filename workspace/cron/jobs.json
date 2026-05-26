@@ -56,12 +56,12 @@
         "command": "analytics.report.daily"
       },
       "state": {
-        "nextRunAtMs": 1779677940000,
-        "lastRunAtMs": 1779591540006,
+        "nextRunAtMs": 1779850740000,
+        "lastRunAtMs": 1779764347084,
         "lastStatus": "ok"
       },
       "createdAtMs": 0,
-      "updatedAtMs": 1779591540007,
+      "updatedAtMs": 1779764347086,
       "deleteAfterRun": false
     },
     {
@@ -79,10 +79,12 @@
         "command": "analytics.patterns.weekly"
       },
       "state": {
-        "nextRunAtMs": 1779699600000
+        "nextRunAtMs": 1780304400000,
+        "lastRunAtMs": 1779757441151,
+        "lastStatus": "ok"
       },
       "createdAtMs": 0,
-      "updatedAtMs": 0,
+      "updatedAtMs": 1779757441152,
       "deleteAfterRun": false
     },
     {
@@ -140,13 +142,15 @@
         "message": "Gere tendencias da semana, ideias de posts e uma campanha semanal. Salve o resultado como proposta de marketing.",
         "channel": "cron",
         "to": "marketing-weekly-proposals",
-        "agent_id": "marketing"
+        "agent_id": "lia"
       },
       "state": {
-        "nextRunAtMs": 1779710400000
+        "nextRunAtMs": 1780315200000,
+        "lastRunAtMs": 1779757441226,
+        "lastStatus": "ok"
       },
       "createdAtMs": 1779451017251,
-      "updatedAtMs": 1779451017251,
+      "updatedAtMs": 1779757494036,
       "deleteAfterRun": false
     },
     {
@@ -162,7 +166,7 @@
         "message": "Gere um relatorio mensal de posicionamento da marca com sugestoes de melhoria. Salve o resultado como proposta de marketing.",
         "channel": "cron",
         "to": "marketing-monthly-positioning",
-        "agent_id": "marketing"
+        "agent_id": "lia"
       },
       "state": {
         "nextRunAtMs": 1780315200000

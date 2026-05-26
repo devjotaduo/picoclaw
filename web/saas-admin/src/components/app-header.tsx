@@ -31,7 +31,7 @@ export function AppHeader() {
   const email = status.state === "authenticated" ? status.me.email : "";
   const role =
     status.state === "authenticated"
-      ? status.me.platform_role || "tenant user"
+      ? status.me.platform_role || "usuário"
       : "";
 
   return (
@@ -47,11 +47,11 @@ export function AppHeader() {
         </Tooltip>
         <Link to="/tenants" className="hidden shrink-0 items-center gap-2 sm:flex">
           <img className="size-8 rounded-md object-contain" src="/jota-duo-logo.png" alt="" />
-          <span className="text-sm font-semibold text-foreground">Picoclaw</span>
+          <span className="text-sm font-semibold text-foreground">Jota Duo</span>
         </Link>
         <Separator orientation="vertical" className="mx-2 hidden h-6 md:block" />
         <span className="hidden text-xs font-medium text-muted-foreground md:inline">
-          SaaS Control Plane
+          Painel administrativo
         </span>
       </div>
 
@@ -88,12 +88,12 @@ export function AppHeader() {
             <DropdownMenuItem asChild>
               <Link to="/account/password">
                 <IconKey data-icon="inline-start" />
-                Change password
+                Alterar senha
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => signOut()}>
               <IconLogout data-icon="inline-start" />
-              Sign out
+              Sair
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
