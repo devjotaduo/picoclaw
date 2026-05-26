@@ -1,16 +1,8 @@
 ---
-name: knowledge-base-resolution
-description: Tenta resolver a dúvida do cliente usando a base de conhecimento antes de escalar pra humano.
-visibility: atendimento
+name: kb-lookup
+description: Searches local customer knowledge-base markdown files under memory/kb for support, reception, sales, and content answers.
 ---
 
-# Skill: Knowledge Base Resolution
+# kb-lookup
 
-**Stub minimal** — este SKILL.md existe pra satisfazer o teste
-`TestTemplateCatalogRecommendedSkillsExist` que valida que toda skill
-referenciada em `recommended_skills` dos templates exista no
-`workspace/skills/`. Conteúdo completo (objetivo + processo + scripts)
-será desenvolvido conforme a feature for priorizada pelo time.
-
-Esta skill é referenciada pelos templates em
-`web/frontend/src/components/agent/templates/catalog.ts`.
+Use this skill according to its description. Scripts read JSON from stdin, write one JSON object to stdout, support `--help`, reject sensitive keys, and keep customer state inside the active workspace.
