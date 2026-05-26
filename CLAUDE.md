@@ -2,6 +2,43 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🎯 LEIA PRIMEIRO — Core product mechanic
+
+**O coração deste projeto é a jornada `tenant publico → cliente`.** Antes
+de tocar em qualquer arquivo de `internal/saas/`, `workspace/agents/`,
+`workspace/skills/onboarding-state/`, ou `web/saas-admin/`, leia
+[**docs/architecture/public-tenant-promotion.md**](docs/architecture/public-tenant-promotion.md).
+
+TL;DR em 3 frases:
+
+1. Visitante anônimo entra num **tenant publico** (`is_public=true`,
+   sem owner_email) e conversa com **Sofia** (discovery) e depois com
+   **Catarina** (deepening via WhatsApp institucional).
+2. A skill `onboarding-state` cristaliza o progresso em
+   `workspace/state/onboarding.json`. Quando Sofia + Catarina terminam,
+   `promotion.ready=true`.
+3. Admin clica **"Promover"** no painel
+   (`adm.<base>/tenants/{id}`) → `POST /api/v1/tenants/{id}/promote`
+   migra o tenant pra cliente real: cria owner user, gera senha, recria
+   container com auth mode novo, manda email com credenciais.
+
+Sem entender esse fluxo, decisões locais (renomear um campo, mudar uma
+rota, mexer num skill) viram regressões silenciosas no funil de
+cadastro. Esse é o **core revenue mechanic** — todo o resto da
+plataforma existe pra servi-lo.
+
+Componentes envolvidos (visão rápida, deep dive no doc):
+
+- `workspace/skills/onboarding-state/` — state machine (skill)
+- `workspace/agents/sofia/` + `workspace/skills/jotaduo-discovery/` — discovery
+- `workspace/agents/catarina/` + `workspace/skills/aprofundar-empresa/` — deepening
+- `internal/saas/api/tenants_promote.go` — endpoint `/promote` (10 steps)
+- `internal/saas/store/tenants.go::Promote` — DB UPDATE atômica
+- `web/saas-admin/src/components/tenant/promote-tenant-card.tsx` — UI admin
+- `internal/saas/api/launcher_ui_visibility.go` (não, isso é launcher) +
+  `web/backend/api/launcher_ui_visibility.go` — endpoint que serve o
+  `ui-visibility.json` per-tenant pro SPA renderizar o profile correto
+
 ## Commands
 
 Always use `make` targets when one exists — they enforce the right build tags, ldflags, and `go generate` ordering.

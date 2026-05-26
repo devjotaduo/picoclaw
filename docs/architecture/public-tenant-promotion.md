@@ -1,0 +1,467 @@
+# Public Tenant Promotion — coração do produto
+
+> **Leia isto primeiro se você está começando neste projeto.** A promoção
+> tenant publico → cliente é o mecanismo central da plataforma; tudo o
+> mais (workspaces, agentes, channels, billing) existe pra servir esse
+> fluxo. Sem entender essa jornada, decisões locais ficam fora de
+> contexto.
+
+## TL;DR em 3 frases
+
+1. Visitante anônimo entra num **tenant publico** (`is_public=true`,
+   `active_profile=public`, sem owner_email) e conversa com **Sofia** que
+   conduz discovery do negócio, depois com **Catarina** que aprofunda os
+   detalhes técnicos via WhatsApp institucional.
+2. Quando Sofia + Catarina terminam, o arquivo
+   `workspace/state/onboarding.json` no volume do tenant marca
+   `promotion.ready=true`.
+3. O admin clica **"Promover"** no painel
+   (`adm.<base>/tenants/{id}`) → `POST /api/v1/tenants/{id}/promote`
+   migra o tenant pra **cliente normal**: cria owner user, gera senha,
+   flipa `is_public=false`, recreate do container com auth mode novo,
+   manda email com credenciais.
+
+## Por que essa arquitetura existe
+
+**Problema de produto:** ninguém preenche formulário longo de cadastro
+pra um SaaS de IA. Mas a equipe de agentes (Clara, Marcos, Camila…)
+precisa de muita info sobre a empresa pra atender bem sem inventar.
+A conversa com Sofia substitui o formulário — o dono passa por discovery
+sem perceber que está se cadastrando.
+
+**Solução técnica:** o cadastro vira um **tenant funcional desde a
+primeira interação** (`is_public=true`), com a equipe inteira já
+disponível (mesmo que escondida pela ui-visibility). Sofia/Catarina
+preenchem a memória, e a "promoção" é só a mudança de modelo de auth +
+captura dos dados que faltavam pra criar a conta real.
+
+Isso resolve dois problemas em um:
+- **Conversão:** zero fricção pra começar (URL pública → chat)
+- **Qualidade:** quando promove, a memória já está rica — clientes
+  novos não passam pelo vazio inicial
+
+## Estado da implementação (2026-05-27)
+
+Status atual (5 fatias):
+
+| Fatia | Status | PR |
+|---|---|---|
+| 1+2 — state machine + Sofia/Catarina | ✅ mergeada | #113 |
+| 3 — `POST /tenants/{id}/promote` backend | ✅ mergeada | #114 |
+| 4 — UI admin (PromoteTenantCard) | ✅ mergeada | #115 |
+| 5 — bridge automático Sofia→Catarina | 🟡 planejada | — |
+
+Fluxo end-to-end funciona manualmente. Fatia 5 (auto-bridge) é opcional;
+hoje quem dispara Catarina é Rafael via notify_user, ou admin via
+WhatsApp manual.
+
+## A jornada — diagrama da feature
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  1. CRIAÇÃO DO TENANT PUBLICO                                       │
+│  Admin abre adm.<base>/tenants/new → escolhe card "Público" →       │
+│  preenche display_name + subdomain (SEM owner_email — Sofia coleta) │
+│  → POST /tenants {tenant_type: "publico"}                           │
+│     ↓                                                                │
+│  Provisioner.Create cria container com:                              │
+│    - is_public=true                                                  │
+│    - auth_backend="local" (sem dashboardauth.db owner)               │
+│    - PICOCLAW_AUTH_MODE=trusted_gateway                              │
+│    - PICOCLAW_ALLOWED_CHANNELS=whatsapp_native,pico,public-web       │
+│    - ui-visibility.json::active_profile="public"                     │
+│  → tenant URL: https://<sub>.jotaduo.com                             │
+└─────────────────────────────────────────────────────────────────────┘
+                                  ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│  2. DISCOVERY (Sofia, no chat publico anônimo)                      │
+│  Visitante acessa <sub>.jotaduo.com → launcher SPA carrega →        │
+│  active_profile=public esconde toda navegação exceto chat →         │
+│  Sofia carrega skill jotaduo-discovery + onboarding-state.init      │
+│                                                                      │
+│  Fase 1-7: conversa consultiva sobre o negócio                       │
+│  Fase 7.5: captura "nome + email + WhatsApp do dono"                 │
+│    → exec onboarding-state.set_owner(name, email, whatsapp)          │
+│  Fase 8: grava workspace/memory/empresa.md (via delegate Rafael)    │
+│  Fase 8b.5: exec onboarding-state.mark_discovery_done(segment, ...)  │
+│                                                                      │
+│  Resultado: workspace/state/onboarding.json com:                     │
+│    phase = "discovery_done"                                          │
+│    discovery.completed_at = now                                      │
+│    owner_captured.{name, email, whatsapp} = preenchidos              │
+│    promotion.blocked_by = ["deepening_incomplete: <5 áreas>"]        │
+└─────────────────────────────────────────────────────────────────────┘
+                                  ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│  3. DEEPENING (Catarina, via WhatsApp institucional da Jotaduo)     │
+│  Pré-requisito: admin tem whatsapp_jotaduo_outbound configurado     │
+│  Trigger atual: Rafael delega via notify_user (Fatia 5 vai automatizar) │
+│                                                                      │
+│  Catarina manda 1ª mensagem ao número capturado por Sofia:           │
+│  "Oi <nome>, sou a Catarina. Sofia já fez o discovery — agora vou   │
+│   te perguntar uns detalhes técnicos em sessões curtas, 10-15min,   │
+│   uma por dia, pra equipe não inventar nada. Posso te chamar?"      │
+│                                                                      │
+│  5 sessões, 1 por dia, fechando uma área cada:                       │
+│    - equipe: quem faz o quê, horários, ferramentas                   │
+│    - casos-excecao: VIPs, fluxos especiais                           │
+│    - faq: perguntas específicas do nicho                             │
+│    - historico: o que já deu errado antes                            │
+│    - regras-tacitas: políticas não escritas                          │
+│                                                                      │
+│  Cada área fechada: exec onboarding-state.mark_area_complete(area)   │
+│  Quando a 5ª fecha: state.promotion.ready = true (automático)        │
+│                                                                      │
+│  Escape hatch: admin pode forçar via mark_ready_for_promotion        │
+│  com motivo logado (cliente simples, sem necessidade de aprofundar). │
+└─────────────────────────────────────────────────────────────────────┘
+                                  ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│  4. PROMOÇÃO (Admin, no painel)                                     │
+│  Admin abre adm.<base>/tenants/<id> →                                │
+│  PromoteTenantCard renderiza (porque is_public=true):                │
+│    - Badge "Pronto pra promover" (emerald)                           │
+│    - Mostra email/nome/WhatsApp capturado por Sofia                  │
+│    - Mostra 5/5 áreas cobertas                                       │
+│  Admin clica "Promover" → modal pré-preenchido com email             │
+│  Submete → POST /api/v1/tenants/<id>/promote {}                      │
+│                                                                      │
+│  Backend (handlePromoteTenant) executa em 10 steps:                  │
+│    1. Get tenant; reject se !is_public (409)                         │
+│    2. Read /srv/saas/tenants/<id>/workspace/state/onboarding.json    │
+│    3. Validate promotion.ready=true (ou req.force=true)              │
+│    4. Resolve owner email (state OR override) + re-validate          │
+│    5. DB: Tenants.Promote(id, ownerEmail, "launcher")                │
+│       + Users.EnsureInvited(email) → owner user                      │
+│       + Memberships.Upsert(owner.id, tenant.id, tenant_owner)        │
+│    6. FS: SetUIVisibilityActiveProfile(volume, UIProfileTenant)      │
+│       + GeneratePassword() + SeedDashboardPassword(volume, pwd)      │
+│    7. Direct file write: state.json::promotion.promoted_at = now     │
+│    8. Provisioner.Recreate — container reboots com env novo:         │
+│       PICOCLAW_AUTH_MODE muda trusted_gateway → launcher native      │
+│       PICOCLAW_ALLOWED_CHANNELS volta pro default sem public-web     │
+│       launcher-auth.db (já seeded) é lido pelo launcher pra auth     │
+│    9. Mailer.SendCredentialsEmail (best-effort, goroutine)           │
+│    10. Audit log: tenant.promote                                     │
+│                                                                      │
+│  Resposta: {tenant_id, url, owner_email, initial_password, ...}      │
+│  UI: dialog não-fechável com CopyableField pra URL + senha          │
+└─────────────────────────────────────────────────────────────────────┘
+                                  ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│  5. CLIENTE NORMAL                                                  │
+│  Owner recebe email com URL + login + senha →                        │
+│  Acessa https://<sub>.jotaduo.com → vê tela de login real            │
+│  (não mais chat anônimo) → autentica → painel completo:              │
+│    - Sidebar visível (Chat, Agentes, WhatsApp, etc — tenant profile) │
+│    - Memória preenchida (empresa.md + 5 áreas via Catarina)          │
+│    - Equipe pronta pra operar sem inventar                           │
+│    - Histórico da conversa anônima do discovery preservado           │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## Componentes envolvidos — onde mexer no quê
+
+| Camada | Arquivo / Diretório | Função |
+|---|---|---|
+| **Frontend (SPA do launcher)** | `web/frontend/src/api/ui-visibility.ts` | Fetcha `/api/launcher/ui-visibility` e aplica o profile (esconde sidebar pra public, mostra full pra tenant) |
+| **Backend launcher** | `web/backend/api/launcher_ui_visibility.go` | Serve `home/ui-visibility.json` do volume pro SPA (PR #109) |
+| **Backend controlplane — provisioner** | `internal/saas/tenant/provisioner.go` | `Create` (cria tenant), `Recreate` (rebuilda container env), `SetUIVisibilityActiveProfile` |
+| **Backend controlplane — handler create** | `internal/saas/api/tenants.go::handleCreateTenant` | Resolve `tenant_type` → UIProfile; público pula `EnsureInvited` / `SendCredentialsEmail` (PR #108) |
+| **Backend controlplane — handler promote** | `internal/saas/api/tenants_promote.go::handlePromoteTenant` | Endpoint da promoção (10 steps) (PR #114) |
+| **Backend controlplane — endpoint state** | `internal/saas/api/tenants_promote.go::handleGetTenantOnboardingState` | Expõe state.json pra UI consumir (PR #115) |
+| **Store DB** | `internal/saas/store/tenants.go::Promote` | UPDATE atômica: is_public=false + owner_email + auth_backend |
+| **State machine no workspace** | `workspace/skills/onboarding-state/` | Skill Python que escreve `workspace/state/onboarding.json` (PR #113) |
+| **Discovery agent** | `workspace/agents/sofia/AGENT.md` + `workspace/skills/jotaduo-discovery/` | 8 fases + Phase 7.5 captura credenciais + Phase 8b.5 marca discovery_done |
+| **Deepening agent** | `workspace/agents/catarina/AGENT.md` + `workspace/skills/aprofundar-empresa/` | 5 áreas via WhatsApp institucional, marca area_complete por área |
+| **UI admin** | `web/saas-admin/src/components/tenant/promote-tenant-card.tsx` | Card renderizado em TenantDetail quando is_public=true (PR #115) |
+
+## O arquivo de estado — `workspace/state/onboarding.json`
+
+Single source of truth da jornada. Escrito pela skill `onboarding-state`,
+lido pelo backend `/promote` e pela UI admin.
+
+```json
+{
+  "phase": "discovery_in_progress | discovery_done | deepening_in_progress | ready_for_promotion | promoted",
+  "discovery": {
+    "started_at": "2026-05-26T22:30:00Z",
+    "completed_at": null,
+    "segment": "clinica | restaurante | varejo | servicos | beleza | ...",
+    "summary": "Resumo executivo do discovery (gerado pela Sofia)",
+    "agent": "sofia"
+  },
+  "deepening": {
+    "started_at": null,
+    "areas_covered": ["equipe", "casos-excecao"],
+    "areas_required": ["equipe", "casos-excecao", "faq", "historico", "regras-tacitas"],
+    "completed_at": null,
+    "agent": "catarina",
+    "forced_completion_reason": null
+  },
+  "owner_captured": {
+    "name": "Eduardo Silva",
+    "email": "eduardo@empresa.com.br",
+    "whatsapp": "+5511999998888",
+    "captured_by": "sofia",
+    "captured_at": "2026-05-26T22:55:00Z"
+  },
+  "promotion": {
+    "ready": false,
+    "blocked_by": ["deepening_incomplete: faq,historico,regras-tacitas"],
+    "promoted_at": null,
+    "promoted_by": null
+  }
+}
+```
+
+### Invariantes que você NÃO pode quebrar
+
+1. **`phase` é DERIVADO, não setado.** Mutar diretamente quebra a state
+   machine. Quem precisa transicionar usa as ops do skill (`set_owner`,
+   `mark_discovery_done`, `mark_area_complete`, etc.).
+2. **`promotion.ready=true` exige TODOS os 3:** discovery.completed_at,
+   owner_captured.email, todas as 5 áreas em areas_covered.
+3. **owner_captured.email é PII** — não loga nem expõe sem autenticação
+   platform_admin.
+4. **`forced_completion_reason` é audit-only** — quando admin usa o
+   escape hatch, o motivo fica gravado pra postmortem.
+
+## Schema completo: state machine + transition rules
+
+Ver `workspace/skills/onboarding-state/references/state-schema.md`. Não
+duplico aqui — esse arquivo é a referência canônica e fica colado ao
+script Python que implementa a lógica.
+
+## Failure modes & recovery
+
+### "Sofia não rodou nesse tenant publico"
+
+Sintoma: `GET /tenants/{id}/onboarding-state` retorna 404. UI mostra
+"Sem state.json — força o force=true path".
+
+Causa: tenant publico foi criado mas ninguém conversou com Sofia, OU
+Sofia teve erro antes da Phase 1, OU o volume foi recreado e perdeu o
+state file.
+
+Recovery: admin clica "Promover (com override)", marca `force=true`,
+preenche `owner_email` manualmente. Auditado.
+
+### "Promote falhou no step 8 (recreate)"
+
+Sintoma: response 202 com `warning` mencionando recreate failure.
+
+Causa: docker daemon flaky, imagem launcher faltando, env malformado.
+
+Recovery: admin abre TenantDetail e clica botão **Recreate** manual.
+Container reboota com env novo (DB já mostra is_public=false).
+
+### "Container voltou mas chat não responde"
+
+Sintoma: cliente faz login OK mas chat dá erro.
+
+Causa mais provável: `${LITELLM_KEY}` não foi substituído no config.json,
+ou o `model_list` é inválido (`api_keys` plural ausente).
+
+Recovery: SSH no VPS, `cat /srv/saas/tenants/<id>/config.json` —
+confirmar que api_keys está preenchido (não `${LITELLM_KEY}` literal).
+Se literal, provisioner.SubstituteConfigPlaceholders quebrou — regerar
+LiteLLM key + reescrever config + recreate.
+
+### "Email não chegou"
+
+Sintoma: cliente nunca recebeu credenciais.
+
+Causa: SMTP não configurado, ou email landed em spam.
+
+Recovery: admin pega `initial_password` do dialog (admin SEMPRE vê isso
+mesmo se email falhar) → entrega manualmente pelo WhatsApp ou usando
+`POST /tenants/{id}/magic-link` pra gerar um link de acesso temporário.
+
+## Decisões de design (e por que)
+
+### 1. Por que Sofia coleta credenciais (não tela separada)
+
+Considerado: tela de cadastro tradicional após o chat.
+Escolhido: Sofia pergunta no fim do discovery.
+
+Razão: o tenant publico é literalmente uma conversa com Sofia. Pedir
+"agora preencha esse form" quebra a fluência. Sofia já estabeleceu
+contexto + confiança; pedir email+WhatsApp como continuação natural da
+conversa converte mais.
+
+### 2. Por que promoção é manual (não automática)
+
+Considerado: trigger `promotion.ready=true` → promove sozinho.
+Escolhido: admin clica botão.
+
+Razão: V1 — admin precisa REVISAR antes de comprometer (cria user,
+manda email, recreate container). Auto-promote é otimização V2 quando
+o fluxo for confiável. O custo de uma promoção indevida (email mandado
+pra endereço errado, container morto sem motivo) é alto.
+
+### 3. Por que Catarina é obrigatória (com escape hatch)
+
+Considerado: Sofia sozinha já libera promoção.
+Escolhido: 5 áreas de aprofundamento exigidas por padrão, escape hatch
+disponível.
+
+Razão: respeita a visão de produto ("aprofundamento técnico antes de
+promover") sem travar casos simples (cliente que dispensa deepening).
+O escape hatch é registrado com motivo em audit, então não cria
+shortcut silencioso.
+
+### 4. Por que `phase` é derivado de outros campos
+
+Considerado: campo `phase` set diretamente pelas skills.
+Escolhido: `phase` recalculado em toda mutação.
+
+Razão: evita estados impossíveis. Se você setasse `phase=ready_for_promotion`
+mas `owner_captured.email=null`, o sistema ficaria em estado inválido.
+Derivar de dados garante invariantes. Bug-free by construction.
+
+### 5. Por que JSON file (não tabela no DB)
+
+Considerado: tabela `onboarding_progress` no Postgres.
+Escolhido: JSON no volume do tenant.
+
+Razão:
+- **Portabilidade**: backup do volume = backup do state. Rollback de
+  tenant restaura tudo.
+- **Coupling**: state da jornada é responsabilidade do workspace
+  (Sofia/Catarina escrevem). DB é responsabilidade da plataforma
+  (`is_public`, `owner_email`).
+- **Recovery**: legível direto via SSH pra diagnóstico, sem precisar de
+  acesso ao DB.
+- **Migration**: cada tenant carrega seu próprio state — quando você
+  muda o schema, novos tenants nascem com novo formato e antigos
+  continuam funcionando.
+
+Custo: não dá pra fazer query SQL tipo "todos tenants com
+`phase=ready_for_promotion`". Pra isso, V2 pode ter uma view materialized
+que cola DB + state.json via cron poll.
+
+## Variáveis de ambiente injetadas em tenants publicos vs cliente
+
+A diferença prática entre os dois estados:
+
+| Variável | Publico (`is_public=true`) | Cliente (`is_public=false`) |
+|---|---|---|
+| `PICOCLAW_AUTH_MODE` | `trusted_gateway` | `launcher` (native local) |
+| `PICOCLAW_ALLOWED_CHANNELS` | `whatsapp_native,pico,public-web` | `whatsapp_native,pico` (padrão) |
+| `PICOCLAW_TENANT_ID` | sempre | sempre |
+| `PICOCLAW_TRUSTED_GATEWAY_SECRET` | sempre | sempre (used pra outras chamadas internas) |
+| `PICOCLAW_CONFIG_STRICT` | `true` | `true` |
+
+E no DB:
+- `tenants.is_public`: `true` → `false`
+- `tenants.owner_email`: `ops@<base>` (sentinel) → email real
+- `tenants.auth_backend`: `local` → `launcher`
+
+## Fatia 5 — bridge automático Sofia → Catarina (planejada)
+
+**Problema atual:** depois que Sofia chama `mark_discovery_done`, alguém
+precisa iniciar Catarina manualmente. Hoje o fluxo é:
+- Rafael recebe contexto via skill `notify_user` quando Sofia termina
+- Admin vê notification, decide momento de disparar Catarina
+- Admin manda mensagem manual no WhatsApp institucional, OU instrui
+  Rafael a fazê-lo
+
+Isso adiciona latência humana entre discovery_done e o início do
+deepening. Em prod a meta é minutos, não dias.
+
+**Design proposto pra Fatia 5:**
+
+Existem 3 opções viáveis (pick uma):
+
+### Opção A — Cron job no workspace
+
+Novo job em `workspace/cron/jobs.json`:
+
+```json
+{
+  "id": "onboarding-bridge-poll",
+  "name": "Bridge Sofia → Catarina (poll state.json)",
+  "enabled": true,
+  "schedule": {"kind": "cron", "expr": "*/15 * * * *", "tz": "America/Sao_Paulo"},
+  "payload": {
+    "kind": "agent_turn",
+    "message": "Verifique workspace/state/onboarding.json. Se phase=discovery_done há mais de 30min e WhatsApp institucional configurado, inicie Catarina chamando aprofundar-empresa.iniciar-sessao com o owner capturado.",
+    "channel": "cron",
+    "to": "onboarding-bridge",
+    "agent_id": "catarina"
+  }
+}
+```
+
+**Prós:** simples, vive 100% no workspace (zero código Go), reusa
+infra existente de cron. **Contras:** Catarina precisa estar inicializada
+no tenant + WhatsApp ativo. Cada tenant publico precisa ter o job.
+
+### Opção B — Webhook no controlplane
+
+Quando a skill `onboarding-state` chama `mark_discovery_done`, o
+launcher (que executa o skill) detecta a mutação e faz um POST pro
+controlplane:
+
+```
+POST /api/v1/tenants/{id}/notify-onboarding-event
+  body: {"event": "discovery_done", "owner_captured": {...}}
+```
+
+Controlplane enfileira em uma queue de "post-discovery actions" e um
+worker dispara Catarina via skill exec dentro do container.
+
+**Prós:** event-driven (zero latência de polling). Centralized.
+**Contras:** novo endpoint + worker + queue table. Mais código.
+
+### Opção C — Hook no provisioner
+
+Quando Provisioner detecta `state.json` mudou pra `discovery_done`, ele
+mesmo dispara Catarina via `docker exec tenant-<id> picoclaw-launcher
+trigger-agent catarina`.
+
+**Prós:** menor surface area de mudança.
+**Contras:** Provisioner não é watcher; precisaria de fsnotify ou
+periodic check. Mistura responsabilidades (provisioner deveria ser
+provisionar, não orchestrar agentes).
+
+### Recomendação
+
+**Opção A (cron job)** pra V2 — menor custo de mudança. Cron já é
+pattern aceito no workspace. Catarina mesma decide se pode iniciar
+(precondições: WhatsApp configurado, owner email válido, ainda não
+iniciou).
+
+Quando V2 ficar saturado (latência de 15min vira problema), migrar pra
+Opção B.
+
+## Quando alterar este fluxo
+
+Esse fluxo é o **core product mechanic**. Alterações precisam
+considerar:
+
+- Mudar o schema do `onboarding.json`? Toca: skill state.py, doc, handler
+  promote (parser), UI typescript types. **Versionar:** se mudar o
+  formato incompatível, adicionar `version: 2` no JSON e migration.
+
+- Adicionar fases novas? (Discovery_in_review, deepening_paused, etc.)
+  Decidir antes: phase é derivado ou setado? Se derivado, adicionar
+  campo de dados que cause a derivação.
+
+- Mudar quem captura `owner_email`? (UI dedicada, outra skill, etc.)
+  Lembrar que backend `/promote` valida o formato de novo. Tudo bem
+  mudar a captura sem tocar no validator.
+
+- Adicionar agente novo entre Sofia e Catarina? (Ex: "Maria" pra
+  validação de PII antes do deepening) Adicionar nova phase derivada e
+  novo método na state machine; UI badge map precisa do label novo.
+
+## Referências cruzadas
+
+- [state-schema.md](../../workspace/skills/onboarding-state/references/state-schema.md) — schema canônico do onboarding.json
+- [public-onboarding-tenant.md](./public-onboarding-tenant.md) — design histórico (deprecated; superseded por este doc)
+- [saas-tenancy.md](./saas-tenancy.md) — multi-tenant topology no VPS
+- [workspaces.md](./workspaces.md) — como workspaces seedam tenants
+- [admin-in-launcher.md](./admin-in-launcher.md) — UI admin embutida no launcher
+- PRs históricas: #104 (wizard tenant-type), #108 (owner_email opcional pra publico), #109 (ui-visibility endpoint), #110 (pico no allowlist), #113 (state machine), #114 (POST promote), #115 (PromoteTenantCard)

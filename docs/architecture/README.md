@@ -2,6 +2,9 @@
 
 Internal architecture notes for major runtime mechanisms and subsystem design.
 
+> **🎯 START HERE if you're new:** [**Public Tenant Promotion**](public-tenant-promotion.md) — the core product mechanic (tenant publico → cliente). Sofia discovers + Catarina deepens + admin promotes. Everything else in this folder serves this flow.
+
+- [**Public Tenant Promotion**](public-tenant-promotion.md): core product mechanic — public anonymous tenant → discovery → deepening → promote to paying customer. Read this first.
 - [Steering](steering.md): injecting messages into a running agent loop between tool calls.
 - [SubTurn Mechanism](subturn.md): sub-agent coordination, concurrency control, and lifecycle handling.
 - [Session System](session-system.md): session scope allocation, JSONL persistence, alias compatibility, and migration. ([ZH](session-system.zh.md))
