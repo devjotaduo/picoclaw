@@ -44,9 +44,9 @@ import { cn } from "@/lib/utils";
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 
 function validateSubdomain(value: string): string | null {
-  if (!value) return "Subdomain is required.";
-  if (value.length < 3 || value.length > 30) return "Only lowercase letters, numbers, hyphens. Max 30 chars.";
-  if (!SUBDOMAIN_RE.test(value)) return "Only lowercase letters, numbers, hyphens. Max 30 chars.";
+  if (!value) return "Informe o endereço curto.";
+  if (value.length < 3 || value.length > 30) return "Use de 3 a 30 caracteres.";
+  if (!SUBDOMAIN_RE.test(value)) return "Use apenas letras minúsculas, números e hífen.";
   return null;
 }
 
@@ -64,17 +64,17 @@ const TYPE_CARDS: TypeCard[] = [
   {
     id: "cliente",
     title: "Cliente",
-    tagline: "Cliente pagante com painel e acesso do owner",
-    bullets: ["Magic link curto + senha fallback", "Chat, agente, canais e config básica", "Sem ferramentas internas de plataforma"],
+    tagline: "Cliente com área própria e responsável definido",
+    bullets: ["Link curto de acesso + senha como alternativa", "Atendimento, canais e configurações básicas", "Sem ferramentas internas da Jota Duo"],
     subdomainHint: "acme",
     displayNameHint: "Acme Corp",
     icon: IconUserCheck,
   },
   {
     id: "admin",
-    title: "Admin",
-    tagline: "Tenant interno com perfil administrativo",
-    bullets: ["Magic link curto de owner", "Sidebar administrativa habilitada", "Skills, tools, logs e config visíveis"],
+    title: "Equipe Jota Duo",
+    tagline: "Área interna para gestão da operação",
+    bullets: ["Link curto de acesso", "Menu completo da equipe", "Habilidades, registros e configurações visíveis"],
     subdomainHint: "ops",
     displayNameHint: "Operações",
     icon: IconShieldCheck,
@@ -82,8 +82,8 @@ const TYPE_CARDS: TypeCard[] = [
   {
     id: "publico",
     title: "Público",
-    tagline: "Chat anônimo sem owner e sem senha",
-    bullets: ["Visitante entra sem cadastro", "Ideal para discovery e pré-cadastro", "Entrega URL pública, não pacote admin"],
+    tagline: "Atendimento aberto, sem senha",
+    bullets: ["Visitante entra sem cadastro", "Ideal para descoberta e pré-cadastro", "Entrega endereço público, sem pacote interno"],
     subdomainHint: "onboarding",
     displayNameHint: "Onboarding",
     icon: IconMessageCircle,
@@ -198,8 +198,8 @@ export function NewTenant() {
   return (
     <div className="flex min-h-full flex-col">
       <PageHeader
-        title="Novo tenant"
-        description="Criação direta com workspace, provisionamento e pacote de acesso no mesmo fluxo."
+        title="Novo cliente"
+        description="Crie a área do cliente com modelo base, preparação automática e pacote de acesso no mesmo fluxo."
       >
         <Button variant="outline" asChild>
           <Link to="/tenants">Cancelar</Link>
@@ -248,11 +248,11 @@ export function NewTenant() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Criar tenant — {card.title}</CardTitle>
+            <CardTitle>Criar cliente — {card.title}</CardTitle>
             <CardDescription>
               {needsOwnerEmail
-                ? "Ao concluir, o admin recebe o link curto de acesso e a senha inicial como fallback."
-                : "Tenant público não gera owner, senha ou link administrativo automático."}
+                ? "Ao concluir, o responsável recebe o link curto de acesso e a senha inicial como alternativa."
+                : "O atendimento público não gera responsável, senha ou link interno automático."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -260,7 +260,7 @@ export function NewTenant() {
               <FieldGroup>
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field>
-                    <FieldLabel htmlFor="display_name">Nome exibido</FieldLabel>
+                    <FieldLabel htmlFor="display_name">Nome do cliente</FieldLabel>
                     <Input
                       id="display_name"
                       required
@@ -272,22 +272,22 @@ export function NewTenant() {
 
                   {needsOwnerEmail ? (
                     <Field>
-                      <FieldLabel htmlFor="owner_email">Email do owner</FieldLabel>
+                      <FieldLabel htmlFor="owner_email">Email do responsável</FieldLabel>
                       <Input
                         id="owner_email"
                         type="email"
                         required
                         value={form.owner_email}
                         onChange={(e) => setForm({ ...form, owner_email: e.target.value })}
-                        placeholder="owner@empresa.com"
+                        placeholder="responsavel@empresa.com"
                       />
-                      <FieldDescription>Recebe acesso de dono do tenant.</FieldDescription>
+                      <FieldDescription>Recebe acesso como responsável pela área.</FieldDescription>
                     </Field>
                   ) : (
                     <Field>
-                      <FieldLabel>Owner</FieldLabel>
+                      <FieldLabel>Responsável</FieldLabel>
                       <div className="flex h-9 items-center rounded-md border border-dashed px-3 text-sm text-muted-foreground">
-                        Não se aplica a tenant público
+                        Não se aplica ao atendimento público
                       </div>
                     </Field>
                   )}
@@ -295,7 +295,7 @@ export function NewTenant() {
 
                 <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
                   <Field data-invalid={Boolean(subdomainError)}>
-                    <FieldLabel htmlFor="subdomain">Subdomínio</FieldLabel>
+                    <FieldLabel htmlFor="subdomain">Endereço curto</FieldLabel>
                     <Input
                       id="subdomain"
                       ref={subdomainRef}
@@ -320,12 +320,12 @@ export function NewTenant() {
                   </Field>
 
                   <Field>
-                    <FieldLabel>Workspace</FieldLabel>
+                    <FieldLabel>Modelo base</FieldLabel>
                     {workspaces.length === 0 ? (
                       <Alert className="border-chart-3/40 bg-chart-3/10">
-                        <AlertTitle>Nenhum workspace disponível</AlertTitle>
+                        <AlertTitle>Nenhum modelo base disponível</AlertTitle>
                         <AlertDescription>
-                          Crie um workspace antes de provisionar tenants.
+                          Crie um modelo base antes de criar clientes.
                         </AlertDescription>
                       </Alert>
                     ) : (
@@ -336,14 +336,14 @@ export function NewTenant() {
                           required
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Escolha um workspace" />
+                            <SelectValue placeholder="Escolha um modelo base" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectGroup>
                               {workspaces.map((ws) => (
                                 <SelectItem key={ws.id} value={ws.id}>
                                   {ws.name} · v{ws.version}
-                                  {ws.is_default_auto ? " (default)" : ""}
+                                  {ws.is_default_auto ? " (padrão)" : ""}
                                 </SelectItem>
                               ))}
                             </SelectGroup>
@@ -351,8 +351,8 @@ export function NewTenant() {
                         </Select>
                         <FieldDescription>
                           {selectedWorkspace
-                            ? `${selectedWorkspace.name} aplica agentes, skills e frontend compilado.`
-                            : "Fonte do workspace inicial do tenant."}
+                            ? `${selectedWorkspace.name} aplica agentes, habilidades e telas prontas.`
+                            : "Modelo inicial da área do cliente."}
                         </FieldDescription>
                       </>
                     )}
@@ -363,14 +363,14 @@ export function NewTenant() {
               <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
                 <CollapsibleTrigger asChild>
                   <Button type="button" variant="ghost" className="w-fit">
-                    Recursos avançados
+                    Ajustes avançados
                     <IconChevronDown className={cn("transition-transform", advancedOpen && "rotate-180")} />
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pt-3">
                   <div className="grid gap-4 rounded-lg border bg-muted/20 p-4 md:grid-cols-3">
                     <Field>
-                      <FieldLabel htmlFor="budget">Budget USD/mês</FieldLabel>
+                      <FieldLabel htmlFor="budget">Limite mensal (USD)</FieldLabel>
                       <Input
                         id="budget"
                         type="number"
@@ -392,7 +392,7 @@ export function NewTenant() {
                       />
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="cpu">CPU quota</FieldLabel>
+                      <FieldLabel htmlFor="cpu">Uso de CPU</FieldLabel>
                       <Input
                         id="cpu"
                         type="number"
@@ -409,12 +409,12 @@ export function NewTenant() {
 
               {errMsg ? (
                 <Alert className="border-destructive/40 bg-destructive/10">
-                  <AlertTitle>Falha ao criar tenant</AlertTitle>
+                  <AlertTitle>Falha ao criar cliente</AlertTitle>
                   <AlertDescription>
                     <div>{errMsg}</div>
                     {duplicateTenant ? (
                       <div className="mt-2">
-                        Tenant existente:{" "}
+                        Cliente existente:{" "}
                         <button
                           type="button"
                           className="underline hover:text-foreground"
@@ -442,7 +442,7 @@ export function NewTenant() {
                 </Button>
                 <Button type="submit" disabled={m.isPending || workspaces.length === 0}>
                   {m.isPending ? <IconLoader2 data-icon="inline-start" className="animate-spin" /> : <IconSparkles data-icon="inline-start" />}
-                  {m.isPending ? "Provisionando..." : "Criar tenant"}
+                  {m.isPending ? "Preparando..." : "Criar cliente"}
                 </Button>
               </div>
             </form>
@@ -450,7 +450,7 @@ export function NewTenant() {
         </Card>
       </div>
 
-      <Dialog open={!!result} onClose={markDelivered} title="Tenant pronto" size="lg" closable={false}>
+      <Dialog open={!!result} onClose={markDelivered} title="Cliente pronto" size="lg">
         {result ? (
           <div className="flex flex-col gap-4 text-sm">
             {result.warning || result.access_warning ? (
@@ -464,36 +464,36 @@ export function NewTenant() {
               <Alert>
                 <AlertTitle className="flex items-center gap-2">
                   <IconLoader2 className="size-4 animate-spin" />
-                  Container iniciando
+                  Área do cliente iniciando
                 </AlertTitle>
-                <AlertDescription>O acesso já foi gerado; aguarde o tenant ficar ativo antes de abrir.</AlertDescription>
+                <AlertDescription>O acesso já foi gerado; aguarde a área ficar ativa antes de abrir.</AlertDescription>
               </Alert>
             ) : null}
             {hasError ? (
               <Alert className="border-destructive/40 bg-destructive/10">
-                <AlertTitle>Erro no provisionamento</AlertTitle>
+                <AlertTitle>Erro ao preparar a área</AlertTitle>
                 <AlertDescription>{statusQuery.data?.last_error ?? "Verifique os logs do servidor."}</AlertDescription>
               </Alert>
             ) : null}
 
             {accessLink ? (
               <CopyableField
-                label="Link recomendado"
+                label="Link de acesso recomendado"
                 value={accessLink}
                 accent="emerald"
                 variant="tight"
-                hint="Use este link para enviar ao owner. O shortlink é preferido quando disponível."
+                hint="Use este link para enviar ao responsável. O link curto é preferido quando disponível."
               />
             ) : needsOwnerEmail ? (
               <Empty className="p-5">
-                <EmptyTitle>Pacote de acesso sem magic link</EmptyTitle>
-                <EmptyDescription>Use URL, email e senha inicial abaixo como fallback.</EmptyDescription>
+                <EmptyTitle>Pacote sem link de acesso</EmptyTitle>
+                <EmptyDescription>Use endereço, email e senha inicial abaixo como alternativa.</EmptyDescription>
               </Empty>
             ) : null}
 
-            <CopyableField label="URL do tenant" value={result.url} variant="tight" />
+            <CopyableField label="Endereço da área" value={result.url} variant="tight" />
             {needsOwnerEmail && form.owner_email ? (
-              <CopyableField label="Email do owner" value={form.owner_email} />
+              <CopyableField label="Email do responsável" value={form.owner_email} />
             ) : null}
             {result.initial_password ? (
               <CopyableField
@@ -503,7 +503,7 @@ export function NewTenant() {
               />
             ) : null}
             {result.magic_link && result.magic_link !== accessLink ? (
-              <CopyableField label="Magic link completo" value={result.magic_link} variant="tight" />
+              <CopyableField label="Link de acesso completo" value={result.magic_link} variant="tight" />
             ) : null}
             {result.info ? (
               <Alert className="border-chart-2/30 bg-chart-2/10">
@@ -512,15 +512,18 @@ export function NewTenant() {
             ) : null}
 
             <div className="flex flex-col-reverse gap-2 border-t pt-3 sm:flex-row sm:justify-end">
+              <Button variant="ghost" onClick={() => setResult(null)}>
+                Fechar
+              </Button>
               <Button variant="outline" asChild>
                 <a href={result.url} target="_blank" rel="noreferrer">
-                  Abrir URL
+                  Abrir área
                   <IconExternalLink data-icon="inline-end" />
                 </a>
               </Button>
               <Button onClick={markDelivered} disabled={isProvisioning}>
                 {isProvisioning ? <IconLoader2 data-icon="inline-start" className="animate-spin" /> : null}
-                {isProvisioning ? "Provisionando..." : "Abrir tenant no admin"}
+                {isProvisioning ? "Preparando..." : "Abrir cliente no painel"}
               </Button>
             </div>
           </div>

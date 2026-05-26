@@ -36,14 +36,14 @@ export function AcceptInvite() {
         }}
         className="w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-900/70 p-5"
       >
-        <h1 className="mb-4 text-lg font-semibold">Accept invite</h1>
+        <h1 className="mb-4 text-lg font-semibold">Aceitar convite</h1>
         <div className="space-y-3">
           <div>
-            <Label htmlFor="token">Invite token</Label>
+            <Label htmlFor="token">Código do convite</Label>
             <Input id="token" required value={token} onChange={(e) => setToken(e.target.value)} />
           </div>
           <div>
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">Senha</Label>
             <Input
               id="password"
               required
@@ -55,7 +55,7 @@ export function AcceptInvite() {
           </div>
           {errMsg && <div className="rounded bg-red-950/50 px-3 py-2 text-xs text-red-300">{errMsg}</div>}
           <Button type="submit" className="w-full" disabled={m.isPending}>
-            {m.isPending ? "Accepting..." : "Accept invite"}
+            {m.isPending ? "Aceitando..." : "Aceitar convite"}
           </Button>
         </div>
       </form>

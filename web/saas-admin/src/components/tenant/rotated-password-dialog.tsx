@@ -14,13 +14,13 @@ export function RotatedPasswordDialog(props: {
 }) {
   const { password, onClose } = props;
   return (
-    <Dialog open={!!password} onClose={onClose} title="New password" size="md" closable={false}>
+    <Dialog open={!!password} onClose={onClose} title="Senha nova" size="md">
       {password && (
         <div className="space-y-3 text-sm">
-          <p className="text-amber-300">Save this password now — it will not be shown again.</p>
+          <p className="text-amber-300">Guarde esta senha agora: ela não será exibida novamente.</p>
           <CopyableField label="Senha" value={password} />
           <div className="flex justify-end pt-2">
-            <Button onClick={onClose}>Done</Button>
+            <Button onClick={onClose}>Fechar</Button>
           </div>
         </div>
       )}

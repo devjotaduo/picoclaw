@@ -82,7 +82,7 @@ func (m *Mailer) SendInviteEmail(to, tenantName, role, inviteURL string, expires
 		log.Printf("mailer: render invite for %s failed: %v", to, err)
 		return
 	}
-	subject := fmt.Sprintf("Convite — Painel %s no Jotaduo", tenantName)
+	subject := fmt.Sprintf("Convite — Painel %s no Jota Duo", tenantName)
 	if err := m.Send(to, subject, html, text); err != nil {
 		log.Printf("mailer: send invite to %s failed: %v", to, err)
 	}
@@ -118,7 +118,7 @@ func (m *Mailer) SendCredentialsEmail(to, tenantName, dashboardURL, loginEmail, 
 		log.Printf("mailer: render credentials for %s failed: %v", to, err)
 		return
 	}
-	subject := fmt.Sprintf("Acesso ao painel %s — Jotaduo", tenantName)
+	subject := fmt.Sprintf("Acesso ao painel %s — Jota Duo", tenantName)
 	if err := m.Send(to, subject, html, text); err != nil {
 		log.Printf("mailer: send credentials to %s failed: %v", to, err)
 	}
@@ -135,7 +135,7 @@ func (m *Mailer) SendPasswordResetEmail(to, resetURL string, expiresAt time.Time
 		return
 	}
 	expiresStr := expiresAt.Format("02/01/2006 15:04 MST")
-	subject := "Redefinição de senha — Jotaduo"
+	subject := "Redefinição de senha — Jota Duo"
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:32px auto;padding:0 24px;line-height:1.55;color:#1a1a1a">

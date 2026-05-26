@@ -35,9 +35,9 @@ export function TenantsDiscovery() {
     <div className="mx-auto max-w-7xl p-6">
       <header className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">Tenants em Discovery</h1>
+          <h1 className="text-xl font-semibold">Clientes em descoberta</h1>
           <p className="text-xs text-zinc-500">
-            Confira o checklist de validação por tenant e libere o painel completo quando estiver pronto.
+            Confira a validação por cliente e libere o painel completo quando estiver pronto.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => q.refetch()} disabled={q.isFetching}>
@@ -46,16 +46,16 @@ export function TenantsDiscovery() {
       </header>
 
       {q.isError && (
-        <div className="rounded bg-red-950/50 p-3 text-xs text-red-300">Falha ao carregar tenants.</div>
+        <div className="rounded bg-red-950/50 p-3 text-xs text-red-300">Falha ao carregar clientes.</div>
       )}
 
       <div className="overflow-hidden rounded-lg border border-zinc-800">
         <table className="w-full text-sm">
           <thead className="bg-zinc-900/80 text-left text-xs uppercase tracking-wide text-zinc-500">
             <tr>
-              <th className="px-3 py-2 font-medium">Subdomain</th>
+              <th className="px-3 py-2 font-medium">Endereço</th>
               <th className="px-3 py-2 font-medium">Nome</th>
-              <th className="px-3 py-2 font-medium">Owner</th>
+              <th className="px-3 py-2 font-medium">Responsável</th>
               <th className="px-3 py-2 font-medium">Status</th>
               <th className="px-3 py-2 text-right font-medium">Ações</th>
             </tr>
@@ -71,7 +71,7 @@ export function TenantsDiscovery() {
             {!q.isLoading && tenants.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-3 py-8 text-center text-xs text-zinc-500">
-                  Nenhum tenant provisionado ainda.
+                  Nenhum cliente criado ainda.
                 </td>
               </tr>
             )}
@@ -135,7 +135,7 @@ function DiscoveryPanel({ tenant, onClose }: { tenant: Tenant; onClose: () => vo
     mutationFn: () => liberateTenant(tenant.id),
     onSuccess: (data: LiberateResult) => {
       if (data.liberated) {
-        toast({ type: "success", message: `Tenant ${tenant.subdomain} liberado.` });
+        toast({ type: "success", message: `Cliente ${tenant.subdomain} liberado.` });
         qc.invalidateQueries({ queryKey: ["tenant-discovery", tenant.id] });
       } else {
         // 200 body shouldn't reach here when liberated=false (backend returns
@@ -150,7 +150,7 @@ function DiscoveryPanel({ tenant, onClose }: { tenant: Tenant; onClose: () => vo
         message:
           missing.length > 0
             ? `Liberação rejeitada: ${missing.join("; ")}`
-            : e?.error ?? "Falha ao liberar tenant.",
+            : e?.error ?? "Falha ao liberar cliente.",
       });
       // Refresh so the latest checklist replaces what we showed.
       qc.invalidateQueries({ queryKey: ["tenant-discovery", tenant.id] });
@@ -191,7 +191,7 @@ function DiscoveryPanel({ tenant, onClose }: { tenant: Tenant; onClose: () => vo
                   <div className="flex items-start gap-2">
                     <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     <span>
-                      <code className="font-mono">validate_workspace.py</code> ainda não está instalado no workspace.
+                      O validador ainda não está instalado no modelo base.
                       O botão de liberação fica desativado até o script aparecer em
                       <code className="ml-1 font-mono">workspace/skills/tenant-liberation/scripts/</code>.
                     </span>
@@ -263,10 +263,10 @@ function DiscoveryPanel({ tenant, onClose }: { tenant: Tenant; onClose: () => vo
           >
             <ShieldCheck className="h-4 w-4" />
             {status?.active_profile === "tenant"
-              ? "TENANT JÁ LIBERADO"
+              ? "CLIENTE JÁ LIBERADO"
               : liberateM.isPending
                 ? "Liberando…"
-                : "LIBERAR TENANT"}
+                : "LIBERAR CLIENTE"}
           </Button>
           {!status?.ok && status?.script_used && (
             <p className="mt-2 text-center text-[10px] text-zinc-500">
@@ -293,7 +293,7 @@ function ProfileBanner({ status }: { status: DiscoveryStatus }) {
       <span className="font-semibold uppercase tracking-wider">Perfil atual:</span>{" "}
       <span className="font-mono">{status.active_profile}</span>
       {active && (
-        <span className="ml-2 text-emerald-300">— painel completo já visível ao tenant.</span>
+        <span className="ml-2 text-emerald-300">— painel completo já visível ao cliente.</span>
       )}
     </div>
   );

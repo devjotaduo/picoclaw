@@ -111,28 +111,28 @@ export function TenantDetail() {
 
   const suspendM = useMutation({
     mutationFn: () => suspendTenant(id),
-    onSuccess: () => { invalidate(); toast({ type: "info", message: "Tenant suspended." }); },
-    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to suspend." }),
+    onSuccess: () => { invalidate(); toast({ type: "info", message: "Cliente suspenso." }); },
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Falha ao suspender." }),
   });
   const resumeM = useMutation({
     mutationFn: () => resumeTenant(id),
-    onSuccess: () => { invalidate(); toast({ type: "success", message: "Tenant resumed." }); },
-    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to resume." }),
+    onSuccess: () => { invalidate(); toast({ type: "success", message: "Cliente reativado." }); },
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Falha ao reativar." }),
   });
   const deleteM = useMutation({
     mutationFn: () => deleteTenant(id),
     onSuccess: () => {
       setConfirmDelete(false);
       setDeleteConfirm("");
-      toast({ type: "success", message: "Tenant deleted." });
+      toast({ type: "success", message: "Cliente excluído." });
       nav("/tenants");
     },
-    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to delete tenant." }),
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Falha ao excluir cliente." }),
   });
   const rotateM = useMutation({
     mutationFn: () => rotatePassword(id),
     onSuccess: (r) => setRotatedPwd(r.initial_password),
-    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to rotate password." }),
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Falha ao trocar a senha." }),
   });
   // Recreate: stops the docker container, removes it, creates a fresh one.
   // Preserves the bind-mounted volume so per-tenant state (sessions,
@@ -143,10 +143,10 @@ export function TenantDetail() {
     onSuccess: () => {
       invalidate();
       sanityQuery.refetch();
-      toast({ type: "success", message: "Tenant recreated. Container env atualizado." });
+      toast({ type: "success", message: "Área recriada com as configurações atuais." });
     },
     onError: (e: { error?: string }) =>
-      toast({ type: "error", message: e?.error ?? "Failed to recreate." }),
+      toast({ type: "error", message: e?.error ?? "Falha ao recriar a área." }),
   });
   // Clone: raw volume copy + new LiteLLM key. The cloned launcher-auth.db
   // and all secrets carry over — the new tenant is functionally a twin
@@ -169,11 +169,11 @@ export function TenantDetail() {
       setCloneDisplayName("");
       setCloneOwnerEmail("");
       setCloneError("");
-      toast({ type: "success", message: `Cloned → ${r.tenant_id}` });
+      toast({ type: "success", message: `Cliente copiado: ${r.tenant_id}` });
       nav(`/tenants/${r.tenant_id}`);
     },
     onError: (e: { error?: string }) =>
-      setCloneError(e?.error ?? "Failed to clone tenant."),
+      setCloneError(e?.error ?? "Falha ao copiar cliente."),
   });
   // Sanity check + magic links list polled in the background. Both are
   // platform-admin-only endpoints; the queries no-op when the user lacks
@@ -193,10 +193,10 @@ export function TenantDetail() {
     refetchInterval: 30_000,
   });
   const revokeMagicM = useMutation({
-    mutationFn: (nonce: string) => consumeMagicLink(nonce, "Revogado pelo admin."),
+    mutationFn: (nonce: string) => consumeMagicLink(nonce, "Revogado pela equipe."),
     onSuccess: () => {
       magicLinksQuery.refetch();
-      toast({ type: "success", message: "Magic link revogado." });
+      toast({ type: "success", message: "Link de acesso revogado." });
     },
     onError: (e: { error?: string }) =>
       toast({ type: "error", message: e?.error ?? "Falha ao revogar." }),
@@ -292,7 +292,7 @@ export function TenantDetail() {
       </div>
     );
   }
-  if (t.isError || !t.data) return <div className="p-6 text-sm text-red-300">Failed to load tenant.</div>;
+  if (t.isError || !t.data) return <div className="p-6 text-sm text-red-300">Falha ao carregar cliente.</div>;
 
   const tenant = t.data;
   const isPlatformAdmin =
@@ -314,7 +314,7 @@ export function TenantDetail() {
   return (
     <div className="mx-auto min-h-full w-full max-w-5xl p-6">
       <Link to="/tenants" className="mb-3 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-200">
-        <ArrowLeft className="h-3 w-3" /> Back to tenants
+        <ArrowLeft className="h-3 w-3" /> Voltar para clientes
       </Link>
 
       <header className="mb-6 flex items-start justify-between">
@@ -323,7 +323,7 @@ export function TenantDetail() {
           <div className="mt-1 flex items-center gap-2 text-sm">
             <StatusBadge status={tenant.status} />
             {tenant.suspended_at && (
-              <span className="text-xs text-zinc-500">since {formatDate(tenant.suspended_at)}</span>
+              <span className="text-xs text-zinc-500">desde {formatDate(tenant.suspended_at)}</span>
             )}
             <a
               href={`https://${tenant.subdomain}.jotaduo.com`}
@@ -343,12 +343,12 @@ export function TenantDetail() {
             <>
               <Link to={`/tenants/${tenant.id}/settings`}>
                 <Button variant="outline" size="sm">
-                  <Bot className="h-4 w-4" /> Agent
+                  <Bot className="h-4 w-4" /> Agente
                 </Button>
               </Link>
               <Link to={`/tenants/${tenant.id}/skills`}>
                 <Button variant="outline" size="sm">
-                  <Sparkles className="h-4 w-4" /> Skills
+                  <Sparkles className="h-4 w-4" /> Habilidades
                 </Button>
               </Link>
             </>
@@ -367,11 +367,11 @@ export function TenantDetail() {
                 onChange={(e) => setMagicLinkRole(e.target.value as MagicLinkRole)}
                 disabled={magicLinkM.isPending}
                 className="h-8 rounded-md border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
-                title="Role concedido ao clicar no link. Owner/admin = acesso ao dashboard sem precisar de senha."
+                title="Tipo de acesso concedido ao clicar no link."
               >
                 <option value="public">Público (visitante)</option>
-                <option value="tenant_admin">tenant_admin (sem senha)</option>
-                <option value="tenant_owner">tenant_owner (sem senha)</option>
+                <option value="tenant_admin">Administrador (sem senha)</option>
+                <option value="tenant_owner">Responsável (sem senha)</option>
               </select>
               <Button
                 variant="outline"
@@ -379,13 +379,9 @@ export function TenantDetail() {
                 onClick={() => {
                   if (magicLinkRole !== "public") {
                     const confirmed = confirm(
-                      "Você está gerando um link de acesso com role '" +
-                        magicLinkRole +
-                        "'. Qualquer pessoa que receber o link entrará como " +
-                        (magicLinkRole === "tenant_owner" ? "DONO" : "admin") +
-                        " do tenant até expirar (TTL " +
-                        (magicLinkRole === "tenant_owner" ? "24h" : "7 dias") +
-                        " — cap do servidor). Continuar?",
+                      "Você está gerando um link de acesso especial. Qualquer pessoa que receber o link entrará como " +
+                        (magicLinkRole === "tenant_owner" ? "responsável" : "administrador") +
+                        " até expirar. Continuar?",
                     );
                     if (!confirmed) return;
                   }
@@ -409,15 +405,15 @@ export function TenantDetail() {
                   !confirm(
                     "Isto vai gerar uma SENHA NOVA (a anterior deixa de funcionar) e enviar " +
                       "por email para " +
-                      (tenant.owner_email || "o owner") +
-                      ", com URL + login + senha + magic link. Continuar?",
+                      (tenant.owner_email || "o responsável") +
+                      ", com endereço + email + senha + link de acesso. Continuar?",
                   )
                 )
                   return;
                 resendCredsM.mutate();
               }}
               disabled={resendCredsM.isPending}
-              title="Rotaciona a senha do owner no Supabase e envia URL + login + senha + magic link por email."
+              title="Troca a senha do responsável e envia endereço, email, senha e link de acesso por email."
             >
               <Mail className="h-4 w-4" />
               {resendCredsM.isPending ? "Enviando..." : "Reenviar credenciais"}
@@ -432,12 +428,12 @@ export function TenantDetail() {
           )}
           {isPlatformAdmin && tenant.status === "active" && (
             <Button variant="outline" size="sm" onClick={() => suspendM.mutate()} disabled={suspendM.isPending}>
-              Suspend
+              Suspender
             </Button>
           )}
           {isPlatformAdmin && tenant.status === "suspended" && (
             <Button variant="outline" size="sm" onClick={() => resumeM.mutate()} disabled={resumeM.isPending}>
-              Resume
+              Reativar
             </Button>
           )}
           {isPlatformAdmin && (
@@ -447,10 +443,9 @@ export function TenantDetail() {
               onClick={() => {
                 if (
                   confirm(
-                    "Recreate vai derrubar e recriar o container do tenant a partir da imagem atual.\n\n" +
-                      "✓ Preserva o volume bind-mounted (sessions, launcher-auth.db, workspace/)\n" +
-                      "✓ Aplica env vars novas (auth_mode, allowed_channels, etc.)\n" +
-                      "✗ Encerra conexões WebSocket abertas (~30s downtime)\n\n" +
+                    "Isso vai reiniciar a área do cliente com a versão atual.\n\n" +
+                      "Mantém os arquivos e aplica novas configurações.\n" +
+                      "A área pode ficar indisponível por cerca de 30 segundos.\n\n" +
                       "Continuar?",
                   )
                 ) {
@@ -458,9 +453,9 @@ export function TenantDetail() {
                 }
               }}
               disabled={recreateM.isPending}
-              title="Stop + remove + recreate container preservando volume"
+              title="Recria a área mantendo os arquivos"
             >
-              {recreateM.isPending ? "Recriando..." : "Recreate"}
+              {recreateM.isPending ? "Recriando..." : "Recriar área"}
             </Button>
           )}
           {isPlatformAdmin && (
@@ -469,7 +464,7 @@ export function TenantDetail() {
               size="sm"
               onClick={() => {
                 setCloneSubdomain("");
-                setCloneDisplayName(tenant.display_name + " (clone)");
+                setCloneDisplayName(tenant.display_name + " (cópia)");
                 setCloneOwnerEmail(tenant.owner_email);
                 setCloneError("");
                 setCloneOpen(true);
@@ -482,7 +477,7 @@ export function TenantDetail() {
           {isPlatformAdmin && (
             <>
               <Button variant="secondary" size="sm" onClick={() => rotateM.mutate()} disabled={rotateM.isPending}>
-                Rotate password
+                Trocar senha
               </Button>
               <Button
                 variant="danger"
@@ -541,7 +536,7 @@ export function TenantDetail() {
 
       {tenant.status === "error" && tenant.last_error && (
         <div className="mb-4 rounded-lg border border-red-800 bg-red-950/30 p-3 text-xs text-red-300">
-          <span className="font-medium text-red-200">Error:</span> {tenant.last_error}
+          <span className="font-medium text-red-200">Erro:</span> {tenant.last_error}
         </div>
       )}
 
@@ -555,14 +550,14 @@ export function TenantDetail() {
                 ? <CopyText value={tenant.container_id} display={tenant.container_id.slice(0, 12)} />
                 : <span className="text-zinc-300">—</span>}
             </div>
-            <Row label="Memory" value={`${tenant.mem_limit_mb} MB`} />
+            <Row label="Memória" value={`${tenant.mem_limit_mb} MB`} />
             <Row label="CPU" value={String(tenant.cpu_quota)} />
           </CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle>Billing</CardTitle></CardHeader>
           <CardContent className="text-xs">
-            <Row label="Budget/mo" value={formatUSD(tenant.monthly_budget_usd)} />
+            <Row label="Limite/mês" value={formatUSD(tenant.monthly_budget_usd)} />
             {u.data && (
               <>
                 <Row label="Spent this period" value={formatUSD(u.data.summary.cost_usd)} />
@@ -582,18 +577,18 @@ export function TenantDetail() {
                     </div>
                   </div>
                 )}
-                <Row label="Tokens (prompt)" value={formatInt(u.data.summary.prompt_tokens)} />
-                <Row label="Tokens (completion)" value={formatInt(u.data.summary.completion_tokens)} />
+                <Row label="Tokens enviados" value={formatInt(u.data.summary.prompt_tokens)} />
+                <Row label="Tokens recebidos" value={formatInt(u.data.summary.completion_tokens)} />
               </>
             )}
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Lifecycle</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Ciclo de vida</CardTitle></CardHeader>
           <CardContent className="text-xs">
-            <Row label="Created" value={relativeTime(tenant.created_at)} />
-            <Row label="Suspended" value={relativeTime(tenant.suspended_at)} />
-            <Row label="Pwd delivered" value={tenant.initial_password_delivered ? "yes" : "no"} />
+            <Row label="Criado" value={relativeTime(tenant.created_at)} />
+            <Row label="Suspenso" value={relativeTime(tenant.suspended_at)} />
+            <Row label="Senha entregue" value={tenant.initial_password_delivered ? "sim" : "não"} />
             <Row
               label="CRM"
               value={
@@ -612,12 +607,12 @@ export function TenantDetail() {
 
       {isPlatformAdmin && tenant.workspace_id && (
         <Card className="mt-4">
-          <CardHeader><CardTitle>Workspace</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Modelo base</CardTitle></CardHeader>
           <CardContent className="text-xs">
-            <Row label="Workspace" value={tenant.workspace_id} />
-            <Row label="Version applied" value={tenant.workspace_version_applied ?? "—"} />
+            <Row label="Modelo" value={tenant.workspace_id} />
+            <Row label="Versão aplicada" value={tenant.workspace_version_applied ?? "—"} />
             <p className="mt-2 text-[11px] text-zinc-500">
-              Edit the workspace files via{" "}
+              Edite os arquivos do modelo em{" "}
               <Link to="/workspaces" className="underline">
                 /workspaces
               </Link>
@@ -640,7 +635,7 @@ export function TenantDetail() {
       {isPlatformAdmin && magicLinksQuery.data && magicLinksQuery.data.links.length > 0 && (
         <div className="mt-6">
           <h2 className="mb-2 text-sm font-semibold text-zinc-300">
-            Magic links
+            Links de acesso
             <span className="ml-2 text-xs font-normal text-zinc-500">
               ({magicLinksQuery.data.links.filter((l) => l.active).length} ativos /{" "}
               {magicLinksQuery.data.links.length} total)
@@ -703,7 +698,7 @@ export function TenantDetail() {
                           onClick={() => {
                             if (
                               confirm(
-                                "Revogar este magic link?\n\nQuem clicar depois disso vai ver a página 'Obrigado' em vez do dashboard.",
+                                "Revogar este link de acesso?\n\nQuem clicar depois disso verá a página de obrigado em vez da área do cliente.",
                               )
                             ) {
                               revokeMagicM.mutate(m.nonce);
@@ -754,7 +749,7 @@ export function TenantDetail() {
                 <th className="px-3 py-2 font-medium">Provider</th>
                 <th className="px-3 py-2 font-medium text-right">Prompt</th>
                 <th className="px-3 py-2 font-medium text-right">Completion</th>
-                <th className="px-3 py-2 font-medium text-right">Cost</th>
+                <th className="px-3 py-2 font-medium text-right">Custo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60">
@@ -770,7 +765,7 @@ export function TenantDetail() {
               ))}
               {(u.data?.recent?.length ?? 0) === 0 && !u.isLoading && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-4 text-center text-zinc-500">No usage yet.</td>
+                  <td colSpan={6} className="px-3 py-4 text-center text-zinc-500">Sem uso ainda.</td>
                 </tr>
               )}
             </tbody>
@@ -778,13 +773,13 @@ export function TenantDetail() {
         </div>
       </div>
 
-      <Dialog open={confirmDelete} onClose={closeDeleteDialog} title="Delete tenant?" size="sm" closable={!deleteM.isPending}>
+      <Dialog open={confirmDelete} onClose={closeDeleteDialog} title="Excluir cliente?" size="sm" closable={!deleteM.isPending}>
         <div className="space-y-4 text-sm">
           <p className="text-zinc-300">
-            This removes the Docker container, LiteLLM key, tenant volume, and related Picoclaw database records.
+            Isso remove a área do cliente, os arquivos vinculados e os registros da Jota Duo relacionados.
           </p>
           <div>
-            <label className="mb-1 block text-xs text-zinc-400">Type {tenant.subdomain}</label>
+            <label className="mb-1 block text-xs text-zinc-400">Digite {tenant.subdomain}</label>
             <input
               value={deleteConfirm}
               onChange={(e) => setDeleteConfirm(e.target.value)}
@@ -794,13 +789,13 @@ export function TenantDetail() {
             />
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={closeDeleteDialog} disabled={deleteM.isPending}>Cancel</Button>
+            <Button variant="outline" onClick={closeDeleteDialog} disabled={deleteM.isPending}>Cancelar</Button>
             <Button
               variant="danger"
               onClick={() => deleteM.mutate()}
               disabled={deleteConfirm !== tenant.subdomain || deleteM.isPending}
             >
-              {deleteM.isPending ? "Deleting…" : "Delete forever"}
+              {deleteM.isPending ? "Excluindo..." : "Excluir definitivamente"}
             </Button>
           </div>
         </div>
@@ -824,21 +819,21 @@ export function TenantDetail() {
           {mintedMagicRole !== "public" && (
             <div className="rounded-md border border-red-700/60 bg-red-950/40 p-3 text-xs text-red-200">
               <div className="mb-1 text-sm font-semibold">
-                ⚠️ Link de acesso elevado — role <code>{mintedMagicRole}</code>
+                Link de acesso especial
               </div>
               Qualquer pessoa que clicar entra como{" "}
-              {mintedMagicRole === "tenant_owner" ? "DONO do tenant" : "admin do tenant"} até expirar.
-              Não publique em canal público, não cole em screenshot. Quando terminar de usar, clique em
-              <b> "Concluir agora"</b> abaixo pra revogar imediatamente.
+              {mintedMagicRole === "tenant_owner" ? "responsável" : "administrador"} até expirar.
+              Não publique em canal público. Quando terminar de usar, clique em
+              <b> "Concluir agora"</b> abaixo para revogar imediatamente.
             </div>
           )}
           <p className="text-zinc-300">
             {mintedMagicRole === "public"
-              ? "Compartilhe esse link com o lead/prospecto. Ao clicar, ele entra direto no dashboard conversando com o agente — sem login, sem senha."
-              : "Use esse link pra entrar no dashboard como " +
-                (mintedMagicRole === "tenant_owner" ? "dono" : "admin") +
-                " sem precisar de senha. Login por senha do Supabase continua funcionando em paralelo."}{" "}
-            O link expira no horário abaixo; depois disso, clicks voltam pra tela de login normal.
+              ? "Compartilhe esse link com o contato. Ao clicar, ele entra direto no atendimento, sem email e sem senha."
+              : "Use esse link para entrar como " +
+                (mintedMagicRole === "tenant_owner" ? "responsável" : "administrador") +
+                " sem precisar de senha."}{" "}
+            O link expira no horário abaixo; depois disso, a pessoa volta para a tela de acesso normal.
           </p>
           {magicLinkData && (
             <>
@@ -852,10 +847,10 @@ export function TenantDetail() {
                 value={magicLinkData.access_link ?? magicLinkData.short_magic_link ?? magicLinkData.url}
                 accent="emerald"
                 variant="tight"
-                hint="O shortlink é usado automaticamente quando o encurtador está disponível."
+                hint="O link curto é usado automaticamente quando está disponível."
               />
               {magicLinkData.short_magic_link && magicLinkData.short_magic_link !== magicLinkData.url && (
-                <CopyableField label="Magic link completo" value={magicLinkData.url} variant="tight" />
+                <CopyableField label="Link de acesso completo" value={magicLinkData.url} variant="tight" />
               )}
               <Button size="sm" variant="outline" onClick={copyMagicLink} className="w-fit">
                 {magicLinkCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
@@ -863,14 +858,11 @@ export function TenantDetail() {
               </Button>
               <div className="text-xs text-zinc-400">
                 Expira em <b>{new Date(magicLinkData.expires_at).toLocaleString("pt-BR")}</b>.
-                Quem tiver o link consegue entrar até esse horário — pra revogar
-                antes, rotacione <code>PICOCLAW_SAAS_GATEWAY_SECRET</code> no
-                controlplane (invalida TODOS os links).
+                Quem tiver o link consegue entrar até esse horário. Para bloquear antes,
+                use a ação de revogar abaixo.
               </div>
               <div className="rounded-md border border-amber-700/50 bg-amber-950/30 p-2 text-xs text-amber-300">
-                ⚠️ Trate como token de acesso — não publique em canal público
-                nem cole em screenshots. Qualquer browser com o link entra como
-                visitor anônimo.
+                Trate como um link privado: não publique em canal aberto.
               </div>
 
               <div className="space-y-2 rounded-md border border-zinc-700 bg-zinc-900/50 p-3 text-xs">
@@ -928,15 +920,13 @@ export function TenantDetail() {
       >
         <div className="space-y-4 text-sm">
           <div className="rounded-md border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200">
-            <div className="mb-1 font-semibold">⚠️ Clone raw</div>
-            O volume do tenant é copiado bit-a-bit: <b>senha do dashboard</b>, sessões,
-            tokens OAuth, banco da launcher-auth.db — tudo viaja. Apenas a chave LiteLLM
-            é renovada (pra não compartilhar budget). Rotacione a senha do clone depois
-            se o dono final for diferente.
+            <div className="mb-1 font-semibold">Cópia completa</div>
+            Os arquivos e acessos da área atual serão copiados para um novo cliente.
+            Troque a senha depois se o responsável final for diferente.
           </div>
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-500">
-              Subdomain do clone
+              Endereço curto da cópia
             </label>
             <Input
               value={cloneSubdomain}
@@ -947,7 +937,7 @@ export function TenantDetail() {
           </div>
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-500">
-              Display name
+              Nome do cliente
             </label>
             <Input
               value={cloneDisplayName}
@@ -956,7 +946,7 @@ export function TenantDetail() {
           </div>
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-500">
-              Owner email
+              Email do responsável
             </label>
             <Input
               value={cloneOwnerEmail}
@@ -985,7 +975,7 @@ export function TenantDetail() {
                 !cloneOwnerEmail.trim()
               }
             >
-              {cloneM.isPending ? "Clonando..." : "Clonar tenant"}
+              {cloneM.isPending ? "Copiando..." : "Copiar cliente"}
             </Button>
           </div>
         </div>
@@ -1037,19 +1027,19 @@ function MembersSection({ tenantId, canManage }: { tenantId: string; canManage: 
 
   return (
     <div className="mt-6">
-      <h2 className="mb-2 text-sm font-semibold text-zinc-300">Members</h2>
+      <h2 className="mb-2 text-sm font-semibold text-zinc-300">Equipe</h2>
       <div className="overflow-hidden rounded-lg border border-zinc-800">
         <table className="w-full text-xs">
           <thead className="bg-zinc-900/80 text-left text-[10px] uppercase tracking-wide text-zinc-500">
             <tr>
               <th className="px-3 py-2 font-medium">Email</th>
-              <th className="px-3 py-2 font-medium">Role</th>
-              <th className="px-3 py-2 font-medium">Since</th>
+              <th className="px-3 py-2 font-medium">Acesso</th>
+              <th className="px-3 py-2 font-medium">Desde</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/60">
             {membersQ.isLoading && (
-              <tr><td colSpan={3} className="px-3 py-3 text-center text-zinc-600">Loading…</td></tr>
+              <tr><td colSpan={3} className="px-3 py-3 text-center text-zinc-600">Carregando...</td></tr>
             )}
             {members.map((m) => (
               <tr key={m.user_id} className="hover:bg-zinc-900/40">
@@ -1059,7 +1049,7 @@ function MembersSection({ tenantId, canManage }: { tenantId: string; canManage: 
               </tr>
             ))}
             {!membersQ.isLoading && members.length === 0 && (
-              <tr><td colSpan={3} className="px-3 py-3 text-center text-zinc-600">No members yet.</td></tr>
+              <tr><td colSpan={3} className="px-3 py-3 text-center text-zinc-600">Nenhum membro ainda.</td></tr>
             )}
           </tbody>
         </table>
@@ -1080,15 +1070,15 @@ function MembersSection({ tenantId, canManage }: { tenantId: string; canManage: 
               {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
             <Button size="sm" onClick={() => inviteM.mutate()} disabled={!email.trim() || inviteM.isPending}>
-              {inviteM.isPending ? "Inviting…" : "Invite"}
+              {inviteM.isPending ? "Convidando..." : "Convidar"}
             </Button>
           </div>
         </div>
       </div>
 
-      <Dialog open={!!inviteToken} onClose={() => setInviteToken(null)} title="Invite link" size="md" closable={false}>
+      <Dialog open={!!inviteToken} onClose={() => setInviteToken(null)} title="Link de convite" size="md">
         <div className="space-y-3 text-sm">
-          <p className="text-amber-300">Share this token once — it won't be shown again.</p>
+          <p className="text-amber-300">Compartilhe este código agora: ele não será exibido novamente.</p>
           <div className="flex items-center gap-2">
             <code className="flex-1 break-all rounded bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
               {inviteToken}
@@ -1098,7 +1088,7 @@ function MembersSection({ tenantId, canManage }: { tenantId: string; canManage: 
             </Button>
           </div>
           <div className="flex justify-end pt-2">
-            <Button onClick={() => setInviteToken(null)}>Done</Button>
+            <Button onClick={() => setInviteToken(null)}>Fechar</Button>
           </div>
         </div>
       </Dialog>
@@ -1148,9 +1138,9 @@ function CRMSection({ tenantId, tenant, onLinked }: CRMSectionProps) {
     onSuccess: () => {
       onLinked();
       qc.invalidateQueries({ queryKey: ["crm-contact"] });
-      toast({ type: "success", message: "CRM contact created and linked." });
+      toast({ type: "success", message: "Contato criado e vinculado." });
     },
-    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Failed to create CRM contact." }),
+    onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Falha ao criar contato." }),
   });
 
   const dealM = useMutation({
@@ -1167,7 +1157,7 @@ function CRMSection({ tenantId, tenant, onLinked }: CRMSectionProps) {
       setDealValue("");
       setDealStage("prospect");
       qc.invalidateQueries({ queryKey: ["crm-deals", contactId] });
-      toast({ type: "success", message: "Deal created." });
+      toast({ type: "success", message: "Negócio criado." });
     },
   });
 
@@ -1186,7 +1176,7 @@ function CRMSection({ tenantId, tenant, onLinked }: CRMSectionProps) {
 
       {contactId == null ? (
         <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-4">
-          <span className="flex-1 text-sm text-zinc-500">No CRM contact linked to this tenant.</span>
+          <span className="flex-1 text-sm text-zinc-500">Nenhum contato vinculado a este cliente.</span>
           <Button variant="outline" size="sm" onClick={() => linkM.mutate()} disabled={linkM.isPending}>
             {linkM.isPending ? "Creating…" : "Create CRM contact"}
           </Button>

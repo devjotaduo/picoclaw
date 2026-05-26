@@ -31,43 +31,43 @@ export function PlatformDashboard() {
   return (
     <div className="mx-auto max-w-5xl p-6">
       <header className="mb-6">
-        <h1 className="text-xl font-semibold">Platform dashboard</h1>
-        <p className="text-xs text-zinc-500">Current month · auto-refreshes every 30 s</p>
+        <h1 className="text-xl font-semibold">Resumo da Jota Duo</h1>
+        <p className="text-xs text-zinc-500">Mês atual · atualização automática a cada 30 s</p>
       </header>
 
       {stats.isError && (
         <div className="mb-4 rounded bg-red-950/50 p-3 text-xs text-red-300">
-          Failed to load platform stats.
+          Falha ao carregar o resumo.
         </div>
       )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatCard
-          label="Active"
+          label="Ativos"
           value={s?.active_tenants ?? "—"}
           icon={<CheckCircle className="h-4 w-4 text-emerald-500" />}
           onClick={() => navigate("/tenants?status=active")}
         />
         <StatCard
-          label="Suspended"
+          label="Suspensos"
           value={s?.suspended_tenants ?? "—"}
           icon={<PauseCircle className="h-4 w-4 text-amber-400" />}
           onClick={() => navigate("/tenants?status=suspended")}
         />
         <StatCard
-          label="Errors"
+          label="Erros"
           value={s?.error_tenants ?? "—"}
           icon={<AlertTriangle className="h-4 w-4 text-red-400" />}
           onClick={() => navigate("/tenants?status=error")}
           highlight={(s?.error_tenants ?? 0) > 0}
         />
         <StatCard
-          label="Cost / mo"
+          label="Custo/mês"
           value={s != null ? `$${s.total_cost_usd.toFixed(2)}` : "—"}
           icon={<DollarSign className="h-4 w-4 text-zinc-400" />}
         />
         <StatCard
-          label="Tokens / mo"
+          label="Tokens/mês"
           value={s != null ? fmtTokens(s.total_tokens) : "—"}
           icon={<Zap className="h-4 w-4 text-zinc-400" />}
         />
@@ -75,16 +75,16 @@ export function PlatformDashboard() {
 
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-5">
         <div className="mb-3 flex items-center justify-between">
-          <span className="text-sm font-medium">Daily cost — last 30 days</span>
-          {series.isFetching && <span className="text-xs text-zinc-500">Updating…</span>}
+          <span className="text-sm font-medium">Custo diário — últimos 30 dias</span>
+          {series.isFetching && <span className="text-xs text-zinc-500">Atualizando...</span>}
         </div>
         {series.isLoading ? (
           <div className="flex h-40 items-center justify-center text-xs text-zinc-500">
-            Loading chart…
+            Carregando gráfico...
           </div>
         ) : points.length === 0 ? (
           <div className="flex h-40 items-center justify-center text-xs text-zinc-500">
-            No usage data for the period.
+            Sem dados de uso no período.
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={200}>
@@ -96,7 +96,7 @@ export function PlatformDashboard() {
                 contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", fontSize: 12 }}
                 labelStyle={{ color: "#a1a1aa" }}
                 itemStyle={{ color: "#e4e4e7" }}
-                formatter={(v) => [`$${Number(v).toFixed(4)}`, "Cost"]}
+                formatter={(v) => [`$${Number(v).toFixed(4)}`, "Custo"]}
               />
               <Line
                 type="monotone"
@@ -113,15 +113,15 @@ export function PlatformDashboard() {
 
       <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/70 p-5">
         <div className="mb-3 flex items-center justify-between">
-          <span className="text-sm font-medium">Daily tokens — last 30 days</span>
+          <span className="text-sm font-medium">Tokens diários — últimos 30 dias</span>
         </div>
         {series.isLoading ? (
           <div className="flex h-40 items-center justify-center text-xs text-zinc-500">
-            Loading chart…
+            Carregando gráfico...
           </div>
         ) : points.length === 0 ? (
           <div className="flex h-40 items-center justify-center text-xs text-zinc-500">
-            No usage data for the period.
+            Sem dados de uso no período.
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={200}>

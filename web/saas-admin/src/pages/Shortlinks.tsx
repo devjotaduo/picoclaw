@@ -41,17 +41,17 @@ export function Shortlinks() {
       await qc.invalidateQueries({ queryKey: ["shortlinks"] });
       setTarget("");
       setLabel("");
-      toast({ type: "success", message: "Shortlink criado." });
+      toast({ type: "success", message: "Link curto criado." });
     },
     onError: (e: { error?: string }) =>
-      toast({ type: "error", message: e?.error ?? "Falha ao criar shortlink." }),
+      toast({ type: "error", message: e?.error ?? "Falha ao criar link curto." }),
   });
 
   const deleteM = useMutation({
     mutationFn: (code: string) => deleteShortlink(code),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["shortlinks"] });
-      toast({ type: "info", message: "Shortlink removido." });
+      toast({ type: "info", message: "Link curto removido." });
     },
     onError: (e: { error?: string }) =>
       toast({ type: "error", message: e?.error ?? "Falha ao remover." }),
@@ -68,38 +68,38 @@ export function Shortlinks() {
   return (
     <div className="mx-auto max-w-5xl p-6">
       <header className="mb-4">
-        <h1 className="text-2xl font-semibold text-zinc-100">Shortlinks</h1>
+        <h1 className="text-2xl font-semibold text-zinc-100">Links curtos</h1>
         <p className="mt-1 text-sm text-zinc-400">
-          URLs curtas <code>https://&lt;apex&gt;/s/&lt;code&gt;</code> pra você compartilhar magic links e outros URLs longos.
-          Server cap: 1 ano. Default: 30 dias.
+          Endereços curtos para compartilhar links de acesso e outros endereços longos.
+          Validade máxima: 1 ano. Padrão: 30 dias.
         </p>
       </header>
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-base">Novo shortlink</CardTitle>
+          <CardTitle className="text-base">Novo link curto</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_220px]">
             <div>
               <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-500">
-                Target URL (absoluto)
+                Endereço de destino
               </label>
               <Input
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                placeholder="https://exemplo.com/very/long/path?token=…"
+                placeholder="https://exemplo.com/caminho/longo"
               />
             </div>
             <div>
               <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-500">
-                Label (opcional)
+                Rótulo (opcional)
               </label>
               <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Cliente X — link semana 12" />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs uppercase tracking-wider text-zinc-500">TTL:</span>
+            <span className="text-xs uppercase tracking-wider text-zinc-500">Validade:</span>
             {TTL_PRESETS.map((p) => (
               <button
                 key={p.seconds}
@@ -132,10 +132,10 @@ export function Shortlinks() {
         <table className="w-full text-sm">
           <thead className="bg-zinc-900/80 text-left text-xs uppercase tracking-wide text-zinc-500">
             <tr>
-              <th className="px-3 py-2 font-medium">Code</th>
-              <th className="px-3 py-2 font-medium">Target</th>
-              <th className="px-3 py-2 font-medium">Label</th>
-              <th className="px-3 py-2 font-medium">Hits</th>
+              <th className="px-3 py-2 font-medium">Código</th>
+              <th className="px-3 py-2 font-medium">Destino</th>
+              <th className="px-3 py-2 font-medium">Rótulo</th>
+              <th className="px-3 py-2 font-medium">Acessos</th>
               <th className="px-3 py-2 font-medium">Criado</th>
               <th className="px-3 py-2 font-medium">Expira</th>
               <th className="px-3 py-2 text-right font-medium">Ações</th>
@@ -152,7 +152,7 @@ export function Shortlinks() {
             {!q.isLoading && links.length === 0 && (
               <tr>
                 <td className="px-3 py-6 text-center text-zinc-500" colSpan={7}>
-                  Nenhum shortlink ainda.
+                  Nenhum link curto ainda.
                 </td>
               </tr>
             )}
@@ -202,9 +202,9 @@ export function Shortlinks() {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-zinc-500 hover:text-red-300"
-                      aria-label={`Delete ${sl.code}`}
+                      aria-label={`Excluir ${sl.code}`}
                       onClick={() => {
-                        if (confirm(`Apagar shortlink /s/${sl.code}? Quem tiver o link receberá uma página de "Link expirado".`)) {
+                        if (confirm(`Apagar link curto /s/${sl.code}? Quem tiver o link verá uma página de link expirado.`)) {
                           deleteM.mutate(sl.code);
                         }
                       }}

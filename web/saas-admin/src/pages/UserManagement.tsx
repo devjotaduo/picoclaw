@@ -36,7 +36,7 @@ export function UserManagement() {
       setShowInvite(false);
       setInviteToken(data.token);
       qc.invalidateQueries({ queryKey: ["platform-users"] });
-      toast({ type: "success", message: "Invite created — share the token below." });
+      toast({ type: "success", message: "Convite criado. Compartilhe o código abaixo." });
     },
     onError: (e) => toast({ type: "error", message: `Error: ${e.message}` }),
   });
@@ -45,15 +45,15 @@ export function UserManagement() {
     <div className="mx-auto max-w-5xl p-6">
       <header className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">Users</h1>
-          <p className="text-xs text-zinc-500">All platform users · platform admins can access this panel</p>
+          <h1 className="text-xl font-semibold">Equipe</h1>
+          <p className="text-xs text-zinc-500">Pessoas com acesso ao painel da Jota Duo</p>
         </div>
         <button
           onClick={() => setShowInvite(true)}
           className="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500"
         >
           <UserPlus className="h-4 w-4" />
-          Invite platform admin
+          Convidar administrador
         </button>
       </header>
 
@@ -63,9 +63,9 @@ export function UserManagement() {
             <tr>
               <th className="px-4 py-2.5 text-left font-medium">Email</th>
               <th className="px-4 py-2.5 text-left font-medium">Status</th>
-              <th className="px-4 py-2.5 text-left font-medium">Platform role</th>
-              <th className="px-4 py-2.5 text-left font-medium">Joined</th>
-              <th className="px-4 py-2.5 text-left font-medium">Last login</th>
+              <th className="px-4 py-2.5 text-left font-medium">Acesso</th>
+              <th className="px-4 py-2.5 text-left font-medium">Entrada</th>
+              <th className="px-4 py-2.5 text-left font-medium">Último acesso</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800">
@@ -94,7 +94,7 @@ export function UserManagement() {
             {!q.isLoading && users.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-xs text-zinc-600">
-                  No users found.
+                  Nenhuma pessoa encontrada.
                 </td>
               </tr>
             )}
@@ -103,9 +103,9 @@ export function UserManagement() {
       </div>
 
       {/* Invite dialog */}
-      <Dialog open={showInvite} onClose={() => setShowInvite(false)} title="Invite platform admin">
+      <Dialog open={showInvite} onClose={() => setShowInvite(false)} title="Convidar administrador">
         <p className="mb-3 text-xs text-zinc-400">
-          The invited user will receive a one-time invite token granting platform admin access.
+          A pessoa convidada receberá um código de uso único para acessar o painel.
         </p>
         <input
           type="email"
@@ -119,22 +119,22 @@ export function UserManagement() {
             onClick={() => setShowInvite(false)}
             className="rounded px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-100"
           >
-            Cancel
+            Cancelar
           </button>
           <button
             onClick={() => invite.mutate()}
             disabled={!inviteEmail.trim() || invite.isPending}
             className="rounded bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-50"
           >
-            {invite.isPending ? "Sending…" : "Send invite"}
+            {invite.isPending ? "Enviando..." : "Enviar convite"}
           </button>
         </div>
       </Dialog>
 
       {/* One-time token dialog */}
-      <Dialog open={!!inviteToken} onClose={() => setInviteToken(null)} title="Invite token">
+      <Dialog open={!!inviteToken} onClose={() => setInviteToken(null)} title="Código de convite">
         <p className="mb-2 text-xs text-amber-300">
-          Save this token now — it will not be shown again.
+          Guarde este código agora: ele não será exibido novamente.
         </p>
         <code className="block break-all rounded bg-zinc-900 p-3 text-xs text-zinc-200">
           {inviteToken}
@@ -144,7 +144,7 @@ export function UserManagement() {
             onClick={() => setInviteToken(null)}
             className="rounded px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-100"
           >
-            Done
+            Fechar
           </button>
         </div>
       </Dialog>

@@ -64,10 +64,10 @@ export function Workspaces() {
   const createM = useMutation({
     mutationFn: () =>
       createWorkspace({
-        name: `Novo workspace ${workspaces.length + 1}`,
+        name: `Novo modelo ${workspaces.length + 1}`,
         slug: `novo-${Date.now()}`,
         description:
-          "Workspace baseado no template padrão (Sofia discovery + Clara atende).",
+          "Modelo baseado no atendimento padrão da Jota Duo.",
         is_default_auto: workspaces.length === 0,
         is_available_manual: true,
         seed_from_baseline: true,
@@ -83,7 +83,7 @@ export function Workspaces() {
   // "saude-clinica" then customize agents/skills for that segment.
   const cloneM = useMutation({
     mutationFn: () => {
-      if (!selected) throw new Error("Selecione um workspace pra clonar");
+      if (!selected) throw new Error("Selecione um modelo para copiar");
       const baseSlug = selected.slug || "workspace";
       return createWorkspace({
         name: `${selected.name} (cópia)`,
@@ -111,7 +111,7 @@ export function Workspaces() {
       importWorkspaceFromHome({
         name: "Importado do operador",
         slug: `home-${Date.now()}`,
-        description: "Snapshot do $PICOCLAW_HOME do operador.",
+        description: "Cópia dos arquivos base do operador.",
       }),
     onSuccess: async (ws) => {
       await qc.invalidateQueries({ queryKey: ["workspaces"] });
@@ -174,15 +174,15 @@ export function Workspaces() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
-        title="Workspaces"
-        description="Diretórios completos que cada tenant herda no provisionamento — config.json, agentes, skills e o frontend compilado."
+        title="Modelos"
+        description="Modelos completos que cada cliente recebe na criação: configurações, agentes, habilidades e telas prontas."
       >
         <Button
           variant="secondary"
           onClick={() => importM.mutate()}
           disabled={importM.isPending}
         >
-          <Download className="size-4" /> Importar do $PICOCLAW_HOME
+          <Download className="size-4" /> Importar base do operador
         </Button>
         <Button variant="secondary" onClick={() => setUploadOpen(true)}>
           <Upload className="size-4" /> Upload (.zip)
@@ -194,13 +194,13 @@ export function Workspaces() {
           title={
             selected
               ? `Duplicar "${selected.name}" como novo template editável`
-              : "Selecione um workspace antes pra duplicar"
+              : "Selecione um modelo antes para duplicar"
           }
         >
           <Copy className="size-4" /> Clonar selecionado
         </Button>
         <Button onClick={() => createM.mutate()} disabled={createM.isPending}>
-          <Plus className="size-4" /> Novo workspace
+          <Plus className="size-4" /> Novo modelo
         </Button>
       </PageHeader>
 
@@ -238,7 +238,7 @@ export function Workspaces() {
           <aside className="min-h-0 overflow-hidden">
             <Card className="flex max-h-full min-h-0 flex-col">
               <CardHeader>
-                <CardTitle>Workspaces</CardTitle>
+                <CardTitle>Modelos</CardTitle>
               </CardHeader>
               <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-2">
                 {workspaces.map((ws) => (
@@ -271,7 +271,7 @@ export function Workspaces() {
                 ))}
                 {workspaces.length === 0 && (
                   <div className="rounded bg-zinc-950 px-3 py-6 text-center text-xs text-zinc-500">
-                    Nenhum workspace.
+                    Nenhum modelo.
                   </div>
                 )}
               </CardContent>
@@ -282,8 +282,7 @@ export function Workspaces() {
               <WorkspaceEditor key={selected.id} workspace={selected} />
             ) : (
               <div className="rounded-md border border-zinc-800 bg-zinc-900/40 p-6 text-sm text-zinc-500">
-                Crie um workspace ou importe o $PICOCLAW_HOME do operador pra
-                começar.
+                Crie ou importe um modelo para começar.
               </div>
             )}
           </div>
@@ -376,9 +375,9 @@ function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
           <div className="grid grid-cols-2 gap-3 pt-2">
             <label className="flex items-center justify-between gap-3 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2">
               <div>
-                <div className="font-medium">Padrão p/ auto-provision</div>
+                <div className="font-medium">Padrão para criação automática</div>
                 <div className="text-[11px] text-zinc-500">
-                  A Clara cria tenants automáticos com este.
+                  A Clara cria clientes automáticos com este modelo.
                 </div>
               </div>
               <Switch
@@ -390,7 +389,7 @@ function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
               <div>
                 <div className="font-medium">Disponível no cadastro manual</div>
                 <div className="text-[11px] text-zinc-500">
-                  Aparece no dropdown ao criar tenant.
+                  Aparece na seleção ao criar cliente.
                 </div>
               </div>
               <Switch
@@ -415,7 +414,7 @@ function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
               onClick={() => {
                 if (
                   window.confirm(
-                    `Apagar o workspace "${workspace.name}"? Os arquivos em ${workspace.host_path} ficam no disco — só a row do DB sai.`,
+                    `Apagar o modelo "${workspace.name}"? Os arquivos em ${workspace.host_path} ficam no disco.`,
                   )
                 ) {
                   deleteM.mutate();
@@ -424,7 +423,7 @@ function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
               disabled={isDefaultAuto || deleteM.isPending}
               title={
                 isDefaultAuto
-                  ? "Não dá pra apagar o workspace marcado como default-auto"
+                  ? "Não dá para apagar o modelo marcado como padrão"
                   : undefined
               }
             >
@@ -487,7 +486,7 @@ function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
         </CardHeader>
         <CardContent className="text-sm">
           <p className="mb-3 text-xs text-zinc-400">
-            Edite qualquer arquivo do workspace (home/, frontend-src/) com árvore de navegação e
+            Edite qualquer arquivo do modelo com árvore de navegação e
             syntax highlight. Para os arquivos comuns (AGENT.md, SOUL.md, config.json, etc.) você
             pode continuar usando o editor rápido abaixo.
           </p>
@@ -583,7 +582,7 @@ function FileEditor({ workspaceId }: { workspaceId: string }) {
           </Button>
         </div>
         <div className="text-[11px] text-zinc-500">
-          Path relativo ao workspace. Prefixos válidos: <code>home/</code>,{" "}
+          Caminho relativo ao modelo. Prefixos válidos: <code>home/</code>,{" "}
           <code>frontend-src/</code>, <code>frontend-dist/</code>.
         </div>
         {loaded ? (
@@ -613,13 +612,13 @@ function ValidationPanel({ workspaceId }: { workspaceId: string }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ShieldCheck className="size-4" />
-          Validação do workspace
+          Validação do modelo
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <p className="text-xs text-zinc-400">
-          Checa se este workspace tem os arquivos necessários pra provisionar tenants. Arquivos obrigatórios
-          quebram o boot do tenant se faltarem; recomendados melhoram segurança e UX.
+          Checa se este modelo tem os arquivos necessários para criar clientes. Arquivos obrigatórios
+          impedem a criação quando faltam; recomendados melhoram segurança e experiência.
         </p>
 
         {v.isLoading ? (
@@ -640,8 +639,8 @@ function ValidationPanel({ workspaceId }: { workspaceId: string }) {
             >
               {v.data.ok ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
               {v.data.ok
-                ? "Workspace pronto pra provisionar tenants."
-                : "Falta pelo menos um arquivo obrigatório — auto-provision vai falhar."}
+                ? "Modelo pronto para criar clientes."
+                : "Falta pelo menos um arquivo obrigatório. A criação automática pode falhar."}
             </div>
             <ul className="space-y-1 text-xs">
               {v.data.rows.map((row: WorkspaceValidationRow) => (
@@ -714,7 +713,7 @@ function UploadWorkspaceDialog(props: {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-lg space-y-4 rounded-lg border border-zinc-700 bg-zinc-900 p-5 text-sm">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-100">Upload de workspace</h2>
+          <h2 className="text-lg font-semibold text-zinc-100">Upload de modelo</h2>
           <p className="mt-1 text-xs text-zinc-400">
             Suba um <code>.zip</code> com qualquer combinação de{" "}
             <code>home/</code>, <code>frontend-src/</code> e{" "}
@@ -804,8 +803,8 @@ function UploadWorkspaceDialog(props: {
               checked={props.defaultAuto}
               onChange={(e) => props.setDefaultAuto(e.target.checked)}
             />
-            Marcar como workspace padrão pro auto-provisionamento
-            <span className="text-zinc-500">(só um workspace pode ter esse flag)</span>
+            Marcar como modelo padrão para criação automática
+            <span className="text-zinc-500">(só um modelo pode ser padrão)</span>
           </label>
 
           <label className="flex items-start gap-2 text-xs text-zinc-300">
@@ -836,7 +835,7 @@ function UploadWorkspaceDialog(props: {
 
         {props.warnings.length > 0 && (
           <div className="rounded border border-amber-800 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
-            <div className="mb-1 font-semibold">Workspace criado com avisos:</div>
+            <div className="mb-1 font-semibold">Modelo criado com avisos:</div>
             <ul className="list-disc space-y-0.5 pl-4">
               {props.warnings.map((w, i) => (
                 <li key={i}>{w}</li>
@@ -853,7 +852,7 @@ function UploadWorkspaceDialog(props: {
             onClick={props.onSubmit}
             disabled={props.isPending || !props.file || !props.name.trim()}
           >
-            {props.isPending ? "Enviando..." : "Enviar e criar workspace"}
+            {props.isPending ? "Enviando..." : "Enviar e criar modelo"}
           </Button>
         </div>
       </div>

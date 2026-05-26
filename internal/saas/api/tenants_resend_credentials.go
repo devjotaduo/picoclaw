@@ -33,14 +33,14 @@ type tenantLauncherForgotPasswordReq struct {
 func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		writeError(w, http.StatusBadRequest, "tenant id required")
+		writeError(w, http.StatusBadRequest, "cliente obrigatório")
 		return
 	}
 
 	t, err := h.Tenants.Get(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrTenantNotFound) {
-			writeError(w, http.StatusNotFound, "tenant not found")
+			writeError(w, http.StatusNotFound, "cliente não encontrado")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "db: "+err.Error())
@@ -48,7 +48,7 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 	}
 
 	if t.OwnerEmail == "" {
-		writeError(w, http.StatusBadRequest, "tenant has no owner_email on record; cannot resend credentials")
+		writeError(w, http.StatusBadRequest, "cliente sem email do responsável cadastrado")
 		return
 	}
 
@@ -64,7 +64,7 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		// dashboardauth.db, then restarts the container so the new hash is loaded.
 		newPassword, err := h.Provisioner.RotatePassword(r.Context(), t.ID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "rotate launcher password: "+err.Error())
+			writeError(w, http.StatusInternalServerError, "trocar senha: "+err.Error())
 			return
 		}
 
@@ -94,27 +94,27 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 	// ── Legacy Supabase path ───────────────────────────────────────────────
 	if t.SupabaseUserID == nil || *t.SupabaseUserID == "" {
 		writeError(w, http.StatusBadRequest,
-			"tenant is not linked to a Supabase user; only supabase-backed tenants support this flow")
+			"este cliente não está ligado ao acesso antigo")
 		return
 	}
 	if h.Supabase == nil {
-		writeError(w, http.StatusServiceUnavailable, "supabase auth not configured on the controlplane")
+		writeError(w, http.StatusServiceUnavailable, "acesso antigo não configurado no painel")
 		return
 	}
 	if h.Mailer == nil || !h.Mailer.Enabled() {
 		writeError(w, http.StatusServiceUnavailable,
-			"SMTP not configured on the controlplane; configure SMTP_HOST/USER/PASSWORD/ALERT_FROM first")
+			"envio de email não configurado no painel")
 		return
 	}
 
 	newPassword, err := auth.GeneratePassword()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "generate password: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "gerar senha: "+err.Error())
 		return
 	}
 
 	if err := h.Supabase.UpdateUserPassword(*t.SupabaseUserID, newPassword); err != nil {
-		writeError(w, http.StatusInternalServerError, "rotate password in supabase: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "trocar senha no acesso antigo: "+err.Error())
 		return
 	}
 
@@ -157,7 +157,7 @@ func (h *Handler) handleResendCredentials(w http.ResponseWriter, r *http.Request
 		"initial_password":    newPassword,
 		"magic_link":          magicLink,
 		"short_magic_link":    shortMagicLink,
-		"info":                "Senha rotacionada. Email enfileirado para " + t.OwnerEmail + " — se demorar, copie a senha/link diretamente abaixo.",
+		"info":                "Senha trocada. Email enfileirado para " + t.OwnerEmail + " — se demorar, copie a senha e o link abaixo.",
 	})
 }
 

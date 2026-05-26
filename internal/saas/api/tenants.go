@@ -80,7 +80,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(
 			w,
 			http.StatusBadRequest,
-			"display_name and subdomain are required (owner_email also required for non-public tenants)",
+			"nome, endereço curto e email do responsável são obrigatórios",
 		)
 		return
 	}
@@ -97,7 +97,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	if !isPublic {
 		if existing, err := h.Tenants.GetByOwnerEmail(r.Context(), req.OwnerEmail); err == nil && existing != nil {
 			writeJSON(w, http.StatusConflict, map[string]any{
-				"error":     "owner already has a tenant",
+				"error":     "este email já tem um cliente cadastrado",
 				"tenant_id": existing.ID,
 				"url":       tenantURL(h.Cfg, existing.Subdomain),
 			})
@@ -108,7 +108,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if _, err := h.Tenants.GetBySubdomain(r.Context(), req.Subdomain); err == nil {
-		writeError(w, http.StatusConflict, "subdomain already taken")
+		writeError(w, http.StatusConflict, "endereço curto já está em uso")
 		return
 	} else if !errors.Is(err, store.ErrTenantNotFound) {
 		writeError(w, http.StatusInternalServerError, "db error")
@@ -153,7 +153,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	// audit anchor, not a real recipient.
 	if isPublic {
 		resp["is_public"] = true
-		resp["info"] = "Tenant público criado. Acesso é anônimo (sem login). Use ui-visibility.json para customizar o que o visitante vê."
+		resp["info"] = "Atendimento público criado. O visitante entra sem senha."
 		h.auditTenantOp(r, out.TenantID, "tenant.create")
 		writeJSON(w, http.StatusCreated, resp)
 		return
@@ -164,11 +164,11 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	// from adm.<base>/users.
 	owner, err := h.Users.EnsureInvited(r.Context(), req.OwnerEmail)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "owner user error")
+		writeError(w, http.StatusInternalServerError, "erro ao preparar usuário responsável")
 		return
 	}
 	if err := h.Memberships.Upsert(r.Context(), owner.ID, out.TenantID, store.RoleTenantOwner); err != nil {
-		writeError(w, http.StatusInternalServerError, "owner membership error")
+		writeError(w, http.StatusInternalServerError, "erro ao preparar acesso do responsável")
 		return
 	}
 
@@ -177,7 +177,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	mailMagicLink := ""
 	if createdTenant, err := h.Tenants.Get(r.Context(), out.TenantID); err != nil {
 		log.Printf("tenant create: reload tenant %s for access link failed: %v", out.TenantID, err)
-		resp["access_warning"] = "Tenant criado, mas não foi possível carregar dados para gerar magic link."
+		resp["access_warning"] = "Cliente criado, mas não foi possível carregar os dados para gerar o link de acesso."
 	} else if bundle, err := h.createTenantMagicAccessBundle(
 		r.Context(),
 		createdTenant,
@@ -186,7 +186,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		"",
 	); err != nil {
 		log.Printf("tenant create: access bundle generation failed for tenant %s: %v", out.TenantID, err)
-		resp["access_warning"] = "Tenant criado, mas magic link/shortlink não foram gerados. Use URL + senha inicial como fallback."
+		resp["access_warning"] = "Cliente criado, mas o link de acesso não foi gerado. Use endereço e senha inicial como alternativa."
 	} else {
 		resp["magic_link"] = bundle.URL
 		resp["short_magic_link"] = bundle.ShortMagicLink
@@ -207,9 +207,9 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 			out.InitialPassword,
 			mailMagicLink,
 		)
-		resp["info"] = "Email com URL, login, senha e link de acesso enviado para o owner."
+		resp["info"] = "Email com endereço, email de acesso, senha e link enviado para o responsável."
 	} else {
-		resp["info"] = "Tenant criado. Salve as credenciais agora — elas não serão exibidas de novo."
+		resp["info"] = "Cliente criado. Salve os dados de acesso agora: eles não serão exibidos novamente."
 		resp["warning"] = "SMTP não configurado — entregue email + senha manualmente."
 	}
 
@@ -288,7 +288,7 @@ func (h *Handler) handleGetTenant(w http.ResponseWriter, r *http.Request) {
 	t, err := h.Tenants.Get(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrTenantNotFound) {
-			writeError(w, http.StatusNotFound, "tenant not found")
+			writeError(w, http.StatusNotFound, "cliente não encontrado")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "db error")
@@ -360,7 +360,7 @@ func (h *Handler) handleRotatePassword(w http.ResponseWriter, r *http.Request) {
 	h.auditTenantOp(r, id, "tenant.password.rotate")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"initial_password": password,
-		"warning":          "Save this password now — it will not be shown again.",
+		"warning":          "Guarde esta senha agora: ela não será exibida novamente.",
 	})
 }
 
