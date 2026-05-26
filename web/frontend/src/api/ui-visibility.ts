@@ -22,7 +22,13 @@ export interface UIVisibilityPolicy {
   profiles: Record<UIVisibilityProfile, UIVisibilityProfileConfig>
 }
 
-export const LOCAL_UI_VISIBILITY_POLICY_URL = "/mock-api/ui-visibility.json"
+// Launcher backend serves $PICOCLAW_HOME/ui-visibility.json — the file the
+// SaaS provisioner writes per tenant (active_profile=public|tenant|admin per
+// tenant_type) and the LLM tool pkg/tools/set_ui_profile updates at runtime.
+// When the backend returns 404 (no per-tenant file present), the hook falls
+// back to DEFAULT_UI_VISIBILITY_POLICY below — preserves single-tenant /
+// local-dev launchers that never had a file written.
+export const LOCAL_UI_VISIBILITY_POLICY_URL = "/api/launcher/ui-visibility"
 
 export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
   version: 1,

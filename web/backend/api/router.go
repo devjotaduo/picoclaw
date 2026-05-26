@@ -166,6 +166,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Tenant role policy exposed to the launcher frontend.
 	h.registerLauncherPolicyRoutes(mux)
 
+	// Per-tenant ui-visibility.json from $PICOCLAW_HOME — drives sidebar /
+	// header / chat visibility per active_profile (public/tenant/admin/waiting).
+	h.registerLauncherUIVisibilityRoutes(mux)
+
 	// SaaS admin proxy — forwards /api/admin/saas/* to the controlplane on
 	// behalf of the launcher dashboard user. Disabled unless the launcher is
 	// configured with PICOCLAW_SAAS_ADMIN_MODE=true plus base/email/password.
