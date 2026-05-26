@@ -152,6 +152,27 @@ Path EXATO: memory/empresa.md (relativo ao workspace raiz).
 )
 ```
 
+## State machine — sinalizar progresso pra a promoção
+
+**Após cada área fechar** (`memory/<chave>.md` gravado + validado), chame
+a skill `onboarding-state` pra registrar que a área foi coberta:
+
+```
+exec(
+  action="run",
+  command="python skills/onboarding-state/scripts/state.py",
+  cwd="<workspace_root>",
+  stdin='{"action":"mark_area_complete","area":"<chave>"}'
+)
+```
+
+Onde `<chave>` é uma de: `equipe | casos-excecao | faq | historico | regras-tacitas`.
+
+O script é idempotente (chamar 2x pra mesma área não conta duplo). E
+quando você fechar a 5ª área, o próprio script vira `promotion.ready=true`
+no `onboarding.json` — o admin vê isso no painel e libera "Promover" pra
+você passar de tenant publico pra cliente normal.
+
 ## Critério de maturidade (80%)
 
 Após cada sessão, conte quantas das 5 áreas têm `memory/<chave>.md`
@@ -169,8 +190,20 @@ notify_user(
 )
 ```
 
-A quinta área pode ficar em aberto ou ser feita sob demanda quando o
-dono pedir.
+**Importante:** mesmo encerrando ativa em 4/5, **só ative
+`promotion.ready=true`** quando fechar a 5ª. Os 80% é pra você reduzir
+pressão na curadoria, não pra o admin promover sem deepening completo.
+Se o dono explicitamente recusar a 5ª área ("não precisa, é simples"),
+use o escape hatch:
+
+```
+exec(
+  ...,
+  stdin='{"action":"mark_ready_for_promotion","reason":"dono recusou aprofundamento — empresa simples"}'
+)
+```
+
+Isso força `promotion.ready=true` mas grava o motivo no JSON pra auditoria.
 
 ## Sessões curtas — não esticar
 
