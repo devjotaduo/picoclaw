@@ -10,6 +10,15 @@ import (
 
 var ErrTenantNotFound = errors.New("tenant not found")
 
+// ErrTenantAlreadyPromoted is returned by Promote when the target tenant
+// already has is_public=false. Audit P1 #24 (2026-05-27): without the
+// is_public guard, two concurrent Promote requests both passed the
+// handler's pre-check, both ran the UPDATE (the second one no-op'ing),
+// then both proceeded to filesystem + container recreate in parallel.
+// With the guard, the loser gets this sentinel and the handler answers
+// 409 with the existing tenant info instead of clobbering.
+var ErrTenantAlreadyPromoted = errors.New("tenant already promoted")
+
 type TenantStatus string
 
 const (
@@ -291,20 +300,57 @@ func (s *TenantStore) MarkSuspended(ctx context.Context, id string) error {
 // state machine in the tenant volume reports promotion.ready=true.
 // Atomic at the SQL level (single UPDATE), but the caller must coordinate
 // the subsequent filesystem + container recreate work.
+//
+// Guarded with `AND is_public = true` so concurrent Promote requests
+// can't both succeed (audit P1 #24). The loser gets ErrTenantAlreadyPromoted
+// when 0 rows are affected AND the row still exists (vs ErrTenantNotFound
+// when the row never existed).
 func (s *TenantStore) Promote(ctx context.Context, id, ownerEmail, authBackend string) error {
 	const q = `UPDATE tenants
 	           SET is_public = false,
 	               owner_email = $2,
 	               auth_backend = $3
-	           WHERE id = $1`
+	           WHERE id = $1 AND is_public = true`
 	tag, err := s.DB.Pool.Exec(ctx, q, id, ownerEmail, authBackend)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return ErrTenantNotFound
+		// Distinguish "not found" from "already promoted" so the caller
+		// can return 404 vs 409 idempotent. Cheap follow-up SELECT.
+		var exists bool
+		if scanErr := s.DB.Pool.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM tenants WHERE id = $1)`, id,
+		).Scan(&exists); scanErr != nil {
+			return scanErr
+		}
+		if !exists {
+			return ErrTenantNotFound
+		}
+		return ErrTenantAlreadyPromoted
 	}
 	return nil
+}
+
+// UnpromoteRollback reverses Promote when a downstream step fails.
+// Restores is_public=true + clears owner_email + sets auth_backend back
+// to the original value (caller passes what it was). Audit P1 #21
+// (2026-05-27): without this, a failed step 6 leaves the DB saying
+// "cliente" while the container is still publico — promote endpoint
+// returns 500 but the row is stuck in the inconsistent state.
+//
+// Best-effort: failure is logged by the caller but doesn't make the
+// outer error worse. WHERE clause only matches the just-promoted row
+// (id + owner_email exactly), so a re-promote race won't undo a
+// successful second promotion.
+func (s *TenantStore) UnpromoteRollback(ctx context.Context, id, ownerEmail, originalAuthBackend string) error {
+	const q = `UPDATE tenants
+	           SET is_public = true,
+	               owner_email = NULL,
+	               auth_backend = $3
+	           WHERE id = $1 AND owner_email = $2 AND is_public = false`
+	_, err := s.DB.Pool.Exec(ctx, q, id, ownerEmail, originalAuthBackend)
+	return err
 }
 
 func (s *TenantStore) MarkResumed(ctx context.Context, id string) error {

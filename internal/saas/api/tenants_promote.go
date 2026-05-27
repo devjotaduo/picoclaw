@@ -201,19 +201,38 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 5: DB mutations.
+	// Step 5: DB mutations. Capture the original auth_backend BEFORE the
+	// UPDATE so a downstream failure can rollback via UnpromoteRollback
+	// (audit P1 #21). Without this, a failure at step 6+ left the DB
+	// claiming "cliente" while the container was still publico —
+	// promote returned 500 but the row was stuck in the inconsistent state.
+	originalAuthBackend := t.AuthBackend
 	if err := h.Tenants.Promote(r.Context(), t.ID, ownerEmail, "launcher"); err != nil {
+		// Concurrent Promote landed first (audit P1 #24) — answer
+		// idempotently with the existing tenant info instead of
+		// clobbering with parallel filesystem writes + recreates.
+		if errors.Is(err, store.ErrTenantAlreadyPromoted) {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"error":     "tenant já foi promovido (race com outro request)",
+				"tenant_id": t.ID,
+				"url":       tenantURL(h.Cfg, t.Subdomain),
+				"hint":      "se você precisa da senha gerada, use password.rotate",
+			})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "db promote failed: "+err.Error())
 		return
 	}
 	owner, err := h.Users.EnsureInvited(r.Context(), ownerEmail)
 	if err != nil {
 		log.Printf("promote %s: EnsureInvited failed: %v", t.ID, err)
+		rollbackPromote(r.Context(), h.Tenants, t.ID, ownerEmail, originalAuthBackend, "EnsureInvited")
 		writeError(w, http.StatusInternalServerError, "criar usuário owner falhou: "+err.Error())
 		return
 	}
 	if err := h.Memberships.Upsert(r.Context(), owner.ID, t.ID, store.RoleTenantOwner); err != nil {
 		log.Printf("promote %s: membership upsert failed: %v", t.ID, err)
+		rollbackPromote(r.Context(), h.Tenants, t.ID, ownerEmail, originalAuthBackend, "Memberships.Upsert")
 		writeError(w, http.StatusInternalServerError, "criar membership owner falhou: "+err.Error())
 		return
 	}
@@ -226,13 +245,15 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 
 	password, err := auth.GeneratePassword()
 	if err != nil {
+		rollbackPromote(r.Context(), h.Tenants, t.ID, ownerEmail, originalAuthBackend, "GeneratePassword")
 		writeError(w, http.StatusInternalServerError, "gerar senha falhou: "+err.Error())
 		return
 	}
 	if err := tenant.SeedDashboardPassword(r.Context(), t.VolumePath, password); err != nil {
-		log.Printf("promote %s: SeedDashboardPassword failed (DB already promoted): %v", t.ID, err)
+		log.Printf("promote %s: SeedDashboardPassword failed: %v", t.ID, err)
+		rollbackPromote(r.Context(), h.Tenants, t.ID, ownerEmail, originalAuthBackend, "SeedDashboardPassword")
 		writeError(w, http.StatusInternalServerError,
-			"escrever launcher-auth.db falhou: "+err.Error()+" — DB já marcou is_public=false; corrija manualmente")
+			"escrever launcher-auth.db falhou: "+err.Error()+" — DB foi revertido pra is_public=true")
 		return
 	}
 
@@ -242,22 +263,7 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		markPromotedInState(t.VolumePath, actorEmailFromCtx(r.Context()))
 	}
 
-	// Step 7.5: Revoke the tenant's routes in the jotaduo-wa sidecar so a
-	// late inbound reply from a former lead's number stops being routed
-	// back to this (now-cliente) tenant. Defense in depth: the recreate
-	// at step 8 already strips JOTADUO_WA_HMAC_SECRET from the container
-	// env so the launcher endpoint would 503 the webhook anyway — this
-	// prevents the sidecar from even firing.
-	//
-	// Best-effort: a sidecar issue must NOT abort the promotion. The DB
-	// row + container recreate are the source of truth; the routing
-	// revoke is hygiene. Logged so operators can re-run it manually if
-	// the sidecar was momentarily unreachable.
-	if err := h.RevokeJotaduoWARouting(r.Context(), t.ID); err != nil {
-		log.Printf("promote %s: revoke jotaduo-wa routing failed (non-fatal): %v", t.ID, err)
-	}
-
-	// Step 7.6: Restore the canonical workspace/AGENT.md from the
+	// Step 7.5: Restore the canonical workspace/AGENT.md from the
 	// AGENT.cliente.md backup the provisioner left behind when this
 	// tenant was created as public. Without this, the cliente boots into
 	// the Sofia-mode prompt that was active while public — Rafael+team
@@ -277,17 +283,40 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 	// (instead of trusted_gateway) and the corrected ALLOWED_CHANNELS.
 	if err := h.Provisioner.Recreate(r.Context(), t.ID); err != nil {
 		log.Printf("promote %s: container recreate failed (DB promoted + password seeded): %v", t.ID, err)
+		// Distinct audit action so dashboards can highlight partial
+		// failures the operator might miss in the 202 response (P1 #22).
+		h.auditTenantOp(r, t.ID, "tenant.promote.recreate_failed")
 		// Tenant is now in a consistent DB state but container still old.
-		// Admin can manually trigger recreate from the panel.
+		// Admin can manually trigger recreate from the panel. We do NOT
+		// revoke the jotaduo-wa routes here — if Recreate failed the
+		// container is likely still running the OLD spec (publico) and
+		// stripping routing would silently lose pending lead replies
+		// (P1 #25). Routing cleanup waits until Recreate actually succeeds.
 		writeJSON(w, http.StatusAccepted, map[string]any{
 			"tenant_id":        t.ID,
 			"url":              tenantURL(h.Cfg, t.Subdomain),
 			"owner_email":      ownerEmail,
 			"initial_password": password,
 			"warning":          "promoção concluída no DB mas recreate do container falhou: " + err.Error(),
-			"hint":             "use POST /api/v1/tenants/" + t.ID + "/recreate pra finalizar",
+			"hint":             "use POST /api/v1/tenants/" + t.ID + "/recreate pra finalizar — jotaduo-wa routing NÃO foi revogada pra não perder leads",
 		})
 		return
+	}
+
+	// Step 8.5 (was 7.5): Revoke the tenant's routes in the jotaduo-wa
+	// sidecar NOW that Recreate succeeded — running container is on the
+	// cliente spec, has no JOTADUO_WA_HMAC_SECRET, would 503 any inbound
+	// webhook. Removing the sidecar routes prevents the round-trip even.
+	// Audit P1 #25 (2026-05-27): originally this ran BEFORE Recreate, so
+	// a Recreate failure left the OLD publico container running with no
+	// routing — leads got silently dropped. Now revoke only happens once
+	// the cliente container is up.
+	//
+	// Best-effort: a sidecar issue must NOT abort the (already-succeeded)
+	// promotion. Operator can re-run the revoke manually if the sidecar
+	// was momentarily unreachable.
+	if err := h.RevokeJotaduoWARouting(r.Context(), t.ID); err != nil {
+		log.Printf("promote %s: revoke jotaduo-wa routing failed (non-fatal, container already on cliente spec): %v", t.ID, err)
 	}
 
 	// Step 9: Email (best-effort).
@@ -418,6 +447,23 @@ func markPromotedInState(volumePath, actorEmail string) {
 	if err := os.WriteFile(path, append(out, '\n'), 0o600); err != nil {
 		log.Printf("markPromotedInState: write %s: %v", path, err)
 	}
+}
+
+// rollbackPromote reverses the Step 5 DB Promote when any later step
+// fails. Best-effort: a rollback error is logged but doesn't replace
+// the original failure that the user sees. Audit P1 #21 (2026-05-27):
+// without this helper, a 500 from EnsureInvited/Memberships/SeedPassword
+// left the tenant row with is_public=false + owner_email=<x> but no
+// matching user + no dashboard password — operator had to manually
+// `UPDATE tenants` to re-enable the public funnel.
+func rollbackPromote(ctx context.Context, tenants *store.TenantStore, tenantID, ownerEmail, originalAuthBackend, failedStep string) {
+	if err := tenants.UnpromoteRollback(ctx, tenantID, ownerEmail, originalAuthBackend); err != nil {
+		log.Printf("promote %s: UnpromoteRollback after %s failure ALSO failed (manual SQL needed): %v",
+			tenantID, failedStep, err)
+		return
+	}
+	log.Printf("promote %s: rolled back DB to is_public=true after %s failure",
+		tenantID, failedStep)
 }
 
 // actorEmailFromCtx returns the email of the platform_admin user
