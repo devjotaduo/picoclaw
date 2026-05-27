@@ -15,6 +15,44 @@ mesmo tempo. Nenhum deles é resolvido pela PR #128 sozinha — ela ataca
 
 ---
 
+## ⚡ Update 04:05 UTC — fixes aplicados, re-teste validou
+
+Após o relatório inicial:
+
+| Ação | PR | Status |
+|---|---|---|
+| Provisioner sobrescreve `AGENT.md` (LLM persona = Sofia) | #128 | mergeada antes do teste original |
+| Frontend: greeting + banner + tour gates por `active_profile==="public"` | #129 | mergeada + deployada |
+| Workspace template config: `gpt-5.4` → `claude-sonnet-4-5` | manual (SSH) | aplicado em `/srv/picoclaw-workspaces/default-business/` |
+| Tenant existente padaria-teste-sofia: mesmo patch + recreate | manual (SSH + admin UI) | aplicado |
+
+**Re-teste com tenant recriado (mesmo subdomain):**
+
+- ✅ Greeting: **"Oi, sou Sofia. Te ajudo a completar o cadastro."** (antes: Rafael)
+- ✅ **Sem** banner "Cadastro incompleto"
+- ✅ **Sem** tour modal
+- ✅ Sofia respondeu Phase 1 do discovery: "Antes de começarmos, preciso entender o seu negócio... qual é o nome da sua empresa e o que vocês fazem?"
+- ✅ Phase 2 contextualizada pro segmento padaria: "Vocês atendem só no balcão ou também fazem delivery? E se fazem delivery, usam alguma plataforma tipo iFood, Rappi, ou é delivery próprio?"
+- ✅ Tom consultivo, uma pergunta por vez (regra Sofia)
+- ✅ Modelo `claude-sonnet-4-5` via OpenRouter funcionou nas 2 trocas
+
+**Restantes:**
+
+- ❌ **Bug #4 NÃO foi coberto em PR #129**: bubble label da resposta ainda mostra "Rafael • 1:02 AM" mesmo o conteúdo sendo Sofia. PR #129 fixou só o greeting + banners; o nome no header de cada bolha precisa do mesmo gate. Cosmético mas confuso pro visitante ("se é Sofia, por que diz Rafael?").
+- ❌ **Erro 402 do OpenRouter na 3ª mensagem**: créditos da chave OpenRouter esgotados (`This request requires more credits...`). Não é bug da plataforma — é saldo operacional. Bloqueia continuação do discovery completo. Screenshot: `sofia-discovery-funcional-com-bubble-label-bug.png`.
+
+**Screenshots:**
+- `bug-publico-rafael-erro-llm.png` — estado quebrado original (Rafael + 400 gpt-5.4)
+- `fix-sofia-greeting-clean.png` — UI limpa após PR #129 (Sofia greeting, sem banner, sem tour)
+- `sofia-discovery-funcional-com-bubble-label-bug.png` — Sofia respondendo Phase 1+2 mas bubble label ainda "Rafael"
+
+**Próximas PRs sugeridas:**
+1. Fix bubble label de mensagens em modo público (mesmo padrão do PR #129, em `message-bubble` ou onde quer que renderiza o sender name)
+2. Recarregar créditos do OpenRouter (operacional)
+3. P2 do relatório (página "Tenants" mostrando todos os tipos) — quando der tempo
+
+---
+
 ## ✅ O que funcionou
 
 | Item | Status | Observação |
