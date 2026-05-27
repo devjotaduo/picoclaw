@@ -22,12 +22,17 @@ set -euo pipefail
 
 ENV_FILE="${PICOCLAW_R2_ENV_FILE:-/etc/picoclaw/r2-backup.env}"
 # Space-separated list of host paths included in each snapshot.
-# Default: tenant volumes + the operator config tree at /etc/picoclaw,
-# which holds r2-backup.env + claude-auth/ (Claude CLI OAuth credentials
-# for tenants using provider="claude-cli"). Losing /etc/picoclaw/claude-auth
-# means re-uploading the operator's local credentials.json — including it
-# here makes restore a single restic command.
-BACKUP_PATHS="${PICOCLAW_BACKUP_PATHS:-/srv/saas/tenants /etc/picoclaw}"
+# Default: tenant volumes + operator config tree (/etc/picoclaw holds
+# r2-backup.env + claude-auth/) + Postgres dump staging dir. Losing
+# /srv/saas/postgres/data/ is recoverable from the .sql.gz dumps in
+# the staging dir (audit P0 #3, 2026-05-27).
+BACKUP_PATHS="${PICOCLAW_BACKUP_PATHS:-/srv/saas/tenants /etc/picoclaw /var/lib/picoclaw-pg-dumps}"
+# Where pg_dumpall writes the daily dump before restic snapshots it.
+# Restic dedup makes the 2-keep retention cheap; we keep 2 on disk
+# (not 1) so a corrupt run still has a previous good local copy.
+PG_DUMP_DIR="${PICOCLAW_PG_DUMP_DIR:-/var/lib/picoclaw-pg-dumps}"
+PG_CONTAINER="${PICOCLAW_PG_CONTAINER:-postgres}"
+PG_USER="${PICOCLAW_PG_USER:-picoclaw-saas}"
 # Legacy single-path env still honored: older deploys may set
 # PICOCLAW_BACKUP_PATH to a single dir; preserve that override.
 LEGACY_BACKUP_PATH="${PICOCLAW_BACKUP_PATH:-}"
@@ -61,7 +66,14 @@ if ! command -v restic >/dev/null 2>&1; then
   exit 1
 fi
 
+# Pre-flight: every BACKUP_PATH must exist EXCEPT the pg-dumps staging dir,
+# which the pg_dumpall step above creates lazily. If pg_dumpall ran but
+# wrote zero files, restic still snapshots the empty dir cleanly.
 for path in $BACKUP_PATHS; do
+  if [ "$path" = "$PG_DUMP_DIR" ]; then
+    mkdir -p "$path"
+    continue
+  fi
   if [ ! -e "$path" ]; then
     log "ERROR: backup path $path does not exist on this host"
     exit 1
@@ -81,6 +93,35 @@ if ! flock -n 9; then
 fi
 
 log "=== backup pass starting (paths=$BACKUP_PATHS host=$HOST_TAG) ==="
+
+# ── Postgres dump (audit P0 #3) ──────────────────────────────────────
+# pg_dumpall writes a logical dump containing roles + all databases.
+# Restic dedups the gzipped output across snapshots, so storage cost is
+# small. Skipped if docker or the postgres container isn't present
+# (e.g. local dev box) — the restic step still runs over /srv/saas/tenants
+# and /etc/picoclaw. Failure of pg_dump aborts the whole pass: losing
+# postgres without noticing is the bug this P0 fixes.
+if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -qx "$PG_CONTAINER"; then
+  mkdir -p "$PG_DUMP_DIR"
+  chmod 0700 "$PG_DUMP_DIR"
+  PG_DUMP_FILE="$PG_DUMP_DIR/pg_dumpall-$(date +%Y%m%dT%H%M%S).sql.gz"
+  log "--- dumping postgres → $PG_DUMP_FILE ---"
+  if ! docker exec "$PG_CONTAINER" pg_dumpall -U "$PG_USER" --clean --if-exists \
+       | gzip -9 > "$PG_DUMP_FILE.partial"; then
+    log "ERROR: pg_dumpall failed — aborting backup pass"
+    rm -f "$PG_DUMP_FILE.partial"
+    exit 1
+  fi
+  mv "$PG_DUMP_FILE.partial" "$PG_DUMP_FILE"
+  # Keep last 2 dumps on disk; restic snapshots are the long-term history.
+  # shellcheck disable=SC2012
+  ls -1t "$PG_DUMP_DIR"/pg_dumpall-*.sql.gz 2>/dev/null \
+    | tail -n +3 | xargs -r rm -f --
+  DUMP_SIZE_MB=$(( $(stat -c%s "$PG_DUMP_FILE" 2>/dev/null || echo 0) / 1024 / 1024 ))
+  log "pg_dumpall complete: ${DUMP_SIZE_MB} MB on disk"
+else
+  log "WARN: postgres container '$PG_CONTAINER' not running — skipping pg_dumpall"
+fi
 
 # Lazy repo init — first run on a fresh bucket has to call `restic init`.
 # Subsequent calls fast-path through and just write a snapshot.
