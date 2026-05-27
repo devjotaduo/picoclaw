@@ -30,6 +30,12 @@ fi
 mkdir -p "$SECRETS_DIR"
 chmod 0700 "$SECRETS_DIR"
 
+# Postgres dump staging dir (audit P0 #3). The backup script writes
+# pg_dumpall here right before restic snapshots it. 0700 root-only —
+# the dump contains all secrets in plaintext (well, dump-encoded).
+mkdir -p /var/lib/picoclaw-pg-dumps
+chmod 0700 /var/lib/picoclaw-pg-dumps
+
 if [ ! -f "$ENV_FILE" ]; then
   echo "==> seeding $ENV_FILE from template (you MUST edit it before the backup will run)"
   install -m 0600 "$SRC_DIR/r2-backup.env.example" "$ENV_FILE"
