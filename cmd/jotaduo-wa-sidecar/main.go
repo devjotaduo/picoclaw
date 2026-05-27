@@ -47,6 +47,12 @@ func main() {
 	if adminToken == "" {
 		log.Fatal("JOTADUO_WA_ADMIN_TOKEN is required (gates /pair + /qr endpoints)")
 	}
+	// Compose convention: tenant containers are named tenant-<id> on the
+	// saas_edge network, listening on 18800 (picoclaw-launcher default).
+	// Operators can override (e.g. for HA with reverse proxies) but the
+	// pattern MUST keep the "{id}" placeholder; the dispatcher refuses
+	// patterns without it to prevent cross-tenant delivery accidents.
+	tenantPattern := envOr("JOTADUO_WA_TENANT_URL_PATTERN", "http://tenant-{id}:18800")
 
 	if err := os.MkdirAll(*storeDir, 0o700); err != nil {
 		log.Fatalf("create store dir %s: %v", *storeDir, err)
@@ -65,6 +71,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("init whatsapp: %v", err)
 	}
+
+	// Wire inbound dispatch BEFORE Start so the very first event (which may
+	// arrive immediately if whatsmeow had unread messages queued from a prior
+	// session) gets routed instead of dropped.
+	dispatcher := jotaduowa.NewDispatcher(routing, secret, tenantPattern)
+	wa.SetInboundHandler(dispatcher.Dispatch)
+
 	if err := wa.Start(ctx); err != nil {
 		log.Fatalf("start whatsapp: %v", err)
 	}
