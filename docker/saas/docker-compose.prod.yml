@@ -157,6 +157,10 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=saas_edge"
       - "traefik.http.routers.jotaduo-wa-pair.rule=Host(`adm.${SAAS_BASE_DOMAIN}`) && PathPrefix(`/jotaduo-wa/`)"
+      # Priority must beat controlplane.rule (HostRegexp + 2 Hosts ORed
+      # = ~80 chars > our rule), otherwise Traefik routes /jotaduo-wa/*
+      # to the controlplane SPA and the operator's pairing UI 404s.
+      - "traefik.http.routers.jotaduo-wa-pair.priority=200"
       - "traefik.http.routers.jotaduo-wa-pair.entrypoints=websecure"
       - "traefik.http.routers.jotaduo-wa-pair.tls.certresolver=letsencrypt"
       - "traefik.http.routers.jotaduo-wa-pair.middlewares=jotaduo-wa-stripprefix@docker,security-headers@file"
