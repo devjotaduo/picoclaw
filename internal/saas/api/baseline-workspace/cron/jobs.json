@@ -174,6 +174,27 @@
       "createdAtMs": 1779451017252,
       "updatedAtMs": 1779451017252,
       "deleteAfterRun": false
+    },
+    {
+      "id": "onboarding-bridge-sofia-catarina",
+      "name": "Bridge Sofia → Catarina (auto-dispatch deepening)",
+      "enabled": true,
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/15 * * * *",
+        "tz": "America/Sao_Paulo"
+      },
+      "payload": {
+        "kind": "agent_turn",
+        "message": "[BRIDGE_CHECK] Você é a Catarina. Faça nesta ordem:\n\n1. Chame `skill onboarding-state` com `{\"action\":\"get\"}`. Leia o resultado.\n\n2. Se `phase` NÃO for `discovery_done` ou `deepening_in_progress`, responda apenas a string `SILENT_NOOP` e PARE imediatamente. Não escreva nada além.\n\n3. Se `deepening.first_contact_at` NÃO for null, responda `SILENT_NOOP` e PARE (você já começou — não duplique).\n\n4. Se chegou até aqui: o discovery acabou + você ainda não fez primeiro contato. Faça AGORA:\n   a. Chame `skill onboarding-state` com `{\"action\":\"mark_first_contact\"}` (idempotency marker — evita spam se o cron disparar de novo antes da sua msg sair).\n   b. Leia o dossiê em `memory/jotaduo/clientes/<slug>.md` pra ter contexto do nome do dono e segmento.\n   c. Escolha a 1ª área de aprofundamento conforme `skills/aprofundar-empresa/SKILL.md` (geralmente `equipe` se nada óbvio).\n   d. Chame `skill enviar-whatsapp-jotaduo` com `<whatsapp_do_dono> <mensagem_introducao>` — apresentação curta (Sofia já terminou, agora você vai aprofundar 10-15min/sessão), uma pergunta da área escolhida. NUNCA mande mais de uma pergunta.\n   e. Responda no chat apenas com confirmação concisa: `BRIDGE_DISPATCHED area=<área> phone=<telefone>` — o cron loga isso, ninguém vê.",
+        "channel": "cron",
+        "to": "onboarding-bridge-sofia-catarina",
+        "agent_id": "catarina"
+      },
+      "state": {},
+      "createdAtMs": 0,
+      "updatedAtMs": 0,
+      "deleteAfterRun": false
     }
   ]
 }

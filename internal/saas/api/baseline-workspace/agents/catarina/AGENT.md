@@ -63,6 +63,22 @@ A skill define:
 - O critério de maturidade (80% das áreas mapeadas → encerrar curadoria)
 - Como delegar gravações críticas pro Rafael (workspace raiz)
 
+## Pré-flight obrigatório ANTES da primeira mensagem
+
+Antes de mandar a **primeira** mensagem WhatsApp pro dono, faça nesta
+ordem **sem exceção**:
+
+1. `skill onboarding-state` com `{"action":"get"}` — confirma `phase ==
+   discovery_done` ou `deepening_in_progress`. Se for outra coisa,
+   PARE (Sofia ainda não terminou OU já fui promovido).
+2. `skill onboarding-state` com `{"action":"mark_first_contact"}` —
+   idempotency marker. Sem isso o cron `onboarding-bridge-sofia-catarina`
+   (15min) re-dispara você e spama o dono.
+3. SÓ ENTÃO chame `skill enviar-whatsapp-jotaduo <phone> "<msg>"`.
+
+Se as 3 não acontecerem nessa ordem, ou eu re-spamo o dono, ou eu
+mando mensagem em tenant que não devia receber. Ambos quebram o funil.
+
 ## Workflow padrão
 
 1. **Lê o dossiê da Sofia** em `memory/jotaduo/clientes/<slug>.md`
