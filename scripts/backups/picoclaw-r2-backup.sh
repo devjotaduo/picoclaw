@@ -96,6 +96,19 @@ if ! flock -n 9; then
   exit 0
 fi
 
+# Cleanup-on-exit trap (Sprint 1 followup, 2026-05-27): a prior run
+# that died mid-flight leaves a restic-side lock on the R2 repo,
+# which blocks retention + check on every subsequent run until manual
+# `restic unlock`. The local flock above handles "two scripts at once"
+# but not "previous script crashed". `restic unlock` only removes
+# stale locks owned by THIS host (safe to run unconditionally).
+# || true so a transient R2 hiccup at cleanup doesn't taint the exit
+# code of an otherwise-successful backup.
+cleanup_restic_lock() {
+  restic unlock --quiet 2>/dev/null || true
+}
+trap cleanup_restic_lock EXIT
+
 log "=== backup pass starting (paths=$BACKUP_PATHS host=$HOST_TAG) ==="
 
 # ── Postgres dump (audit P0 #3) ──────────────────────────────────────
@@ -192,3 +205,16 @@ if [ "$SIZE_MB" -gt 8192 ]; then
 fi
 
 log "=== backup pass complete ==="
+
+# Heartbeat file written at successful end of every pass. External
+# monitoring (Uptime Robot HTTP check on a tiny sidecar, or a cron
+# elsewhere that SSHs in and stats this file's mtime) can alert when
+# the file goes stale (> 26h means yesterday's daily backup didn't
+# run — could be timer disabled, postgres down, R2 outage, etc.).
+# Sprint 1 followup, 2026-05-27: the timer was silently disabled
+# between 23/05 and 27/05 with no alarm because nothing watched the
+# timer state. This file is the watchable artifact.
+HEARTBEAT_FILE="${PICOCLAW_BACKUP_HEARTBEAT:-/var/lib/picoclaw-pg-dumps/.last-backup-ok}"
+mkdir -p "$(dirname "$HEARTBEAT_FILE")"
+echo "$(date -Iseconds) snapshot_size_mb=${SIZE_MB}" > "$HEARTBEAT_FILE"
+chmod 0644 "$HEARTBEAT_FILE"
