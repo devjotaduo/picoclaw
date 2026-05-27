@@ -29,6 +29,8 @@ BROWSER_IMAGE="${PICOCLAW_BROWSER_SIDECAR_SOURCE_IMAGE:-ghcr.io/devjotaduo/picoc
 BROWSER_LOCAL_TAG="${PICOCLAW_BROWSER_SIDECAR_IMAGE:-picoclaw/browser-sidecar:latest}"
 OPENCRM_IMAGE="${PICOCLAW_OPENCRM_SOURCE_IMAGE:-ghcr.io/devjotaduo/picoclaw-opencrm:main}"
 OPENCRM_LOCAL_TAG="${PICOCLAW_OPENCRM_IMAGE:-picoclaw/opencrm:latest}"
+JOTADUO_WA_IMAGE="${PICOCLAW_JOTADUO_WA_SOURCE_IMAGE:-ghcr.io/devjotaduo/picoclaw-jotaduo-wa:main}"
+JOTADUO_WA_LOCAL_TAG="${PICOCLAW_JOTADUO_WA_IMAGE:-picoclaw/jotaduo-wa:latest}"
 
 DEFAULT_COMPOSE_FILE="/srv/saas/picoclaw/docker/saas/docker-compose.prod.yml"
 LEGACY_COMPOSE_FILE="/srv/saas/picoclaw/docker/saas/docker-compose.yml"
@@ -139,9 +141,22 @@ pull_and_tag "$CONTROLPLANE_IMAGE" "$CONTROLPLANE_LOCAL_TAG" "controlplane"
 pull_and_tag "$LAUNCHER_IMAGE" "$LAUNCHER_LOCAL_TAG" "launcher"
 pull_and_tag "$BROWSER_IMAGE" "$BROWSER_LOCAL_TAG" "browser-sidecar"
 pull_and_tag "$OPENCRM_IMAGE" "$OPENCRM_LOCAL_TAG" "opencrm"
+# jotaduo-wa pull is best-effort: the image existed only after PR #124
+# (release workflow added the build step). Pre-existing deploys without
+# the image on GHCR just skip; the recreate step will detect the missing
+# image and skip too.
+pull_and_tag "$JOTADUO_WA_IMAGE" "$JOTADUO_WA_LOCAL_TAG" "jotaduo-wa" || \
+  log "WARN: jotaduo-wa pull failed (image may not be published yet); continuing"
 
 recreate_if_changed "browser-sidecar" "browser-sidecar" "$BROWSER_LOCAL_TAG" "browser-sidecar"
 recreate_if_changed "opencrm" "opencrm" "$OPENCRM_LOCAL_TAG" "opencrm"
+# jotaduo-wa: only recreate when the image is locally present AND the
+# compose file declares the service. The compose check avoids triggering
+# on legacy compose-yml deployments that haven't been updated yet.
+if docker image inspect "$JOTADUO_WA_LOCAL_TAG" >/dev/null 2>&1 && \
+   grep -q "^  jotaduo-wa:" "$COMPOSE_FILE"; then
+  recreate_if_changed "jotaduo-wa" "jotaduo-wa" "$JOTADUO_WA_LOCAL_TAG" "jotaduo-wa"
+fi
 recreate_if_changed "$CONTROLPLANE_SERVICE" "$CONTAINER" "$CONTROLPLANE_LOCAL_TAG" "controlplane"
 
 # Give the healthcheck a moment, then report. We DON'T fail the deploy on
