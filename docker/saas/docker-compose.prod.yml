@@ -132,6 +132,37 @@ services:
       - saas_llm
       - saas_db
 
+  # Owns Jotaduo's institutional WhatsApp pairing. Public tenants call its
+  # internal HTTP API (HMAC-signed) so multiple tenants can send/receive on
+  # the same WA without each running their own whatsmeow client. See
+  # cmd/jotaduo-wa-sidecar/README.md for endpoints + the 5-fatia rollout.
+  #
+  # Operator pairs once via https://adm.${SAAS_BASE_DOMAIN}/jotaduo-wa/pair
+  # (admin-token gated). Pairing persists in /srv/picoclaw/jotaduo-wa.
+  jotaduo-wa:
+    image: ${PICOCLAW_JOTADUO_WA_IMAGE:-picoclaw/jotaduo-wa:latest}
+    container_name: jotaduo-wa
+    restart: unless-stopped
+    environment:
+      JOTADUO_WA_LISTEN: ":18810"
+      JOTADUO_WA_STORE_DIR: "/var/lib/jotaduo-wa"
+      JOTADUO_WA_HMAC_SECRET: ${JOTADUO_WA_HMAC_SECRET:-}
+      JOTADUO_WA_ADMIN_TOKEN: ${JOTADUO_WA_ADMIN_TOKEN:-}
+      JOTADUO_WA_TENANT_URL_PATTERN: ${JOTADUO_WA_TENANT_URL_PATTERN:-http://tenant-{id}:18800}
+    volumes:
+      - /srv/picoclaw/jotaduo-wa:/var/lib/jotaduo-wa
+    networks:
+      - saas_edge
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=saas_edge"
+      - "traefik.http.routers.jotaduo-wa-pair.rule=Host(`adm.${SAAS_BASE_DOMAIN}`) && PathPrefix(`/jotaduo-wa/`)"
+      - "traefik.http.routers.jotaduo-wa-pair.entrypoints=websecure"
+      - "traefik.http.routers.jotaduo-wa-pair.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.jotaduo-wa-pair.middlewares=jotaduo-wa-stripprefix@docker,security-headers@file"
+      - "traefik.http.middlewares.jotaduo-wa-stripprefix.stripprefix.prefixes=/jotaduo-wa"
+      - "traefik.http.services.jotaduo-wa.loadbalancer.server.port=18810"
+
   browser-sidecar:
     image: ${PICOCLAW_BROWSER_SIDECAR_IMAGE:-picoclaw/browser-sidecar:latest}
     container_name: browser-sidecar
@@ -219,6 +250,14 @@ services:
       SUPABASE_SITE_URL: ${SUPABASE_SITE_URL:-https://${SAAS_BASE_DOMAIN}}
       PICOCLAW_ONBOARDING_CALLBACK_SECRET: ${PICOCLAW_ONBOARDING_CALLBACK_SECRET:-}
       PICOCLAW_ONBOARDING_CALLBACK_URL: ${PICOCLAW_ONBOARDING_CALLBACK_URL:-}
+      # Same secret the jotaduo-wa sidecar reads as JOTADUO_WA_HMAC_SECRET —
+      # set ONCE in .env and both services pick it up. The provisioner uses
+      # this to inject JOTADUO_WA_URL+SECRET into public tenants so Catarina's
+      # `enviar-whatsapp-jotaduo` skill can sign requests. Cliente tenants
+      # don't receive the envs → skill fails fast post-promotion.
+      # Empty default keeps pre-sidecar deployments working unchanged.
+      PICOCLAW_JOTADUO_WA_URL: ${PICOCLAW_JOTADUO_WA_URL:-http://jotaduo-wa:18810}
+      PICOCLAW_JOTADUO_WA_HMAC_SECRET: ${JOTADUO_WA_HMAC_SECRET:-}
     volumes:
       - /srv/saas/tenants:/srv/saas/tenants
       - controlplane_data:/var/lib/picoclaw-saas

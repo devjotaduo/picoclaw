@@ -32,10 +32,13 @@ on:
       - "Makefile"
       - "scripts/copydir.go"
       - "docker/saas/Dockerfile"
+      - "docker/saas/Dockerfile.jotaduo-wa"
       - "docker/saas/docker-compose.prod.yml"
       - "docker/saas/opencrm/**"
       - "docker/Dockerfile.launcher"
       - "docker/Dockerfile.browser-sidecar"
+      - "cmd/jotaduo-wa-sidecar/**"
+      - "internal/jotaduowa/**"
       - ".github/workflows/release-controlplane.yml"
   # Manual rebuild for incident response or after fixing the Dockerfile.
   workflow_dispatch:
@@ -79,6 +82,7 @@ jobs:
           echo "launcher=${ns}/picoclaw-launcher:main,${ns}/picoclaw-launcher:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "browser=${ns}/picoclaw-browser-sidecar:main,${ns}/picoclaw-browser-sidecar:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "opencrm=${ns}/picoclaw-opencrm:main,${ns}/picoclaw-opencrm:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "jotaduo_wa=${ns}/picoclaw-jotaduo-wa:main,${ns}/picoclaw-jotaduo-wa:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push controlplane
         uses: docker/build-push-action@v7
@@ -126,4 +130,15 @@ jobs:
           tags: ${{ steps.tags.outputs.opencrm }}
           cache-from: type=gha,scope=opencrm
           cache-to: type=gha,mode=max,scope=opencrm
+          platforms: linux/amd64
+
+      - name: Build and push jotaduo-wa sidecar
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/saas/Dockerfile.jotaduo-wa
+          push: true
+          tags: ${{ steps.tags.outputs.jotaduo_wa }}
+          cache-from: type=gha,scope=jotaduo-wa
+          cache-to: type=gha,mode=max,scope=jotaduo-wa
           platforms: linux/amd64
