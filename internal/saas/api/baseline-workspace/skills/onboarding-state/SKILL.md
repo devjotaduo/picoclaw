@@ -124,6 +124,27 @@ Ver `references/state-schema.md` pro schema completo (campos, tipos, valores vá
 - **promotion.ready sem owner capturado** — script bloqueia: precisa do email pra promover.
 - **set_owner antes de init** — script auto-inicia. Não falha.
 
+## Ground-truth check em `memory/empresa.md`
+
+Marcar todas as 5 áreas como completas **não** é suficiente pra
+`promotion.ready=true`. O script também verifica se `memory/empresa.md`
+tem conteúdo real (não só o esqueleto do template). Critério:
+
+- O arquivo precisa existir.
+- Pelo menos 3 dos labels `Nome:`, `Segmento:`, `Descrição:` … têm
+  valor não-vazio depois dos dois pontos.
+- O valor não pode começar com `pendente` (marca de template).
+
+Se falhar, o `blocked_by` ganha `empresa_memory_empty: <motivo>` mesmo
+com discovery + owner + 5 áreas todos verdes. Isso garante que a
+promoção nunca leva um tenant onde os agentes operacionais (Clara,
+Marcos, …) inheritam uma memória vazia.
+
+Para um cliente simples sem necessidade de curadoria, o admin usa
+`mark_ready_for_promotion` (escape hatch) — mas mesmo nesse caso o
+ground-truth check roda. O admin é responsável por preencher o
+empresa.md manualmente antes ou aceitar o bloqueio.
+
 ## Sequência típica
 
 ```
