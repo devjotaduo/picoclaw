@@ -8,6 +8,7 @@ import * as React from "react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
+import { useUIVisibility } from "@/hooks/use-ui-visibility"
 import { cn } from "@/lib/utils"
 import {
   TOUR_STEP_ORDER,
@@ -33,6 +34,13 @@ export function TourGuide() {
   const [, setCurrentStep] = useAtom(tourCurrentStepAtom)
   const [, setIsActive] = useAtom(tourIsActiveAtom)
   const { goToNextStep, goToPrevStep } = useTourActions()
+  // Suppress the entire tour in public tenants. The tour walks operators
+  // through Models / Agents / Readiness nav — none of which exists for
+  // anonymous visitors going through Sofia discovery. Showing
+  // "Cadastro incompleto" + a navigation tour to a visitor breaks the
+  // funnel before the first discovery question.
+  const { profile } = useUIVisibility()
+  const isPublicTenant = profile === "public"
 
   const steps = React.useMemo<Record<TourStep, TourStepConfig>>(
     () => ({
@@ -98,6 +106,7 @@ export function TourGuide() {
   ])
 
   if (
+    isPublicTenant ||
     !tourState.isActive ||
     tourState.currentStep === "completed" ||
     !isStepAvailable(tourState.currentStep)

@@ -19,6 +19,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useEffect, useState } from "react"
 
 import { getLauncherPolicy } from "@/api/launcher-policy"
+import { useUIVisibility } from "@/hooks/use-ui-visibility"
 
 const DISMISS_KEY = "picoclaw.onboarding-banner.dismissed-at"
 const DISMISS_TTL_MS = 24 * 60 * 60 * 1000 // 24h
@@ -64,6 +65,14 @@ export function OnboardingBanner() {
     refetchInterval: 60_000, // re-check every minute pra esconder rápido quando completar
   })
 
+  // Hide entirely in public tenants — the visitor IS the lead that's about
+  // to be onboarded by Sofia. They're not the operator of a half-onboarded
+  // business; the "Cadastro incompleto" framing confuses anonymous visitors
+  // who never agreed to onboard anything yet. Sofia's discovery flow is the
+  // onboarding here, not a banner on top of the chat.
+  const { profile } = useUIVisibility(policy)
+  const isPublicTenant = profile === "public"
+
   const incomplete = policy?.onboarding?.incomplete === true
   const pending = policy?.onboarding?.pending ?? []
 
@@ -73,7 +82,7 @@ export function OnboardingBanner() {
     if (!incomplete) clearDismissed()
   }, [incomplete])
 
-  if (!incomplete || dismissed) return null
+  if (isPublicTenant || !incomplete || dismissed) return null
 
   const handleDismiss = () => {
     setDismissed()

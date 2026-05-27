@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next"
 
 import type { AgentSummary } from "@/api/internal-agents"
 import type { LauncherQuickTask } from "@/api/launcher-policy"
+import type { UIVisibilityProfile } from "@/api/ui-visibility"
 import { AIOrbAvatar, type AuraPalette } from "@/components/chat/ai-orb-avatar"
 import { Button } from "@/components/ui/button"
 
@@ -35,6 +36,17 @@ const AGENT_INTRO_BY_KEY: Record<string, string> = {
   humano: "Chamo uma pessoa quando precisa.",
 }
 
+// Sofia is the discovery agent that owns the entire public-tenant chat
+// surface (see docs/architecture/public-tenant-promotion.md). The provisioner
+// already swaps workspace/AGENT.md to Sofia mode for IsPublic tenants (see
+// internal/saas/tenant/workspace.go::ApplyPublicSofiaAgentMD), but the
+// frontend empty state separately reads agent.name/id from the agents API,
+// which still surfaces "Rafael" (front-line of the cliente team). Forcing
+// Sofia branding in the public-tenant empty state keeps the visible voice
+// consistent with the actual LLM persona that responds.
+const PUBLIC_TENANT_FORCED_NAME = "Sofia"
+const PUBLIC_TENANT_FORCED_INTRO = AGENT_INTRO_BY_KEY.sofia
+
 interface ChatEmptyStateProps {
   hasAvailableModels: boolean
   defaultModelName: string
@@ -48,6 +60,9 @@ interface ChatEmptyStateProps {
   quickTasks?: LauncherQuickTask[]
   disabled?: boolean
   onQuickTask?: (prompt: string) => void
+  // activeProfile drives public-tenant overrides: when "public", agent
+  // name + intro are forced to Sofia regardless of what `agent` reports.
+  activeProfile?: UIVisibilityProfile | null
 }
 
 function normalizeAgentLookup(value: string): string {
@@ -125,6 +140,7 @@ export function ChatEmptyState({
   quickTasks,
   disabled,
   onQuickTask,
+  activeProfile,
 }: ChatEmptyStateProps) {
   const { t } = useTranslation()
 
@@ -187,11 +203,19 @@ export function ChatEmptyState({
     )
   }
 
-  const agentName = (displayName || agent?.name || agent?.id || "").trim()
+  const isPublicTenant = activeProfile === "public"
+  // Public tenants: ignore whatever the agent registry reports (typically
+  // Rafael as the first agents.list entry) and brand the empty state as
+  // Sofia, who is the actual LLM persona doing discovery.
+  const agentName = isPublicTenant
+    ? PUBLIC_TENANT_FORCED_NAME
+    : (displayName || agent?.name || agent?.id || "").trim()
   const heading = agentName
     ? t("chat.welcomeWithAgent", { name: agentName })
     : t("chat.welcome")
-  const agentDescription = displayDescription?.trim() || agentIntro(agent, t)
+  const agentDescription = isPublicTenant
+    ? PUBLIC_TENANT_FORCED_INTRO
+    : displayDescription?.trim() || agentIntro(agent, t)
   const description = (agentDescription ||
     (chatIntro && chatIntro.length > 0
       ? chatIntro
