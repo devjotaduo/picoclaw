@@ -713,31 +713,39 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 		}
 	}
 
-	// claude CLI provider — share the operator's Claude OAuth credentials
-	// across all tenants. The host directory (default
-	// /etc/picoclaw/claude-auth) holds a `claude` CLI's $HOME/.claude
-	// subtree populated by the operator running `claude /login` once.
-	// Mounted read-only so the launcher process inside the tenant cannot
-	// rotate / leak credentials — refresh tokens go via the operator's
-	// re-login on the host.
+	// Shared CLI provider auth dirs — bind-mount the operator's OAuth
+	// credentials read-only into every tenant. Tenants configured with
+	// provider="claude-cli" / "codex-cli" then call the bundled binary
+	// inside the container without per-tenant authentication.
 	//
-	// Skip silently when:
-	//   - PICOCLAW_TENANT_CLAUDE_CLI_AUTH_DIR is empty (operator not opted in)
-	//   - The directory doesn't exist (no auth yet — `claude /login` not run)
+	// Mounted read-only so a compromised tenant cannot rotate / exfil
+	// the operator's tokens — refresh happens on the host.
 	//
-	// This decouples the deploy from the auth setup: image bumps land fine
-	// without the operator step; the moment the operator creates the dir
-	// and re-provisions a tenant, every new tenant inherits the auth.
-	if dir := strings.TrimSpace(p.Cfg.TenantClaudeCliAuthDir); dir != "" {
+	// Skip silently when env unset OR dir missing OR not a directory.
+	// Decouples the deploy from the auth setup: image bumps land fine
+	// without the operator step; the moment the operator creates the
+	// dir + writes credentials, every new tenant inherits the auth.
+	for _, mount := range []struct {
+		dir    string
+		target string
+		label  string
+	}{
+		{p.Cfg.TenantClaudeCliAuthDir, "/root/.claude", "claude-cli"},
+		{p.Cfg.TenantCodexCliAuthDir, "/root/.codex", "codex-cli"},
+	} {
+		dir := strings.TrimSpace(mount.dir)
+		if dir == "" {
+			continue
+		}
 		if info, err := os.Stat(dir); err == nil && info.IsDir() {
 			spec.ExtraMounts = append(spec.ExtraMounts, ContainerMount{
 				Source:   dir,
-				Target:   "/root/.claude",
+				Target:   mount.target,
 				ReadOnly: true,
 			})
 		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-			log.Printf("WARN: provisioner: tenant %s claude-cli auth dir %s: %v (skipping mount)",
-				t.ID, dir, err)
+			log.Printf("WARN: provisioner: tenant %s %s auth dir %s: %v (skipping mount)",
+				t.ID, mount.label, dir, err)
 		}
 	}
 

@@ -155,6 +155,16 @@ padrão** no backup R2 diário (`scripts/backups/picoclaw-r2-backup.sh` —
 feature). Perda do dir = restore via restic OU re-upload do
 `.credentials.json` local do operador (o atalho acima).
 
+## Fallback pra codex-cli quando claude rate-limita
+
+Subscription Max tem limite mensal. Quando bate, todos tenants
+claude-cli começam a falhar. Pra mitigar: configure `fallbacks:
+["codex-fallback"]` no `model_list` entry primário + adicione uma
+entry `codex-fallback` apontando pro codex CLI. O Picoclaw tem
+fallback chain nativo (`pkg/providers/fallback.go`) que retenta
+automaticamente sem intervenção. Setup completo:
+[codex-cli-provider.md](codex-cli-provider.md).
+
 ## Por que read-only
 
 Se o mount fosse read-write, um tenant comprometido poderia:
