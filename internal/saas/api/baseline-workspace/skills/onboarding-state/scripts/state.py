@@ -102,8 +102,49 @@ def save_state(path: Path, state: dict) -> None:
     )
 
 
-def recompute_phase_and_blockers(state: dict) -> None:
-    """Recalcula state.phase e state.promotion.blocked_by depois de qualquer mutação."""
+def empresa_memory_filled(workspace_root: Path) -> tuple[bool, str]:
+    """Ground-truth check for audit P0 #6: memory/empresa.md must contain
+    real curadoria content before promotion, not just the template
+    skeleton. Catarina (or Sofia, in discovery) can mark all the state-
+    machine flags green without ever writing to the file — if that
+    happens, the new tenant's roster agents inherit an empty empresa.md
+    and have nothing to ground their answers on.
+
+    Threshold: at least 3 colon-labels (Nome:, Segmento:, Descrição: …)
+    have a non-empty value AND the value is not "pendente de validação"
+    (the template default). Returns (is_filled, reason_if_not).
+    """
+    empresa_path = workspace_root / "memory" / "empresa.md"
+    if not empresa_path.is_file():
+        return False, "memory/empresa.md does not exist"
+    try:
+        text = empresa_path.read_text(encoding="utf-8")
+    except OSError as e:
+        return False, f"memory/empresa.md unreadable: {e}"
+
+    filled = 0
+    for line in text.splitlines():
+        m = re.match(r"^[A-Za-zÀ-ÿ][^:#]*:\s*(.+?)\s*$", line)
+        if not m:
+            continue
+        value = m.group(1).strip()
+        if not value or value.lower().startswith("pendente"):
+            continue
+        filled += 1
+
+    if filled < 3:
+        return False, f"memory/empresa.md has only {filled} filled field(s) (min 3)"
+    return True, ""
+
+
+def recompute_phase_and_blockers(state: dict, workspace_root: Path | None = None) -> None:
+    """Recalcula state.phase e state.promotion.blocked_by depois de qualquer mutação.
+
+    workspace_root: passed by main() so we can do a ground-truth filesystem
+    check on memory/empresa.md (audit P0 #6). When None (legacy callers
+    that import this module without a workspace), the empresa.md check is
+    skipped — the state-machine-only blockers still run.
+    """
     blocked: list[str] = []
 
     if state["discovery"]["completed_at"] is None:
@@ -117,6 +158,11 @@ def recompute_phase_and_blockers(state: dict) -> None:
     if not required.issubset(covered):
         missing = sorted(required - covered)
         blocked.append(f"deepening_incomplete: {','.join(missing)}")
+
+    if workspace_root is not None:
+        filled, reason = empresa_memory_filled(workspace_root)
+        if not filled:
+            blocked.append(f"empresa_memory_empty: {reason}")
 
     state["promotion"]["blocked_by"] = blocked
     state["promotion"]["ready"] = (
@@ -270,7 +316,7 @@ def main() -> int:
     state_path = workspace_root / "state" / "onboarding.json"
     state = load_state(state_path)
     state = OPERATIONS[action](state, payload)
-    recompute_phase_and_blockers(state)
+    recompute_phase_and_blockers(state, workspace_root)
     save_state(state_path, state)
     json.dump(state, sys.stdout, indent=2, ensure_ascii=False)
     sys.stdout.write("\n")
