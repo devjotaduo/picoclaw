@@ -20,7 +20,12 @@ RUN pnpm build:backend
 # ============================================================
 FROM golang:1.25-alpine AS builder
 
-RUN apk add --no-cache git make
+# python3 is needed by `make build` → `make generate` → `go generate ./...`,
+# which fires the //go:generate directive in internal/saas/api/workspaces_
+# bootstrap.go (scripts/sync-baseline-workspace.py). Even though the launcher
+# binary itself doesn't ship that embed, `go generate ./...` walks the whole
+# tree and fails the build if the script isn't runnable.
+RUN apk add --no-cache git make python3
 
 WORKDIR /src
 
