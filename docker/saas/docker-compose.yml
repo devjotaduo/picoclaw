@@ -213,6 +213,9 @@ services:
       # Pairing UI is only reachable through the admin host. Path-prefix is
       # stripped so the in-binary handler sees /pair instead of /jotaduo-wa/pair.
       - "traefik.http.routers.jotaduo-wa-pair.rule=Host(`adm.${SAAS_BASE_DOMAIN}`) && PathPrefix(`/jotaduo-wa/`)"
+      # Priority must beat controlplane.rule (HostRegexp + 2 Hosts ORed)
+      # otherwise Traefik routes /jotaduo-wa/* to the controlplane SPA.
+      - "traefik.http.routers.jotaduo-wa-pair.priority=200"
       - "traefik.http.routers.jotaduo-wa-pair.entrypoints=websecure"
       - "traefik.http.routers.jotaduo-wa-pair.tls.certresolver=letsencrypt"
       - "traefik.http.routers.jotaduo-wa-pair.middlewares=jotaduo-wa-stripprefix@docker,security-headers@file"
