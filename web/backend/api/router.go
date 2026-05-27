@@ -110,6 +110,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// after Sofia/Catarina and after admin promotion.
 	h.registerOnboardingStateRoutes(mux)
 
+	// Guided company profile form backed by workspace Markdown memory/config.
+	h.registerCompanyProfileRoutes(mux)
+
 	// Aggregated operational dashboard for agent results, analyses, tasks,
 	// metrics, reports, and file-based dashboard publications.
 	h.registerAgentDashboardRoutes(mux)
