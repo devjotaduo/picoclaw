@@ -357,6 +357,14 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 	}
 	h.auditTenantOp(r, t.ID, auditAction)
 
+	// Stash the generated password for one-shot re-display via
+	// GET /tenants/{id}/promote/recent-password within promotedPasswordTTL.
+	// Lifeline for an admin who closed the response dialog before copying
+	// (audit P1 #23).
+	if h.PromotedPasswords != nil {
+		h.PromotedPasswords.Store(t.ID, password)
+	}
+
 	resp := map[string]any{
 		"tenant_id":        t.ID,
 		"url":              tenantURL(h.Cfg, t.Subdomain),
@@ -376,6 +384,41 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 // errEmptyBody is what we expect from json.Decoder on an empty body.
 // Used so an empty {} doesn't trip the "invalid json" branch.
 var errEmptyBody = errors.New("EOF")
+
+// handleRecentPromotedPassword serves GET /api/v1/tenants/{id}/promote/recent-password.
+// One-shot: a successful read CONSUMES the cached password — subsequent
+// reads return 404. Lost on controlplane restart by design (in-memory).
+// Audit P1 #23 (2026-05-27): admin who closed the promote dialog
+// without copying can recover the SAME password without rotating,
+// keeping it consistent with what the owner received by email.
+//
+// When the cache miss (TTL elapsed, restart, never promoted, or already
+// consumed), the response hints at the rotation fallback path.
+func (h *Handler) handleRecentPromotedPassword(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "tenant id é obrigatório")
+		return
+	}
+	if h.PromotedPasswords == nil {
+		writeError(w, http.StatusServiceUnavailable, "promoted password cache not initialized")
+		return
+	}
+	password, ok := h.PromotedPasswords.ConsumeOnce(id)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{
+			"error": "senha gerada não disponível (TTL expirado, controlplane reiniciado, ou já consumida)",
+			"hint":  "use POST /api/v1/tenants/" + id + "/resend-credentials pra rotacionar + reenviar via email",
+		})
+		return
+	}
+	h.auditTenantOp(r, id, "tenant.promote.password.redisplay")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"tenant_id":        id,
+		"initial_password": password,
+		"info":             "Senha de promoção recuperada (one-shot). Próxima leitura retorna 404.",
+	})
+}
 
 // handleGetTenantOnboardingState exposes workspace/state/onboarding.json
 // as JSON so the admin panel can render the current phase + pre-fill the
