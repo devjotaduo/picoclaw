@@ -55,24 +55,24 @@ func (r *RouteResolver) ResolveRoute(inbound bus.InboundContext) ResolvedRoute {
 	view := buildDispatchView(inbound, identityLinks)
 
 	if rule := r.matchDispatchRule(view); rule != nil {
-		// Default-agent override: quando há override ativo (ex: onboarding
-		// incompleto → Sofia), TODAS as rules que resolvem para agentes de
-		// atendimento são redirecionadas pro override. Motivo: nenhum
-		// agente externo (main/Rafael, marketing/Maya, vendas/Leo,
-		// clara/marcos/camila) consegue atender clientes sem o cadastro
-		// da empresa preenchido — só Sofia conduz o onboarding.
+		// Default-agent override: aplica APENAS quando a rule resolveu pro
+		// agent default do config (i.e., a rule disse "use o default"). Se
+		// a rule nomeou explicitamente outro agente (ex: clara, marcos),
+		// preserva — uma rule explícita é uma decisão deliberada do
+		// operador que o onboarding-override NÃO deve sobrescrever.
 		//
 		// Exceções (sem redirect):
 		//   1. A própria agente do override (anti-ciclo).
-		//   2. [FUTURO] Rules marcadas como técnicas/operador (dev, doc,
-		//      pixel). Quando esses agentes aparecerem em algum tenant,
-		//      adicionar flag `AgentConfig.SkipOnboardingOverride bool`
-		//      ou uma whitelist consultada aqui.
+		//   2. Rules que nomeiam explicitamente um agente diferente do
+		//      config-default (decisão do operador via dispatch rule).
+		//   3. [FUTURO] Flag `AgentConfig.SkipOnboardingOverride bool`
+		//      pra agentes técnicos/operador (dev, doc, pixel).
 		agentID := r.pickAgentID(rule.Agent)
 		if r.defaultOverride != nil {
 			if override := strings.TrimSpace(r.defaultOverride()); override != "" {
 				normalizedOverride := NormalizeAgentID(override)
-				if agentID != normalizedOverride {
+				configDefault := r.resolveConfigDefaultAgentID()
+				if agentID != normalizedOverride && agentID == configDefault {
 					for _, a := range r.cfg.Agents.List {
 						if a.IsEnabled() && NormalizeAgentID(a.ID) == normalizedOverride {
 							agentID = normalizedOverride
