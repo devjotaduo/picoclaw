@@ -107,6 +107,20 @@ type Config struct {
 	// (skill will refuse to run with a clear error).
 	BrowserCDPURL string
 
+	// TenantClaudeCliAuthDir is the host directory holding the operator's
+	// claude CLI OAuth state ($HOME/.claude subtree populated by running
+	// `claude /login` once on the host). When set AND the directory exists,
+	// the provisioner bind-mounts it read-only into every tenant container
+	// at /root/.claude so workspaces configured with provider="claude-cli"
+	// can call the bundled `claude` binary without per-tenant auth.
+	//
+	// Default empty = feature disabled (no mount, no leak risk). Operator
+	// opts in by setting the env var AND running `claude /login` once
+	// under HOME=$THIS_DIR. Subsequent token refresh is the host's
+	// responsibility — the mount is read-only so the tenant can't rotate.
+	// See docs/operations/claude-cli-provider.md for setup.
+	TenantClaudeCliAuthDir string
+
 	// Supabase Auth — used as the source of truth for tenant dashboard logins
 	// when tenant.auth_backend = 'supabase'. The controlplane verifies the
 	// JWT and continues signing trusted_gateway HMAC headers to the launcher.
@@ -220,6 +234,8 @@ func Load() (*Config, error) {
 
 	c.JotaduoWAURL = envOr("PICOCLAW_JOTADUO_WA_URL", "http://jotaduo-wa:18810")
 	c.JotaduoWAHMACSecret = os.Getenv("PICOCLAW_JOTADUO_WA_HMAC_SECRET")
+
+	c.TenantClaudeCliAuthDir = os.Getenv("PICOCLAW_TENANT_CLAUDE_CLI_AUTH_DIR")
 
 	if c.PGDSN == "" {
 		return nil, fmt.Errorf("PG_DSN is required")

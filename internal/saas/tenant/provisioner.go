@@ -713,5 +713,33 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 		}
 	}
 
+	// claude CLI provider — share the operator's Claude OAuth credentials
+	// across all tenants. The host directory (default
+	// /etc/picoclaw/claude-auth) holds a `claude` CLI's $HOME/.claude
+	// subtree populated by the operator running `claude /login` once.
+	// Mounted read-only so the launcher process inside the tenant cannot
+	// rotate / leak credentials — refresh tokens go via the operator's
+	// re-login on the host.
+	//
+	// Skip silently when:
+	//   - PICOCLAW_TENANT_CLAUDE_CLI_AUTH_DIR is empty (operator not opted in)
+	//   - The directory doesn't exist (no auth yet — `claude /login` not run)
+	//
+	// This decouples the deploy from the auth setup: image bumps land fine
+	// without the operator step; the moment the operator creates the dir
+	// and re-provisions a tenant, every new tenant inherits the auth.
+	if dir := strings.TrimSpace(p.Cfg.TenantClaudeCliAuthDir); dir != "" {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			spec.ExtraMounts = append(spec.ExtraMounts, ContainerMount{
+				Source:   dir,
+				Target:   "/root/.claude",
+				ReadOnly: true,
+			})
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			log.Printf("WARN: provisioner: tenant %s claude-cli auth dir %s: %v (skipping mount)",
+				t.ID, dir, err)
+		}
+	}
+
 	return spec, nil
 }

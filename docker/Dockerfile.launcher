@@ -78,7 +78,14 @@ RUN apk add --no-cache \
   tmux \
   tzdata \
   && npm install -g --omit=optional agent-browser \
+  && npm install -g --omit=optional @anthropic-ai/claude-code \
   && npm cache clean --force
+
+# claude CLI uses OAuth credentials under $HOME/.claude. The provisioner
+# bind-mounts a shared host directory (PICOCLAW_CLAUDE_CLI_AUTH_DIR, default
+# /etc/picoclaw/claude-auth) read-only into /root/.claude for tenants
+# configured with provider="claude-cli" — see internal/saas/tenant/
+# provisioner.go::buildSpec and docs/operations/claude-cli-provider.md.
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -q --spider http://127.0.0.1:18800/ || exit 1

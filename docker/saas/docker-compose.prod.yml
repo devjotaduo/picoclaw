@@ -262,10 +262,24 @@ services:
       # Empty default keeps pre-sidecar deployments working unchanged.
       PICOCLAW_JOTADUO_WA_URL: ${PICOCLAW_JOTADUO_WA_URL:-http://jotaduo-wa:18810}
       PICOCLAW_JOTADUO_WA_HMAC_SECRET: ${JOTADUO_WA_HMAC_SECRET:-}
+      # Host directory holding the operator's claude CLI OAuth state.
+      # When set AND the directory exists, the provisioner bind-mounts
+      # it read-only into every tenant container at /root/.claude so
+      # workspaces configured with provider="claude-cli" can call the
+      # bundled `claude` binary without per-tenant auth. Empty default
+      # = feature disabled. See docs/operations/claude-cli-provider.md.
+      PICOCLAW_TENANT_CLAUDE_CLI_AUTH_DIR: ${PICOCLAW_TENANT_CLAUDE_CLI_AUTH_DIR:-}
     volumes:
       - /srv/saas/tenants:/srv/saas/tenants
       - controlplane_data:/var/lib/picoclaw-saas
       - /srv/picoclaw-workspaces:/srv/picoclaw-workspaces
+      # Pass-through bind so the provisioner can os.Stat the claude-cli
+      # auth dir before adding the mount to a tenant spec. Mount itself is
+      # the docker daemon's job (uses host paths) but the controlplane
+      # needs to SEE the host path to decide whether to attach it. Empty/
+      # missing → provisioner skips silently. Read-only here too — only
+      # the host operator (running `claude /login`) should rotate tokens.
+      - /etc/picoclaw/claude-auth:/etc/picoclaw/claude-auth:ro
       # NOTE: a landing page de jotaduo.com (apex) é BAKEADA na imagem
       # do controlplane em /var/lib/picoclaw-landing/ — ver Dockerfile
       # stage 1b. Toda push em web/landing/ entra em produção via CI/CD
