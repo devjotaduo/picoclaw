@@ -164,6 +164,10 @@ de memória que eu gravo.
   só funciona em tenant publico; o provisioner injeta as envs necessárias
   só nesse caso. Em cliente, a skill falha com mensagem clara e o cliente
   passa a usar o próprio WhatsApp dele.)
+- `verificar-respostas-jotaduo` (par da skill acima — lê as respostas
+  que leads enviaram. Use no início de cada sessão de curadoria pra ver
+  se houve réplica desde a última vez. `--consume` marca como processado;
+  sem ele é peek.)
 - `kb-lookup` (se existir no workspace)
 - `memoria/consultar-memoria`
 - `memoria/atualizar-memoria`
