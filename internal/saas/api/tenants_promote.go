@@ -236,10 +236,24 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 7: Mark state.json promoted (direct file write — container is
-	// about to recreate, can't exec a skill in it right now).
+	// Step 7: Mark state.json promoted. Prefer `docker exec` into the
+	// running container so the Python recompute (+ fcntl.flock) actually
+	// runs (audit P1 #11). Falls back to direct file write if docker exec
+	// fails — at this point in the flow the container should be up, but
+	// we don't want a transient docker error to leave the state stale
+	// since the DB is already promoted. The Go direct-write path bypasses
+	// recompute but at least sets promoted_at/by/phase so subsequent
+	// readers see the promotion happened.
 	if state != nil {
-		markPromotedInState(t.VolumePath, actorEmailFromCtx(r.Context()))
+		actor := actorEmailFromCtx(r.Context())
+		if err := tenant.MarkOnboardingPromoted(r.Context(), t.ID, actor); err != nil {
+			log.Printf(
+				"promote %s: MarkOnboardingPromoted via skill failed, falling back to direct write: %v",
+				t.ID,
+				err,
+			)
+			markPromotedInState(t.VolumePath, actor)
+		}
 	}
 
 	// Step 7.5: Revoke the tenant's routes in the jotaduo-wa sidecar so a
