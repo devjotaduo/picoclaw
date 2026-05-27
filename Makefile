@@ -1,5 +1,5 @@
 .PHONY: all build install uninstall clean help test cover build-all lint-docs \
-	build-whatsapp-native-local
+	build-whatsapp-native-local build-jotaduo-wa-sidecar
 
 # Build variables
 BINARY_NAME=picoclaw
@@ -236,6 +236,18 @@ endif
 
 build-launcher-frontend:
 	@$(MAKE) -C web build-frontend
+
+## build-jotaduo-wa-sidecar: Build the jotaduo-wa-sidecar binary (whatsmeow + HTTP API for shared WA across public tenants)
+build-jotaduo-wa-sidecar:
+	@echo "Building jotaduo-wa-sidecar for $(PLATFORM)/$(ARCH)..."
+ifeq ($(OS),Windows_NT)
+	@$(POWERSHELL) "New-Item -ItemType Directory -Force -Path '$(BUILD_DIR)' | Out-Null"
+	@$(GO) build -tags $(GO_BUILD_TAGS),whatsapp_native -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/jotaduo-wa-sidecar$(EXT) ./cmd/jotaduo-wa-sidecar
+else
+	@mkdir -p $(BUILD_DIR)
+	@GOOS=$(PLATFORM) GOARCH=$(ARCH) $(GO) build -tags $(GO_BUILD_TAGS),whatsapp_native -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/jotaduo-wa-sidecar$(EXT) ./cmd/jotaduo-wa-sidecar
+endif
+	@echo "Build complete: $(BUILD_DIR)/jotaduo-wa-sidecar$(EXT)"
 
 ## build-whatsapp-native-local: Build current platform with WhatsApp native (whatsmeow) support
 build-whatsapp-native-local: generate
