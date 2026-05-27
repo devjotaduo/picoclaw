@@ -42,18 +42,40 @@ Isso resolve dois problemas em um:
 
 ## Estado da implementação (2026-05-27)
 
-Status atual (5 fatias):
+Status atual:
 
-| Fatia | Status | PR |
+| Item | Status | PR |
 |---|---|---|
-| 1+2 — state machine + Sofia/Catarina | ✅ mergeada | #113 |
-| 3 — `POST /tenants/{id}/promote` backend | ✅ mergeada | #114 |
-| 4 — UI admin (PromoteTenantCard) | ✅ mergeada | #115 |
-| 5 — bridge automático Sofia→Catarina | 🟡 planejada | — |
+| state machine + Sofia/Catarina | ✅ mergeada | #113 |
+| `POST /tenants/{id}/promote` backend | ✅ mergeada | #114 |
+| UI admin (PromoteTenantCard) | ✅ mergeada | #115 |
+| jotaduo-wa sidecar (5 fatias + 2 follow-ups) | ✅ deployado em prod | #118-#126 |
+| bridge automático Sofia→Catarina | 🟡 planejada | — |
 
-Fluxo end-to-end funciona manualmente. Fatia 5 (auto-bridge) é opcional;
-hoje quem dispara Catarina é Rafael via notify_user, ou admin via
-WhatsApp manual.
+Fluxo end-to-end funciona manualmente e via WhatsApp institucional. A
+bridge automática Sofia→Catarina (que Catarina mande a 1ª mensagem
+sozinha quando Sofia conclui discovery) ainda é opcional; hoje quem
+dispara Catarina é Rafael via notify_user, ou admin via comando manual.
+
+### Como Catarina alcança o lead (sidecar jotaduo-wa)
+
+Catarina não tem WhatsApp próprio dentro do tenant — ela usa o
+**WhatsApp institucional da Jotaduo** via um sidecar dedicado
+(`docker compose service jotaduo-wa`). Deep dive técnico:
+[jotaduo-wa-sidecar.md](jotaduo-wa-sidecar.md).
+
+Resumo:
+- Sidecar é o único processo com o pareamento whatsmeow (operador
+  escaneia QR uma vez em `https://adm.<base>/jotaduo-wa/pair?token=...`)
+- Tenant publico recebe `JOTADUO_WA_URL` + `JOTADUO_WA_HMAC_SECRET`
+  injetados pelo provisioner. Skill `enviar-whatsapp-jotaduo` POSTa no
+  sidecar.
+- Respostas do lead voltam via webhook `/api/launcher/jotaduo-wa-inbound`
+  e são appendadas em `workspace/state/jotaduo-wa-inbox.jsonl` —
+  Catarina lê com `verificar-respostas-jotaduo --consume`.
+- Na promoção, `/promote` revoga a routing no sidecar E o `Recreate`
+  retira `JOTADUO_WA_HMAC_SECRET` do container do cliente. Defesa em
+  duas camadas — cliente promovido perde acesso ao número institucional.
 
 ## A jornada — diagrama da feature
 

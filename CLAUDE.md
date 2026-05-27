@@ -32,11 +32,20 @@ Componentes envolvidos (visão rápida, deep dive no doc):
 - `workspace/skills/onboarding-state/` — state machine (skill)
 - `workspace/agents/sofia/` + `workspace/skills/jotaduo-discovery/` — discovery
 - `workspace/agents/catarina/` + `workspace/skills/aprofundar-empresa/` — deepening
-- `internal/saas/api/tenants_promote.go` — endpoint `/promote` (10 steps)
+- `cmd/jotaduo-wa-sidecar/` + `internal/jotaduowa/` — sidecar que dona o
+  WhatsApp institucional da Jotaduo (Catarina manda outbound via HTTP HMAC;
+  inbound volta via webhook → `workspace/state/jotaduo-wa-inbox.jsonl`).
+  Deep dive: [docs/architecture/jotaduo-wa-sidecar.md](docs/architecture/jotaduo-wa-sidecar.md).
+- `workspace/skills/enviar-whatsapp-jotaduo/` (Catarina envia) +
+  `workspace/skills/verificar-respostas-jotaduo/` (Catarina lê respostas)
+- `internal/saas/api/tenants_promote.go` — endpoint `/promote` (10 steps,
+  inclui revoke de routing no sidecar antes do Recreate)
 - `internal/saas/store/tenants.go::Promote` — DB UPDATE atômica
 - `web/saas-admin/src/components/tenant/promote-tenant-card.tsx` — UI admin
 - `web/backend/api/launcher_ui_visibility.go` — endpoint que serve o
   `ui-visibility.json` per-tenant pro SPA renderizar o profile correto
+- `web/backend/api/jotaduo_wa_inbound.go` — endpoint que recebe webhook do
+  sidecar e appende em `workspace/state/jotaduo-wa-inbox.jsonl`
 
 **⚠️ Mexeu em `workspace/`? Rode `make sync-baseline` antes de commitar.**
 O `internal/saas/api/baseline-workspace/` é auto-gerado pelo script
@@ -79,11 +88,39 @@ cd web/frontend && pnpm build:backend  # builds + copies dist into web/backend/d
 
 Deploy: production deploys flow strictly through GitHub Actions. Push to
 `main` → `.github/workflows/release-controlplane.yml` builds and pushes
-4 images to GHCR (controlplane, launcher, browser-sidecar, opencrm) →
+5 images to GHCR (controlplane, launcher, browser-sidecar, opencrm,
+jotaduo-wa) →
 the VPS `picoclaw-deploy.timer` polls every 2 min and recreates only
 services whose image ID changed. There is no supported path to ship
 code to the prod VPS that bypasses this pipeline — do not `scp`/`rsync`
 binaries onto the box and do not run `go build`/`pnpm build` there.
+
+**Deploy gotchas (aprendidos na marra, 2026-05-27):**
+
+1. **`docker/Dockerfile.launcher` precisa de `python3` no builder.** O
+   `make build` chama `make generate` → `go generate ./...` que dispara
+   o `//go:generate python3 scripts/sync-baseline-workspace.py` em
+   `internal/saas/api/workspaces_bootstrap.go`. `go generate ./...` anda
+   na árvore toda independente do binary que tá buildando, então ELE
+   roda no build do launcher também (não só do controlplane). Sem
+   python3 instalado, **todo release-controlplane.yml falha em
+   cascata** — opencrm/browser-sidecar/jotaduo-wa nem chegam a buildar.
+   Já está corrigido (PR #125), mas se algum Dockerfile novo usar `make`
+   em vez de `go build`, aplique a mesma correção.
+2. **Os compose files no VPS são estáticos.** Só `/srv/saas/picoclaw/.env`,
+   os compose files e os configs de Traefik/Postgres/LiteLLM existem no
+   disco — nada é git-managed. Mudanças em `docker-compose.prod.yml`
+   precisam ser propagadas manualmente (SSH + heredoc) porque o
+   `picoclaw-deploy.timer` só pula imagens, não YAML. Adicionar um
+   serviço novo no compose **exige** ambos: PR no repo + sync manual no
+   VPS.
+3. **Traefik prioritiza por tamanho da rule.** Routers com rules longas
+   (HostRegexp + várias condições) ganham por padrão. Quando criar um
+   router novo num host que o controlplane já catch-alls
+   (`adm.<base>`, `*.<base>`), set `priority=200` explícito no label —
+   senão o router específico é silenciosamente sobrescrito pelo
+   genérico. Cair na SPA do controlplane em vez do serviço novo é o
+   sintoma.
 
 Local dev: spin the SaaS stack up on your dev machine with
 `docker compose -f docker/saas/docker-compose.yml -f docker/saas/docker-compose.dev.yml --env-file .env up -d --build`
