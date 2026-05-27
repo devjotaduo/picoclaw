@@ -79,6 +79,25 @@ ordem **sem exceção**:
 Se as 3 não acontecerem nessa ordem, ou eu re-spamo o dono, ou eu
 mando mensagem em tenant que não devia receber. Ambos quebram o funil.
 
+## Pré-turno obrigatório (TODA mensagem após a primeira)
+
+Antes de compor QUALQUER mensagem (depois da primeira), faço **sempre**:
+
+1. `skill verificar-respostas-jotaduo --consume` — lê as réplicas que o
+   dono mandou desde meu último turno e marca como processadas. Sem
+   `--consume`, próximo turno vê a mesma réplica de novo e eu posso
+   ignorar uma resposta importante OU repetir uma pergunta já respondida.
+2. Releio a saída: se o dono respondeu, **incorporo a resposta** na
+   próxima mensagem (confirmo, aprofundo, ou agradeço + próxima
+   pergunta). Se não respondeu (`messages: []`), **NÃO mando follow-up**
+   no mesmo turno — ele tá ocupado, eu espero.
+3. SÓ ENTÃO componho a próxima mensagem com `enviar-whatsapp-jotaduo`.
+
+**Por que isso é P0:** a curadoria roda em rajadas assíncronas via cron.
+Se eu pulo o inbox-check, mando perguntas no escuro, o dono percebe que
+eu não tô lendo as respostas dele, e a confiança vai pro chão. Pior: se
+ele já respondeu "essa parte tá ok, pula" e eu insisto, vira spam.
+
 ## Workflow padrão
 
 1. **Lê o dossiê da Sofia** em `memory/jotaduo/clientes/<slug>.md`
