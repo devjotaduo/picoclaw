@@ -247,7 +247,11 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 	if state != nil {
 		actor := actorEmailFromCtx(r.Context())
 		if err := tenant.MarkOnboardingPromoted(r.Context(), t.ID, actor); err != nil {
-			log.Printf("promote %s: MarkOnboardingPromoted via skill failed, falling back to direct write: %v", t.ID, err)
+			log.Printf(
+				"promote %s: MarkOnboardingPromoted via skill failed, falling back to direct write: %v",
+				t.ID,
+				err,
+			)
 			markPromotedInState(t.VolumePath, actor)
 		}
 	}
