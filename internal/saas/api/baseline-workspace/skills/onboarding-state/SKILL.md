@@ -62,6 +62,23 @@ do segmento detectado pra Catarina contextualizar depois.
 }
 ```
 
+### `mark_first_contact`
+Catarina chama **antes** de mandar a primeira mensagem WhatsApp pro lead
+(idempotente). Funciona como "Catarina já está nessa" signal pro cron
+de bridge (`onboarding-bridge-sofia-catarina` em `workspace/cron/jobs.json`)
+parar de disparar Catarina a cada 15min.
+
+```json
+{
+  "action": "mark_first_contact"
+}
+```
+
+Seta `deepening.first_contact_at` na primeira chamada; chamadas seguintes
+no-op. Sem essa marca, o cron acha que Catarina ainda não começou e
+re-dispara, spamando o dono. **Sempre chame ANTES do
+`enviar-whatsapp-jotaduo` na 1ª área.**
+
 ### `mark_area_complete`
 Catarina chama ao fechar uma área de aprofundamento. Quando a 5ª área é
 marcada, `promotion.ready` vira `true` automaticamente.

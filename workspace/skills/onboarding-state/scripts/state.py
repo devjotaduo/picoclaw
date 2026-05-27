@@ -63,6 +63,7 @@ def empty_state() -> dict:
         },
         "deepening": {
             "started_at": None,
+            "first_contact_at": None,
             "areas_covered": [],
             "areas_required": sorted(VALID_AREAS),
             "completed_at": None,
@@ -181,6 +182,25 @@ def op_mark_discovery_done(state: dict, payload: dict) -> dict:
     return state
 
 
+def op_mark_first_contact(state: dict, payload: dict) -> dict:
+    """Catarina marks she sent the FIRST outreach WhatsApp to the lead.
+
+    Idempotent — safe to call multiple times; only the first call sets
+    the timestamp. Used by the onboarding-bridge cron job as the
+    "Catarina is already on it" signal so the cron doesn't fire her
+    again every 15min causing spam.
+
+    Bridge cron condition becomes:
+        phase in (discovery_done, deepening_in_progress)
+        AND deepening.first_contact_at is null
+    """
+    # backfill key for tenants whose state.json predates this field
+    state["deepening"].setdefault("first_contact_at", None)
+    if state["deepening"]["first_contact_at"] is None:
+        state["deepening"]["first_contact_at"] = now_iso()
+    return state
+
+
 def op_mark_area_complete(state: dict, payload: dict) -> dict:
     area = (payload.get("area") or "").strip().lower()
     if area not in VALID_AREAS:
@@ -223,6 +243,7 @@ OPERATIONS = {
     "init": op_init,
     "set_owner": op_set_owner,
     "mark_discovery_done": op_mark_discovery_done,
+    "mark_first_contact": op_mark_first_contact,
     "mark_area_complete": op_mark_area_complete,
     "mark_ready_for_promotion": op_mark_ready_for_promotion,
     "mark_promoted": op_mark_promoted,
