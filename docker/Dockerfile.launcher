@@ -79,6 +79,7 @@ RUN apk add --no-cache \
   tzdata \
   && npm install -g --omit=optional agent-browser \
   && npm install -g --omit=optional @anthropic-ai/claude-code \
+  && npm install -g --omit=optional @openai/codex \
   && npm cache clean --force
 
 # claude CLI uses OAuth credentials under $HOME/.claude. The provisioner
@@ -86,6 +87,13 @@ RUN apk add --no-cache \
 # /etc/picoclaw/claude-auth) read-only into /root/.claude for tenants
 # configured with provider="claude-cli" — see internal/saas/tenant/
 # provisioner.go::buildSpec and docs/operations/claude-cli-provider.md.
+#
+# codex CLI (OpenAI's Codex) has the same pattern: OAuth under $HOME/.codex,
+# bind-mounted from PICOCLAW_TENANT_CODEX_CLI_AUTH_DIR. Used as fallback
+# in model_list entries that set fallbacks: ["codex"] — when the primary
+# claude-cli hits rate-limit / token-expired, the agent's fallback chain
+# (pkg/providers/fallback.go) retries on the codex provider. See
+# docs/operations/codex-cli-provider.md.
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -q --spider http://127.0.0.1:18800/ || exit 1

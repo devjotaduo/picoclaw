@@ -115,4 +115,79 @@ func TestBuildSpec_ClaudeCliAuthBindMount(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("both claude + codex configured → both mounts attached, both read-only", func(t *testing.T) {
+		// Fallback chain use case: operator configured BOTH so claude-cli
+		// can fail over to codex-cli without service disruption.
+		claudeDir := t.TempDir()
+		codexDir := t.TempDir()
+		_ = os.WriteFile(filepath.Join(claudeDir, ".credentials.json"), []byte("{}"), 0o600)
+		_ = os.WriteFile(filepath.Join(codexDir, "auth.json"), []byte("{}"), 0o600)
+
+		p := &Provisioner{
+			Cfg: &config.Config{
+				GatewaySharedSecret:    "gw",
+				TenantClaudeCliAuthDir: claudeDir,
+				TenantCodexCliAuthDir:  codexDir,
+			},
+		}
+		spec, err := p.buildSpec(context.Background(), &store.Tenant{ID: "t5"})
+		if err != nil {
+			t.Fatalf("buildSpec: %v", err)
+		}
+
+		mounts := map[string]ContainerMount{}
+		for _, m := range spec.ExtraMounts {
+			if m.Target == "/root/.claude" || m.Target == "/root/.codex" {
+				mounts[m.Target] = m
+			}
+		}
+		if len(mounts) != 2 {
+			t.Fatalf("expected 2 CLI auth mounts, got %d (%+v)", len(mounts), mounts)
+		}
+		for target, m := range mounts {
+			if !m.ReadOnly {
+				t.Errorf("%s mount must be read-only (no tenant token rotation)", target)
+			}
+		}
+		if mounts["/root/.claude"].Source != claudeDir {
+			t.Errorf("/root/.claude source = %q, want %q", mounts["/root/.claude"].Source, claudeDir)
+		}
+		if mounts["/root/.codex"].Source != codexDir {
+			t.Errorf("/root/.codex source = %q, want %q", mounts["/root/.codex"].Source, codexDir)
+		}
+	})
+
+	t.Run("only codex configured → only codex mount (claude unset = no claude mount)", func(t *testing.T) {
+		// Independence check: codex doesn't require claude to be present.
+		codexDir := t.TempDir()
+		_ = os.WriteFile(filepath.Join(codexDir, "auth.json"), []byte("{}"), 0o600)
+
+		p := &Provisioner{
+			Cfg: &config.Config{
+				GatewaySharedSecret:   "gw",
+				TenantCodexCliAuthDir: codexDir,
+			},
+		}
+		spec, err := p.buildSpec(context.Background(), &store.Tenant{ID: "t6"})
+		if err != nil {
+			t.Fatalf("buildSpec: %v", err)
+		}
+		hasClaude := false
+		hasCodex := false
+		for _, m := range spec.ExtraMounts {
+			if m.Target == "/root/.claude" {
+				hasClaude = true
+			}
+			if m.Target == "/root/.codex" {
+				hasCodex = true
+			}
+		}
+		if hasClaude {
+			t.Error("unexpected /root/.claude mount when TenantClaudeCliAuthDir is unset")
+		}
+		if !hasCodex {
+			t.Error("expected /root/.codex mount when TenantCodexCliAuthDir is set")
+		}
+	})
 }

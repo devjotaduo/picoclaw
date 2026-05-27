@@ -121,6 +121,15 @@ type Config struct {
 	// See docs/operations/claude-cli-provider.md for setup.
 	TenantClaudeCliAuthDir string
 
+	// TenantCodexCliAuthDir is the codex CLI equivalent of
+	// TenantClaudeCliAuthDir: a host directory ($HOME/.codex tree) bind-
+	// mounted read-only into tenants at /root/.codex. Used as a fallback
+	// provider when claude-cli rate-limits or token expires (model_list
+	// entries set fallbacks: ["codex"]; pkg/providers/fallback.go drives
+	// the chain). Default empty = feature disabled.
+	// See docs/operations/codex-cli-provider.md for setup.
+	TenantCodexCliAuthDir string
+
 	// Supabase Auth — used as the source of truth for tenant dashboard logins
 	// when tenant.auth_backend = 'supabase'. The controlplane verifies the
 	// JWT and continues signing trusted_gateway HMAC headers to the launcher.
@@ -236,6 +245,7 @@ func Load() (*Config, error) {
 	c.JotaduoWAHMACSecret = os.Getenv("PICOCLAW_JOTADUO_WA_HMAC_SECRET")
 
 	c.TenantClaudeCliAuthDir = os.Getenv("PICOCLAW_TENANT_CLAUDE_CLI_AUTH_DIR")
+	c.TenantCodexCliAuthDir = os.Getenv("PICOCLAW_TENANT_CODEX_CLI_AUTH_DIR")
 
 	if c.PGDSN == "" {
 		return nil, fmt.Errorf("PG_DSN is required")
