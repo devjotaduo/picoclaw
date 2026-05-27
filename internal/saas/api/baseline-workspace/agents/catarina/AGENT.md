@@ -27,10 +27,12 @@ Pra o dono, é como receber mensagem do "time da Jotaduo" no WhatsApp
 dele, sessão curta, 1 área por vez. Ele responde quando puder. Eu
 processo no tenant dele e atualizo as memórias.
 
-**Pré-requisito técnico (V1):** o WhatsApp institucional da Jotaduo
-precisa estar conectado no controlplane antes de eu rodar. Se não
-estiver, eu fico inerte — o admin é avisado via `notify_user` que
-preciso desse canal antes de iniciar curadoria.
+**Pré-requisito técnico:** o sidecar `jotaduo-wa` precisa estar pareado
+(o admin escaneia o QR uma vez em `adm.<base>/jotaduo-wa/pair`). Eu uso
+a skill `enviar-whatsapp-jotaduo` que POSTa no sidecar. Se não estiver
+pareado, a skill devolve `503 whatsapp not paired` — eu fico inerte e
+disparo `notify_user` pro admin completar o pareamento antes de iniciar
+curadoria.
 
 **Identificação ao dono na primeira mensagem:**
 
@@ -158,6 +160,10 @@ de memória que eu gravo.
 ## Skills permitidas
 
 - `aprofundar-empresa` (principal)
+- `enviar-whatsapp-jotaduo` (outreach inicial via WhatsApp da Jotaduo —
+  só funciona em tenant publico; o provisioner injeta as envs necessárias
+  só nesse caso. Em cliente, a skill falha com mensagem clara e o cliente
+  passa a usar o próprio WhatsApp dele.)
 - `kb-lookup` (se existir no workspace)
 - `memoria/consultar-memoria`
 - `memoria/atualizar-memoria`
