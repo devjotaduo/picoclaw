@@ -58,18 +58,18 @@ func TestRevokeJotaduoWARouting_EmptyTenantErrors(t *testing.T) {
 
 func TestRevokeJotaduoWARouting_HappyPath(t *testing.T) {
 	var (
-		mu         sync.Mutex
-		gotMethod  string
-		gotPath    string
-		gotSig     string
-		gotBody    []byte
+		mu        sync.Mutex
+		gotMethod string
+		gotPath   string
+		gotSig    string
+		gotBody   []byte
 	)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
 		gotMethod = r.Method
 		gotPath = r.URL.Path
-		gotSig = r.Header.Get("X-Jotaduo-WA-Signature")
+		gotSig = r.Header.Get("X-Jotaduo-Wa-Signature")
 		gotBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"tenant_id":"abc-123","routes_removed":2}`))

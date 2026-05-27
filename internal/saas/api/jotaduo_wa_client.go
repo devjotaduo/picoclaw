@@ -73,7 +73,7 @@ func (h *Handler) RevokeJotaduoWARouting(ctx context.Context, tenantID string) e
 		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Jotaduo-WA-Signature", signRevokeBody(jotaduoWARevokeBody, secret))
+	req.Header.Set("X-Jotaduo-Wa-Signature", signRevokeBody(jotaduoWARevokeBody, secret))
 
 	resp, err := jotaduoWAHTTPClient.Do(req)
 	if err != nil {
