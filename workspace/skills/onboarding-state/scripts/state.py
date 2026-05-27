@@ -11,11 +11,18 @@ em /root/.picoclaw/workspace e em dev local em c:/.../workspace).
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    import fcntl  # POSIX only — Linux/macOS. Windows dev path skips locking.
+    _HAS_FCNTL = True
+except ImportError:
+    _HAS_FCNTL = False
 
 
 VALID_AREAS = {"equipe", "casos-excecao", "faq", "historico", "regras-tacitas"}
@@ -107,6 +114,35 @@ def save_state(path: Path, state: dict) -> None:
         json.dumps(state, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+
+
+@contextlib.contextmanager
+def locked_state_file(state_path: Path):
+    """Serializa invocações concorrentes de state.py via fcntl.flock num
+    sibling lockfile. Audit P1 #10 (2026-05-27): sem isso, o
+    read-modify-write em main() perde updates quando Sofia + Catarina +
+    admin invocam a skill ao mesmo tempo (cenário real em tenant publico
+    com visitante + Catarina + ops).
+
+    Lockfile separado de onboarding.json (sibling .lock) pra evitar
+    truncar/recriar o state file só pra adquirir o lock. fcntl.LOCK_EX
+    bloqueia até liberar; sem timeout porque cada operação é rápida
+    (read+mutate+write é <10ms) — se travar é bug.
+
+    Windows dev: fcntl não existe, then yield direto (no-op). Em prod
+    tenants são sempre Linux então race fica coberta.
+    """
+    if not _HAS_FCNTL:
+        yield
+        return
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = state_path.with_name(state_path.name + ".lock")
+    with open(lock_path, "w", encoding="utf-8") as lockfile:
+        fcntl.flock(lockfile.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lockfile.fileno(), fcntl.LOCK_UN)
 
 
 def empresa_memory_filled(workspace_root: Path) -> tuple[bool, str]:
@@ -383,10 +419,14 @@ def main() -> int:
 
     workspace_root = find_workspace_root(Path(__file__))
     state_path = workspace_root / "state" / "onboarding.json"
-    state = load_state(state_path)
-    state = OPERATIONS[action](state, payload)
-    recompute_phase_and_blockers(state, workspace_root)
-    save_state(state_path, state)
+    # Lock covers the full read-modify-write (P1 #10). Stdout serialization
+    # happens AFTER unlocking — by then `state` is a local dict copy and
+    # other invocations can re-enter immediately.
+    with locked_state_file(state_path):
+        state = load_state(state_path)
+        state = OPERATIONS[action](state, payload)
+        recompute_phase_and_blockers(state, workspace_root)
+        save_state(state_path, state)
     json.dump(state, sys.stdout, indent=2, ensure_ascii=False)
     sys.stdout.write("\n")
     return 0
