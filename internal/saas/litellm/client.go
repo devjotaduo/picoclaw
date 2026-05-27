@@ -129,6 +129,25 @@ func (c *Client) GetSpendLogs(ctx context.Context, tenantID string, since time.T
 	return out, nil
 }
 
+// GetTenantSpendMTD sums all spend events for a tenant since the start
+// of the current UTC month. Used by the admin /budget-status endpoint
+// to surface tenants approaching their MonthlyBudgetUSD cap (audit P1
+// #29, 2026-05-27). Returns 0 + nil when there are no records — that's
+// the legitimate "new tenant, no usage yet" state.
+func (c *Client) GetTenantSpendMTD(ctx context.Context, tenantID string) (float64, error) {
+	now := time.Now().UTC()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	logs, err := c.GetSpendLogs(ctx, tenantID, startOfMonth)
+	if err != nil {
+		return 0, err
+	}
+	var total float64
+	for _, r := range logs {
+		total += r.Spend
+	}
+	return total, nil
+}
+
 func (c *Client) do(ctx context.Context, method, path string, in, out any) error {
 	var body io.Reader
 	if in != nil {
