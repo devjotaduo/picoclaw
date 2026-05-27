@@ -26,6 +26,11 @@ except ImportError:
 
 
 VALID_AREAS = {"equipe", "casos-excecao", "faq", "historico", "regras-tacitas"}
+# Audit P1 #17: when Catarina has been waiting on the lead for longer than
+# this threshold without any response, surface a `lead_timeout_days: N` line
+# in `promotion.blocked_by` so the admin sees stale tenants in the panel.
+# Informational only — does NOT block promote (admin can still force-promote).
+LEAD_TIMEOUT_DAYS = 7
 VALID_PHASES = {
     "discovery_in_progress",
     "discovery_done",
@@ -71,6 +76,8 @@ def empty_state() -> dict:
         "deepening": {
             "started_at": None,
             "first_contact_at": None,
+            "last_outreach_at": None,        # P1 #17: Catarina chama mark_outreach_sent
+            "last_owner_response_at": None,  # P1 #17: Catarina chama mark_owner_response
             "areas_covered": [],
             "areas_required": sorted(VALID_AREAS),
             "completed_at": None,
@@ -173,6 +180,30 @@ def empresa_memory_filled(workspace_root: Path) -> tuple[bool, str]:
     return True, ""
 
 
+def _lead_stale_days(state: dict) -> int | None:
+    """Returns the number of full days since the last meaningful contact
+    with the lead, or None when no outreach has happened yet (Catarina
+    hasn't started OR last_outreach_at field is missing in legacy state).
+
+    "Meaningful contact" = max(last_outreach_at, last_owner_response_at).
+    Once Catarina sends an outreach we expect a response within
+    LEAD_TIMEOUT_DAYS; if the response comes back, the clock resets.
+    """
+    deepening = state.get("deepening") or {}
+    last_out = deepening.get("last_outreach_at")
+    last_in = deepening.get("last_owner_response_at")
+    # No outreach yet (still in discovery or pre-first-contact) → don't compute.
+    if not last_out:
+        return None
+    latest_iso = max(filter(None, [last_out, last_in]))
+    try:
+        latest = datetime.strptime(latest_iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+    delta = datetime.now(timezone.utc) - latest
+    return max(delta.days, 0)
+
+
 def recompute_phase_and_blockers(state: dict, workspace_root: Path | None = None) -> None:
     """Recalcula state.phase e state.promotion.blocked_by depois de qualquer mutação.
 
@@ -199,6 +230,14 @@ def recompute_phase_and_blockers(state: dict, workspace_root: Path | None = None
         filled, reason = empresa_memory_filled(workspace_root)
         if not filled:
             blocked.append(f"empresa_memory_empty: {reason}")
+
+    # P1 #17: surface stale-lead signal. Informational — never the SOLE
+    # blocker, just appended when actual blockers already exist. If the
+    # tenant is otherwise ready (no other blockers), the lead being slow
+    # to respond shouldn't gate promotion.
+    stale_days = _lead_stale_days(state)
+    if stale_days is not None and stale_days >= LEAD_TIMEOUT_DAYS and blocked:
+        blocked.append(f"lead_timeout_days: {stale_days}")
 
     state["promotion"]["blocked_by"] = blocked
     state["promotion"]["ready"] = (
@@ -280,6 +319,34 @@ def op_mark_first_contact(state: dict, payload: dict) -> dict:
     state["deepening"].setdefault("first_contact_at", None)
     if state["deepening"]["first_contact_at"] is None:
         state["deepening"]["first_contact_at"] = now_iso()
+    # Calling first contact also counts as an outreach for the timeout clock.
+    state["deepening"].setdefault("last_outreach_at", None)
+    state["deepening"]["last_outreach_at"] = now_iso()
+    return state
+
+
+def op_mark_outreach_sent(state: dict, payload: dict) -> dict:
+    """Catarina chama TODA vez que envia uma mensagem WhatsApp pro lead.
+
+    Audit P1 #17 (2026-05-27): sem esse timestamp não há como detectar
+    deepening parado. O blocker `lead_timeout_days` no recompute usa
+    este campo + `last_owner_response_at` pra sinalizar leads que não
+    respondem há N dias.
+    """
+    state["deepening"].setdefault("last_outreach_at", None)
+    state["deepening"]["last_outreach_at"] = now_iso()
+    return state
+
+
+def op_mark_owner_response(state: dict, payload: dict) -> dict:
+    """Catarina chama no pré-turno SEMPRE que `verificar-respostas-jotaduo`
+    retorna mensagens novas do lead. Marca que o lead está vivo.
+
+    Audit P1 #17 (2026-05-27): par do `mark_outreach_sent`. Zera o
+    timer de timeout — leads que responderam não disparam alerta.
+    """
+    state["deepening"].setdefault("last_owner_response_at", None)
+    state["deepening"]["last_owner_response_at"] = now_iso()
     return state
 
 
@@ -326,6 +393,8 @@ OPERATIONS = {
     "set_owner": op_set_owner,
     "mark_discovery_done": op_mark_discovery_done,
     "mark_first_contact": op_mark_first_contact,
+    "mark_outreach_sent": op_mark_outreach_sent,
+    "mark_owner_response": op_mark_owner_response,
     "mark_area_complete": op_mark_area_complete,
     "mark_ready_for_promotion": op_mark_ready_for_promotion,
     "mark_promoted": op_mark_promoted,
