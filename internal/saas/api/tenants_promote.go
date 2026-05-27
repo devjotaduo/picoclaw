@@ -316,7 +316,11 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 	// promotion. Operator can re-run the revoke manually if the sidecar
 	// was momentarily unreachable.
 	if err := h.RevokeJotaduoWARouting(r.Context(), t.ID); err != nil {
-		log.Printf("promote %s: revoke jotaduo-wa routing failed (non-fatal, container already on cliente spec): %v", t.ID, err)
+		log.Printf(
+			"promote %s: revoke jotaduo-wa routing failed (non-fatal, container already on cliente spec): %v",
+			t.ID,
+			err,
+		)
 	}
 
 	// Step 9: Email (best-effort).
@@ -456,7 +460,11 @@ func markPromotedInState(volumePath, actorEmail string) {
 // left the tenant row with is_public=false + owner_email=<x> but no
 // matching user + no dashboard password — operator had to manually
 // `UPDATE tenants` to re-enable the public funnel.
-func rollbackPromote(ctx context.Context, tenants *store.TenantStore, tenantID, ownerEmail, originalAuthBackend, failedStep string) {
+func rollbackPromote(
+	ctx context.Context,
+	tenants *store.TenantStore,
+	tenantID, ownerEmail, originalAuthBackend, failedStep string,
+) {
 	if err := tenants.UnpromoteRollback(ctx, tenantID, ownerEmail, originalAuthBackend); err != nil {
 		log.Printf("promote %s: UnpromoteRollback after %s failure ALSO failed (manual SQL needed): %v",
 			tenantID, failedStep, err)
