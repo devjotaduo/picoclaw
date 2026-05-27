@@ -129,6 +129,32 @@ Os tenants pegam automatic na próxima chamada (mount é live).
 **Sinal de que precisa renovar**: tenant chat retorna erro do
 claude-cli mencionando "unauthorized", "token expired", ou OAuth.
 
+## Atalho usado no bootstrap (operador já tem Claude Code local)
+
+Se você JÁ usa Claude Code na sua máquina (Mac/Linux/Windows), o arquivo
+de credenciais já existe local em `~/.claude/.credentials.json`
+(Windows: `C:\Users\<você>\.claude\.credentials.json`). Em vez de
+fazer OAuth de novo no VPS, copie o arquivo direto:
+
+```bash
+# Linux/Mac:
+scp ~/.claude/.credentials.json root@<vps>:/etc/picoclaw/claude-auth/.claude/.credentials.json
+
+# Windows PowerShell:
+scp $env:USERPROFILE\.claude\.credentials.json root@<vps>:/etc/picoclaw/claude-auth/.claude/.credentials.json
+```
+
+Depois `chmod 600` no destino. Funciona porque é o mesmo formato OAuth
+que o `claude` no container espera. Validado em prod 2026-05-27.
+
+## Backup
+
+`/etc/picoclaw/claude-auth/.claude/.credentials.json` é **incluído por
+padrão** no backup R2 diário (`scripts/backups/picoclaw-r2-backup.sh` —
+`BACKUP_PATHS` cobre `/etc/picoclaw` desde o patch que acompanhou esta
+feature). Perda do dir = restore via restic OU re-upload do
+`.credentials.json` local do operador (o atalho acima).
+
 ## Por que read-only
 
 Se o mount fosse read-write, um tenant comprometido poderia:

@@ -77,6 +77,29 @@ Resumo:
   retira `JOTADUO_WA_HMAC_SECRET` do container do cliente. Defesa em
   duas camadas — cliente promovido perde acesso ao número institucional.
 
+### Qual modelo Sofia/Catarina rodam
+
+Por default, `config.json` do template `default-business` aponta `default`
+pra `claude-sonnet-4-5` via OpenRouter (pay-per-token na chave do
+operador). Alternativas validadas em prod:
+
+- **claude-cli (subscription do operador)** — provider `claude-cli`,
+  model `sonnet`. Usa o binário `claude` instalado no launcher container
+  com OAuth bind-mountado de `/etc/picoclaw/claude-auth`. Zero custo
+  por token (subscription Max do operador absorve). Setup operacional
+  em [docs/operations/claude-cli-provider.md](../operations/claude-cli-provider.md).
+- **groq-qwen3-32b** — barato (~$0.0002 por mensagem curta), super
+  rápido, MAS rejeita prompts > 6K tokens no Groq free tier. Sofia
+  tem prompt ~11K, então **não funciona** sem upgrade no plano Groq.
+  Pra outros tenants com prompt menor pode servir.
+- **anthropic-api direto** — adiciona `ANTHROPIC_API_KEY` ao LiteLLM
+  e usa `anthropic/claude-sonnet-4-5`. Mais caro que OpenRouter (~50%
+  premium) mas sem aggregator markup.
+
+Tenant escolhe via `config.json::model_list[0].provider+model`. Pode ser
+trocado per-tenant sem mexer no template — basta editar o config no
+volume e recriar o container.
+
 ## A jornada — diagrama da feature
 
 ```
