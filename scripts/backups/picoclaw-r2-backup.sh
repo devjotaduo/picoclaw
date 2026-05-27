@@ -27,12 +27,6 @@ ENV_FILE="${PICOCLAW_R2_ENV_FILE:-/etc/picoclaw/r2-backup.env}"
 # /srv/saas/postgres/data/ is recoverable from the .sql.gz dumps in
 # the staging dir (audit P0 #3, 2026-05-27).
 BACKUP_PATHS="${PICOCLAW_BACKUP_PATHS:-/srv/saas/tenants /etc/picoclaw /var/lib/picoclaw-pg-dumps}"
-# Where pg_dumpall writes the daily dump before restic snapshots it.
-# Restic dedup makes the 2-keep retention cheap; we keep 2 on disk
-# (not 1) so a corrupt run still has a previous good local copy.
-PG_DUMP_DIR="${PICOCLAW_PG_DUMP_DIR:-/var/lib/picoclaw-pg-dumps}"
-PG_CONTAINER="${PICOCLAW_PG_CONTAINER:-postgres}"
-PG_USER="${PICOCLAW_PG_USER:-picoclaw-saas}"
 # Legacy single-path env still honored: older deploys may set
 # PICOCLAW_BACKUP_PATH to a single dir; preserve that override.
 LEGACY_BACKUP_PATH="${PICOCLAW_BACKUP_PATH:-}"
@@ -54,6 +48,16 @@ set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+
+# Postgres backup config (audit P0 #3). Resolved AFTER the env-file source
+# so PICOCLAW_PG_* keys in /etc/picoclaw/r2-backup.env actually win. Default
+# user is `picoclaw` (matches POSTGRES_USER in docker/saas/.env on this fleet);
+# operators with a non-standard role set PICOCLAW_PG_USER in the env file.
+# Where pg_dumpall writes the daily dump before restic snapshots it. We keep
+# the last 2 on disk (not 1) so a corrupt run still has a previous good copy.
+PG_DUMP_DIR="${PICOCLAW_PG_DUMP_DIR:-/var/lib/picoclaw-pg-dumps}"
+PG_CONTAINER="${PICOCLAW_PG_CONTAINER:-postgres}"
+PG_USER="${PICOCLAW_PG_USER:-picoclaw}"
 
 : "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID not set in $ENV_FILE}"
 : "${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY not set in $ENV_FILE}"

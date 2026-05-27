@@ -79,6 +79,24 @@ no-op. Sem essa marca, o cron acha que Catarina ainda não começou e
 re-dispara, spamando o dono. **Sempre chame ANTES do
 `enviar-whatsapp-jotaduo` na 1ª área.**
 
+### `mark_outreach_sent`
+Catarina chama **toda vez** que envia mensagem WhatsApp pro lead (não só
+a primeira). Atualiza `deepening.last_outreach_at` pra agora. Sem isso o
+timer de timeout (P1 #17) não tem ponto de referência.
+
+```json
+{"action": "mark_outreach_sent"}
+```
+
+### `mark_owner_response`
+Catarina chama no pré-turno SEMPRE que `verificar-respostas-jotaduo`
+retorna mensagens novas do lead. Atualiza `deepening.last_owner_response_at`.
+Zera o timer de timeout — lead que respondeu não dispara alerta.
+
+```json
+{"action": "mark_owner_response"}
+```
+
 ### `mark_area_complete`
 Catarina chama ao fechar uma área de aprofundamento. Quando a 5ª área é
 marcada, `promotion.ready` vira `true` automaticamente.
@@ -123,6 +141,28 @@ Ver `references/state-schema.md` pro schema completo (campos, tipos, valores vá
 - **area duplicada** — `mark_area_complete` é idempotente; não conta a área 2x.
 - **promotion.ready sem owner capturado** — script bloqueia: precisa do email pra promover.
 - **set_owner antes de init** — script auto-inicia. Não falha.
+
+## Lead timeout monitoring (P1 #17)
+
+Quando Catarina envia outreach e o lead não responde por
+`LEAD_TIMEOUT_DAYS = 7`, o recompute adiciona uma linha
+`lead_timeout_days: <N>` em `promotion.blocked_by` — **informativa, não
+bloqueante**. Aparece só se outros blockers já existem (não-promotion-
+ready ainda); um lead lento sozinho não impede promoção quando todas as
+áreas estão cobertas.
+
+Critério: `last_outreach_at > 7d ago AND (last_owner_response_at is null
+OR last_owner_response_at > 7d ago)`. Se o lead respondeu depois do
+último outreach, o clock reseta.
+
+Pra Catarina manter o sinal preciso:
+- Chamar `mark_outreach_sent` toda vez que enviar mensagem
+- Chamar `mark_owner_response` no pré-turno quando
+  `verificar-respostas-jotaduo` retornar mensagens novas
+
+Admin consulta via `GET /api/v1/tenants/{id}/onboarding-state` (mesmo
+endpoint do promote modal). Listagem de tenants stale em todo o fleet
+fica pendente — não foi shipado nesse PR.
 
 ## Ground-truth check em `memory/empresa.md`
 

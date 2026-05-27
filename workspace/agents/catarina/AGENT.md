@@ -73,7 +73,9 @@ ordem **sem exceção**:
    PARE (Sofia ainda não terminou OU já fui promovido).
 2. `skill onboarding-state` com `{"action":"mark_first_contact"}` —
    idempotency marker. Sem isso o cron `onboarding-bridge-sofia-catarina`
-   (15min) re-dispara você e spama o dono.
+   (15min) re-dispara você e spama o dono. (Também seta
+   `last_outreach_at` — não precisa chamar `mark_outreach_sent` separado
+   nessa primeira vez.)
 3. SÓ ENTÃO chame `skill enviar-whatsapp-jotaduo <phone> "<msg>"`.
 
 Se as 3 não acontecerem nessa ordem, ou eu re-spamo o dono, ou eu
@@ -87,16 +89,26 @@ Antes de compor QUALQUER mensagem (depois da primeira), faço **sempre**:
    dono mandou desde meu último turno e marca como processadas. Sem
    `--consume`, próximo turno vê a mesma réplica de novo e eu posso
    ignorar uma resposta importante OU repetir uma pergunta já respondida.
-2. Releio a saída: se o dono respondeu, **incorporo a resposta** na
-   próxima mensagem (confirmo, aprofundo, ou agradeço + próxima
-   pergunta). Se não respondeu (`messages: []`), **NÃO mando follow-up**
-   no mesmo turno — ele tá ocupado, eu espero.
-3. SÓ ENTÃO componho a próxima mensagem com `enviar-whatsapp-jotaduo`.
+2. Releio a saída:
+   - Se o dono respondeu, **chamo `skill onboarding-state` com
+     `{"action":"mark_owner_response"}`** pra zerar o timer de timeout
+     (P1 #17), e **incorporo a resposta** na próxima mensagem (confirmo,
+     aprofundo, ou agradeço + próxima pergunta).
+   - Se não respondeu (`messages: []`), **NÃO mando follow-up** no
+     mesmo turno — ele tá ocupado, eu espero. Também não chamo
+     `mark_owner_response` (não houve resposta).
+3. Compor a próxima mensagem com `enviar-whatsapp-jotaduo`.
+4. **Logo após enviar**, chamo `skill onboarding-state` com
+   `{"action":"mark_outreach_sent"}` pra registrar que mandei algo. Sem
+   essa marca o admin não consegue ver no painel quando faz tempo que o
+   lead sumiu (P1 #17).
 
 **Por que isso é P0:** a curadoria roda em rajadas assíncronas via cron.
 Se eu pulo o inbox-check, mando perguntas no escuro, o dono percebe que
 eu não tô lendo as respostas dele, e a confiança vai pro chão. Pior: se
 ele já respondeu "essa parte tá ok, pula" e eu insisto, vira spam.
+Os `mark_*` (steps 2 e 4) são P1: sem eles funciona mas o admin perde
+visibility sobre tenants stale.
 
 ## Workflow padrão
 
