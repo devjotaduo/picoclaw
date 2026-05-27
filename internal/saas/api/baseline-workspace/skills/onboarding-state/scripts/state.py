@@ -42,6 +42,64 @@ EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 # Brazilian-friendly: +55 11 99999-8888 / 11999998888 / etc. Strip non-digits then check length.
 WHATSAPP_DIGITS_MIN = 10  # 10 sem DDI; agente normaliza pra +55 depois
 
+# Audit P1 #14: cap free-text fields the user (or LLM-translated user
+# input) controls before they hit disk. Length cap defeats a stupid
+# 5000-char company name from inflating onboarding.json; control-char
+# strip + tag strip keeps newlines + HTML out of single-line fields.
+# This is defense in depth — the frontend should also sanitize, and
+# downstream readers MUST NOT trust state.json as already-safe HTML.
+NAME_MAX_LEN = 200
+SEGMENT_MAX_LEN = 80
+SUMMARY_MAX_LEN = 2000
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+_TAG_LIKE_RE = re.compile(r"<[^>]+>")
+
+
+def sanitize_short_text(value: str, max_len: int = NAME_MAX_LEN) -> str:
+    """Strip control chars + HTML-ish tags from a single-line field and
+    truncate. Returns empty when input is empty/whitespace. Use for owner
+    name, segment, etc. — fields where newlines should not survive."""
+    if not value:
+        return ""
+    cleaned = _CONTROL_CHAR_RE.sub("", value)
+    cleaned = _TAG_LIKE_RE.sub("", cleaned).strip()
+    return cleaned[:max_len]
+
+
+def sanitize_long_text(value: str, max_len: int = SUMMARY_MAX_LEN) -> str:
+    """Like sanitize_short_text but preserves newlines (Sofia's discovery
+    summary may be multi-line). Still strips other control chars + tags."""
+    if not value:
+        return ""
+    # Keep \n + \t; strip everything else in 0x00-0x1f.
+    cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", value)
+    cleaned = _TAG_LIKE_RE.sub("", cleaned).strip()
+    return cleaned[:max_len]
+
+
+# Audit P1 #13: bump SCHEMA_VERSION whenever required fields are added so
+# old state.json files get migrated lazily on load (`migrate_state`)
+# instead of silently breaking parsers. Don't change semantics of an
+# existing version — bump and migrate.
+SCHEMA_VERSION = 2
+
+
+def migrate_state(state: dict) -> dict:
+    """Lazy upgrade of older state shapes to SCHEMA_VERSION. Idempotent.
+
+    v1 → v2: adds deepening.first_contact_at, .last_outreach_at,
+             .last_owner_response_at. Pre-v1 state (no schema_version
+             key) is treated as v1.
+    """
+    version = state.get("schema_version", 1)
+    if version < 2:
+        deep = state.setdefault("deepening", {})
+        deep.setdefault("first_contact_at", None)
+        deep.setdefault("last_outreach_at", None)
+        deep.setdefault("last_owner_response_at", None)
+    state["schema_version"] = SCHEMA_VERSION
+    return state
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -65,6 +123,7 @@ def find_workspace_root(start: Path) -> Path:
 
 def empty_state() -> dict:
     return {
+        "schema_version": SCHEMA_VERSION,
         "phase": "discovery_in_progress",
         "discovery": {
             "started_at": now_iso(),
@@ -103,9 +162,13 @@ def load_state(path: Path) -> dict:
     if not path.is_file():
         return empty_state()
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        loaded = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         raise SystemExit(f"onboarding.json corrupted: {e}")
+    # Lazy migration (P1 #13): old tenants without newer fields auto-upgrade
+    # on first read after a state.py upgrade. main() saves the migrated
+    # version so subsequent loads are fast-paths.
+    return migrate_state(loaded)
 
 
 def save_state(path: Path, state: dict) -> None:
@@ -263,20 +326,29 @@ def op_init(state: dict, payload: dict) -> dict:
 
 
 def op_set_owner(state: dict, payload: dict) -> dict:
-    name = (payload.get("name") or "").strip()
+    # P1 #14: sanitize the LLM-provided strings before persisting. Name
+    # field is capped + tag-stripped (sanitize_short_text); email goes
+    # through regex validation; whatsapp is digit-stripped.
+    name = sanitize_short_text(payload.get("name") or "", NAME_MAX_LEN)
     email = (payload.get("email") or "").strip().lower()
     whatsapp = (payload.get("whatsapp") or "").strip()
-    captured_by = payload.get("captured_by") or "sofia"
+    captured_by = sanitize_short_text(payload.get("captured_by") or "sofia", 50) or "sofia"
 
     if not email:
         raise SystemExit("set_owner: email is required")
     if not EMAIL_RE.match(email):
         raise SystemExit(f"set_owner: email inválido: {email!r}")
+    if len(email) > 320:  # RFC 3696 §3 ceiling — keeps DB column happy.
+        raise SystemExit(f"set_owner: email exceeds 320 chars ({len(email)})")
     if whatsapp:
         digits = re.sub(r"\D", "", whatsapp)
         if len(digits) < WHATSAPP_DIGITS_MIN:
             raise SystemExit(
                 f"set_owner: whatsapp tem {len(digits)} dígitos, mínimo {WHATSAPP_DIGITS_MIN}"
+            )
+        if len(digits) > 15:  # E.164 max
+            raise SystemExit(
+                f"set_owner: whatsapp tem {len(digits)} dígitos, máximo 15"
             )
 
     state["owner_captured"] = {
@@ -290,8 +362,10 @@ def op_set_owner(state: dict, payload: dict) -> dict:
 
 
 def op_mark_discovery_done(state: dict, payload: dict) -> dict:
-    segment = (payload.get("segment") or "").strip().lower() or None
-    summary = (payload.get("summary") or "").strip() or None
+    # P1 #14: sanitize the LLM-provided segment + summary before persisting.
+    segment_raw = payload.get("segment") or ""
+    segment = sanitize_short_text(segment_raw, SEGMENT_MAX_LEN).lower() or None
+    summary = sanitize_long_text(payload.get("summary") or "", SUMMARY_MAX_LEN) or None
     state["discovery"]["completed_at"] = now_iso()
     if segment:
         state["discovery"]["segment"] = segment
