@@ -216,6 +216,21 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		markPromotedInState(t.VolumePath, actorEmailFromCtx(r.Context()))
 	}
 
+	// Step 7.5: Revoke the tenant's routes in the jotaduo-wa sidecar so a
+	// late inbound reply from a former lead's number stops being routed
+	// back to this (now-cliente) tenant. Defense in depth: the recreate
+	// at step 8 already strips JOTADUO_WA_HMAC_SECRET from the container
+	// env so the launcher endpoint would 503 the webhook anyway — this
+	// prevents the sidecar from even firing.
+	//
+	// Best-effort: a sidecar issue must NOT abort the promotion. The DB
+	// row + container recreate are the source of truth; the routing
+	// revoke is hygiene. Logged so operators can re-run it manually if
+	// the sidecar was momentarily unreachable.
+	if err := h.RevokeJotaduoWARouting(r.Context(), t.ID); err != nil {
+		log.Printf("promote %s: revoke jotaduo-wa routing failed (non-fatal): %v", t.ID, err)
+	}
+
 	// Step 8: Recreate container so it boots with PICOCLAW_AUTH_MODE=launcher
 	// (instead of trusted_gateway) and the corrected ALLOWED_CHANNELS.
 	if err := h.Provisioner.Recreate(r.Context(), t.ID); err != nil {
