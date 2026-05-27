@@ -14,6 +14,12 @@ import (
 	"github.com/sipeed/picoclaw/internal/saas/tenant"
 )
 
+// publicTenantDefaultMonthlyBudgetUSD is the LiteLLM cap auto-applied to
+// public tenants created without an explicit budget (audit P0 #8). $10/mo
+// covers a few hundred Sofia turns at Sonnet rates and keeps a leaked URL
+// from blowing up the operator's bill; the admin can raise it in the panel.
+const publicTenantDefaultMonthlyBudgetUSD = 10.0
+
 type createTenantReq struct {
 	DisplayName      string   `json:"display_name"`
 	OwnerEmail       string   `json:"owner_email"`
@@ -74,6 +80,22 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	// wizard. Mirrors what the retired handleBootstrapOnboardingTenant did.
 	if isPublic && req.OwnerEmail == "" {
 		req.OwnerEmail = "ops@" + strings.Trim(h.Cfg.TenantBaseDomain, ".")
+	}
+
+	// Audit P0 #8 (2026-05-27): public tenant URL leaked = unbounded cost
+	// spiral for the operator (Sofia chat = LLM calls = JOTADUO pays). The
+	// rate-limit-per-IP (30 msg / 10min) doesn't stop a botnet rotating
+	// IPs. Force a non-nil MonthlyBudgetUSD on every public tenant so the
+	// LiteLLM virtual key has a hard cap. Default to $10/month — the admin
+	// can raise it in the panel after observing real demand. Honors an
+	// explicit override (admin sending {"monthly_budget_usd": 50}).
+	if isPublic && req.MonthlyBudgetUSD == nil {
+		defaultCap := publicTenantDefaultMonthlyBudgetUSD
+		req.MonthlyBudgetUSD = &defaultCap
+		log.Printf(
+			"create tenant %s: public tenant without explicit monthly_budget_usd, defaulting to $%.2f/mo (audit P0 #8)",
+			req.Subdomain, defaultCap,
+		)
 	}
 
 	if req.DisplayName == "" || req.Subdomain == "" || req.OwnerEmail == "" {

@@ -214,7 +214,15 @@ func EnsurePublicWebChannelConfig(volumePath string) error {
 		settings["session_ttl_seconds"] = 1800
 	}
 	if _, ok := settings["require_captcha_header"]; !ok {
-		settings["require_captcha_header"] = false
+		// Default ON for public tenants (audit P0 #8, 2026-05-27). A public
+		// URL leaked = bot food without CAPTCHA; the cost is paid by the
+		// operator. The launcher honors this header even when the
+		// controlplane TURNSTILE_SECRET_KEY is unset (defense-in-depth:
+		// non-empty header still acts as a presence check). Operators that
+		// want to disable CAPTCHA for a specific tenant can flip the value
+		// in the tenant's config.json — this function only fills the
+		// default when the key is absent.
+		settings["require_captcha_header"] = true
 	}
 
 	out, err := json.MarshalIndent(cfg, "", "  ")

@@ -195,7 +195,7 @@ func TestEnsurePublicWebChannelConfigAddsMissingChannel(t *testing.T) {
 	settings := publicWeb["settings"].(map[string]any)
 	if settings["rate_limit_per_ip"] != float64(30) ||
 		settings["session_ttl_seconds"] != float64(1800) ||
-		settings["require_captcha_header"] != false {
+		settings["require_captcha_header"] != true {
 		t.Fatalf("unexpected public-web settings: %#v", settings)
 	}
 }
