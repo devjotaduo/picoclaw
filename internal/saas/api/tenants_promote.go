@@ -231,6 +231,18 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		log.Printf("promote %s: revoke jotaduo-wa routing failed (non-fatal): %v", t.ID, err)
 	}
 
+	// Step 7.6: Restore the canonical workspace/AGENT.md from the
+	// AGENT.cliente.md backup the provisioner left behind when this
+	// tenant was created as public. Without this, the cliente boots into
+	// the Sofia-mode prompt that was active while public — Rafael+team
+	// orchestration is gone, the main agent keeps "BEing Sofia" and
+	// keeps trying to run jotaduo-discovery on a tenant that's already
+	// past discovery. Idempotent: no-op when the backup doesn't exist
+	// (tenant was never public, e.g. cliente created directly).
+	if err := tenant.RestoreClienteAgentMD(t.VolumePath); err != nil {
+		log.Printf("promote %s: restore cliente AGENT.md failed (non-fatal — cliente will boot with Sofia prompt until manual fix): %v", t.ID, err)
+	}
+
 	// Step 8: Recreate container so it boots with PICOCLAW_AUTH_MODE=launcher
 	// (instead of trusted_gateway) and the corrected ALLOWED_CHANNELS.
 	if err := h.Provisioner.Recreate(r.Context(), t.ID); err != nil {

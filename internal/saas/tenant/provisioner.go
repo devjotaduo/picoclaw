@@ -275,6 +275,15 @@ func (p *Provisioner) runProvision(
 		if err := EnsurePublicWebChannelConfig(t.VolumePath); err != nil {
 			return fmt.Errorf("ensure public-web config: %w", err)
 		}
+		// Override workspace/AGENT.md so the main agent IS Sofia from the
+		// first message, instead of falling back to Rafael (front-line of
+		// the cliente team prompt). Canonical AGENT.md is preserved as
+		// AGENT.cliente.md so the promote flow can restore it. Without
+		// this, visitor says "oi" and gets Rafael introducing the full
+		// team — funnel broken before the first discovery question.
+		if err := ApplyPublicSofiaAgentMD(t.VolumePath); err != nil {
+			return fmt.Errorf("apply public sofia AGENT.md: %w", err)
+		}
 	}
 
 	// 1c. Patch memory/empresa.md com o nome da empresa que o admin
