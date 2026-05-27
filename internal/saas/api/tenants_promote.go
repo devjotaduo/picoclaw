@@ -25,11 +25,11 @@ import (
 // the promote endpoint actually reads are typed strictly; the rest
 // stays untyped so additions in the skill don't break the parse.
 type onboardingState struct {
-	Phase          string                   `json:"phase"`
-	OwnerCaptured  onboardingOwnerCaptured  `json:"owner_captured"`
-	Promotion      onboardingPromotionField `json:"promotion"`
-	Discovery      map[string]any           `json:"discovery"`
-	Deepening      map[string]any           `json:"deepening"`
+	Phase         string                   `json:"phase"`
+	OwnerCaptured onboardingOwnerCaptured  `json:"owner_captured"`
+	Promotion     onboardingPromotionField `json:"promotion"`
+	Discovery     map[string]any           `json:"discovery"`
+	Deepening     map[string]any           `json:"deepening"`
 }
 
 type onboardingOwnerCaptured struct {
@@ -39,10 +39,10 @@ type onboardingOwnerCaptured struct {
 }
 
 type onboardingPromotionField struct {
-	Ready       bool     `json:"ready"`
-	BlockedBy   []string `json:"blocked_by"`
-	PromotedAt  string   `json:"promoted_at"`
-	PromotedBy  string   `json:"promoted_by"`
+	Ready      bool     `json:"ready"`
+	BlockedBy  []string `json:"blocked_by"`
+	PromotedAt string   `json:"promoted_at"`
+	PromotedBy string   `json:"promoted_by"`
 }
 
 // promoteReq is the body of POST /api/v1/tenants/{id}/promote.
@@ -124,9 +124,9 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 	state, stateErr := readOnboardingState(t.VolumePath)
 	if stateErr != nil && !req.Force {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
-			"error":       "não consegui ler workspace/state/onboarding.json — Sofia ainda não rodou nesse tenant?",
-			"detail":      stateErr.Error(),
-			"hint":        "pra prosseguir mesmo assim, mande {\"force\": true, \"owner_email\": \"...\"} no body",
+			"error":  "não consegui ler workspace/state/onboarding.json — Sofia ainda não rodou nesse tenant?",
+			"detail": stateErr.Error(),
+			"hint":   "pra prosseguir mesmo assim, mande {\"force\": true, \"owner_email\": \"...\"} no body",
 		})
 		return
 	}
@@ -163,14 +163,19 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Dedup: same email already on another tenant?
-	if existing, err := h.Tenants.GetByOwnerEmail(r.Context(), ownerEmail); err == nil && existing != nil && existing.ID != t.ID {
+	if existing, err := h.Tenants.GetByOwnerEmail(
+		r.Context(),
+		ownerEmail,
+	); err == nil && existing != nil &&
+		existing.ID != t.ID {
 		writeJSON(w, http.StatusConflict, map[string]any{
 			"error":     "esse email já é dono de outro tenant",
 			"tenant_id": existing.ID,
 			"url":       tenantURL(h.Cfg, existing.Subdomain),
 		})
 		return
-	} else if err != nil && !errors.Is(err, store.ErrTenantNotFound) {
+	} else if err != nil &&
+		!errors.Is(err, store.ErrTenantNotFound) {
 		writeError(w, http.StatusInternalServerError, "db error checking owner dedup: "+err.Error())
 		return
 	}
@@ -240,7 +245,11 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 	// past discovery. Idempotent: no-op when the backup doesn't exist
 	// (tenant was never public, e.g. cliente created directly).
 	if err := tenant.RestoreClienteAgentMD(t.VolumePath); err != nil {
-		log.Printf("promote %s: restore cliente AGENT.md failed (non-fatal — cliente will boot with Sofia prompt until manual fix): %v", t.ID, err)
+		log.Printf(
+			"promote %s: restore cliente AGENT.md failed (non-fatal — cliente will boot with Sofia prompt until manual fix): %v",
+			t.ID,
+			err,
+		)
 	}
 
 	// Step 8: Recreate container so it boots with PICOCLAW_AUTH_MODE=launcher
