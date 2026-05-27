@@ -274,7 +274,9 @@ export function ChatPage() {
     queryFn: getLauncherPolicy,
     staleTime: 30_000,
   })
-  const { visible: isVisible } = useUIVisibility(launcherPolicyQ.data)
+  const { visible: isVisible, profile: activeProfile } = useUIVisibility(
+    launcherPolicyQ.data,
+  )
 
   const {
     messages,
@@ -629,6 +631,7 @@ export function ChatPage() {
                 chatIntro={chatIntro}
                 displayName={assistantName}
                 displayDescription={emptyStateDescription}
+                activeProfile={activeProfile}
                 avatarSeed={
                   testingPublicAttendant
                     ? "atendente-publico"
