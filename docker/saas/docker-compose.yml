@@ -312,6 +312,14 @@ services:
       # Empty default keeps existing deployments working pre-Phase 10.
       PICOCLAW_ONBOARDING_CALLBACK_SECRET: ${PICOCLAW_ONBOARDING_CALLBACK_SECRET:-}
       PICOCLAW_ONBOARDING_CALLBACK_URL: ${PICOCLAW_ONBOARDING_CALLBACK_URL:-}
+      # Shared with jotaduo-wa sidecar (same value passed to it as
+      # JOTADUO_WA_HMAC_SECRET). The provisioner forwards both URL + secret
+      # into public-tenant containers so Catarina's `enviar-whatsapp-jotaduo`
+      # skill can sign requests. Cliente tenants don't receive these envs —
+      # at promotion, the recreate strips them and the skill stops working.
+      # Empty default keeps existing deployments working pre-Fatia 3.
+      PICOCLAW_JOTADUO_WA_URL: ${PICOCLAW_JOTADUO_WA_URL:-http://jotaduo-wa:18810}
+      PICOCLAW_JOTADUO_WA_HMAC_SECRET: ${JOTADUO_WA_HMAC_SECRET:-}
     volumes:
       - /srv/saas/tenants:/srv/saas/tenants
       - controlplane_data:/var/lib/picoclaw-saas

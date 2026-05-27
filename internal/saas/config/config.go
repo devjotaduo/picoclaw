@@ -123,6 +123,21 @@ type Config struct {
 	// returns 503 — the admin cannot activate any MCPs that require creds
 	// until this is configured. See internal/saas/mcp/credentials.go.
 	MCPEncryptionKey string
+
+	// JotaduoWAURL is the base URL the public-tenant skill
+	// `enviar-whatsapp-jotaduo` POSTs to. Defaults to the compose service
+	// name on saas_edge (http://jotaduo-wa:18810) since the sidecar lives
+	// alongside the controlplane. Threaded into the tenant container env
+	// at buildSpec time, but ONLY for IsPublic tenants — cliente tenants
+	// must use their own WhatsApp channel after promotion.
+	JotaduoWAURL string
+
+	// JotaduoWAHMACSecret is the HMAC-SHA256 secret shared with the
+	// jotaduo-wa sidecar. The same value MUST be set as JOTADUO_WA_HMAC_SECRET
+	// in the sidecar's env. When empty, the controlplane does not inject
+	// the credential into any tenant — the skill in public tenants will
+	// fail with a clear error directing operators to wire it up.
+	JotaduoWAHMACSecret string
 }
 
 func Load() (*Config, error) {
@@ -202,6 +217,9 @@ func Load() (*Config, error) {
 	c.SupabaseSiteURL = envOr("SUPABASE_SITE_URL", "https://"+c.TenantBaseDomain)
 
 	c.MCPEncryptionKey = os.Getenv("PICOCLAW_SAAS_MCP_ENCRYPTION_KEY")
+
+	c.JotaduoWAURL = envOr("PICOCLAW_JOTADUO_WA_URL", "http://jotaduo-wa:18810")
+	c.JotaduoWAHMACSecret = os.Getenv("PICOCLAW_JOTADUO_WA_HMAC_SECRET")
 
 	if c.PGDSN == "" {
 		return nil, fmt.Errorf("PG_DSN is required")

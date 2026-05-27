@@ -644,6 +644,19 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 		if u := p.Cfg.OnboardingCallbackURL; u != "" {
 			env["PICOCLAW_ONBOARDING_CALLBACK_URL"] = u
 		}
+		// Catarina's `enviar-whatsapp-jotaduo` skill POSTs to the sidecar
+		// using these two envs. Both MUST be present for the skill to work —
+		// the script fails fast with a clear message if either is missing.
+		// We deliberately scope this to IsPublic only so that at promotion
+		// time (when is_public flips to false and the container is recreated)
+		// the cliente tenant loses access to the institutional WA. The
+		// promote endpoint also calls DELETE /internal/wa/routing/by-tenant
+		// on the sidecar (fatia 5) so any pending inbound stops being
+		// routed back — defense in depth.
+		if s := p.Cfg.JotaduoWAHMACSecret; s != "" {
+			env["JOTADUO_WA_URL"] = p.Cfg.JotaduoWAURL
+			env["JOTADUO_WA_HMAC_SECRET"] = s
+		}
 		// publicweb is the channel anonymous visitors use via /api/public/chat*
 		// (SSE, no auth). pico stays in the allowlist because the launcher's
 		// embedded React SPA still renders for visitors on the tenant subdomain
