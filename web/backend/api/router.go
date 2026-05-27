@@ -170,6 +170,11 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// header / chat visibility per active_profile (public/tenant/admin/waiting).
 	h.registerLauncherUIVisibilityRoutes(mux)
 
+	// Inbound webhook from the jotaduo-wa sidecar. Only active in public
+	// tenants (the provisioner injects JOTADUO_WA_HMAC_SECRET only there);
+	// cliente tenants reject with 503 by design.
+	h.registerJotaduoWAInboundRoutes(mux)
+
 	// SaaS admin proxy — forwards /api/admin/saas/* to the controlplane on
 	// behalf of the launcher dashboard user. Disabled unless the launcher is
 	// configured with PICOCLAW_SAAS_ADMIN_MODE=true plus base/email/password.

@@ -56,6 +56,7 @@ The `/pair*` endpoints accept the admin token via either the
 | `JOTADUO_WA_ADMIN_TOKEN` | **yes** | — | Gates `/pair*`. `openssl rand -hex 24` |
 | `JOTADUO_WA_LISTEN` | no | `:18810` | HTTP listen address |
 | `JOTADUO_WA_STORE_DIR` | no | `/var/lib/jotaduo-wa` | Directory holding `whatsapp/store.db` (whatsmeow session) + `routing.db` (phone→tenant map) |
+| `JOTADUO_WA_TENANT_URL_PATTERN` | no | `http://tenant-{id}:18800` | Where the dispatcher POSTs inbound webhooks; `{id}` is substituted with the routed tenant id. Pattern MUST contain `{id}` — silent global delivery would be a cross-tenant leak |
 
 ## On-disk layout
 
@@ -103,11 +104,20 @@ docker build -f docker/saas/Dockerfile.jotaduo-wa -t picoclaw/jotaduo-wa .
 `docker compose up -d --build jotaduo-wa` brings the service up in dev
 alongside the rest of the SaaS stack.
 
-## What's missing (deferred to other fatias)
+## Inbound dispatch (fatia 4)
 
-- **Fatia 2**: workspace skill `enviar-whatsapp-jotaduo` (the consumer)
-- **Fatia 3**: provisioner injects `JOTADUO_WA_URL` + `JOTADUO_WA_HMAC_SECRET` env into public tenants
-- **Fatia 4**: real inbound dispatch — currently inbound messages are received and dropped (the routing table works, but no webhook is fired yet)
-- **Fatia 5**: `tenants_promote.go` calls `DELETE /internal/wa/routing/by-tenant/{id}` before recreate
+When the institutional WA receives a message, the sidecar:
 
-Each is a separate PR so the rollout is reversible at every step.
+1. Looks up `phone → tenant_id` in `routing.db`.
+2. If found: HMAC-signs the message body and POSTs to `<JOTADUO_WA_TENANT_URL_PATTERN with {id} substituted><inboundWebhookPath>` (default `http://tenant-<id>:18800/api/launcher/jotaduo-wa-inbound`).
+3. If not found: logs at info level and drops (cold lead messaging the institutional number without prior outreach — common, not an error).
+
+The launcher endpoint (registered in [web/backend/api/jotaduo_wa_inbound.go](../../web/backend/api/jotaduo_wa_inbound.go)) verifies the HMAC, rejects stale timestamps + tenant_id mismatches, and **appends the message verbatim to `workspace/state/jotaduo-wa-inbox.jsonl`** inside `$PICOCLAW_HOME`. Catarina reads that file via a follow-up skill (TODO) to surface lead replies in her own conversation context.
+
+Best-effort delivery: a failed POST is logged and dropped — there is no retry queue. The lead's next reply will route normally.
+
+## What's missing (deferred to fatia 5)
+
+- **Fatia 5**: `tenants_promote.go` calls `DELETE /internal/wa/routing/by-tenant/{id}` before recreate, so a freshly-promoted cliente stops receiving inbound from the institutional WA even if the route hadn't expired.
+
+The reader skill for Catarina (parsing `jotaduo-wa-inbox.jsonl`) ships as a small follow-up PR after fatia 5 lands — it's a workspace-only change with no infra impact.
