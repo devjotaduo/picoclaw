@@ -21,7 +21,19 @@
 set -euo pipefail
 
 ENV_FILE="${PICOCLAW_R2_ENV_FILE:-/etc/picoclaw/r2-backup.env}"
-BACKUP_PATH="${PICOCLAW_BACKUP_PATH:-/srv/saas/tenants}"
+# Space-separated list of host paths included in each snapshot.
+# Default: tenant volumes + the operator config tree at /etc/picoclaw,
+# which holds r2-backup.env + claude-auth/ (Claude CLI OAuth credentials
+# for tenants using provider="claude-cli"). Losing /etc/picoclaw/claude-auth
+# means re-uploading the operator's local credentials.json — including it
+# here makes restore a single restic command.
+BACKUP_PATHS="${PICOCLAW_BACKUP_PATHS:-/srv/saas/tenants /etc/picoclaw}"
+# Legacy single-path env still honored: older deploys may set
+# PICOCLAW_BACKUP_PATH to a single dir; preserve that override.
+LEGACY_BACKUP_PATH="${PICOCLAW_BACKUP_PATH:-}"
+if [ -n "$LEGACY_BACKUP_PATH" ]; then
+  BACKUP_PATHS="$LEGACY_BACKUP_PATH"
+fi
 LOCKFILE="${PICOCLAW_BACKUP_LOCK:-/var/run/picoclaw-r2-backup.lock}"
 HOST_TAG="${PICOCLAW_BACKUP_HOST:-$(hostname -s)}"
 
@@ -49,10 +61,12 @@ if ! command -v restic >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -d "$BACKUP_PATH" ]; then
-  log "ERROR: backup path $BACKUP_PATH does not exist on this host"
-  exit 1
-fi
+for path in $BACKUP_PATHS; do
+  if [ ! -e "$path" ]; then
+    log "ERROR: backup path $path does not exist on this host"
+    exit 1
+  fi
+done
 
 # restic talks to S3-compatible API; R2 fits.
 export RESTIC_REPOSITORY="s3:${R2_ENDPOINT}/${R2_BUCKET}"
@@ -66,7 +80,7 @@ if ! flock -n 9; then
   exit 0
 fi
 
-log "=== backup pass starting (target=$BACKUP_PATH host=$HOST_TAG) ==="
+log "=== backup pass starting (paths=$BACKUP_PATHS host=$HOST_TAG) ==="
 
 # Lazy repo init — first run on a fresh bucket has to call `restic init`.
 # Subsequent calls fast-path through and just write a snapshot.
@@ -81,8 +95,10 @@ fi
 # Backup. Excludes are conservative: drop transient state that can be
 # rebuilt (sessions/.tmp, WhatsApp store WALs that get rolled by sqlite,
 # lock files, journal/shm) but KEEP the main *.db files themselves.
-log "--- backing up $BACKUP_PATH ---"
-if ! restic backup "$BACKUP_PATH" \
+# Multiple paths are passed as separate args to restic (it accepts N).
+log "--- backing up $BACKUP_PATHS ---"
+# shellcheck disable=SC2086 # BACKUP_PATHS is intentionally word-split
+if ! restic backup $BACKUP_PATHS \
     --tag daily \
     --tag "host:$HOST_TAG" \
     --host "$HOST_TAG" \

@@ -323,9 +323,17 @@ export function ChatPage() {
     ? publicAttendantAgentID
     : mainAgentID
   const activeAgent = testingPublicAttendant ? publicAttendantAgent : mainAgent
+  // Public tenant: the `main` agent in the agents registry is still labelled
+  // "Rafael" (front-line of the cliente team), but the LLM persona in public
+  // mode is Sofia (provisioner swaps workspace/AGENT.md). Override the
+  // assistant display name so every message bubble header AND the empty
+  // state render Sofia, matching what the LLM actually says.
+  // See PR #129 for the empty-state fix; this extends it to bubble headers.
   const assistantName = testingPublicAttendant
     ? publicAttendantLabel(publicAttendantAgent)
-    : (mainAgent?.name || mainAgent?.id || "").trim()
+    : activeProfile === "public"
+      ? "Sofia"
+      : (mainAgent?.name || mainAgent?.id || "").trim()
   const emptyStateDescription = testingPublicAttendant
     ? publicAttendantAgent
       ? undefined
