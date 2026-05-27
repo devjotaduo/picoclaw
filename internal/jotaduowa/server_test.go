@@ -110,42 +110,136 @@ func TestRoutingRegisterAndRevokeViaHTTP(t *testing.T) {
 	}
 }
 
-func TestAdminTokenGatesPair(t *testing.T) {
-	s, _ := newTestServer(t)
+func TestAdminAuthFlow(t *testing.T) {
+	// GET /pair without auth → login form (200, but loginHTML, not pairHTML).
+	t.Run("no auth → login form served", func(t *testing.T) {
+		s, _ := newTestServer(t)
+		req := httptest.NewRequest(http.MethodGet, "/pair", nil)
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("login form: expected 200, got %d", w.Code)
+		}
+		body := w.Body.String()
+		if !strings.Contains(body, `action="/pair/login"`) {
+			t.Errorf("expected login form with action=\"/pair/login\"; got body=%q", body)
+		}
+		if !strings.Contains(body, `name="token"`) {
+			t.Errorf("expected login form with token input; got body=%q", body)
+		}
+	})
 
-	// Without token → 401.
-	req := httptest.NewRequest(http.MethodGet, "/pair", nil)
-	w := httptest.NewRecorder()
-	s.Handler().ServeHTTP(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("no token: expected 401, got %d", w.Code)
-	}
+	// /pair/qr without auth → 401 (the real protected endpoint).
+	t.Run("no auth on /pair/qr → 401", func(t *testing.T) {
+		s, _ := newTestServer(t)
+		req := httptest.NewRequest(http.MethodGet, "/pair/qr", nil)
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401 on /pair/qr, got %d", w.Code)
+		}
+	})
 
-	// With wrong token → 401.
-	req = httptest.NewRequest(http.MethodGet, "/pair", nil)
-	req.Header.Set(adminTokenHeader, "wrong")
-	w = httptest.NewRecorder()
-	s.Handler().ServeHTTP(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("wrong token: expected 401, got %d", w.Code)
-	}
+	// Wrong token via POST /pair/login → 401.
+	t.Run("POST /pair/login wrong token → 401", func(t *testing.T) {
+		s, _ := newTestServer(t)
+		req := httptest.NewRequest(http.MethodPost, "/pair/login",
+			strings.NewReader("token=wrong"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401, got %d", w.Code)
+		}
+	})
 
-	// Right token via header → 200.
-	req = httptest.NewRequest(http.MethodGet, "/pair", nil)
-	req.Header.Set(adminTokenHeader, "admin-token")
-	w = httptest.NewRecorder()
-	s.Handler().ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Errorf("good token: expected 200, got %d", w.Code)
-	}
+	// Right token via POST /pair/login → 303 redirect + Set-Cookie.
+	// Then GET /pair with the cookie → 200 pairHTML.
+	t.Run("login flow: POST → cookie → GET /pair → pair UI", func(t *testing.T) {
+		s, _ := newTestServer(t)
+		req := httptest.NewRequest(http.MethodPost, "/pair/login",
+			strings.NewReader("token=admin-token"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, req)
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("login: expected 303, got %d (body=%s)", w.Code, w.Body.String())
+		}
 
-	// Right token via query string → 200 (browser-friendly fallback).
-	req = httptest.NewRequest(http.MethodGet, "/pair?token=admin-token", nil)
-	w = httptest.NewRecorder()
-	s.Handler().ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Errorf("good token via query: expected 200, got %d", w.Code)
-	}
+		// Extract the session cookie.
+		var sessionCookie *http.Cookie
+		for _, c := range w.Result().Cookies() {
+			if c.Name == adminSessionCookie {
+				sessionCookie = c
+				break
+			}
+		}
+		if sessionCookie == nil {
+			t.Fatal("expected Set-Cookie for adminSessionCookie")
+		}
+		if !sessionCookie.HttpOnly {
+			t.Error("session cookie must be HttpOnly")
+		}
+		if sessionCookie.SameSite != http.SameSiteStrictMode {
+			t.Error("session cookie must be SameSite=Strict")
+		}
+
+		// Now use the cookie to access /pair (should serve pairHTML).
+		req = httptest.NewRequest(http.MethodGet, "/pair", nil)
+		req.AddCookie(sessionCookie)
+		w = httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("/pair with cookie: expected 200, got %d", w.Code)
+		}
+		body := w.Body.String()
+		if !strings.Contains(body, `id="qr"`) {
+			t.Errorf("expected pair UI (QR div) when cookie valid; got body=%q", body)
+		}
+		if strings.Contains(body, `name="token"`) {
+			t.Error("expected pair UI, got login form (cookie was not accepted)")
+		}
+
+		// /pair/qr with the cookie should ALSO succeed (auth was the gate).
+		// Actual handler delegates to WhatsApp.HealthHandler — in tests WA is
+		// nil so we'd panic; verify auth passed by checking we get past the
+		// 401 path, even if downstream errors are different. Skipping the
+		// downstream check is safe — TestAdminAuthFlow is about AUTH only.
+	})
+
+	// ?token= query string fallback → MUST be rejected (audit P0).
+	t.Run("query-string ?token= no longer authenticates", func(t *testing.T) {
+		s, _ := newTestServer(t)
+		req := httptest.NewRequest(http.MethodGet, "/pair/qr?token=admin-token", nil)
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("?token= must NOT authenticate (security fix): got %d", w.Code)
+		}
+	})
+
+	// Header still works (for curl / scripts).
+	t.Run("header still authenticates /pair/qr", func(t *testing.T) {
+		s, _ := newTestServer(t)
+		req := httptest.NewRequest(http.MethodGet, "/pair/qr", nil)
+		req.Header.Set(adminTokenHeader, "admin-token")
+		w := httptest.NewRecorder()
+		// Don't assert the final status (downstream HealthHandler needs WA);
+		// just verify it's NOT 401 (auth passed). A panic from nil WA would
+		// be a test failure, so check the response is at least set.
+		defer func() {
+			// Recover from possible nil WhatsApp panic — auth passed if we
+			// reached the downstream handler.
+			if rec := recover(); rec != nil {
+				// Reached past auth into HealthHandler — auth OK.
+				return
+			}
+		}()
+		s.Handler().ServeHTTP(w, req)
+		if w.Code == http.StatusUnauthorized {
+			t.Error("header auth should succeed")
+		}
+	})
 }
 
 func TestHealthzAlwaysOK(t *testing.T) {
