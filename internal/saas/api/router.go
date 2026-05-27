@@ -258,6 +258,9 @@ func (h *Handler) Routes() http.Handler {
 				// when the checklist is complete. See admin_tenants_discovery.go.
 				r.Get("/admin/tenants/{id}/discovery-status", h.handleAdminTenantDiscoveryStatus)
 				r.Post("/admin/tenants/{id}/discovery-liberate", h.handleAdminTenantDiscoveryLiberate)
+				// Budget status dashboard — lists tenants approaching their
+				// MonthlyBudgetUSD cap, sorted percent_used desc (audit P1 #29).
+				r.Get("/admin/tenants/budget-status", h.handleAdminTenantsBudgetStatus)
 				r.Get("/tenants/{id}/files/tree", h.handleTenantFilesTree)
 				r.Get("/tenants/{id}/files", h.handleTenantFileRead)
 				r.Put("/tenants/{id}/files", h.handleTenantFileWrite)
