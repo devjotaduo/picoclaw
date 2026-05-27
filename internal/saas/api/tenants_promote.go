@@ -146,20 +146,41 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Compute what would block this promotion if not forced. Used both for
+	// the 422 response (when !req.Force) AND for the audit-trail log line
+	// when an admin force-promotes despite blockers (audit P0 #9).
+	var bypassedBlockers []string
+	if state == nil {
+		bypassedBlockers = []string{"onboarding_state_missing"}
+	} else if !state.Promotion.Ready {
+		if len(state.Promotion.BlockedBy) > 0 {
+			bypassedBlockers = state.Promotion.BlockedBy
+		} else {
+			bypassedBlockers = []string{"state.promotion.ready=false"}
+		}
+	}
+
 	// Gate on promotion.ready unless force.
 	if !req.Force {
-		if state == nil || !state.Promotion.Ready {
-			blockedBy := []string{"state.promotion.ready=false"}
-			if state != nil && len(state.Promotion.BlockedBy) > 0 {
-				blockedBy = state.Promotion.BlockedBy
-			}
+		if len(bypassedBlockers) > 0 {
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
 				"error":      "tenant não está pronto pra promoção",
-				"blocked_by": blockedBy,
+				"blocked_by": bypassedBlockers,
 				"hint":       "complete o discovery + 5 áreas de aprofundamento, OU passe {\"force\":true} se quer pular",
 			})
 			return
 		}
+	} else if len(bypassedBlockers) > 0 {
+		// Admin force-promoted DESPITE blockers — record what was bypassed
+		// so post-hoc audit can answer "did this tenant skip discovery?".
+		// Logged as a single line for easy grep, and the audit action verb
+		// changes to tenant.promote.forced so dashboards can filter for it.
+		log.Printf(
+			"promote %s: FORCED by %s — bypassing blockers: [%s] | owner_email=%s",
+			t.ID, actorEmailFromCtx(r.Context()),
+			strings.Join(bypassedBlockers, ","),
+			ownerEmail,
+		)
 	}
 
 	// Dedup: same email already on another tenant?
@@ -281,8 +302,13 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
-	// Step 10: Audit + response.
-	h.auditTenantOp(r, t.ID, "tenant.promote")
+	// Step 10: Audit + response. Distinct verb when force bypassed real
+	// blockers so audit dashboards can highlight forced promotions (P0 #9).
+	auditAction := "tenant.promote"
+	if req.Force && len(bypassedBlockers) > 0 {
+		auditAction = "tenant.promote.forced"
+	}
+	h.auditTenantOp(r, t.ID, auditAction)
 
 	resp := map[string]any{
 		"tenant_id":        t.ID,
