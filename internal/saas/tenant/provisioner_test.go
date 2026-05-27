@@ -91,6 +91,76 @@ func TestBuildSpec_PublicTenantInjectsOnboardingEnv(t *testing.T) {
 	})
 }
 
+// TestBuildSpec_PublicTenantInjectsJotaduoWAEnv locks the contract between
+// the provisioner and the public-tenant skill `enviar-whatsapp-jotaduo`:
+// when IsPublic is true AND the controlplane has a JotaduoWAHMACSecret, the
+// container must receive JOTADUO_WA_URL + JOTADUO_WA_HMAC_SECRET. Cliente
+// tenants must NEVER receive them — after promotion the recreate strips
+// these envs so the cliente loses access to the institutional WA. Empty
+// secret on the controlplane must skip injection so existing deployments
+// pre-sidecar keep working unchanged.
+func TestBuildSpec_PublicTenantInjectsJotaduoWAEnv(t *testing.T) {
+	t.Run("public tenant with configured secret gets both envs", func(t *testing.T) {
+		p := &Provisioner{
+			Cfg: &config.Config{
+				GatewaySharedSecret: "gw",
+				JotaduoWAURL:        "http://jotaduo-wa:18810",
+				JotaduoWAHMACSecret: "wa-secret",
+			},
+		}
+		spec, err := p.buildSpec(context.Background(), &store.Tenant{ID: "pub1", IsPublic: true})
+		if err != nil {
+			t.Fatalf("buildSpec: %v", err)
+		}
+		if got := spec.Env["JOTADUO_WA_URL"]; got != "http://jotaduo-wa:18810" {
+			t.Errorf("JOTADUO_WA_URL = %q, want sidecar URL", got)
+		}
+		if got := spec.Env["JOTADUO_WA_HMAC_SECRET"]; got != "wa-secret" {
+			t.Errorf("JOTADUO_WA_HMAC_SECRET = %q, want %q", got, "wa-secret")
+		}
+	})
+
+	t.Run("public tenant without configured secret skips injection", func(t *testing.T) {
+		p := &Provisioner{
+			Cfg: &config.Config{
+				GatewaySharedSecret: "gw",
+				JotaduoWAURL:        "http://jotaduo-wa:18810",
+				JotaduoWAHMACSecret: "", // not configured — sidecar absent in this deployment
+			},
+		}
+		spec, err := p.buildSpec(context.Background(), &store.Tenant{ID: "pub2", IsPublic: true})
+		if err != nil {
+			t.Fatalf("buildSpec: %v", err)
+		}
+		if _, ok := spec.Env["JOTADUO_WA_URL"]; ok {
+			t.Errorf("JOTADUO_WA_URL should NOT be set when secret is empty (no sidecar configured)")
+		}
+		if _, ok := spec.Env["JOTADUO_WA_HMAC_SECRET"]; ok {
+			t.Errorf("JOTADUO_WA_HMAC_SECRET should NOT be set when secret is empty")
+		}
+	})
+
+	t.Run("cliente tenant NEVER gets the envs even when secret is configured", func(t *testing.T) {
+		p := &Provisioner{
+			Cfg: &config.Config{
+				GatewaySharedSecret: "gw",
+				JotaduoWAURL:        "http://jotaduo-wa:18810",
+				JotaduoWAHMACSecret: "wa-secret",
+			},
+		}
+		spec, err := p.buildSpec(context.Background(), &store.Tenant{ID: "cli1", IsPublic: false})
+		if err != nil {
+			t.Fatalf("buildSpec: %v", err)
+		}
+		if _, ok := spec.Env["JOTADUO_WA_URL"]; ok {
+			t.Errorf("cliente tenant got JOTADUO_WA_URL — promotion strip is broken")
+		}
+		if _, ok := spec.Env["JOTADUO_WA_HMAC_SECRET"]; ok {
+			t.Errorf("cliente tenant got JOTADUO_WA_HMAC_SECRET — promotion strip is broken")
+		}
+	})
+}
+
 // TestBuildSpec_WorkspaceMountAttached verifies the second bind-mount that
 // the new Workspace flow adds when the workspace has a compiled frontend.
 // We exercise the on-disk HasBuiltFrontend gate (an index.html with size>0
