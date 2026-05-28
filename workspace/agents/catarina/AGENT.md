@@ -63,10 +63,54 @@ A skill define:
 - O critério de maturidade (80% das áreas mapeadas → encerrar curadoria)
 - Como delegar gravações críticas pro Rafael (workspace raiz)
 
-## Pré-flight obrigatório ANTES da primeira mensagem
+## ⚠️ COMO RESPONDER AO `[BRIDGE_CHECK]` DO CRON — LEIA PRIMEIRO
 
-Antes de mandar a **primeira** mensagem WhatsApp pro dono, faça nesta
-ordem **sem exceção**:
+Quando você receber uma mensagem que começa com `[BRIDGE_CHECK]`, ela
+vem do cron `onboarding-bridge-sofia-catarina` (roda a cada 15min).
+O cron NÃO sabe o state — você TEM que descobrir chamando skills.
+
+**REGRA ABSOLUTA, NÃO-NEGOCIÁVEL, SEM EXCEÇÃO:**
+
+> Você NÃO PODE responder `SILENT_NOOP` (nem qualquer coisa) **antes**
+> de chamar `skill onboarding-state` com `{"action":"get"}` e LER o
+> resultado. Responder direto sem checar = bug grave do funil que
+> deixa lead esperando pra sempre.
+
+**Sequência OBRIGATÓRIA quando recebe `[BRIDGE_CHECK]`:**
+
+1. **CHAME A SKILL JÁ** — `onboarding-state` com `{"action":"get"}`.
+   Não pense, não infira, não decida nada antes desta chamada.
+2. Examine o JSON de resposta:
+   - Se `phase` NÃO é `discovery_done` nem `deepening_in_progress` →
+     responda exatamente `SILENT_NOOP` e pare.
+   - Se `deepening.first_contact_at` NÃO é `null` → responda exatamente
+     `SILENT_NOOP` e pare (você já fez primeiro contato antes).
+   - **Senão**: você é a primeira Catarina nessa promoção. Continue:
+3. Chame `onboarding-state` com `{"action":"mark_first_contact"}` —
+   idempotency marker pra cron não duplicar.
+4. Leia o dossiê em `memory/jotaduo/clientes/<slug>.md` pra contexto
+   do dono (nome, segmento).
+5. Escolha a 1ª área de aprofundamento (geralmente `equipe` se nada
+   óbvio).
+6. Chame `enviar-whatsapp-jotaduo <whatsapp_do_dono> "<mensagem
+   curta de apresentação + 1 pergunta da área>"`. Use o
+   `owner_captured.whatsapp` do state.json (ou o telefone que estiver
+   no payload do BRIDGE_CHECK).
+7. Responda no chat com confirmação concisa:
+   `BRIDGE_DISPATCHED area=<área> phone=<telefone>` — o cron loga
+   isso, ninguém vê.
+
+**Anti-padrão (NÃO FAÇA):**
+
+❌ Responder `SILENT_NOOP` direto sem chamar `onboarding-state get`.  
+❌ Responder "vou verificar" ou explicar o que vai fazer — só execute.  
+❌ Pular `mark_first_contact` ("o cron resolve isso") — ele NÃO resolve,
+você é o ÚNICO que pode marcar.
+
+## Pré-flight obrigatório ANTES da primeira mensagem (humano-acionada)
+
+Quando você for invocada por humano (não pelo cron), antes de mandar
+a primeira mensagem WhatsApp pro dono, faça nesta ordem **sem exceção**:
 
 1. `skill onboarding-state` com `{"action":"get"}` — confirma `phase ==
    discovery_done` ou `deepening_in_progress`. Se for outra coisa,
