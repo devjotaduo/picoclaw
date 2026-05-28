@@ -28,8 +28,27 @@ STATE_PY="$TMP/workspace/skills/onboarding-state/scripts/state.py"
 export PICOCLAW_HOME="$TMP"
 
 printf '%s\n' '{"action":"init"}' | python3 "$STATE_PY" >/dev/null
-printf '%s\n' '{"action":"set_owner","name":"Ana","email":"ana@example.com","whatsapp":"+5511999999999"}' | python3 "$STATE_PY" >/dev/null
+printf '%s\n' '{"action":"set_owner","name":"Ana","email":"ana@example.com"}' | python3 "$STATE_PY" >/dev/null
 printf '%s\n' '{"action":"mark_discovery_done"}' | python3 "$STATE_PY" >/dev/null
+
+if sh "$REPO_ROOT/workspace/skills/bridge-flow/scripts/run.sh" >/tmp/bridge-no-phone.out 2>&1; then
+  echo "expected bridge-flow failure when owner whatsapp is missing" >&2
+  exit 1
+fi
+
+missing_phone_error="$(python3 - <<'PY'
+import json
+from pathlib import Path
+state = json.loads(Path(__import__("os").environ["PICOCLAW_HOME"], "workspace/state/onboarding.json").read_text())
+print(state["deepening"].get("last_bridge_error") or "")
+PY
+)"
+if ! printf '%s' "$missing_phone_error" | grep -q "owner phone missing"; then
+  echo "missing phone bridge error was not persisted: $missing_phone_error" >&2
+  exit 1
+fi
+
+printf '%s\n' '{"action":"set_owner","name":"Ana","email":"ana@example.com","whatsapp":"+5511999999999"}' | python3 "$STATE_PY" >/dev/null
 
 if FAIL_SEND=1 sh "$REPO_ROOT/workspace/skills/bridge-flow/scripts/run.sh" >/tmp/bridge-fail.out 2>&1; then
   echo "expected bridge-flow failure when send.py fails" >&2

@@ -19,8 +19,7 @@ const Ctx = createContext<AuthCtx | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [status, setStatus] = useState<AuthState>({ state: "loading" });
-  const isPublicRoute =
-    location.pathname === "/pre-cadastro" || location.pathname === "/accept-invite";
+  const isPublicRoute = location.pathname === "/accept-invite";
 
   const refresh = async () => {
     try {

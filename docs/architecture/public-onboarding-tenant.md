@@ -25,8 +25,8 @@ with `docs/architecture/public-tenant-promotion.md`.
 
 ```
 Visitor browser
-   │  POST /api/public/chat  {session_id, message}
-   │  GET  /api/public/chat/stream?session_id=…  (SSE)
+   │  GET /pico/ws?session_id=…  (tenant chat shell)
+   │  or POST /api/public/chat + GET /api/public/chat/stream (public-web)
    ▼
 [Cloudflare/Traefik]
    │
@@ -35,10 +35,12 @@ Visitor browser
    │
    │ serveTenantHost:
    │   1. tenant ← GetBySubdomain("onboarding")  → is_public=true
-   │   2. if isPublicChatRoute(/api/public/chat[/*]) && tenant.IsPublic:
+   │   2. if isPublicTenantSignedRoute(...) && tenant.IsPublic:
    │        skip Supabase JWT;
    │        sign trusted_gateway HMAC with sentinel claims
    │        (UserID="anonymous", Role="public")
+   │        rate-limit /pico/ws + /api/public/chat* (except health)
+   │        verify Turnstile on public-web POST when TURNSTILE_SECRET_KEY is set
    │
    ▼ reverse proxy to tenant-<id>:18800
 [tenant launcher] (web/backend/api/public_chat.go)
@@ -86,7 +88,7 @@ Admin promotes the public tenant when onboarding.json is ready.
 |---|---|---|---|
 | 1. `tenants.is_public` column | ✅ | `5e38496f` | migration 0011 + struct field |
 | 2. `Provisioner.CreateInput.IsPublic` | ✅ | `e9194494` | `normalize()` helper, forces SkipDashboardPassword |
-| 3. Gateway bypass on `/api/public/chat*` | ✅ | `0e13ec92` | sentinels: `UserID:"anonymous"`, `Role:"public"` |
+| 3. Gateway bypass on public tenant chat routes | ✅ | `0e13ec92` + current | sentinels: `UserID:"anonymous"`, `Role:"public"`; `/pico/ws` and `/api/public/chat*` are rate-limited |
 | 4. `pkg/channels/publicweb/` adapter | ✅ | `36d84a66` | SSE multiplexer, anon identity hashing |
 | 5. Launcher HTTP endpoints | ✅ | `63aa7ce0` | WebhookHandler + launcher reverse proxy |
 | 6. Skill scripts (HMAC callback) | ✅ | `0dec…` | `mark-qualified.sh`, `submit-intake.sh` |
@@ -179,9 +181,10 @@ PICOCLAW_ALLOWED_CHANNELS=whatsapp_native,pico,public-web
 - **Bridge observability.** `bridge-flow` records first contact and outreach
   timestamps. Keep alerts on failed WhatsApp sends so Catarina does not
   silently stop after Sofia completes discovery.
-- **Public chat captcha UX.** `public-web` requires `X-Captcha-Token` when
-  configured. Any visitor-facing UI must obtain and attach a validated token
-  before posting to `/api/public/chat`.
+- **Public chat WebSocket hardening.** `public-web` now verifies `X-Captcha-Token`
+  when `TURNSTILE_SECRET_KEY` is configured. The WebSocket chat shell
+  (`/pico/ws`) is protected by gateway rate limiting and should still sit
+  behind WAF/Cloudflare rules in production.
 - **IP-roaming visitors.** Identity is `sha256(session_id+ip)[:8]`, so a
   mobile→wifi switch mid-conversation creates a new identity and the
   agent loses context. Acceptable v1; revisit if real-world complaint.
@@ -195,4 +198,7 @@ Already addressed (no longer gaps):
   `_URL` into every `is_public=true` tenant container.
 - ✅ Cloudflare Turnstile verification lives in
   `internal/saas/api/turnstile.go`, opt-in via `TURNSTILE_SECRET_KEY`.
-  Fail-closed (403 on token rejection or Cloudflare infra failure).
+  Fail-closed (403 on token rejection, 503 on Cloudflare infra failure).
+- ✅ The real tenant chat path `/pico/ws` is included in the public tenant
+  rate limiter, so the visible chat no longer bypasses the abuse cap that
+  protects `/api/public/chat`.

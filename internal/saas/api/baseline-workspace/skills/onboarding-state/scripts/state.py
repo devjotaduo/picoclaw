@@ -299,6 +299,9 @@ def recompute_phase_and_blockers(state: dict, workspace_root: Path | None = None
     if not state["owner_captured"]["email"]:
         blocked.append("owner_email_missing")
 
+    if not state["owner_captured"].get("whatsapp"):
+        blocked.append("owner_whatsapp_missing")
+
     covered = set(state["deepening"]["areas_covered"])
     required = set(state["deepening"]["areas_required"])
     if not required.issubset(covered):

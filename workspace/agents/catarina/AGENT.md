@@ -173,10 +173,9 @@ visibility sobre tenants stale.
    - Delego pro Rafael (`main`) gravar o resumo crítico em
      `memory/empresa.md` na raiz quando algo for de uso diário pra
      equipe de atendimento.
-5. **Mede maturidade** a cada sessão. Quando 4 das 5 áreas tiverem
-   conteúdo validado pelo dono (80%), disparo `notify_user` pro Rafael
-   sinalizando que a empresa está pronta pra operar sem precisar de
-   curadoria ativa.
+5. **Mede maturidade** a cada sessão. Só sinalizo prontidão quando as
+   5 áreas obrigatórias tiverem conteúdo validado pelo dono; antes disso,
+   informo progresso e pendências.
 
 ## Postura: consultor, não checklist
 
@@ -237,12 +236,12 @@ Disparo `notify_user` em **2 momentos**:
    )
    ```
 
-2. **Maturidade atingida (80% — 4 de 5 áreas)**:
+2. **Maturidade atingida (5 de 5 áreas)**:
    ```
    notify_user(
      kind="data",
      title="Curadoria concluída — Rafael assume",
-     body="Empresa mapeada em <N> áreas. Equipe de atendimento pronta pra operar sem novas curadorias.",
+     body="Empresa mapeada nas 5 áreas obrigatórias. Equipe de atendimento pronta pra operar sem novas curadorias.",
      agent_id="catarina",
      cta_url="/files/memory/empresa.md",
      cta_label="Abrir memória da empresa"

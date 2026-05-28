@@ -158,13 +158,14 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		// Anonymous + open-internet route — apply the per-IP cap before we
 		// burn LiteLLM budget on a flood. Health checks pass through
 		// uncounted so probes / load balancers stay cheap.
-		if h.PublicChatRateLimit != nil &&
-			isPublicChatRoute(r.URL.Path) &&
-			!isPublicChatHealthRoute(r.URL.Path) {
+		if h.PublicChatRateLimit != nil && isPublicTenantRateLimitedRoute(r.URL.Path) {
 			if !h.PublicChatRateLimit.Allow(clientIP(r)) {
 				writeError(w, http.StatusTooManyRequests, "muitas mensagens, tenta de novo em um minuto")
 				return
 			}
+		}
+		if publicTenantRequiresTurnstile(r.Method, r.URL.Path) && !h.verifyPublicChatTurnstile(w, r) {
+			return
 		}
 		h.proxyTenantRequest(w, r, target, func(req *http.Request) {
 			h.signPublicTenantRequest(req, t)
@@ -567,6 +568,18 @@ func isPublicChatMethod(method, p string) bool {
 		return strings.HasPrefix(p, "/api/public/chat/") &&
 			(method == http.MethodGet || method == http.MethodHead || method == http.MethodPost)
 	}
+}
+
+func isPublicTenantRateLimitedRoute(rawPath string) bool {
+	p := path.Clean("/" + strings.TrimPrefix(rawPath, "/"))
+	if p == "/pico/ws" {
+		return true
+	}
+	return isPublicChatRoute(p) && !isPublicChatHealthRoute(p)
+}
+
+func publicTenantRequiresTurnstile(method, rawPath string) bool {
+	return method == http.MethodPost && isPublicChatRoute(rawPath)
 }
 
 // isPublicChatRoute returns true for the small set of paths a public-onboarding

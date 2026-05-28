@@ -280,6 +280,49 @@ func TestIsPublicTenantSignedRoute(t *testing.T) {
 	}
 }
 
+func TestIsPublicTenantRateLimitedRoute(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"/pico/ws", true},
+		{"/api/public/chat", true},
+		{"/api/public/chat/stream", true},
+		{"/api/public/chat/health", false},
+		{"/api/auth/status", false},
+		{"/api/launcher/policy", false},
+		{"/", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			if got := isPublicTenantRateLimitedRoute(tc.path); got != tc.want {
+				t.Fatalf("isPublicTenantRateLimitedRoute(%q) = %v, want %v", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPublicTenantRequiresTurnstile(t *testing.T) {
+	cases := []struct {
+		method string
+		path   string
+		want   bool
+	}{
+		{http.MethodPost, "/api/public/chat", true},
+		{http.MethodPost, "/api/public/chat/anything", true},
+		{http.MethodGet, "/api/public/chat/stream", false},
+		{http.MethodGet, "/pico/ws", false},
+		{http.MethodPost, "/api/config", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			if got := publicTenantRequiresTurnstile(tc.method, tc.path); got != tc.want {
+				t.Fatalf("publicTenantRequiresTurnstile(%q, %q) = %v, want %v", tc.method, tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestIsPublicChatHealthRoute confirms only the canonical health probe
 // matches — chat / chat/stream pay the per-IP cap, while /health stays
 // uncounted so load-balancer probes don't burn the budget. Path traversal

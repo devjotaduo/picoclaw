@@ -253,12 +253,9 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 6: Filesystem — flip ui-visibility + seed dashboardauth password.
-	if err := tenant.SetUIVisibilityActiveProfile(t.VolumePath, tenant.UIProfileTenant); err != nil {
-		log.Printf("promote %s: SetUIVisibilityActiveProfile failed (DB already promoted): %v", t.ID, err)
-		// Don't abort — UI fallback works, this is recoverable post-hoc.
-	}
-
+	// Step 6: Seed dashboardauth password. Filesystem changes that switch
+	// the tenant out of public mode run after the password is safely written,
+	// so a seed failure can roll the DB back without leaving a tenant UI.
 	password, err := auth.GeneratePassword()
 	if err != nil {
 		rollbackPromote(r.Context(), h.Tenants, t.ID, ownerEmail, originalAuthBackend, "GeneratePassword")
@@ -273,7 +270,34 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 7: Mark state.json promoted. Prefer `docker exec` into the
+	// Step 7: Restore the canonical workspace/AGENT.md from the
+	// AGENT.cliente.md backup the provisioner left behind when this
+	// tenant was created as public. Without this, the cliente boots into
+	// the Sofia-mode prompt that was active while public — Rafael+team
+	// orchestration is gone, the main agent keeps "BEing Sofia" and
+	// keeps trying to run jotaduo-discovery on a tenant that's already
+	// past discovery. Idempotent: no-op when the backup doesn't exist
+	// (tenant was never public, e.g. cliente created directly).
+	if err := tenant.RestoreClienteAgentMD(t.VolumePath); err != nil {
+		log.Printf("promote %s: restore cliente AGENT.md failed: %v", t.ID, err)
+		rollbackPromoteToPublic(r.Context(), h.Tenants, t.ID, t.VolumePath, ownerEmail, originalAuthBackend, "RestoreClienteAgentMD")
+		writeError(w, http.StatusInternalServerError,
+			"restaurar AGENT.md cliente falhou: "+err.Error()+" — DB foi revertido pra is_public=true")
+		return
+	}
+
+	// Step 7.5: flip the launcher UI profile to tenant. This is now fatal:
+	// promoting a tenant while the visible UI stays in public/waiting mode
+	// is a confusing partial state for the admin and owner.
+	if err := tenant.SetUIVisibilityActiveProfile(t.VolumePath, tenant.UIProfileTenant); err != nil {
+		log.Printf("promote %s: SetUIVisibilityActiveProfile failed: %v", t.ID, err)
+		rollbackPromoteToPublic(r.Context(), h.Tenants, t.ID, t.VolumePath, ownerEmail, originalAuthBackend, "SetUIVisibilityActiveProfile")
+		writeError(w, http.StatusInternalServerError,
+			"trocar ui-visibility pra tenant falhou: "+err.Error()+" — DB foi revertido pra is_public=true")
+		return
+	}
+
+	// Step 7.75: Mark state.json promoted. Prefer `docker exec` into the
 	// running container so the Python recompute (+ fcntl.flock) actually
 	// runs (audit P1 #11). Falls back to direct file write if docker exec
 	// fails — at this point in the flow the container should be up, but
@@ -284,22 +308,6 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 	if state != nil {
 		actor := actorEmailFromCtx(r.Context())
 		markPromotedForPromote(r.Context(), t.ID, t.VolumePath, actor)
-	}
-
-	// Step 7.5: Restore the canonical workspace/AGENT.md from the
-	// AGENT.cliente.md backup the provisioner left behind when this
-	// tenant was created as public. Without this, the cliente boots into
-	// the Sofia-mode prompt that was active while public — Rafael+team
-	// orchestration is gone, the main agent keeps "BEing Sofia" and
-	// keeps trying to run jotaduo-discovery on a tenant that's already
-	// past discovery. Idempotent: no-op when the backup doesn't exist
-	// (tenant was never public, e.g. cliente created directly).
-	if err := tenant.RestoreClienteAgentMD(t.VolumePath); err != nil {
-		log.Printf(
-			"promote %s: restore cliente AGENT.md failed (non-fatal — cliente will boot with Sofia prompt until manual fix): %v",
-			t.ID,
-			err,
-		)
 	}
 
 	// Step 8: Recreate container so it boots with PICOCLAW_AUTH_MODE=launcher
@@ -338,12 +346,14 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 	// Best-effort: a sidecar issue must NOT abort the (already-succeeded)
 	// promotion. Operator can re-run the revoke manually if the sidecar
 	// was momentarily unreachable.
+	warnings := []string{}
 	if err := h.RevokeJotaduoWARouting(r.Context(), t.ID); err != nil {
 		log.Printf(
 			"promote %s: revoke jotaduo-wa routing failed (non-fatal, container already on cliente spec): %v",
 			t.ID,
 			err,
 		)
+		warnings = append(warnings, "revogar rota jotaduo-wa falhou: "+err.Error())
 	}
 
 	// Step 9: Email (best-effort).
@@ -386,9 +396,12 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		resp["force_reason"] = strings.TrimSpace(req.ForceReason)
 	}
 	if h.Mailer == nil || !h.Mailer.Enabled() {
-		resp["warning"] = "SMTP não configurado — entregue email + senha manualmente ao owner"
+		warnings = append(warnings, "SMTP não configurado — entregue email + senha manualmente ao owner")
 	} else {
 		resp["info"] = resp["info"].(string) + " Email com URL+senha enviado pro owner."
+	}
+	if len(warnings) > 0 {
+		resp["warning"] = strings.Join(warnings, " | ")
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -557,6 +570,20 @@ func rollbackPromote(
 	}
 	log.Printf("promote %s: rolled back DB to is_public=true after %s failure",
 		tenantID, failedStep)
+}
+
+func rollbackPromoteToPublic(
+	ctx context.Context,
+	tenants *store.TenantStore,
+	tenantID, volumePath, ownerEmail, originalAuthBackend, failedStep string,
+) {
+	rollbackPromote(ctx, tenants, tenantID, ownerEmail, originalAuthBackend, failedStep)
+	if err := tenant.SetUIVisibilityActiveProfile(volumePath, tenant.UIProfilePublic); err != nil {
+		log.Printf("promote %s: failed to restore public ui profile after %s rollback: %v", tenantID, failedStep, err)
+	}
+	if err := tenant.ApplyPublicSofiaAgentMD(volumePath); err != nil {
+		log.Printf("promote %s: failed to restore Sofia public AGENT.md after %s rollback: %v", tenantID, failedStep, err)
+	}
 }
 
 // actorEmailFromCtx returns the email of the platform_admin user
