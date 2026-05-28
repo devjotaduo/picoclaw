@@ -3,6 +3,6 @@
 # to regenerate after editing the repo's workspace/ tree.
 
 source_dir: workspace/
-commit_hash: 8e8c9222
-generated_at: 2026-05-28T05:31:38Z
-file_count: 283
+commit_hash: 4f0c4b6e
+generated_at: 2026-05-28T07:20:03Z
+file_count: 285
