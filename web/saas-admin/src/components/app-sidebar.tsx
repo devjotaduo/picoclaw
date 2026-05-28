@@ -4,7 +4,6 @@ import {
   IconActivity,
   IconBriefcase,
   IconClipboardList,
-  IconFileText,
   IconFolder,
   IconLayoutDashboard,
   IconLink,
@@ -65,7 +64,6 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: "Comercial",
     items: [
-      { label: "Pré-cadastros", to: "/intakes", icon: IconFileText, platformOnly: true },
       { label: "CRM", to: "/crm/contacts", icon: IconBriefcase, platformOnly: true, match: (p) => p.startsWith("/crm") },
     ],
   },

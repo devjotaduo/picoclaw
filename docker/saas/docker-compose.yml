@@ -290,15 +290,6 @@ services:
       ALERT_FROM: ${ALERT_FROM:-}
       ALERT_TO: ${ALERT_TO:-}
       ALERT_DISK_THRESHOLD_PCT: ${ALERT_DISK_THRESHOLD_PCT:-85}
-      # Auto-provision: when true, Clara's mark_qualified hands off directly
-      # to the provisioner so qualified visitors get a working dashboard URL
-      # before the SSE stream closes. Keep false until Supabase is wired and
-      # the per-IP rate-limit is tuned for production traffic.
-      PICOCLAW_SAAS_AUTO_PROVISION: ${PICOCLAW_SAAS_AUTO_PROVISION:-false}
-      PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY: ${PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY:-3}
-      # Auto-provision picks the workspace whose row has is_default_auto=true.
-      # Mark one via the admin UI before turning auto-provision on, otherwise
-      # Clara's qualifier fails fast with a clear error.
       # Supabase: source of truth for tenant dashboard logins when set. Leave
       # blank to keep the legacy local sessions auth path (no behavior change
       # to existing tenants — auth_backend='local' rows ignore these vars).
@@ -307,14 +298,6 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
       SUPABASE_SITE_URL: ${SUPABASE_SITE_URL:-https://${SAAS_BASE_DOMAIN}}
-      # Phase 10 — public onboarding tenant. The controlplane signs callbacks
-      # coming back from the in-tenant `onboarding-mark-qualified` /
-      # `onboarding-submit-intake` skills with this HMAC secret. URL points
-      # to the controlplane's own host (Traefik routes both adm.* and the
-      # apex to it), so the tenant can reach it over the saas_edge network.
-      # Empty default keeps existing deployments working pre-Phase 10.
-      PICOCLAW_ONBOARDING_CALLBACK_SECRET: ${PICOCLAW_ONBOARDING_CALLBACK_SECRET:-}
-      PICOCLAW_ONBOARDING_CALLBACK_URL: ${PICOCLAW_ONBOARDING_CALLBACK_URL:-}
       # Shared with jotaduo-wa sidecar (same value passed to it as
       # JOTADUO_WA_HMAC_SECRET). The provisioner forwards both URL + secret
       # into public-tenant containers so Catarina's `enviar-whatsapp-jotaduo`

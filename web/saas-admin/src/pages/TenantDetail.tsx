@@ -653,7 +653,6 @@ export function TenantDetail() {
               <thead className="bg-zinc-900/80 text-left text-[11px] uppercase tracking-wide text-zinc-500">
                 <tr>
                   <th className="px-3 py-2 font-medium">Nonce</th>
-                  <th className="px-3 py-2 font-medium">Origem</th>
                   <th className="px-3 py-2 font-medium">Criado</th>
                   <th className="px-3 py-2 font-medium">Expira</th>
                   <th className="px-3 py-2 font-medium">Status</th>
@@ -664,15 +663,6 @@ export function TenantDetail() {
                 {magicLinksQuery.data.links.map((m) => (
                   <tr key={m.nonce} className={m.active ? "" : "opacity-60"}>
                     <td className="px-3 py-2 font-mono text-[11px] text-zinc-300">{m.nonce}</td>
-                    <td className="px-3 py-2 text-xs text-zinc-500">
-                      {m.intake_id ? (
-                        <span title="Vinculado a um intake (lead Clara). Auto-revogado ao submit_intake.">
-                          intake
-                        </span>
-                      ) : (
-                        <span title="Gerado manualmente pelo admin (não vinculado a intake).">admin</span>
-                      )}
-                    </td>
                     <td className="px-3 py-2 text-xs text-zinc-500" title={formatDate(m.created_at)}>
                       {relativeTime(m.created_at)}
                     </td>
@@ -874,15 +864,14 @@ export function TenantDetail() {
 
               <div className="space-y-2 rounded-md border border-zinc-700 bg-zinc-900/50 p-3 text-xs">
                 <div className="flex items-center justify-between">
-                  <div className="font-medium text-zinc-200">Invalidar quando a conversa terminar</div>
-                  {magicLinkConsumed && <span className="text-[10px] text-emerald-400">✓ link invalidado</span>}
-                </div>
-                <p className="text-zinc-400">
-                  <b>Automático:</b> quando Clara fizer <code>submit_intake</code>, todos os links
-                  amarrados àquele intake são invalidados sozinhos (aparece a tela de "obrigado, em
-                  breve entramos em contato"). <b>Manual:</b> use o botão abaixo se quiser fechar
-                  esse link agora — opcionalmente personalize o resumo que o visitante vê.
-                </p>
+                <div className="font-medium text-zinc-200">Invalidar quando a conversa terminar</div>
+                {magicLinkConsumed && <span className="text-[10px] text-emerald-400">✓ link invalidado</span>}
+              </div>
+              <p className="text-zinc-400">
+                  Use o botão abaixo para fechar este link agora. Depois disso, quem clicar verá a
+                  tela de "obrigado, em breve entramos em contato"; opcionalmente personalize o
+                  resumo exibido ao visitante.
+              </p>
                 <Textarea
                   value={magicLinkSummary}
                   onChange={(e) => setMagicLinkSummary(e.target.value)}

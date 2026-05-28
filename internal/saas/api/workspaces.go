@@ -47,11 +47,11 @@ func randomHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-// Workspaces HTTP layer — single CRUD surface that replaces the LauncherProfile
-// + TenantTemplateDir + AutoProvisionWorkspaceDir pile. The admin panel calls
-// these endpoints to manage workspaces; provisioning reads from the same DB
-// rows. File CRUD is intentionally narrow (read/write a text file by path)
-// for MVP — operators can SSH into <Cfg.WorkspaceDir>/<slug>/ for bulk edits.
+// Workspaces HTTP layer — single CRUD surface for templates used by tenant
+// provisioning. The admin panel calls these endpoints to manage workspaces;
+// provisioning reads from the same DB rows. File CRUD is intentionally narrow
+// (read/write a text file by path) for MVP — operators can SSH into
+// <Cfg.WorkspaceDir>/<slug>/ for bulk edits.
 
 const maxWorkspaceFileBytes = 2 << 20 // 2 MiB — generous for AGENT.md / config.json / .tsx
 
@@ -59,10 +59,10 @@ type workspaceReq struct {
 	Name              string            `json:"name"`
 	Slug              string            `json:"slug"`
 	Description       string            `json:"description"`
-	IsDefaultAuto     bool               `json:"is_default_auto"`
-	IsAvailableManual bool               `json:"is_available_manual"`
-	IsRaw             bool               `json:"is_raw"`
-	RolePolicy        policy.RolePolicy  `json:"role_policy"`
+	IsDefaultAuto     bool              `json:"is_default_auto"`
+	IsAvailableManual bool              `json:"is_available_manual"`
+	IsRaw             bool              `json:"is_raw"`
+	RolePolicy        policy.RolePolicy `json:"role_policy"`
 	// SeedFromBaseline (default true) extracts the embedded
 	// baseline-workspace template into home/ right after creating the
 	// directories. Set false only when the caller intends to fill the

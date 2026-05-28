@@ -640,20 +640,8 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 		env["BROWSER_CDP_URL"] = u
 	}
 
-	// Public-onboarding tenants run skills that call the controlplane via
-	// HMAC-signed callback (mark-qualified.sh, submit-intake.sh). Both vars
-	// are read by the scripts; skipping them means the skills exit with a
-	// `required` env error and Clara has to apologize in chat. We propagate
-	// them only for IsPublic tenants — regular tenants have no business
-	// signing onboarding callbacks.
 	if t.IsPublic {
 		env["PICOCLAW_PUBLIC_TENANT"] = "true"
-		if s := p.Cfg.OnboardingCallbackSecret; s != "" {
-			env["PICOCLAW_ONBOARDING_CALLBACK_SECRET"] = s
-		}
-		if u := p.Cfg.OnboardingCallbackURL; u != "" {
-			env["PICOCLAW_ONBOARDING_CALLBACK_URL"] = u
-		}
 		// Catarina's `enviar-whatsapp-jotaduo` skill POSTs to the sidecar
 		// using these two envs. Both MUST be present for the skill to work —
 		// the script fails fast with a clear message if either is missing.

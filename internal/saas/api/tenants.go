@@ -111,9 +111,9 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Dedup by owner email — mirrors AutoProvisioner.Run. Surfaced as 409 with
-	// the existing tenant info so the admin UI can deep-link instead of
-	// silently no-op'ing a destructive click. Skipped for public tenants
+	// Dedup by owner email. Surfaced as 409 with the existing tenant info so
+	// the admin UI can deep-link instead of silently no-op'ing a destructive
+	// click. Skipped for public tenants
 	// because they all share the same synthetic ops@<base> address; subdomain
 	// uniqueness below catches the real "already provisioned" case.
 	if !isPublic {
@@ -205,7 +205,6 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		createdTenant,
 		string(store.RoleTenantOwner),
 		defaultMagicLinkTTL,
-		"",
 	); err != nil {
 		log.Printf("tenant create: access bundle generation failed for tenant %s: %v", out.TenantID, err)
 		resp["access_warning"] = "Cliente criado, mas o link de acesso não foi gerado. Use endereço e senha inicial como alternativa."

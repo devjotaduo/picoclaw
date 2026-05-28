@@ -8,7 +8,7 @@ em rotas `/admin/*`. Não há login separado: o admin entra pelo
 controlplane usando credenciais armazenadas em arquivo com permissão 600.
 
 `web/saas-admin` (em `adm.<dominio>`) segue atendendo audit log, users,
-intakes públicos, agent/skills editor por tenant, CRM, server health e
+agent/skills editor por tenant, CRM, server health e
 **workspaces** (CRUD + build do frontend customizado por workspace).
 
 ## Escopo
@@ -159,7 +159,7 @@ Disponível em qualquer momento via
 
 ## Fora de escopo
 
-- Portar telas restantes do `web/saas-admin` (audit, users, intakes, CRM,
+- Portar telas restantes do `web/saas-admin` (audit, users, CRM,
   agent editor por tenant, workspaces).
 - Snapshot tenant-as-workspace (criar workspace novo a partir de um tenant
   existente).

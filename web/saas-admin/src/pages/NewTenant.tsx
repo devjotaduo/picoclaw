@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   IconChevronDown,
@@ -94,10 +94,19 @@ function selectedTypeMeta(type: TenantType) {
   return TYPE_CARDS.find((card) => card.id === type) ?? TYPE_CARDS[0];
 }
 
+function parseTenantTypeParam(value: string | null): TenantType | null {
+  return value === "publico" || value === "admin" || value === "cliente" ? value : null;
+}
+
 export function NewTenant() {
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
   const qc = useQueryClient();
-  const [tenantType, setTenantType] = useState<TenantType>("cliente");
+  const initialTenantType =
+    parseTenantTypeParam(searchParams.get("type")) ??
+    parseTenantTypeParam(searchParams.get("tenant_type")) ??
+    "cliente";
+  const [tenantType, setTenantType] = useState<TenantType>(initialTenantType);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [form, setForm] = useState<CreateTenantInput>({
     display_name: "",
