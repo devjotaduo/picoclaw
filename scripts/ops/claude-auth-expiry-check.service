@@ -1,0 +1,14 @@
+[Unit]
+Description=Picoclaw claude-cli OAuth expiry check (audit P1 #32)
+Documentation=https://github.com/devjotaduo/picoclaw/blob/main/scripts/ops/README.md
+# Don't block on other tenant services — this is a read-only check.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/claude-auth-expiry-check.sh
+# Failure on expired credentials is intentional (exit 1). Systemd marks
+# the unit failed; external monitoring (Uptime Robot, Better Stack,
+# etc.) can subscribe to `systemctl is-failed claude-auth-expiry-check`
+# OR stat /var/lib/picoclaw-pg-dumps/.claude-auth-status mtime+content.
+StandardOutput=journal
+StandardError=journal
