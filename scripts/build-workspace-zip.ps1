@@ -408,7 +408,7 @@ if ($Public) {
             settings = [pscustomobject]@{
                 rate_limit_per_ip       = 30
                 session_ttl_seconds     = 1800
-                require_captcha_header  = $false
+                require_captcha_header  = $true
             }
         }
         # Idempotente: substitui se ja existir

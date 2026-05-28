@@ -44,11 +44,10 @@ func loadSecurityConfig(cfg *Config, securityPath string) error {
 		return fmt.Errorf("failed to read security config: %w", err)
 	}
 
-	// Save existing channels and ModelList before unmarshal
-	savedChannels := make(ChannelsConfig, len(cfg.Channels))
-	for name, bc := range cfg.Channels {
-		savedChannels[name] = bc
-	}
+	// Save existing channels before unmarshaling the YAML into cfg. This must
+	// clone the channel structs, not just the map pointers, because yaml.Unmarshal
+	// can mutate the existing Channel values in-place before we restore+merge.
+	savedChannels := cloneChannelsConfig(cfg.Channels)
 	// savedModelList := cfg.ModelList
 
 	// Parse YAML into a yaml.Node tree to extract channels node
@@ -95,6 +94,20 @@ func loadSecurityConfig(cfg *Config, securityPath string) error {
 	}
 
 	return nil
+}
+
+func cloneChannelsConfig(in ChannelsConfig) ChannelsConfig {
+	out := make(ChannelsConfig, len(in))
+	for name, ch := range in {
+		if ch == nil {
+			out[name] = nil
+			continue
+		}
+		copyCh := *ch
+		copyCh.Settings = append(RawNode(nil), ch.Settings...)
+		out[name] = &copyCh
+	}
+	return out
 }
 
 func applyLegacySkillsSecurityConfig(cfg *Config, data []byte) error {
