@@ -99,8 +99,20 @@ func run() error {
 		Handler:           h.Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      60 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		// WriteTimeout must accommodate the longest-lived response on the
+		// controlplane, which is the SSE proxy of /api/public/chat/stream
+		// to the tenant gateway (visitor → controlplane → tenant launcher
+		// → gateway). Each agent reply via claude-cli can take 60–180s
+		// with a tool-call iteration. At WriteTimeout=60s (the original
+		// value), the controlplane killed the SSE connection exactly when
+		// the long reply was about to arrive — saudação rápida (~25s)
+		// chegava, qualquer turn com tool call era cortado em ~60s.
+		// Validated live 2026-05-28 (HTTPS access log: 60017ms then 504).
+		// 15min is well beyond any realistic Sofia turn (Sonnet 4.5) while
+		// still reaping zombie clients; pairs with the gateway's
+		// pkg/channels/manager.go WriteTimeout=10min.
+		WriteTimeout: 15 * time.Minute,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	errCh := make(chan error, 1)
