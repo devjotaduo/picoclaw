@@ -163,7 +163,7 @@ with a clear error otherwise.
 
 ---
 
-## Auto-provision (Clara)
+## Legacy intake auto-provision
 
 `internal/saas/api/company_intakes_provision.go`:
 
@@ -176,7 +176,7 @@ out, _ := a.Provisioner.Create(ctx, tenant.CreateInput{
 ```
 
 If no workspace is marked `is_default_auto`, auto-provision fails fast and
-the operator sees the error in the Clara chat. No legacy fallback.
+the operator sees the error in the legacy intake chat. No legacy fallback.
 
 ---
 

@@ -1,17 +1,19 @@
-# Public Onboarding Tenant
+# Public Tenant Onboarding
 
-The "public onboarding tenant" is a Picoclaw tenant marked `is_public=true`
-that serves anonymous visitors at `https://onboarding.<base>` and runs the
-Clara discovery chat. It's the planned replacement for the legacy in-process
-Clara handler in `internal/saas/clara/` — same UX, but Clara is now a full
-Picoclaw agent (skills, memory, multi-channel, editable via dashboard)
-instead of a stateless LLM client living inside the controlplane Go binary.
+A public onboarding tenant is a normal Picoclaw tenant marked
+`is_public=true`. It is created through the admin "New tenant" wizard with
+tenant type **Público**. Visitors open the tenant subdomain and start in the
+public chat with **Sofia**. After Sofia captures the discovery, **Catarina**
+uses the institutional Jotaduo WhatsApp sidecar to deepen the missing areas.
+
+The old standalone public form is not a live entrypoint. Keep new work aligned
+with `docs/architecture/public-tenant-promotion.md`.
 
 ## Why a dedicated tenant
 
-| Capability | Legacy Clara (`internal/saas/clara/`) | Public onboarding tenant |
+| Capability | Legacy in-process intake | Public onboarding tenant |
 |---|---|---|
-| Editable prompt without deploy | ❌ (`clara_system.txt` is embedded) | ✅ `workspace/agents/clara/AGENT.md` |
+| Editable prompt without deploy | ❌ embedded prompt | ✅ `workspace/agents/sofia/AGENT.md` / public `workspace/AGENT.md` |
 | Skills / MCP / RAG | ❌ | ✅ catálogo completo do Picoclaw |
 | Memory persistente entre conversas | ❌ | ✅ `workspace/memory/` |
 | Multi-canal (WhatsApp, Telegram…) | ❌ só web SSE | ✅ qualquer canal habilitado |
@@ -28,7 +30,7 @@ Visitor browser
    ▼
 [Cloudflare/Traefik]
    │
-   ▼ Host: onboarding.jotaduo.com
+   ▼ Host: <public-subdomain>.jotaduo.com
 [controlplane :443] (internal/saas/api/tenant_gateway.go)
    │
    │ serveTenantHost:
@@ -60,25 +62,22 @@ Visitor browser
    │
    │ Identity: "public-web:" + hex(sha256(sessionID+"|"+ip)[:8])
    │
-   ▼ inbound message → agent loop → Clara responds
+   ▼ inbound message → agent loop → Sofia responds
 [agent loop / pkg/agent/]
    │
-   │ When discovery complete, Clara calls skills:
-   │   onboarding-mark-qualified  → scripts/mark-qualified.sh
-   │   onboarding-submit-intake   → scripts/submit-intake.sh
+   │ Sofia records owner contact + discovery through:
+   │   onboarding-state/scripts/state.py
+   │   memory/empresa.md
    │
-   │ Both scripts sign HMAC-SHA256(body) with
-   │ PICOCLAW_ONBOARDING_CALLBACK_SECRET, POST to:
+   │ When discovery is done, bridge-flow can dispatch Catarina:
+   │   skills/bridge-flow/scripts/run.sh
+   │   skills/enviar-whatsapp-jotaduo/scripts/send.py
    │
    ▼
-[controlplane :443] POST /api/v1/onboarding-callback
-(internal/saas/api/onboarding_callback.go)
+[jotaduo-wa sidecar] sends Catarina's first WhatsApp question
    │
-   │ verify HMAC + timestamp (±5min) → dispatch:
-   │   mark_qualified → CompanyIntakes.MarkQualifiedByID
-   │   submit_intake  → SetContactInfo + SubmitByID + AutoProvisioner.Run
-   │                    (creates the customer's tenant + Supabase user +
-   │                     dispatches Mailer.SendCredentialsEmail)
+   ▼
+Admin promotes the public tenant when onboarding.json is ready.
 ```
 
 ## Phase status (commits on `feat/public-onboarding-tenant`)
@@ -92,10 +91,10 @@ Visitor browser
 | 5. Launcher HTTP endpoints | ✅ | `63aa7ce0` | WebhookHandler + launcher reverse proxy |
 | 6. Skill scripts (HMAC callback) | ✅ | `0dec…` | `mark-qualified.sh`, `submit-intake.sh` |
 | 7. Controlplane callback endpoint | ✅ | `603e436d` | HMAC verify + anti-replay ±5min |
-| 8. Public-tenant workspace template | ✅ | `f78d7c34`+`21cc044c`+(this) | Originally `workspace-onboarding/` with Clara; superseded by `workspace/` (the full multi-agent dev tree) with Sofia as the discovery default. Build a ZIP via `scripts/build-workspace-zip.ps1` and upload via the admin UI to install. |
+| 8. Public-tenant workspace template | ✅ | `f78d7c34`+`21cc044c`+(this) | `workspace/` is the source; public tenants override `workspace/AGENT.md` so Sofia is the discovery default. |
 | 9. Bootstrap script + endpoint | ❌ removed in PR #104 | `889dd4b7` (added), PR #104 (removed) | Singleton public tenant now created through the normal wizard with `tenant_type=publico`. Script `scripts/provision-onboarding-tenant.sh` is broken. |
-| 10. Frontend cutover (feature flag) | ✅ | adapter + env-prop + polling-bridge + useClaraChat wire-up | Three building blocks (`onboardingTenantChat.ts`, `pkg/tools.ExecTool` env injection + skill-script env fallback, `onboardingIntakePolling.ts`) plus the `useClaraChat` cutover gated by `VITE_USE_ONBOARDING_TENANT`. |
-| 11. Delete `internal/saas/clara/` | ⏸ | — | wait 1-2 weeks of stable parallel operation |
+| 10. Tenant-root public chat | ✅ | current | Public tenants can serve the chat shell as role `public`; policy allows chat write + logs read only. |
+| 11. Legacy intake cleanup | ⏸ | — | Keep historical modules until no operational dependency remains. |
 | 12. Docs + memory | ✅ | (this commit) | |
 
 ## Sentinel claims
@@ -112,22 +111,21 @@ tenant routes even if the path classifier had a bug — defense in depth.
 
 ## Required production env vars
 
-Beyond the existing Supabase + Brevo + auto-provision vars (see
-`docs/operations/supabase-auth.md`), the onboarding tenant needs:
+Beyond the existing Supabase/Brevo vars (see
+`docs/operations/supabase-auth.md`), public onboarding needs:
 
 ```bash
-# Same value on controlplane AND inside the onboarding tenant container.
-# Generate via: openssl rand -hex 32
+# Controlplane. Generated with openssl rand -hex 32.
 PICOCLAW_ONBOARDING_CALLBACK_SECRET=...
-
-# Inside the onboarding tenant container only (mark-qualified.sh +
-# submit-intake.sh read these):
 PICOCLAW_ONBOARDING_CALLBACK_URL=https://adm.jotaduo.com
-PICOCLAW_ONBOARDING_CALLBACK_SECRET=...  # same as above
 
-# When activating the frontend cutover (Phase 10 functional):
-VITE_USE_ONBOARDING_TENANT=true
-VITE_ONBOARDING_TENANT_URL=https://onboarding.jotaduo.com
+# Controlplane. Institutional WhatsApp sidecar used only by public tenants.
+JOTADUO_WA_URL=http://jotaduo-wa:18810
+JOTADUO_WA_HMAC_SECRET=...
+
+# Injected automatically into is_public=true tenant containers.
+PICOCLAW_PUBLIC_TENANT=true
+PICOCLAW_ALLOWED_CHANNELS=whatsapp_native,pico,public-web
 ```
 
 ## Bootstrap (one-time per environment)
@@ -135,13 +133,10 @@ VITE_ONBOARDING_TENANT_URL=https://onboarding.jotaduo.com
 > **Updated 2026-05-25 (PR #104).** The dedicated bootstrap endpoint +
 > script were removed. Use the normal wizard with `tenant_type=publico`.
 
-1. Set `PICOCLAW_ONBOARDING_CALLBACK_SECRET` on the controlplane (and
-   recommended `PICOCLAW_ONBOARDING_CALLBACK_URL`). **TODO:** `buildSpec`
-   in `internal/saas/tenant/provisioner.go` does not yet propagate these
-   into the tenant container env — currently has to be added manually to
-   the container or via a parallel mechanism. Without the secret the
-   skill scripts inside the container exit non-zero and Clara has to
-   apologize in chat.
+1. Set `PICOCLAW_ONBOARDING_CALLBACK_SECRET`,
+   `PICOCLAW_ONBOARDING_CALLBACK_URL`, `JOTADUO_WA_URL`, and
+   `JOTADUO_WA_HMAC_SECRET` on the controlplane. `buildSpec` propagates the
+   public-only values into `is_public=true` containers.
 
 2. Create the onboarding workspace via the admin UI. The recommended flow:
    ```bash
@@ -166,58 +161,33 @@ VITE_ONBOARDING_TENANT_URL=https://onboarding.jotaduo.com
 
 4. Verify:
    ```bash
-   curl -sS https://onboarding.jotaduo.com/api/public/chat/health  # → {"ok":true}
-   curl -sS -X POST https://onboarding.jotaduo.com/api/public/chat \
+   curl -sS https://<public-subdomain>.jotaduo.com/api/public/chat/health
+   # → {"ok":true}
+
+   curl -sS -X POST https://<public-subdomain>.jotaduo.com/api/public/chat \
      -H 'Content-Type: application/json' \
-     -d '{"session_id":"smoke","message":"oi"}'                   # → 202
-   curl -N "https://onboarding.jotaduo.com/api/public/chat/stream?session_id=smoke"
+     -H 'X-Captcha-Token: <validated-token>' \
+     -d '{"session_id":"smoke","message":"oi"}'
+   # → 202
+
+   curl -N "https://<public-subdomain>.jotaduo.com/api/public/chat/stream?session_id=smoke"
    # → SSE: event: open → eventual {text: "..."} from the agent
    ```
 
 ## Known gaps (follow-ups)
 
-- **Phase 10 functional cutover.** All four building blocks ship as
-  isolated, vitest-covered modules:
-  1. ✅ **SSE adapter** — `web/saas-admin/src/pages/pre-cadastro/clara/onboardingTenantChat.ts`.
-     POST + GET-stream against the public-onboarding tenant, typed
-     `{open|message|close}` events, open-handshake gate so the first
-     reply isn't dropped by `publicweb.Channel.Send`'s `ErrNoStream`
-     branch.
-  2. ✅ **`intake_id` ↔ `session_id` binding** — `pkg/tools.ExecTool`
-     extends every skill subprocess env with `PICOCLAW_CHAT_*` vars
-     derived from `WithToolContext`. Onboarding skill scripts default
-     `intake_id` to `$PICOCLAW_CHAT_SESSION_ID` when no positional
-     argument is passed. Browser sets `session_id = intake_id` when
-     opening the SSE stream.
-  3. ✅ **Polling bridge** — `web/saas-admin/src/pages/pre-cadastro/clara/onboardingIntakePolling.ts`.
-     Diffs the intake row (`GET /api/v1/public/company-intakes/{id}`)
-     and synthesizes the legacy `extracted` / `qualified` /
-     `tenant_provisioned` events. Public response now exposes
-     `qualified_at`, `linked_tenant_id`, and the resolved
-     `tenant_url` / `tenant_subdomain` / `tenant_login_mode` via
-     `Handler.publicIntakeResponseWithTenant`. Terminal on
-     `tenant_provisioned`.
-  4. ✅ **`useClaraChat` wire-up** — when
-     `VITE_USE_ONBOARDING_TENANT=true` and `VITE_ONBOARDING_TENANT_URL`
-     is set, the hook opens a persistent tenant chat stream + intake
-     polling for the session lifetime. `send()` pushes through the
-     stream's `send()`; reply chunks land on the shared `onEvent`
-     handler. publicweb has no "turn complete" event in its contract,
-     so the hook treats 1.5s of silence after the last chunk as turn
-     end (debounced reset on each chunk). The legacy POST-and-stream
-     path stays intact when the flag is off — flip it back to
-     instantly revert.
-
-  **Rollout:** the flag is opt-in and unset in `.env.example` /
-  production env, so deploys are no-ops until the operator sets
-  `VITE_USE_ONBOARDING_TENANT=true` + `VITE_ONBOARDING_TENANT_URL=…`
-  and triggers a frontend rebuild.
+- **Bridge observability.** `bridge-flow` records first contact and outreach
+  timestamps. Keep alerts on failed WhatsApp sends so Catarina does not
+  silently stop after Sofia completes discovery.
+- **Public chat captcha UX.** `public-web` requires `X-Captcha-Token` when
+  configured. Any visitor-facing UI must obtain and attach a validated token
+  before posting to `/api/public/chat`.
 - **IP-roaming visitors.** Identity is `sha256(session_id+ip)[:8]`, so a
   mobile→wifi switch mid-conversation creates a new identity and the
   agent loses context. Acceptable v1; revisit if real-world complaint.
-- **Phase 11 — delete `internal/saas/clara/`.** Wait at least 1-2 weeks
-  of stable parallel operation with the flag flipped in prod before
-  removing the ~3000-LOC legacy handler.
+- **Legacy intake cleanup.** Historical intake code can stay until no
+  operational path depends on it, but new onboarding work must target public
+  tenants and Sofia/Catarina state.
 
 Already addressed (no longer gaps):
 

@@ -72,6 +72,9 @@ func TestBuildSpec_PublicTenantInjectsOnboardingEnv(t *testing.T) {
 		if got := spec.Env["PICOCLAW_ALLOWED_CHANNELS"]; got != "whatsapp_native,pico,public-web" {
 			t.Errorf("ALLOWED_CHANNELS = %q, want %q", got, "whatsapp_native,pico,public-web")
 		}
+		if got := spec.Env["PICOCLAW_PUBLIC_TENANT"]; got != "true" {
+			t.Errorf("PUBLIC_TENANT = %q, want true", got)
+		}
 	})
 
 	t.Run("private tenant does NOT see onboarding env", func(t *testing.T) {
@@ -87,6 +90,9 @@ func TestBuildSpec_PublicTenantInjectsOnboardingEnv(t *testing.T) {
 		}
 		if got := spec.Env["PICOCLAW_ALLOWED_CHANNELS"]; got != "whatsapp_native,pico" {
 			t.Errorf("ALLOWED_CHANNELS = %q, want %q (default includes pico for in-browser chat)", got, "whatsapp_native,pico")
+		}
+		if _, ok := spec.Env["PICOCLAW_PUBLIC_TENANT"]; ok {
+			t.Errorf("private tenant unexpectedly got PUBLIC_TENANT")
 		}
 	})
 }

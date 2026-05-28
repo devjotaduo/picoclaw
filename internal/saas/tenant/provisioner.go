@@ -647,6 +647,7 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 	// them only for IsPublic tenants — regular tenants have no business
 	// signing onboarding callbacks.
 	if t.IsPublic {
+		env["PICOCLAW_PUBLIC_TENANT"] = "true"
 		if s := p.Cfg.OnboardingCallbackSecret; s != "" {
 			env["PICOCLAW_ONBOARDING_CALLBACK_SECRET"] = s
 		}

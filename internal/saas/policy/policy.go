@@ -23,6 +23,7 @@ const (
 	RoleTenantAdmin   = "tenant_admin"
 	RoleOperator      = "operator"
 	RoleViewer        = "viewer"
+	RolePublic        = "public"
 )
 
 const (
@@ -162,6 +163,13 @@ func DefaultRolePolicy() RolePolicy {
 	viewer[FeatureRawConfig] = AccessNone
 	viewer[FeatureInternalAgents] = AccessNone
 
+	public := map[string]Access{}
+	for _, feature := range FeatureIDs {
+		public[feature] = AccessNone
+	}
+	public[FeatureChat] = AccessWrite
+	public[FeatureLogs] = AccessRead
+
 	// admin_panel is reserved for platform_admin (special-cased in
 	// EffectiveFeatures). Every tenant-scoped role must default to None so the
 	// /admin/* sidebar entry and any future API gating stay invisible.
@@ -169,12 +177,14 @@ func DefaultRolePolicy() RolePolicy {
 	admin[FeatureAdminPanel] = AccessNone
 	operator[FeatureAdminPanel] = AccessNone
 	viewer[FeatureAdminPanel] = AccessNone
+	public[FeatureAdminPanel] = AccessNone
 
 	return RolePolicy{
 		RoleTenantOwner: writeAll,
 		RoleTenantAdmin: admin,
 		RoleOperator:    operator,
 		RoleViewer:      viewer,
+		RolePublic:      public,
 	}
 }
 
@@ -218,6 +228,13 @@ func LoadFile(home string) (LauncherPolicyFile, error) {
 	var f LauncherPolicyFile
 	if err := json.Unmarshal(b, &f); err != nil {
 		return LauncherPolicyFile{}, err
+	}
+	if f.RolePolicy == nil {
+		var raw RolePolicy
+		if err := json.Unmarshal(b, &raw); err != nil {
+			return LauncherPolicyFile{}, err
+		}
+		f.RolePolicy = raw
 	}
 	f.RolePolicy = NormalizeRolePolicy(f.RolePolicy)
 	return f, nil
