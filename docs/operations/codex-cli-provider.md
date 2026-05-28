@@ -73,6 +73,12 @@ Para tenants novos, quando Claude e Codex CLI auth estão válidos, o
 provisioner materializa automaticamente o primário `claude-cli-sonnet` com
 fallback `codex-cli-gpt-5`.
 
+O Codex não é bind-mounted em `/root/.codex`: o provisioner copia um snapshot
+mínimo (`auth.json` e, se existir, `config.toml`) para o volume do tenant e
+seta `CODEX_HOME=/root/.picoclaw/.codex`. Isso mantém o diretório do operador
+imutável, evita levar sessões/logs/memórias locais para o tenant e deixa o
+`codex exec` escrever helper/config state sem falhar em filesystem read-only.
+
 Para tenants existentes que não serão reprovisionados, ajuste manualmente
 `agents.defaults.model_fallbacks` e o `model_list`:
 
@@ -96,12 +102,16 @@ Para tenants existentes que não serão reprovisionados, ajuste manualmente
     {
       "model_name": "codex-cli-gpt-5",
       "provider": "codex-cli",
-      "model": "gpt-5",
+      "model": "codex-cli",
       "workspace": "/root/.picoclaw/workspace"
     }
   ]
 }
 ```
+
+`"model": "codex-cli"` faz o provider não passar `-m`; o modelo efetivo vem do
+`config.toml` do auth dir do operador. Isso evita forçar um modelo não aceito
+por contas ChatGPT usadas via Codex CLI.
 
 Quando o `claude-cli` retorna erro (rate-limit, token expirado, API
 indisponível), `pkg/providers/fallback.go` automaticamente tenta o

@@ -642,12 +642,15 @@ const (
 	defaultSaaSClaudeCLIModelName = "claude-cli-sonnet"
 	defaultSaaSClaudeCLIModel     = "sonnet"
 	defaultSaaSCodexCLIModelName  = "codex-cli-gpt-5"
-	defaultSaaSCodexCLIModel      = "gpt-5"
+	// "codex-cli" tells the provider not to pass -m, letting the operator's
+	// Codex config.toml choose a model compatible with that ChatGPT account.
+	defaultSaaSCodexCLIModel = "codex-cli"
 )
 
 // ApplySaaSCLIModelRouting makes a provisioned non-raw tenant use shared
 // operator CLI auth mounts instead of upstream API keys. The auth material
-// lives outside the workspace and is injected read-only by the provisioner.
+// lives outside the workspace; Claude is injected read-only and Codex is
+// copied into a writable CODEX_HOME snapshot because codex exec writes state.
 func ApplySaaSCLIModelRouting(destDir string, enableClaude, enableCodex bool) error {
 	if !enableClaude && !enableCodex {
 		return fmt.Errorf("at least one saas cli provider must be enabled")
