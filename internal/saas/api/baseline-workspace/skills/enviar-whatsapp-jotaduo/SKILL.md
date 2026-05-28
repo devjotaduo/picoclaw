@@ -44,8 +44,16 @@ dispatch inbound de fato; até lá, inbound é só logado).
 ## Arguments
 
 ```
+python3 scripts/send.py <phone> <message>
+# OU (wrapper compativel):
 scripts/send.sh <phone> <message>
 ```
+
+`scripts/send.py` é o source of truth (stdlib python, sem deps). O wrapper
+`scripts/send.sh` resolve `python3` / `python` no PATH e exec'a o `.py`
+— mantido pra retrocompatibilidade com agentes que ainda chamam `.sh`.
+Container tenant não tem bash nem openssl, então a versão antiga
+falhava silenciosamente em prod (audit 2026-05-28).
 
 - `<phone>` — número de destino. Aceita formatos:
   - `5511999998888` (recomendado: country code + DDD + número)
