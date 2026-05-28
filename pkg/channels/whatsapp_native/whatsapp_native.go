@@ -767,13 +767,16 @@ func (c *WhatsAppNativeChannel) sendWithSource(ctx context.Context, msg bus.Outb
 	if err != nil {
 		return nil, fmt.Errorf("invalid chat id %q: %w", msg.ChatID, err)
 	}
+	if client.Store != nil && client.Store.ID != nil && sameWhatsAppPhoneUser(client.Store.ID.User, to.User) {
+		return nil, fmt.Errorf("recipient matches the paired WhatsApp account; use a different recipient: %w", channels.ErrSendFailed)
+	}
 
 	messageID := client.GenerateMessageID()
 	waMsg := &waE2E.Message{
 		Conversation: proto.String(msg.Content),
 	}
 
-	_, sendErr := client.SendMessage(ctx, to, waMsg, whatsmeow.SendRequestExtra{ID: messageID})
+	resp, sendErr := client.SendMessage(ctx, to, waMsg, whatsmeow.SendRequestExtra{ID: messageID})
 	if sendErr != nil {
 		for _, obs := range c.snapshotObservers() {
 			obs.OnOutbound(ctx, OutboundObservation{
@@ -799,7 +802,10 @@ func (c *WhatsAppNativeChannel) sendWithSource(ctx context.Context, msg bus.Outb
 			Operator:  op,
 		})
 	}
-	return nil, nil
+	if resp.ID != "" {
+		messageID = string(resp.ID)
+	}
+	return []string{messageID}, nil
 }
 
 func (c *WhatsAppNativeChannel) sendMediaWithSource(ctx context.Context, msg bus.OutboundMediaMessage, source string) ([]string, error) {
@@ -1235,4 +1241,42 @@ func parseJID(s string) (types.JID, error) {
 		return types.ParseJID(s)
 	}
 	return types.NewJID(s, types.DefaultUserServer), nil
+}
+
+func sameWhatsAppPhoneUser(a, b string) bool {
+	a = phoneDigits(a)
+	b = phoneDigits(b)
+	if a == "" || b == "" {
+		return false
+	}
+	if a == b {
+		return true
+	}
+	return sameBrazilianNinthDigitVariant(a, b)
+}
+
+func phoneDigits(s string) string {
+	var out strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			out.WriteRune(r)
+		}
+	}
+	return out.String()
+}
+
+func sameBrazilianNinthDigitVariant(a, b string) bool {
+	if !strings.HasPrefix(a, "55") || !strings.HasPrefix(b, "55") {
+		return false
+	}
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+	if len(b) != len(a)+1 || len(a) < 12 {
+		return false
+	}
+	if a[:4] != b[:4] {
+		return false
+	}
+	return b[4] == '9' && a[4:] == b[5:]
 }
