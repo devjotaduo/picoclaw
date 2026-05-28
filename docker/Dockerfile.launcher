@@ -88,11 +88,12 @@ RUN apk add --no-cache \
 # configured with provider="claude-cli" — see internal/saas/tenant/
 # provisioner.go::buildSpec and docs/operations/claude-cli-provider.md.
 #
-# codex CLI (OpenAI's Codex) has the same pattern: OAuth under $HOME/.codex,
-# bind-mounted from PICOCLAW_TENANT_CODEX_CLI_AUTH_DIR. Used as fallback
-# in model_list entries that set fallbacks: ["codex"] — when the primary
-# claude-cli hits rate-limit / token-expired, the agent's fallback chain
-# (pkg/providers/fallback.go) retries on the codex provider. See
+# codex CLI (OpenAI's Codex) uses OAuth under CODEX_HOME. The provisioner
+# snapshots PICOCLAW_TENANT_CODEX_CLI_AUTH_DIR into the tenant volume and sets
+# CODEX_HOME there because `codex exec` writes helper/config state. Used as
+# fallback in model_list entries that set fallbacks: ["codex-cli-gpt-5"] — when
+# the primary claude-cli hits rate-limit / token-expired, the agent's fallback
+# chain (pkg/providers/fallback.go) retries on the codex provider. See
 # docs/operations/codex-cli-provider.md.
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

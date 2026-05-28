@@ -31,6 +31,9 @@ const sharedAuthHostPath = "/etc/picoclaw/shared-auth.json"
 // point at the controlplane-managed model name, not at raw upstream providers.
 const defaultSaaSLiteLLMModel = "gpt-4o-mini"
 
+const tenantCodexCLIHomeRel = ".codex"
+const tenantCodexCLIHomeContainer = "/root/.picoclaw/.codex"
+
 func (p *Provisioner) sharedCLIModelRouting() (useClaude, useCodex bool) {
 	if p == nil || p.Cfg == nil {
 		return false, false
@@ -84,6 +87,47 @@ func resolveCLIAuthDir(path, markerFile, nestedDir string) (string, error) {
 func hasRegularFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+// prepareCodexCLIHome snapshots the minimum operator-managed Codex CLI auth
+// files into the tenant volume. Codex writes helper/config state during
+// `codex exec`, so a read-only bind at /root/.codex breaks the first real
+// turn. Copying just auth.json and config.toml keeps the operator source
+// immutable without leaking local sessions, memories, logs, or plugin caches.
+func prepareCodexCLIHome(volumePath, authDir string) error {
+	authDir = strings.TrimSpace(authDir)
+	if volumePath == "" || authDir == "" {
+		return nil
+	}
+	dest := filepath.Join(volumePath, tenantCodexCLIHomeRel)
+	srcAbs, srcErr := filepath.Abs(authDir)
+	dstAbs, dstErr := filepath.Abs(dest)
+	if srcErr == nil && dstErr == nil && srcAbs == dstAbs {
+		return nil
+	}
+	if err := os.RemoveAll(dest); err != nil {
+		return fmt.Errorf("reset codex home: %w", err)
+	}
+	if err := os.MkdirAll(dest, 0o700); err != nil {
+		return fmt.Errorf("mkdir codex home: %w", err)
+	}
+	for _, name := range []string{"auth.json", "config.toml"} {
+		src := filepath.Join(authDir, name)
+		info, err := os.Stat(src)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) && name == "config.toml" {
+				continue
+			}
+			return fmt.Errorf("stat codex %s: %w", name, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return fmt.Errorf("codex %s is not a regular file", name)
+		}
+		if err := copyFile(src, filepath.Join(dest, name), 0o600); err != nil {
+			return fmt.Errorf("copy codex %s: %w", name, err)
+		}
+	}
+	return nil
 }
 
 // copySharedAuthIfPresent reads sharedAuthHostPath (or the
@@ -392,6 +436,15 @@ func (p *Provisioner) runProvision(
 		// fallback for deployments that have not configured CLI auth dirs.
 		cliClaude, cliCodex := p.sharedCLIModelRouting()
 		if cliClaude || cliCodex {
+			if cliCodex {
+				codexDir, err := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
+				if err != nil {
+					return fmt.Errorf("resolve codex cli auth dir: %w", err)
+				}
+				if err := prepareCodexCLIHome(t.VolumePath, codexDir); err != nil {
+					return fmt.Errorf("prepare codex cli home: %w", err)
+				}
+			}
 			if err := SubstituteConfigPlaceholders(t.VolumePath, map[string]string{
 				"${TENANT_ID}": t.ID,
 			}); err != nil {
@@ -765,12 +818,12 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 	}
 
 	// Shared CLI provider auth dirs — bind-mount the operator's OAuth
-	// credentials read-only into every tenant. Tenants configured with
-	// provider="claude-cli" / "codex-cli" then call the bundled binary
-	// inside the container without per-tenant authentication.
+	// credentials for Claude read-only into every tenant. Codex gets a
+	// writable snapshot prepared under the tenant volume because `codex exec`
+	// writes helper/config state into CODEX_HOME.
 	//
-	// Mounted read-only so a compromised tenant cannot rotate / exfil
-	// the operator's tokens — refresh happens on the host.
+	// Claude remains mounted read-only so a compromised tenant cannot rotate
+	// the operator's source tokens — refresh happens on the host.
 	//
 	// Skip silently when env unset OR dir missing OR not a directory.
 	// Decouples the deploy from the auth setup: image bumps land fine
@@ -778,6 +831,12 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 	// dir + writes credentials, every new tenant inherits the auth.
 	claudeAuthDir, claudeAuthErr := resolveClaudeCLIAuthDir(p.Cfg.TenantClaudeCliAuthDir)
 	codexAuthDir, codexAuthErr := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
+	if codexAuthErr != nil {
+		log.Printf("WARN: provisioner: tenant %s codex-cli auth dir: %v (skipping CODEX_HOME)",
+			t.ID, codexAuthErr)
+	} else if codexAuthDir != "" {
+		spec.Env["CODEX_HOME"] = tenantCodexCLIHomeContainer
+	}
 	for _, mount := range []struct {
 		dir    string
 		err    error
@@ -785,7 +844,6 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 		label  string
 	}{
 		{claudeAuthDir, claudeAuthErr, "/root/.claude", "claude-cli"},
-		{codexAuthDir, codexAuthErr, "/root/.codex", "codex-cli"},
 	} {
 		if mount.err != nil {
 			log.Printf("WARN: provisioner: tenant %s %s auth dir: %v (skipping mount)",

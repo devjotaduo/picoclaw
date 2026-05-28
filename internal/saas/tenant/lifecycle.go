@@ -93,6 +93,13 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 			}
 		}
 	}
+	if codexDir, err := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir); err != nil {
+		return fmt.Errorf("resolve codex cli auth dir: %w", err)
+	} else if codexDir != "" {
+		if err := prepareCodexCLIHome(t.VolumePath, codexDir); err != nil {
+			return fmt.Errorf("prepare codex cli home: %w", err)
+		}
+	}
 	spec, err := p.buildSpec(ctx, t)
 	if err != nil {
 		return fmt.Errorf("build spec: %w", err)

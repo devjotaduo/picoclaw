@@ -325,7 +325,7 @@ channel_list:
 	codex := models[1].(map[string]any)
 	if codex["model_name"] != "codex-cli-gpt-5" ||
 		codex["provider"] != "codex-cli" ||
-		codex["model"] != "gpt-5" ||
+		codex["model"] != "codex-cli" ||
 		codex["workspace"] != "/root/.picoclaw/workspace" ||
 		codex["enabled"] != true {
 		t.Fatalf("codex-cli fallback model not materialized: %#v", codex)
@@ -368,7 +368,7 @@ func TestApplySaaSCLIModelRoutingSupportsCodexOnly(t *testing.T) {
 	codex := models[0].(map[string]any)
 	if codex["model_name"] != "codex-cli-gpt-5" ||
 		codex["provider"] != "codex-cli" ||
-		codex["model"] != "gpt-5" ||
+		codex["model"] != "codex-cli" ||
 		codex["workspace"] != "/root/.picoclaw/workspace" ||
 		codex["enabled"] != true {
 		t.Fatalf("codex-cli model not materialized: %#v", codex)

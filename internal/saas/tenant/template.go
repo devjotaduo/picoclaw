@@ -27,6 +27,7 @@ var rawCloneSkipExact = []string{
 	"runtime-user-env",
 	"logs",
 	"auth.json",        // operator/per-tenant OAuth (Google/Anthropic/Codex)
+	".codex",           // per-tenant Codex CLI OAuth/config snapshot
 	"launcher-auth.db", // dashboard bcrypt — must not be reused
 	"dashboardauth.db", // legacy dashboard credential store
 	".security.yml",    // per-channel secrets (sasl, nickserv, etc.)

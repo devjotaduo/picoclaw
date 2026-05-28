@@ -111,12 +111,16 @@ Se for necessário fazer um hotfix manual sem passar pelo lifecycle, ajuste
     {
       "model_name": "codex-cli-gpt-5",
       "provider": "codex-cli",
-      "model": "gpt-5",
+      "model": "codex-cli",
       "workspace": "/root/.picoclaw/workspace"
     }
   ]
 }
 ```
+
+`"model": "codex-cli"` faz o provider não passar `-m`; o modelo efetivo vem do
+`config.toml` do auth dir do operador. Isso evita forçar um modelo não aceito
+por contas ChatGPT usadas via Codex CLI.
 
 Quando o `claude-cli` retorna erro (rate-limit, token expirado, API
 indisponível), `pkg/providers/fallback.go` automaticamente tenta o
