@@ -98,13 +98,31 @@ Relevant commits on `codex/fix-public-tenant-e2e`:
 - `150e9165 fix(whatsapp): detect self sends in native channel`
 - `c76912f2 fix(whatsapp): resolve LID before native sends`
 - `16aebf6 fix(whatsapp): verify native recipients before send`
-- `fix(jotaduo-wa): route resolved LID replies`
+- `cf386325 fix(jotaduo-wa): route resolved LID replies`
 
 The final deployed production sidecar image after this run was:
 
 ```text
 sha256:b59314a8e4b0150b348098df50f55af55d5d412ee8822582dd95a1fc928f4cf6
 ```
+
+Additional post-fix LID-routing validation:
+
+- GitHub Actions run: `26606434961`
+- Commit: `cf386325`
+- Deployed `jotaduo-wa` image: `sha256:91167836d02150d93de7286765b40466ec3808ae38e1503960989b4445a72b8b`
+- Public tenant: `sofia05282115-4972a4`
+- Route reset before send: `routes_removed=3`
+- Real send returned message ID `3EB0C50BB4AECE9DDC6A96`
+- Route list immediately after send had exactly 2 routes:
+  - phone alias `5587...3793`
+  - LID alias `3921...2606`
+- Real reply arrived as `chat_jid="<lid>@lid"` and Catarina read it with
+  `verificar-respostas-jotaduo`.
+- `check-inbox.py --consume` emitted the reply once; the next read was
+  empty, confirming the pointer advanced.
+- Recent `jotaduo-wa` logs had no `no routing`, `privacy token`, or
+  `participant list hash` errors during this validation.
 
 ## Local validation
 
