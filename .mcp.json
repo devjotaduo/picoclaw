@@ -3,8 +3,10 @@
     "ruflo": {
       "command": "npx",
       "args": [
-        "-y",
-        "ruflo@latest",
+        "--yes",
+        "--package",
+        "ruflo@3.10.5",
+        "ruflo",
         "mcp",
         "start"
       ],
@@ -16,7 +18,7 @@
         "CLAUDE_FLOW_MAX_AGENTS": "15",
         "CLAUDE_FLOW_MEMORY_BACKEND": "hybrid"
       },
-      "autoStart": false
+      "autoStart": true
     }
   }
 }
