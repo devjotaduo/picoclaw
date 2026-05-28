@@ -202,6 +202,19 @@ atomicamente (tmp + rename).
 
 ## Falhas conhecidas e como debugar
 
+**Sintoma:** `/internal/wa/send` retorna `{"status":"sent"}` mas o lead
+nao recebe, e os logs do sidecar mostram `Failed to issue privacy token`
+ou `Server returned different participant list hash`
+**Causa:** historicamente o canal `whatsapp_native` mandava direto para o
+PN JID (`...@s.whatsapp.net`) sem preflight de destinatario. Em sessoes
+com LID presente mas `lid_migration_ts=0`, o WhatsApp podia aceitar o node
+HTTP e depois logar erro de privacy token. Tambem havia falso positivo ao
+enviar para o proprio numero pareado com variante brasileira do nono digito.
+**Fix:** builds a partir de `16aebf6` validam o destinatario com
+`IsOnWhatsApp`, canonizam JIDs, tentam resolver PN -> LID e rejeitam
+self-send. Runbook completo em
+[`docs/operations/jotaduo-wa-real-delivery.md`](../operations/jotaduo-wa-real-delivery.md).
+
 **Sintoma:** Catarina diz `503 whatsapp not paired`
 **Causa:** sidecar tá vivo (`/healthz=200`) mas QR nunca foi escaneado, OU
 WhatsApp desautenticou o pareamento
@@ -244,9 +257,10 @@ nenhuma rota (Catarina nunca mandou mensagem pra esse número antes).
   WhatsApp Web/Desktop ou trocar de celular, o sidecar perde a conexão.
 - **Backup do store.db não automatizado** (TODO ops). Perda = re-pareamento
   manual via QR.
-- **Sem auto-deploy do sidecar nos image bumps** — o `picoclaw-deploy.sh`
-  no VPS atual (pre-PR #124) só pula 4 imagens. Bumps do sidecar precisam
-  de pull manual até [PR #124](https://github.com/devjotaduo/picoclaw/pull/124)
-  ser sincronizado pra VPS (operação manual proibida via SSH; rota é
-  re-publicar via GHA depois que alguém atualizar `/usr/local/bin/picoclaw-deploy.sh`
-  manualmente uma vez).
+- **Deploy de sidecar deve ser via GHA + timer** — o VPS atual puxa
+  `ghcr.io/devjotaduo/picoclaw-jotaduo-wa:main`, retaga para
+  `picoclaw/jotaduo-wa:latest` e recria `jotaduo-wa` via
+  `picoclaw-deploy.service` quando o image ID muda. Nao copie binario,
+  source code ou imagem manual para o VPS; acione
+  `.github/workflows/release-controlplane.yml` e force o timer se precisar
+  validar imediatamente.

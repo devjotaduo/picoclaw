@@ -38,8 +38,8 @@ agent → enviar-whatsapp-jotaduo → jotaduo-wa (HTTP HMAC) → whatsmeow → W
 
 O sidecar `jotaduo-wa` registra automaticamente um routing
 `<phone> → $PICOCLAW_TENANT_ID` quando o envio dá certo, pra que respostas
-do lead voltem pra este mesmo tenant (Fatia 4 do plano implementa o
-dispatch inbound de fato; até lá, inbound é só logado).
+do lead voltem pra este mesmo tenant via webhook em
+`workspace/state/jotaduo-wa-inbox.jsonl`.
 
 ## Arguments
 
@@ -101,6 +101,33 @@ Assinado via HMAC-SHA256 usando `JOTADUO_WA_HMAC_SECRET`. O header
     `adm.<base>/jotaduo-wa/pair`
   - `503 hmac secret not configured` — sidecar subiu sem
     `JOTADUO_WA_HMAC_SECRET`
+  - `502 send failed: recipient ... is not registered on WhatsApp` —
+    numero nao passou na verificacao `IsOnWhatsApp`
+  - `502 send failed: recipient matches the paired WhatsApp account` —
+    tentativa de enviar para o proprio numero institucional (inclui
+    variante brasileira com nono digito)
+
+## Semantica de entrega
+
+Desde o fix de 2026-05-28, o sidecar deve retornar `message_ids` reais no
+stdout quando o envio for aceito pelo WhatsApp:
+
+```json
+{"message_ids":["3EB..."],"status":"sent","tenant_id":"..."}
+```
+
+Isso comprova que o sidecar autenticou, validou o destinatario e recebeu
+ack do envio. Nao comprova leitura no aparelho do lead. Para validar um
+problema de entrega real, confira tambem os logs recentes do sidecar:
+
+```bash
+docker logs --since 2m jotaduo-wa 2>&1 | tail -160
+```
+
+Se aparecer `Failed to issue privacy token` ou
+`Server returned different participant list hash` logo apos o envio, siga
+o runbook em
+`docs/operations/jotaduo-wa-real-delivery.md`.
 
 ## Exemplos
 
