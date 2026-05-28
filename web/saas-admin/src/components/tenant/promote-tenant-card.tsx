@@ -51,6 +51,7 @@ export function PromoteTenantCard(props: { tenant: Tenant }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [emailOverride, setEmailOverride] = useState("");
   const [force, setForce] = useState(false);
+  const [forceReason, setForceReason] = useState("");
   const [error, setError] = useState<string>("");
   const [result, setResult] = useState<PromoteTenantResponse | null>(null);
 
@@ -66,6 +67,7 @@ export function PromoteTenantCard(props: { tenant: Tenant }) {
       promoteTenant(tenant.id, {
         force,
         owner_email: emailOverride.trim().toLowerCase() || undefined,
+        force_reason: force ? forceReason.trim() : undefined,
       }),
     onSuccess: async (r) => {
       setResult(r);
@@ -215,6 +217,20 @@ export function PromoteTenantCard(props: { tenant: Tenant }) {
             </span>
           </label>
 
+          {force && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-zinc-300">
+                Motivo da promoção forçada
+              </label>
+              <textarea
+                className="min-h-20 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-500"
+                value={forceReason}
+                onChange={(e) => setForceReason(e.target.value)}
+                placeholder="Explique por que o admin está liberando antes do onboarding completo."
+              />
+            </div>
+          )}
+
           {error && (
             <div className="rounded border border-red-800 bg-red-950/40 px-3 py-2 text-xs text-red-300">
               {error}
@@ -227,7 +243,11 @@ export function PromoteTenantCard(props: { tenant: Tenant }) {
             </Button>
             <Button
               onClick={() => promoteM.mutate()}
-              disabled={promoteM.isPending || !emailOverride.trim()}
+              disabled={
+                promoteM.isPending ||
+                (!emailOverride.trim() && !capturedEmail) ||
+                (force && !forceReason.trim())
+              }
             >
               {promoteM.isPending ? "Promovendo…" : "Promover"}
             </Button>

@@ -63,10 +63,12 @@ if [ -z "$PHONE" ]; then
   exit 1
 fi
 
-# 4. Mark first contact (idempotent — sets first_contact_at if null)
-MARK_RESULT=$(echo '{"action":"mark_first_contact"}' | python3 "$STATE_PY" 2>&1)
+# 4. Record a bridge attempt without marking first_contact_at yet. If the
+# WhatsApp send fails, the cron must retry instead of treating Catarina as
+# already dispatched.
+ATTEMPT_RESULT=$(echo '{"action":"mark_bridge_attempt"}' | python3 "$STATE_PY" 2>&1)
 if [ $? -ne 0 ]; then
-  echo "BRIDGE_ERROR: mark_first_contact failed: $MARK_RESULT"
+  echo "BRIDGE_ERROR: mark_bridge_attempt failed: $ATTEMPT_RESULT"
   exit 1
 fi
 
@@ -76,7 +78,27 @@ MSG="Oi $NAME, sou a Catarina da Jotaduo. A Sofia ja deixou o painel da empresa 
 SEND_RESULT=$(python3 "$SEND_PY" "$PHONE" "$MSG" 2>&1)
 SEND_RC=$?
 if [ $SEND_RC -ne 0 ]; then
+  ERR_JSON=$(BRIDGE_SEND_RC="$SEND_RC" BRIDGE_SEND_RESULT="$SEND_RESULT" python3 - <<'PY'
+import json
+import os
+
+print(json.dumps({
+    "action": "mark_bridge_failed",
+    "error": "send.py rc=%s out=%s" % (
+        os.environ.get("BRIDGE_SEND_RC", ""),
+        os.environ.get("BRIDGE_SEND_RESULT", ""),
+    ),
+}))
+PY
+)
+  echo "$ERR_JSON" | python3 "$STATE_PY" >/dev/null 2>&1 || true
   echo "BRIDGE_ERROR: send.py rc=$SEND_RC out=$SEND_RESULT"
+  exit 1
+fi
+
+MARK_RESULT=$(echo '{"action":"mark_first_contact"}' | python3 "$STATE_PY" 2>&1)
+if [ $? -ne 0 ]; then
+  echo "BRIDGE_ERROR: mark_first_contact failed after send: $MARK_RESULT"
   exit 1
 fi
 

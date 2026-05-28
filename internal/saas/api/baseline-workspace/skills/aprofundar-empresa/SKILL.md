@@ -64,8 +64,8 @@ Cada sessão cobre **uma** área. Não tente cobrir duas no mesmo turno.
 
 | # | Chave         | O que captura                                          | Playbook                          |
 |---|---------------|--------------------------------------------------------|-----------------------------------|
-| 1 | profissionais | Equipe — quem faz o quê, horários individuais, áreas   | `references/area-profissionais.md` |
-| 2 | excecoes      | Casos que sempre quebram processo                      | `references/area-casos-excecao.md` |
+| 1 | equipe        | Equipe — quem faz o quê, horários individuais, áreas   | `references/area-profissionais.md` |
+| 2 | casos-excecao | Casos que sempre quebram processo                      | `references/area-casos-excecao.md` |
 | 3 | faq           | Perguntas reais recentes que pegaram a equipe          | template genérico (abaixo)        |
 | 4 | historico     | O que já deu errado, como resolveram, lição aprendida  | template genérico                 |
 | 5 | regras-tacitas| Políticas não escritas que todo mundo na empresa sabe  | template genérico                 |

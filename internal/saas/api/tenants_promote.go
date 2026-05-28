@@ -45,16 +45,26 @@ type onboardingPromotionField struct {
 	PromotedBy string   `json:"promoted_by"`
 }
 
-// promoteReq is the body of POST /api/v1/tenants/{id}/promote.
+// promoteTenantRequest is the body of POST /api/v1/tenants/{id}/promote.
 // All fields optional — V1 strict default reads owner from the state
 // machine and only proceeds when promotion.ready=true.
-type promoteReq struct {
+type promoteTenantRequest struct {
 	// Force = true bypasses promotion.ready check. Audit logs the override.
 	// Requires the caller to be platform_admin (enforced by the route group).
 	Force bool `json:"force,omitempty"`
 	// OwnerEmailOverride lets the admin correct/override the email Sofia
 	// captured. Empty = use state.owner_captured.email.
 	OwnerEmailOverride string `json:"owner_email,omitempty"`
+	// ForceReason is mandatory when Force=true so manual liberation has an
+	// audit-friendly explanation instead of only a boolean override.
+	ForceReason string `json:"force_reason,omitempty"`
+}
+
+func validatePromoteRequest(req promoteTenantRequest) error {
+	if req.Force && strings.TrimSpace(req.ForceReason) == "" {
+		return fmt.Errorf("force_reason é obrigatório quando force=true")
+	}
+	return nil
 }
 
 // emailRE matches what onboarding-state/state.py validates on capture.
@@ -89,7 +99,7 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req promoteReq
+	var req promoteTenantRequest
 	if r.Body != http.NoBody {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, errEmptyBody) {
 			// Tolerate empty body — only require valid JSON if any sent.
@@ -99,6 +109,10 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+	if err := validatePromoteRequest(req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	t, err := h.Tenants.Get(r.Context(), id)
@@ -126,7 +140,7 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
 			"error":  "não consegui ler workspace/state/onboarding.json — Sofia ainda não rodou nesse tenant?",
 			"detail": stateErr.Error(),
-			"hint":   "pra prosseguir mesmo assim, mande {\"force\": true, \"owner_email\": \"...\"} no body",
+			"hint":   "pra prosseguir mesmo assim, mande {\"force\": true, \"force_reason\": \"...\", \"owner_email\": \"...\"} no body",
 		})
 		return
 	}
@@ -166,7 +180,7 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
 				"error":      "tenant não está pronto pra promoção",
 				"blocked_by": bypassedBlockers,
-				"hint":       "complete o discovery + 5 áreas de aprofundamento, OU passe {\"force\":true} se quer pular",
+				"hint":       "complete o discovery + 5 áreas de aprofundamento, OU passe {\"force\":true,\"force_reason\":\"...\"} se quer pular",
 			})
 			return
 		}
@@ -176,10 +190,11 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		// Logged as a single line for easy grep, and the audit action verb
 		// changes to tenant.promote.forced so dashboards can filter for it.
 		log.Printf(
-			"promote %s: FORCED by %s — bypassing blockers: [%s] | owner_email=%s",
+			"promote %s: FORCED by %s — bypassing blockers: [%s] | owner_email=%s | force_reason=%q",
 			t.ID, actorEmailFromCtx(r.Context()),
 			strings.Join(bypassedBlockers, ","),
 			ownerEmail,
+			strings.TrimSpace(req.ForceReason),
 		)
 	}
 
@@ -372,6 +387,9 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		"initial_password": password,
 		"login_mode":       "password",
 		"info":             "Tenant promovido a cliente. Owner criado, senha gerada, container recriado.",
+	}
+	if req.Force {
+		resp["force_reason"] = strings.TrimSpace(req.ForceReason)
 	}
 	if h.Mailer == nil || !h.Mailer.Enabled() {
 		resp["warning"] = "SMTP não configurado — entregue email + senha manualmente ao owner"
