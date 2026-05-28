@@ -170,7 +170,9 @@ func LauncherDashboardAuth(cfg LauncherDashboardAuthConfig, next http.Handler) h
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := canonicalAuthPath(r.URL.Path)
 		if isTrustedGatewayMode(cfg) {
-			if isPublicLauncherDashboardStatic(r.Method, p) || isPublicLauncherPublicChatHealth(r.Method, p) {
+			if isPublicLauncherDashboardStatic(r.Method, p) ||
+				isPublicLauncherPublicChatHealth(r.Method, p) ||
+				isPublicLauncherJotaduoWAInbound(r.Method, p) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -342,6 +344,9 @@ func isPublicLauncherDashboardPath(method, p string) bool {
 	if isPublicLauncherPublicChatHealth(method, p) {
 		return true
 	}
+	if isPublicLauncherJotaduoWAInbound(method, p) {
+		return true
+	}
 	switch p {
 	case "/api/auth/login":
 		return method == http.MethodPost
@@ -359,6 +364,10 @@ func isPublicLauncherDashboardPath(method, p string) bool {
 
 func isPublicLauncherPublicChatHealth(method, p string) bool {
 	return method == http.MethodGet && p == "/api/public/chat/health"
+}
+
+func isPublicLauncherJotaduoWAInbound(method, p string) bool {
+	return method == http.MethodPost && p == "/api/launcher/jotaduo-wa-inbound"
 }
 
 // isPublicLauncherDashboardStatic allows the SPA login route and embedded

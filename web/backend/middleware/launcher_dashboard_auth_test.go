@@ -75,6 +75,8 @@ func TestLauncherDashboardAuth_AllowsPublicPaths(t *testing.T) {
 		{http.MethodGet, "/api/auth/status", http.StatusTeapot},
 		{http.MethodPost, "/api/auth/setup", http.StatusTeapot},
 		{http.MethodPost, "/api/auth/logout", http.StatusTeapot},
+		{http.MethodPost, "/api/launcher/jotaduo-wa-inbound", http.StatusTeapot},
+		{http.MethodGet, "/api/launcher/jotaduo-wa-inbound", http.StatusUnauthorized},
 		{http.MethodGet, "/api/auth/logout", http.StatusUnauthorized},
 		{http.MethodGet, "/api/config", http.StatusUnauthorized},
 		{http.MethodGet, "/pico/ws", http.StatusUnauthorized},
@@ -130,6 +132,8 @@ func TestLauncherDashboardAuth_TrustedGatewayAllowsPublicChatHealthOnly(t *testi
 	}{
 		{http.MethodGet, "/api/public/chat/health", http.StatusTeapot},
 		{http.MethodHead, "/api/public/chat/health", http.StatusUnauthorized},
+		{http.MethodPost, "/api/launcher/jotaduo-wa-inbound", http.StatusTeapot},
+		{http.MethodGet, "/api/launcher/jotaduo-wa-inbound", http.StatusUnauthorized},
 		{http.MethodPost, "/api/public/chat", http.StatusUnauthorized},
 		{http.MethodGet, "/api/public/chat/stream", http.StatusUnauthorized},
 	} {
