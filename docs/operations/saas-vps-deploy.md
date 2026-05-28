@@ -131,15 +131,6 @@ SUPABASE_SERVICE_ROLE_KEY=...
 SUPABASE_JWT_SECRET=                # empty for ES256 projects; keyfunc uses JWKS
 SUPABASE_SITE_URL=https://jotaduo.com
 
-PICOCLAW_SAAS_AUTO_PROVISION=true
-PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY=3
-# Auto-provision picks the workspace marked `is_default_auto`. Operator
-# creates one via adm.<base>/workspaces and toggles the flag — there is
-# no env var to override.
-# Login mode is no longer a toggle: when Supabase is configured the new
-# tenant owner receives email + senha AND a magic link in the same
-# transactional email (credentials.{html,txt}.tmpl).
-
 TZ=America/Sao_Paulo
 ```
 
@@ -215,8 +206,8 @@ docker compose exec controlplane /usr/local/bin/picoclaw-tenantctl \
 ```bash
 curl -sS https://${SAAS_BASE_DOMAIN}/                       # 200, SPA
 curl -sS https://admin.${SAAS_BASE_DOMAIN}/                 # 200, SPA
-curl -sS -X POST -H 'Content-Type: application/json' -d '{}' \
-  https://${SAAS_BASE_DOMAIN}/api/v1/public/company-intakes # 201, intake JSON
+# After creating a tenant público in the admin UI:
+curl -sS https://<public-subdomain>.${SAAS_BASE_DOMAIN}/api/public/chat/health
 ```
 
 ## Known landmines (already mitigated in repo)
@@ -229,7 +220,6 @@ curl -sS -X POST -H 'Content-Type: application/json' -d '{}' \
 | `Unable to parse certificate /etc/traefik/certs/dev.pem` | `dev-tls.yml` referenced mkcert files that don't exist in prod | Renamed to `dev-tls.yml.sample`; `dev-setup.sh` activates it for local dev only |
 | Bare `${SAAS_BASE_DOMAIN}` returns TLS `unrecognized name` | Controlplane router rule did not include apex domain | Rule now matches `Host(${SAAS_BASE_DOMAIN}) \|\| Host(admin.${SAAS_BASE_DOMAIN}) \|\| HostRegexp(…)` |
 | Tenant subdomain returns TLS `unrecognized name` even though DNS resolves | Traefik does not pre-issue certs for `HostRegexp` matches; the `letsencrypt` resolver only fires per concrete `Host()` rule | `docker/saas/scripts/tenant-router/` installs a systemd watcher that writes a per-tenant `Host()` router into `traefik/dynamic/tenants.yml` on every docker container lifecycle event (debounced 3s) |
-| Sofia chat finishes but no tenant is created, intake stays `submitted` with no `linked_tenant_id` | `AutoProvision.Run` used to fire inside the chat SSE handler at `mark_qualified`, before `ClaraFinalize` had collected `contact_email` | `AutoProvision.Run` moved to `handleSubmitCompanyIntake` (POST `/submit`) where the email is finally populated |
 
 ## Operational notes
 

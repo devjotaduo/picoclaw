@@ -32,11 +32,10 @@ git commit -m "sync baseline-workspace"
 
 ## Why a baseline at all
 
-`AutoProvisioner.Run` calls `CopyWorkspaceHome` which copies the
-workspace's `home/` subtree verbatim into the new tenant's volume. A
-tenant boots with nothing if the source is empty — the launcher then
-has no agent persona to load and any chat fails with a "no agent
-configured" error.
+`Provisioner.Create` calls `CopyWorkspaceHome`, which copies the workspace's
+`home/` subtree verbatim into the new tenant's volume. A tenant boots with
+nothing if the source is empty — the launcher then has no agent persona to
+load and any chat fails with a "no agent configured" error.
 
 The embedded baseline guarantees a freshly-bootstrapped install always
 provisions tenants with the **canonical Jotaduo workspace** (Sofia

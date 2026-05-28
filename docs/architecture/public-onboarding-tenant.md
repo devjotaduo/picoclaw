@@ -91,12 +91,12 @@ Admin promotes the public tenant when onboarding.json is ready.
 | 3. Gateway bypass on public tenant chat routes | ✅ | `0e13ec92` + current | sentinels: `UserID:"anonymous"`, `Role:"public"`; `/pico/ws` and `/api/public/chat*` are rate-limited |
 | 4. `pkg/channels/publicweb/` adapter | ✅ | `36d84a66` | SSE multiplexer, anon identity hashing |
 | 5. Launcher HTTP endpoints | ✅ | `63aa7ce0` | WebhookHandler + launcher reverse proxy |
-| 6. Skill scripts (HMAC callback) | ✅ | `0dec…` | `mark-qualified.sh`, `submit-intake.sh` |
-| 7. Controlplane callback endpoint | ✅ | `603e436d` | HMAC verify + anti-replay ±5min |
+| 6. Legacy HMAC callback scripts | removed | — | Replaced by `onboarding-state` + tenant chat + admin promotion |
+| 7. Legacy controlplane callback endpoint | removed | — | No live route; do not build new work on callbacks from tenant skills |
 | 8. Public-tenant workspace template | ✅ | `f78d7c34`+`21cc044c`+(this) | `workspace/` is the source; public tenants override `workspace/AGENT.md` so Sofia is the discovery default. |
 | 9. Bootstrap script + endpoint | ❌ removed in PR #104 | `889dd4b7` (added), PR #104 (removed) | Singleton public tenant now created through the normal wizard with `tenant_type=publico`. Script `scripts/provision-onboarding-tenant.sh` is broken. |
 | 10. Tenant-root public chat | ✅ | current | Public tenants can serve the chat shell as role `public`; policy allows chat write + logs read only. |
-| 11. Legacy intake cleanup | ⏸ | — | Keep historical modules until no operational dependency remains. |
+| 11. Legacy intake cleanup | ✅ | current | Removed the standalone public form, in-process Clara chat, callbacks, and old onboarding skills. |
 | 12. Docs + memory | ✅ | (this commit) | |
 
 ## Sentinel claims
@@ -117,10 +117,6 @@ Beyond the existing Supabase/Brevo vars (see
 `docs/operations/supabase-auth.md`), public onboarding needs:
 
 ```bash
-# Controlplane. Generated with openssl rand -hex 32.
-PICOCLAW_ONBOARDING_CALLBACK_SECRET=...
-PICOCLAW_ONBOARDING_CALLBACK_URL=https://adm.jotaduo.com
-
 # Controlplane. Institutional WhatsApp sidecar used only by public tenants.
 JOTADUO_WA_URL=http://jotaduo-wa:18810
 JOTADUO_WA_HMAC_SECRET=...
@@ -135,10 +131,9 @@ PICOCLAW_ALLOWED_CHANNELS=whatsapp_native,pico,public-web
 > **Updated 2026-05-25 (PR #104).** The dedicated bootstrap endpoint +
 > script were removed. Use the normal wizard with `tenant_type=publico`.
 
-1. Set `PICOCLAW_ONBOARDING_CALLBACK_SECRET`,
-   `PICOCLAW_ONBOARDING_CALLBACK_URL`, `JOTADUO_WA_URL`, and
-   `JOTADUO_WA_HMAC_SECRET` on the controlplane. `buildSpec` propagates the
-   public-only values into `is_public=true` containers.
+1. Set `JOTADUO_WA_URL` and `JOTADUO_WA_HMAC_SECRET` on the controlplane.
+   `buildSpec` propagates these public-only values into `is_public=true`
+   containers.
 
 2. Create the onboarding workspace via the admin UI. The recommended flow:
    ```bash
@@ -188,14 +183,11 @@ PICOCLAW_ALLOWED_CHANNELS=whatsapp_native,pico,public-web
 - **IP-roaming visitors.** Identity is `sha256(session_id+ip)[:8]`, so a
   mobile→wifi switch mid-conversation creates a new identity and the
   agent loses context. Acceptable v1; revisit if real-world complaint.
-- **Legacy intake cleanup.** Historical intake code can stay until no
-  operational path depends on it, but new onboarding work must target public
-  tenants and Sofia/Catarina state.
-
 Already addressed (no longer gaps):
 
-- ✅ `buildSpec` propagates `PICOCLAW_ONBOARDING_CALLBACK_SECRET` +
-  `_URL` into every `is_public=true` tenant container.
+- ✅ The legacy standalone public form and callback path were removed.
+  The only live onboarding path is admin-created public tenant → Sofia chat →
+  Catarina WhatsApp → admin promotion.
 - ✅ Cloudflare Turnstile verification lives in
   `internal/saas/api/turnstile.go`, opt-in via `TURNSTILE_SECRET_KEY`.
   Fail-closed (403 on token rejection, 503 on Cloudflare infra failure).

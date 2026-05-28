@@ -302,83 +302,12 @@ config-level.
 
 Em produção, esses crons só geram conteúdo útil DEPOIS que `memory/marca.md` e `memory/marketing.md` estiverem preenchidos pela Sofia no onboarding. Antes disso, Maya devolve `PENDENCIAS:` com a lista do que falta — não inventa.
 
-### Lembretes automáticos de onboarding
-
-Quando o `AutoProvisioner.Run` termina com sucesso, três emails de
-lembrete são agendados na tabela `intake_reminders`. Um worker em
-background no controlplane (`api.ReminderWorker`, tick de 5 min)
-verifica linhas vencidas e envia via o `mailer.Mailer` existente.
-
-Sequência padrão (offsets em código, podem ser ajustados):
-
-- **T+24h** — `first`: "Faz um dia, a Sofia tá te esperando no painel"
-- **T+72h** — `second`: "Sua Sofia ainda tá esperando; em 5 min vocês fecham a base"
-- **T+7d** — `last`: "Último lembrete; se mudou de ideia tudo bem, é só responder esse email"
-
-Cada email lembra que a próxima conversa é **no painel** (não no
-WhatsApp) e leva pra `https://<sub>.jotaduo.com`. O magic link
-original do Supabase pode ter expirado em 1h, então o email instrui
-a responder pra receber outro (o endpoint `resend-link` ainda exige
-o resume_token original, então responder por email é mais simples
-pro visitante).
-
-**Cancelamento automático**: na primeira vez que o tenant gateway
-verifica um JWT Supabase válido do dono, `tenants.initial_password_delivered`
-é flipado pra true e `IntakeReminderStore.CancelByTenant` marca os
-reminders pendentes como `cancelled_at = now()` com motivo
-`"owner first auth"`. Visitantes que entram dentro de 24h nunca
-recebem nenhum dos emails.
-
-**Anti-spam**: o worker se recusa a re-enviar reminders já marcados
-sent_at; tem max 5 attempts por linha; é idempotente em reboot
-(reinicia do estado da tabela). Se o email do visitante bouncar, a
-linha fica com `last_error` setado pra admin inspecionar via:
-
-```sql
-SELECT intake_id, template, attempts, last_error
-FROM intake_reminders
-WHERE last_error IS NOT NULL
-ORDER BY scheduled_at DESC;
-```
-
-**Roadmap**: o schema já carrega `channel ∈ ('email','whatsapp')`
-mas só `email` está implementado. Quando uma WhatsApp Business API
-de outreach for plugada (Twilio, Meta Business, etc.), o worker
-ganha um case `whatsapp` em `deliver()` e novos reminders podem ser
-agendados com esse canal — sem mudar o schema.
-
-## Legacy intake auto-provision
-
-```bash
-# Edit docker/saas/.env
-PICOCLAW_SAAS_AUTO_PROVISION=true
-PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY=3
-# Auto-provision picks the workspace marked `is_default_auto` — mark one
-# via adm.<base>/workspaces before turning this on, otherwise the
-# qualifier returns "no workspace is marked is_default_auto".
-#
-# Note: login mode is no longer a toggle. When Supabase is configured the
-# new tenant owner always receives email + senha AND a magic link in the
-# same transactional email (rendered from credentials.{html,txt}.tmpl).
-
-docker compose -f docker/saas/docker-compose.yml up -d controlplane
-```
-
-This is kept for legacy intake experiments only. It is not the current public
-onboarding path. For the live flow, create a tenant with type **Público** in
-the admin UI and start the discovery through Sofia in that tenant.
-
-```bash
-docker logs -f controlplane | grep -E "(autoProvision|tenant_provisioned|provision_error)"
-docker ps --filter "label=picoclaw.saas.managed=true" --format "table {{.Names}}\t{{.Status}}\t{{.CreatedAt}}"
-```
-
 ## Custom SMTP for the credentials email (Brevo)
 
 Without this, `Mailer.Enabled()` returns `false` and `SendCredentialsEmail`
 just logs — the tenant owner never receives the email. The senha + magic link
-are then only visible in the admin dialog / legacy intake response, which works
-for manual operator delivery but not for the SMB self-serve flow.
+are then only visible in the admin dialog, which works for manual operator
+delivery but not for a hands-off tenant handoff.
 
 Pick a provider with a free tier. We've validated **Brevo** (300 emails/day
 free, good Gmail/Outlook delivery in BR) — instructions assume it. Same shape
@@ -500,16 +429,14 @@ Mailgun, etc. — only `SMTP_HOST/PORT/USER/PASSWORD` change.
   during a 24h grace window. JWKS verifier picks the right one by `kid`
   automatically; no controlplane restart needed.
 
-### Resend a magic link
+### Resend or recreate access
 
 If an owner lost the credentials email (or just the magic link inside it):
 
-```
-POST /api/v1/public/company-intakes/{id}/resend-link
-{ "resume_token": "..." }
-```
-
-Same per-IP rate limit as the public intake endpoints.
+- Use the tenant detail page in `adm.<base>/tenants/<id>` and click
+  **Link de acesso** to generate a fresh magic link.
+- Or click **Reenviar credenciais** for Supabase-backed tenants to rotate the
+  owner password and email URL + login + senha + magic link.
 
 ### Delete a Supabase-backed tenant
 
@@ -569,24 +496,13 @@ tenants entirely.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `tenant_provisioned` fires but visitor can't log in | Supabase user created but `supabase_user_id` not saved on tenant row (very brief race) | Run the migration SQL above, or `Provisioner.Delete` and retry. |
-| `provision_error` SSE event with "supabase create user" | service_role key invalid, or user already exists in `auth.users` | Check Supabase Auth → Users; dedup-by-email should normally catch repeats. |
 | Magic link email never arrives | Supabase project's email rate limit hit, or domain reputation issue | Dashboard → Auth → Rate Limits; or switch to custom SMTP for prod. |
 | Verify fails for ES256 tokens | JWKS endpoint unreachable from controlplane | `curl https://<ref>.supabase.co/auth/v1/.well-known/jwks.json` from inside the container. |
 | Verify fails for HS256 tokens | Project uses asymmetric keys now; the HS256 token is from a different project or forged | Inspect the token: `echo $JWT | cut -d. -f1 | base64 -d`. |
 | Every dashboard request redirects to `/login` | `auth_backend='supabase'` but cookie not present, or wrong domain | Confirm cookie scope is `.jotaduo.com`, not `<sub>.jotaduo.com`. |
-| Legacy auto-provision does not run | `PICOCLAW_SAAS_AUTO_PROVISION=false`, missing default workspace, or intake never reached submit | `docker logs controlplane \| grep -E "autoProvision\|submit"`; for the live public flow, prefer admin-created **Público** tenants. |
 | Tenant subdomain returns TLS `unrecognized name` | Traefik only pre-issues certs for concrete `Host()` routers; the controlplane uses `HostRegexp` which doesn't trigger ACME | Confirm `picoclaw-tenant-router.service` is running on the VPS (see `docker/saas/scripts/tenant-router/install.sh` and `docs/operations/saas-vps-deploy.md` step 8). |
 
-## Rollback (turn it all off)
-
-Auto-provision off:
-
-```bash
-# docker/saas/.env
-PICOCLAW_SAAS_AUTO_PROVISION=false
-docker compose -f docker/saas/docker-compose.yml up -d controlplane
-```
+## Rollback (turn Supabase auth off)
 
 Supabase off (forces all tenants back to local auth):
 
@@ -604,10 +520,9 @@ either re-enable Supabase or migrate them back via `Provisioner.RotatePassword`
 
 - Schema migration: `internal/saas/store/migrations/0009_tenants_supabase.sql`
 - Supabase client: `internal/saas/auth/supabase.go`
-- Auto-provision orchestrator: `internal/saas/api/company_intakes_provision.go`
 - Gateway middleware: `internal/saas/api/tenant_gateway.go`
 - Workspace overlay: `internal/saas/tenant/template.go` (`OverlayWorkspace`)
 - Tests: `internal/saas/auth/supabase_test.go`, `internal/saas/auth/supabase_e2e_test.go`
-- Config: `internal/saas/config/config.go` (all `Supabase*` and `AutoProvision*` fields)
+- Config: `internal/saas/config/config.go` (all `Supabase*` fields)
 - Env template: `docker/saas/.env.supabase.example`
 - Compose entry: `docker/saas/docker-compose.yml` (controlplane service env block)

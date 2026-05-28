@@ -44,30 +44,20 @@ func TestCreateInput_Normalize(t *testing.T) {
 	}
 }
 
-// TestBuildSpec_PublicTenantInjectsOnboardingEnv locks the contract between
-// the provisioner and the onboarding tenant's skill scripts: when IsPublic
-// is true, the container must receive both PICOCLAW_ONBOARDING_CALLBACK_*
-// vars plus the public-web allowlist override. Regular tenants must NOT
-// receive them — propagating the secret broadens the blast radius.
-func TestBuildSpec_PublicTenantInjectsOnboardingEnv(t *testing.T) {
+// TestBuildSpec_PublicTenantInjectsPublicEnv locks the public-tenant contract:
+// public tenants get the sentinel env + public-web allowlist override, while
+// regular tenants keep the default allowlist.
+func TestBuildSpec_PublicTenantInjectsPublicEnv(t *testing.T) {
 	p := &Provisioner{
 		Cfg: &config.Config{
-			GatewaySharedSecret:      "gw-secret",
-			OnboardingCallbackSecret: "hmac-secret",
-			OnboardingCallbackURL:    "https://adm.example.com",
+			GatewaySharedSecret: "gw-secret",
 		},
 	}
 
-	t.Run("public tenant gets onboarding env + public-web allowlist", func(t *testing.T) {
+	t.Run("public tenant gets public marker + public-web allowlist", func(t *testing.T) {
 		spec, err := p.buildSpec(context.Background(), &store.Tenant{ID: "t1", IsPublic: true})
 		if err != nil {
 			t.Fatalf("buildSpec: %v", err)
-		}
-		if got := spec.Env["PICOCLAW_ONBOARDING_CALLBACK_SECRET"]; got != "hmac-secret" {
-			t.Errorf("CALLBACK_SECRET = %q, want %q", got, "hmac-secret")
-		}
-		if got := spec.Env["PICOCLAW_ONBOARDING_CALLBACK_URL"]; got != "https://adm.example.com" {
-			t.Errorf("CALLBACK_URL = %q, want %q", got, "https://adm.example.com")
 		}
 		if got := spec.Env["PICOCLAW_ALLOWED_CHANNELS"]; got != "whatsapp_native,pico,public-web" {
 			t.Errorf("ALLOWED_CHANNELS = %q, want %q", got, "whatsapp_native,pico,public-web")
@@ -77,16 +67,10 @@ func TestBuildSpec_PublicTenantInjectsOnboardingEnv(t *testing.T) {
 		}
 	})
 
-	t.Run("private tenant does NOT see onboarding env", func(t *testing.T) {
+	t.Run("private tenant does NOT see public marker", func(t *testing.T) {
 		spec, err := p.buildSpec(context.Background(), &store.Tenant{ID: "t2", IsPublic: false})
 		if err != nil {
 			t.Fatalf("buildSpec: %v", err)
-		}
-		if _, ok := spec.Env["PICOCLAW_ONBOARDING_CALLBACK_SECRET"]; ok {
-			t.Errorf("private tenant unexpectedly got CALLBACK_SECRET")
-		}
-		if _, ok := spec.Env["PICOCLAW_ONBOARDING_CALLBACK_URL"]; ok {
-			t.Errorf("private tenant unexpectedly got CALLBACK_URL")
 		}
 		if got := spec.Env["PICOCLAW_ALLOWED_CHANNELS"]; got != "whatsapp_native,pico" {
 			t.Errorf("ALLOWED_CHANNELS = %q, want %q (default includes pico for in-browser chat)", got, "whatsapp_native,pico")

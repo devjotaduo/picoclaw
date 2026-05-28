@@ -266,7 +266,6 @@ export async function getTenantSanity(id: string) {
 
 export type MagicLinkSummary = {
   nonce: string;
-  intake_id?: string | null;
   created_at: string;
   expires_at: string;
   consumed_at?: string | null;
@@ -445,8 +444,7 @@ export async function generateTenantMagicLink(
 
 // Manually mark a magic link as consumed. Visitors clicking the link
 // afterwards see the friendly thank-you page with the optional summary
-// text instead of the dashboard. Called for ad-hoc links not tied to
-// an intake, or to short-circuit a stuck conversation.
+// text instead of the dashboard.
 export async function consumeMagicLink(nonce: string, summary?: string) {
   return api<void>(`/api/v1/magic-links/${encodeURIComponent(nonce)}/consume`, {
     method: "POST",

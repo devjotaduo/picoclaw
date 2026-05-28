@@ -353,16 +353,13 @@ func (h *Handler) authenticateSupabaseTenant(
 		writeError(w, http.StatusForbidden, "this account is not registered for this tenant")
 		return "", "", "", false
 	}
-	// First successful owner auth: mark the tenant engaged and cancel any
-	// pending onboarding reminders. initial_password_delivered is reused
+	// First successful owner auth: mark the tenant engaged.
+	// initial_password_delivered is reused
 	// as the "owner has shown up" flag for Supabase tenants (the original
 	// local-auth meaning doesn't apply since we skip the bcrypt seed).
 	// This block is cheap (one tenant column read above) and idempotent.
 	if !t.InitialPasswordDelivered && mapSupabaseRoleToTenantRole(claims.Role) == string(store.RoleTenantOwner) {
-		bgCtx := r.Context()
-		if err := h.Tenants.MarkPasswordDelivered(bgCtx, t.ID); err == nil && h.Reminders != nil {
-			_, _ = h.Reminders.CancelByTenant(bgCtx, t.ID, "owner first auth")
-		}
+		_ = h.Tenants.MarkPasswordDelivered(r.Context(), t.ID)
 	}
 	return claims.UserID, claims.Email, mapSupabaseRoleToTenantRole(claims.Role), true
 }

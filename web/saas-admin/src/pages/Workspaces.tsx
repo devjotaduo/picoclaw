@@ -30,8 +30,8 @@ import { PageHeader } from "@/components/page-header";
 // list, right pane with metadata + tools) so operators familiar with that
 // screen can pick this up without re-learning. Adds two distinctive controls:
 //
-//   - Default-auto toggle (radio across all workspaces): which one Clara's
-//     auto-provisioner picks up. Only one can be marked.
+//   - Default-auto toggle (radio across all workspaces): the workspace used
+//     as the default template. Only one can be marked.
 //   - "Compilar frontend" button: kicks off the docker-sidecar vite build
 //     and shows the log tail when it finishes.
 
@@ -58,8 +58,8 @@ export function Workspaces() {
     if (!selectedId && workspaces[0]) setSelectedId(workspaces[0].id);
   }, [workspaces, selectedId]);
 
-  // Create new workspace seeded with the embedded baseline (Sofia discovery +
-  // Clara/Luna/Marcos/Camila/Lia/Catarina roster). Backend auto-extracts the
+  // Create new workspace seeded with the embedded baseline (Sofia discovery
+  // plus the operational agent roster). Backend auto-extracts the
   // baseline-workspace template when seed_from_baseline is true (default).
   const createM = useMutation({
     mutationFn: () =>
@@ -377,7 +377,7 @@ function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
               <div>
                 <div className="font-medium">Padrão para criação automática</div>
                 <div className="text-[11px] text-zinc-500">
-                  A Clara cria clientes automáticos com este modelo.
+                  Modelo padrão sugerido na criação de tenants.
                 </div>
               </div>
               <Switch

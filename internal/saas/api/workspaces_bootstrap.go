@@ -34,22 +34,20 @@ import (
 var baselineWorkspaceFS embed.FS
 
 // defaultWorkspaceSlug is the slug used for the bootstrap-created workspace.
-// Matches the historical PICOCLAW_SAAS_AUTO_PROVISION_PROFILE default so any
-// docs or env that referenced it keep working.
 const defaultWorkspaceSlug = "default-business"
 
 // canonicalWorkspaceSource is the host path bind-mounted into the controlplane
 // container at /srv/picoclaw:ro by docker-compose. When present, its contents
-// are copied into the bootstrapped workspace's home/workspace/ so Clara's first
-// auto-provision lands a fully-seeded tenant instead of an empty one.
+// are copied into the bootstrapped workspace's home/workspace/ so newly
+// created tenants start from the canonical Jotaduo workspace.
 const canonicalWorkspaceSource = "/srv/picoclaw/workspace"
 
 // EnsureDefaultWorkspace creates a default-auto workspace on first run so
-// AutoProvisioner.Run does not fail with "no default workspace marked" the
-// first time Clara qualifies a lead. Idempotent: when a default-auto workspace
-// already exists, this is a no-op. Failures are logged and returned so the
-// controlplane startup can decide whether to keep going (recommended) or hard-
-// fail on bootstrap issues — current behaviour is to keep going with a WARN.
+// the operator has a selectable template immediately after install.
+// Idempotent: when a default-auto workspace already exists, this is a no-op.
+// Failures are logged and returned so the controlplane startup can decide
+// whether to keep going (recommended) or hard-fail on bootstrap issues —
+// current behaviour is to keep going with a WARN.
 func (h *Handler) EnsureDefaultWorkspace(ctx context.Context) error {
 	if h.Workspaces == nil {
 		return nil
@@ -91,7 +89,7 @@ func (h *Handler) EnsureDefaultWorkspace(ctx context.Context) error {
 		ID:                slug + "-" + randomHex(3),
 		Name:              "Default Business",
 		Slug:              slug,
-		Description:       "Auto-bootstrapped default workspace. Edit via admin UI to customise the template Clara provisions new tenants from.",
+		Description:       "Auto-bootstrapped default workspace. Edit via admin UI to customise the template used for new tenants.",
 		HostPath:          hostPath,
 		IsDefaultAuto:     true,
 		IsAvailableManual: true,

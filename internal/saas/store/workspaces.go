@@ -210,9 +210,8 @@ func (s *WorkspaceStore) GetBySlug(ctx context.Context, slug string) (*Workspace
 	return w, err
 }
 
-// GetDefaultAuto returns the workspace marked as the auto-provision default.
-// AutoProvisioner.Run calls this when Clara qualifies a lead — if no row is
-// marked, the auto-provision flow short-circuits with a clear message rather
+// GetDefaultAuto returns the workspace marked as the default template. If no
+// row is marked, callers should surface a clear configuration error rather
 // than picking a random workspace.
 func (s *WorkspaceStore) GetDefaultAuto(ctx context.Context) (*Workspace, error) {
 	q := `SELECT ` + workspaceCols + ` FROM workspaces WHERE is_default_auto = true LIMIT 1`
