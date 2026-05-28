@@ -32,10 +32,13 @@ The flow has two independent validation layers.
      question.
 2. Real WhatsApp:
    - Tenant skill `enviar-whatsapp-jotaduo` signed `/internal/wa/send`.
-   - Sidecar registered `phone -> tenant_id` in `routing.db`.
+   - Sidecar registered the original phone and resolved WhatsApp route
+     aliases, including LID JIDs, to the tenant in `routing.db`.
    - `whatsapp_native` returned a real WhatsApp message ID.
    - `docker logs jotaduo-wa` showed no post-send `privacy token`
      error after the final fix.
+   - A real reply from the lead was readable by Catarina through
+     `verificar-respostas-jotaduo`.
 
 ## Incident symptoms
 
@@ -63,7 +66,7 @@ Important discovery:
 
 ## Root cause
 
-There were three related gaps in the native WhatsApp channel:
+There were four related gaps in the native WhatsApp channel/sidecar path:
 
 1. `sendWithSource` discarded the generated WhatsApp message ID in the
    successful path, so the sidecar could report `message_ids:null`.
@@ -72,6 +75,10 @@ There were three related gaps in the native WhatsApp channel:
 3. The channel sent directly to the raw PN JID without recipient preflight.
    In the production session, this produced WhatsApp privacy-token errors
    after the HTTP path had already returned success.
+4. The sidecar registered only the original phone number for inbound
+   routing. After `whatsapp_native` correctly resolved PN -> LID, real
+   replies could arrive as `<lid>@lid` and were dropped with `no routing
+   for inbound sender=...@lid`.
 
 The effective fix was to:
 
@@ -81,6 +88,8 @@ The effective fix was to:
 - canonicalize legacy JIDs returned by WhatsApp;
 - resolve PN -> LID when the paired account has a LID;
 - apply the same self-send protection to media sends.
+- return the resolved outbound destination to the sidecar and register it
+  as an inbound route alias for the public tenant.
 
 ## Fix commits
 
@@ -89,6 +98,7 @@ Relevant commits on `codex/fix-public-tenant-e2e`:
 - `150e9165 fix(whatsapp): detect self sends in native channel`
 - `c76912f2 fix(whatsapp): resolve LID before native sends`
 - `16aebf6 fix(whatsapp): verify native recipients before send`
+- `fix(jotaduo-wa): route resolved LID replies`
 
 The final deployed production sidecar image after this run was:
 
@@ -224,8 +234,13 @@ Server returned different participant list hash
 
 ## Routing evidence
 
-The sidecar auto-registers the route when a send succeeds. Query routes via
-the tenant HMAC env without printing the secret:
+The sidecar auto-registers routes when a send succeeds:
+
+- the original target passed by the tenant skill;
+- the WhatsApp-resolved destination returned by `whatsapp_native`, which may
+  be a `<lid>@lid` JID.
+
+Query routes via the tenant HMAC env without printing the secret:
 
 ```bash
 cat <<'PY' | ssh pico 'docker exec -i tenant-padaria-teste-sofia-fbf29a python3 -'
@@ -245,8 +260,19 @@ with urllib.request.urlopen(req, timeout=10) as r:
 PY
 ```
 
-Expected: target phone appears under `routes` with the current public
-tenant ID.
+Expected: the target phone and, when WhatsApp resolves one, the LID alias
+appear under `routes` with the current public tenant ID.
+
+If a real reply is dropped with this log, the route-alias fix is missing or
+the message was sent before the fixed image registered aliases:
+
+```text
+jotaduo-wa: no routing for inbound sender=<lid>@lid ...
+```
+
+Recovery for an already-open conversation: register the observed LID once via
+`POST /internal/wa/routing`, then send a fresh Catarina prompt so the next
+reply is associated with the public tenant.
 
 ## Caveats
 

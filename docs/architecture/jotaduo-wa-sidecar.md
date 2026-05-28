@@ -73,12 +73,22 @@ Dois flows independentes:
 
 - **Outbound** (Catarina → lead): skill assina body HMAC, POSTa em
   `http://jotaduo-wa:18810/internal/wa/send`. Sidecar manda via whatsmeow,
-  auto-registra `phone → tenant_id` na routing.db pra inbound voltar.
+  auto-registra o número original e o JID resolvido pelo WhatsApp
+  (`phone/@s.whatsapp.net` ou `@lid`) na routing.db pra inbound voltar.
 - **Inbound** (lead → tenant): whatsmeow recebe mensagem, sidecar olha
-  routing `sender_phone → tenant_id`, HMAC-signs e POSTa em
+  routing `sender_phone/sender_lid → tenant_id`, HMAC-signs e POSTa em
   `http://tenant-<id>:18800/api/launcher/jotaduo-wa-inbound`. Launcher
   verifica HMAC + timestamp + tenant_id, appende em
   `workspace/state/jotaduo-wa-inbox.jsonl`. Catarina lê depois via skill.
+
+## Detalhe importante: replies via LID
+
+Em sessões WhatsApp com LID habilitado, um envio iniciado por telefone pode
+ser resolvido internamente para um JID `@lid`. A resposta real do lead também
+pode chegar com `SenderJID=<lid>@lid`, não com o telefone original. Por isso
+o sidecar registra aliases depois do envio: o alvo original informado pela
+skill e o destino resolvido pelo `whatsapp_native`. Sem isso, o log típico é
+`no routing for inbound sender=...@lid` e Catarina não enxerga a resposta.
 
 ## Componentes implementados (5 fatias + 2 follow-ups)
 

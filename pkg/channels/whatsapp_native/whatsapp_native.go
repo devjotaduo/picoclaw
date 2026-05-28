@@ -178,6 +178,33 @@ func (c *WhatsAppNativeChannel) Client() *whatsmeow.Client {
 	return c.client
 }
 
+// ResolveSendDestination returns the WhatsApp JID that a phone-number send
+// will actually target after recipient verification and PN -> LID migration.
+// Callers that need to route replies should register both the original chat ID
+// and this resolved JID, because inbound replies may arrive from the LID.
+func (c *WhatsAppNativeChannel) ResolveSendDestination(ctx context.Context, chatID string) (string, error) {
+	c.mu.Lock()
+	client := c.client
+	c.mu.Unlock()
+
+	if client == nil || !client.IsConnected() {
+		return "", fmt.Errorf("whatsapp connection not established: %w", channels.ErrTemporary)
+	}
+	if client.Store == nil || client.Store.ID == nil {
+		return "", fmt.Errorf("whatsapp not yet paired (QR login pending): %w", channels.ErrTemporary)
+	}
+
+	to, err := parseJID(chatID)
+	if err != nil {
+		return "", fmt.Errorf("invalid chat id %q: %w", chatID, err)
+	}
+	to, err = resolveSendDestination(ctx, client, to)
+	if err != nil {
+		return "", err
+	}
+	return to.String(), nil
+}
+
 // NewWhatsAppNativeChannel creates a WhatsApp channel that uses whatsmeow for connection.
 // storePath is the directory for the SQLite session store (e.g. workspace/whatsapp).
 func NewWhatsAppNativeChannel(

@@ -119,12 +119,35 @@ func (w *WhatsApp) IsPaired() bool {
 }
 
 // Send dispatches an outbound text message to a phone number or full JID.
-// Returns the WhatsApp message ID(s).
-func (w *WhatsApp) Send(ctx context.Context, to, text string) ([]string, error) {
-	return w.channel.Send(ctx, bus.OutboundMessage{
+// Returns the WhatsApp message ID(s) and every address that should route
+// replies back to the same tenant. WhatsApp can resolve phone-number sends to
+// a LID JID, and inbound replies often arrive with that LID sender.
+func (w *WhatsApp) Send(ctx context.Context, to, text string) (SendResult, error) {
+	aliases := []string{to}
+	if resolved, err := w.channel.ResolveSendDestination(ctx, to); err == nil {
+		aliases = appendRouteAlias(aliases, resolved)
+	}
+
+	ids, err := w.channel.Send(ctx, bus.OutboundMessage{
 		ChatID:  to,
 		Content: text,
 	})
+	if err != nil {
+		return SendResult{}, err
+	}
+	return SendResult{MessageIDs: ids, RouteAliases: aliases}, nil
+}
+
+func appendRouteAlias(aliases []string, candidate string) []string {
+	if candidate == "" {
+		return aliases
+	}
+	for _, alias := range aliases {
+		if alias == candidate {
+			return aliases
+		}
+	}
+	return append(aliases, candidate)
 }
 
 // HealthHandler exposes the channel's built-in /qr + /disconnect routes so the

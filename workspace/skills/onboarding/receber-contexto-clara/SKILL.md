@@ -7,10 +7,10 @@ visibility: internal
 # Skill: Receber Contexto da Clara
 
 ## Objetivo
-Aproveitar o que a Clara já coletou no pre-cadastro público (segmento,
-dor principal, canais, agente prioritário, etc.) pra Sofia abrir o
-primeiro contato com o dono SEM repetir perguntas — só valida e
-aprofunda.
+Aproveitar o que já foi coletado no chat do tenant público (segmento,
+dor principal, canais, agente prioritário, etc.) pra Sofia abrir ou
+continuar o primeiro contato com o dono SEM repetir perguntas — só
+valida e aprofunda.
 
 ## Quando usar
 - Primeira interação Sofia ↔ dono num tenant recém-provisionado.
