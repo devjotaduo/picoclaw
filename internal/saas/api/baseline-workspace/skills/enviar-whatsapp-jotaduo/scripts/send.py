@@ -45,6 +45,13 @@ def main() -> int:
         fail(1, "usage: send.py <phone> <message>")
 
     phone = sys.argv[1].strip()
+    # Strip leading '+' — validated in prod 2026-05-28: whatsmeow rejects
+    # numbers prefixed with `+` with "whatsapp send: temporary failure".
+    # The skill doc says any of "+5511...", "5511...", or
+    # "5511...@s.whatsapp.net" are accepted, so normalize at the edge so
+    # callers can keep using either form.
+    if phone.startswith("+"):
+        phone = phone[1:]
     # Join the rest with spaces so caller can pass multi-word messages
     # without quoting twice (mirrors send.sh's "$*" behavior).
     message = " ".join(sys.argv[2:]).strip()
