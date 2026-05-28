@@ -242,6 +242,14 @@ func (h *Handler) proxyTenantRequest(
 	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
 		writeError(w, http.StatusBadGateway, "tenant gateway error: "+err.Error())
 	}
+	// FlushInterval=-1 forces a flush after every Write — required for
+	// SSE streams that go through this proxy (/api/public/chat/stream).
+	// Without it, ReverseProxy buffers chunks until either the upstream
+	// closes the body or some internal threshold trips, so the visitor
+	// sees the agent reply only after the entire stream ends. The
+	// downstream launcher proxy in web/backend/api/public_chat.go has
+	// the same setting for the same reason.
+	proxy.FlushInterval = -1
 	proxy.ServeHTTP(w, r)
 }
 
