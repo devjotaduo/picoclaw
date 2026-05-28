@@ -1,15 +1,17 @@
-# Supabase Auth + Auto-Provision
+# Supabase Auth + Tenant Provisioning
 
-This runbook covers the Supabase Auth integration that gates dashboard logins
-on auto-provisioned tenants, and the Clara → tenant auto-provision pipeline
-that creates them. Legacy tenants stay on the controlplane's local sessions
-table — both auth backends coexist indefinitely.
+This runbook covers the Supabase Auth integration that gates customer-tenant
+dashboard logins and the current tenant provisioning flow. The old public
+form route is not a live onboarding entrypoint anymore. Public onboarding now
+starts by creating a **Público** tenant in the admin UI and opening the
+tenant's public chat with Sofia.
 
 ## What this changes (and what it doesn't)
 
 | | Before | After |
 |---|---|---|
-| Provisioning new tenants | Manual via admin UI | Automatic at end of Clara conversation, or still manual |
+| Provisioning public onboarding tenants | Manual scripts / legacy public form | Admin UI → New tenant → **Público** → tenant public chat |
+| Provisioning customer tenants | Manual via admin UI | Promote a validated public tenant, or create manually |
 | Dashboard login for legacy tenants | bcrypt in `launcher-auth.db` (SQLite per tenant) | unchanged |
 | Dashboard login for new tenants | bcrypt | Supabase Auth (email + senha **e** magic link, ambos entregues no mesmo email transacional), JWT in `sb-*-auth-token` cookie on `.<base-domain>` |
 | Trusted gateway HMAC between controlplane and launcher | Same | Same |
@@ -20,52 +22,25 @@ Tenants carry an `auth_backend` column (`'local'` or `'supabase'`). The
 gateway middleware reads it per request and routes through the right
 verifier. Migration of legacy tenants is opt-in and out-of-scope here.
 
-## Architecture in one diagram
+## Current public onboarding path
 
 ```
-Visitor ──▶ /pre-cadastro                    (saas-admin frontend, Clara default)
+Admin ──▶ adm.<base>/tenants/new
         │
-        ▼ SSE chat
-   ┌────────────────────────────────────┐
-   │ controlplane: Clara                │  internal/saas/api/company_intakes_chat.go
-   │   └─ mark_qualified tool           │  internal/saas/clara/clara_system.txt
-   │      sets status = qualified       │  (intake row, NOT yet a tenant)
-   └────────────────────────────────────┘
-        │
-        ▼ visitor enters email + WhatsApp on ClaraFinalize
-   ┌────────────────────────────────────┐
-   │ POST /api/v1/public/.../submit     │  internal/saas/api/company_intakes.go
-   │   ├─ status = submitted            │
-   │   └─ if AUTO_PROVISION enabled     │
-   │      AND intake has email+company: │
-   │        ▼                           │
-   │      AutoProvisioner.Run           │  internal/saas/api/company_intakes_provision.go
-   │        ├─ dedup by owner_email     │
-   │        ├─ rate-limit per IP        │
-   │        ├─ Provisioner.Create       │  internal/saas/tenant/provisioner.go
-   │        │   ├─ Docker container     │
-   │        │   ├─ volume + profile     │
-   │        │   ├─ LiteLLM key          │
-   │        │   └─ SKIP local bcrypt    │  (because Supabase owns auth)
-   │        ├─ Supabase.CreateTenantOwner   │ internal/saas/auth/supabase.go
-   │        │   (Admin API, password mode, EmailConfirm=true,
-   │        │    app_metadata.tenant_id)
-   │        ├─ Supabase.GenerateMagicLink   │ extra magic link for the same user
-   │        ├─ OverlayWorkspace (optional)  │ internal/saas/tenant/template.go
-   │        ├─ SetSupabaseUserID            │
-   │        ├─ Mailer.SendCredentialsEmail  │ URL + email + senha + magic link
-   │        │   (single transactional email)│ in one message
-   │        └─ CompanyIntakes.LinkTenant    │
-   │        ▼                           │
-   │   /submit response carries the     │  → frontend ProvisionSuccessCard
-   │   URL + initial_password +         │     in ClaraFinalize/ClaraDone
-   │   check_email=true                 │
-   └────────────────────────────────────┘
-
-Why /submit and not the chat SSE? Clara's `mark_qualified` fires BEFORE the
-finalize form collects the visitor's email, so the provisioner would always
-reject with ErrMissingContact if called from the chat handler. Moving the
-call to /submit means the contact data is guaranteed populated.
+        ├─ selects tenant_type=publico
+        ├─ chooses workspace
+        └─ creates tenant with is_public=true, no owner_email
+              │
+              ▼
+Visitor ──▶ https://<public-subdomain>.<base>/
+              │
+              ├─ role=public, active_profile=public
+              ├─ Sofia conducts discovery in the tenant chat
+              ├─ onboarding-state records owner contact + discovery summary
+              └─ Catarina deepens through the institutional WhatsApp sidecar
+                    │
+                    ▼
+Admin promotes the public tenant to a customer tenant after validation.
 ```
 
 Later: visitor clicks magic link / enters password
@@ -224,106 +199,62 @@ editor can persist changes. Edits via the admin UI propagate to NEW
 tenants automatically; existing tenants need a re-provision (or a manual
 re-copy of the home/ subtree into their volume).
 
-## Onboarding lifecycle (Clara → Sofia handoff)
+## Onboarding lifecycle (tenant público → Sofia → Catarina)
 
-The first conversation a freshly provisioned tenant has with their team is
-not on WhatsApp — it's in the panel. This isn't an accident; it's the only
-channel available at boot. The full lifecycle:
+The first conversation happens inside the public tenant itself. The public
+tenant is the live entrypoint; Sofia is the first visible agent, and
+Catarina takes over the deepening questions through the institutional
+WhatsApp sidecar.
 
 ```
-T+0s    Maria conversa com Clara em jotaduo.com/pre-cadastro.
-        Clara extrai 10 pontos (nome, empresa, segmento, canais,
-        dor, foco prioritário). Cap de turnos é generoso
-        (ClaraMaxTurns=120 = ~60 user turns); o frontend avisa
-        em soft 50 / hard 56 só pra fechar a conversa antes do
-        cap real.
+T+0s    Admin cria um tenant público pelo wizard:
+        New tenant → Público → workspace → Criar.
 
-T+~Ns   mark_qualified dispara. Status do intake muda pra
-        'qualified' (campo qualified_at). NADA é provisionado
-        ainda — falta o email.
+T+~60s  O container fica active. O visitante abre
+        https://<subdomain>.<base>/ e fala com Sofia no chat público.
+        O papel efetivo é `public`; o tenant tem `active_profile=public`.
 
-        O frontend muda do chat para ClaraFinalize, onde Maria
-        confirma email + WhatsApp.
+T+~Ns   Sofia coleta nome, email, WhatsApp, segmento, horários, endereço,
+        canais, pagamentos, regras de handoff e limites do atendimento.
+        Ela grava `memory/empresa.md` e atualiza
+        `workspace/state/onboarding.json` via `onboarding-state`.
 
-T+~N+Ms POST /api/v1/public/company-intakes/{id}/submit dispara.
-        Status muda pra 'submitted'. AutoProvisioner.Run executa:
-          1. dedup por email
-          2. rate-limit per IP
-          3. Provisioner.Create (Docker + LiteLLM + Supabase user)
-          4. SeedTenantFromIntake escreve memory/empresa.md,
-             leads.md, canais-autorizados.md, atendimentos.md
-             e config/company-profile.md com tudo que a Clara
-             coletou, marcado "Status: pendente de validação"
-          5. OverlayWorkspace copia agents/, skills/, cron/,
-             HEARTBEAT.md, etc. — memory/* é copy-if-missing,
-             portanto a seed do passo 4 ganha
-          6. Restart container
-        AutoProvisioner cria o user Supabase (password mode,
-        EmailConfirm=true), gera um magic link extra, e dispara
-        Mailer.SendCredentialsEmail com URL + email + senha + magic
-        link tudo num só email. O /submit retorna
-        { url, initial_password, check_email: true, ... } e
-        ClaraFinalize mostra a senha no card de sucesso + aviso de
-        que o email também foi enviado.
+T+~N+Ms Quando o discovery básico fica completo, o estado muda para
+        `discovery_done`. O bridge Sofia → Catarina pode disparar a
+        primeira mensagem pelo `jotaduo-wa` institucional.
 
-T+~30s  Maria recebe o email. Pode entrar de duas formas: clicar no
-        magic link (1 clique) OU digitar o email + senha no formulário
-        do painel. Em ambos os casos Supabase autentica, cookie
-        sb-<projectRef>-auth-token cai em .jotaduo.com, browser segue
-        pra acme.jotaduo.com. tenant_gateway verifica JWT, assina
-        trusted_gateway HMAC, repassa pro launcher.
-        Maria vê o painel da empresa dela pela primeira vez.
+T+~N+Ms Catarina manda a primeira pergunta de aprofundamento ao WhatsApp
+        capturado por Sofia. O estado registra `first_contact_at` e
+        `last_outreach_at` para evitar reenvio duplicado.
 
-T+~31s  Maria abre o chat embutido do painel (canal pico). O agente
-        interno é Sofia (workspace/agents/sofia-assistente-interno.md).
-        Sofia detecta os campos "pendente de validação" na memória
-        e abre a conversa de onboarding seguindo a seção "Primeiro
-        contato com o dono" do prompt dela:
-          1. cumprimenta por nome
-          2. menciona que a Clara passou o resumo
-          3. faz UMA pergunta por vez sobre o que está vazio
-             (horário, endereço, FAQs, regra de preço, etc.)
-          4. atualiza memory/empresa.md, troca Status para "validada"
-        Em ~5-10 minutos os essenciais ficam preenchidos.
+T+later Catarina fecha as áreas exigidas (`equipe`, `casos-excecao`,
+        `faq`, `historico`, `regras-tacitas`). Quando o estado fica
+        `ready_for_promotion`, o admin promove o tenant público para
+        cliente normal.
 
-T+~10min Sofia diz: "Pronto, base configurada. Pra Clara/Marcos/Camila
-         começarem a atender no WhatsApp comercial, vamos conectar o
-         número da empresa — vai em Canais → WhatsApp e escaneia o QR
-         code. Quando você fizer isso eu te aviso aqui."
-
-T+~15min Maria abre Canais → WhatsApp, escaneia QR com o celular dela.
-         whatsmeow pareia em ~30-60s. workspace/whatsapp/store.db é
-         criado dentro do volume do tenant.
-
-T+~16min Daí em diante:
-         - Clara/Marcos/Camila atendem cliente final no WhatsApp
-           comercial recém-pareado.
-         - Sofia continua no painel (canal pico) E também ganha
-           acesso ao WhatsApp interno (número da Maria) pra alertas
-           proativos do heartbeat — sem precisar Maria abrir o painel.
+T+promote O backend cria/associa o owner Supabase, troca o tenant para
+          `is_public=false`, recria o container sem credenciais
+          institucionais da Jotaduo e o cliente passa a parear o WhatsApp
+          comercial próprio.
 ```
 
-### Por que não WhatsApp desde o T+0s
+### Por que Catarina usa o WhatsApp institucional nessa fase
 
-O container do tenant nasce com `workspace/whatsapp/store.db` ausente
-(o overlay e o template seed pulam esse arquivo de propósito). whatsmeow
-precisa de uma sessão pareada pra falar com a Meta. Quem pareia é a
-Maria, com o celular dela, depois de logar no painel. Portanto a
-primeira janela de contato disponível é o canal `pico` interno do
-launcher, que é o que Sofia usa.
+O tenant público ainda não pertence a uma empresa cliente e não deve receber
+credenciais permanentes do WhatsApp comercial. Catarina usa
+`JOTADUO_WA_URL` + `JOTADUO_WA_HMAC_SECRET`, injetados apenas em
+`is_public=true`, para falar pelo número institucional da Jotaduo. Na
+promoção, o recreate do container remove esses envs.
 
-A mensagem de fechamento da Clara pública foi ajustada pra refletir
-isso — ela diz "Sofia te recebe no painel" em vez de "no WhatsApp".
-
-### Casos de borda
+### Casos de borda do público
 
 | Cenário | Comportamento atual |
 |---|---|
-| Maria não clica no magic link | Tenant fica criado, supabase_user_id setado, mas sem login. Continua válido — pode entrar a qualquer hora. Magic link Supabase expira em 1h por padrão; use `POST /api/v1/public/company-intakes/{id}/resend-link` pra reenviar. |
-| Maria entra mas não confirma nada | Memória fica com `Status: pendente de validação`. Heartbeat da Sofia (5min) continua tentando avisar no painel. Sofia não atua no WhatsApp porque ainda não tá pareado. Clara/Marcos/Camila não respondem cliente nesse estado porque também não tem WhatsApp. Tenant em estado "inerte" — sem dano. |
-| Maria nunca pareia WhatsApp | Sofia conversa no painel, valida memória, mas Clara/Marcos/Camila ficam sem canal pra atender. O painel funciona como sandbox/preview. Operador pode acompanhar via admin: `SELECT id, owner_email, created_at FROM tenants WHERE supabase_user_id IS NOT NULL AND container_id IS NOT NULL` e cruzar com docker `ls -la /srv/saas/tenants/<id>/workspace/whatsapp/` (vazio = não pareado). |
-| Email da Maria errado/typo | Supabase tenta entregar, falha silenciosamente. Dedup vai bloquear a segunda tentativa da Maria se ela voltar com o MESMO email. Atualmente operador precisa intervir manualmente. (Roadmap: detectar bounce e marcar tenant pra retry.) |
-| Maria parear WhatsApp ANTES de validar memória | Funciona — Sofia continua no painel pedindo validação E também tem o canal WhatsApp da Maria. As duas conversas podem rolar em paralelo. Memória só fica "oficial" quando Sofia marca como validada. Clara/Marcos/Camila respeitam isso (não citam preço/horário não-validado). |
+| Visitante abre o tenant antes do gateway subir | A UI mostra indisponibilidade temporária. O probe real é `GET /api/public/chat/health`. |
+| Papel `public` sem policy de chat/logs | `/api/gateway/status` ou `/pico/ws` podem retornar 403 e a UI parece offline. O default precisa de `chat=write` e `logs=read`. |
+| Catarina já enviou a primeira mensagem | `first_contact_at` impede o bridge de disparar de novo. Use `mark_outreach_sent` só para novas mensagens intencionais. |
+| Lead demora a responder | `last_outreach_at` alimenta o alerta de timeout, mas não bloqueia promoção sozinho quando o restante está pronto. |
+| Admin promove cedo | Use o escape hatch de promoção apenas com `memory/empresa.md` preenchido; o tenant cliente perde acesso ao WhatsApp institucional ao ser recriado. |
 
 ### O que Sofia faz quando os pendentes acabam
 
@@ -416,16 +347,15 @@ de outreach for plugada (Twilio, Meta Business, etc.), o worker
 ganha um case `whatsapp` em `deliver()` e novos reminders podem ser
 agendados com esse canal — sem mudar o schema.
 
-## Turning on auto-provision
+## Legacy intake auto-provision
 
 ```bash
 # Edit docker/saas/.env
 PICOCLAW_SAAS_AUTO_PROVISION=true
 PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY=3
 # Auto-provision picks the workspace marked `is_default_auto` — mark one
-# via adm.<base>/workspaces before turning this on, otherwise Clara's
-# qualifier returns "no workspace is marked is_default_auto" and the
-# provision attempt fails fast.
+# via adm.<base>/workspaces before turning this on, otherwise the
+# qualifier returns "no workspace is marked is_default_auto".
 #
 # Note: login mode is no longer a toggle. When Supabase is configured the
 # new tenant owner always receives email + senha AND a magic link in the
@@ -434,8 +364,9 @@ PICOCLAW_SAAS_AUTO_PROVISION_PER_IP_DAY=3
 docker compose -f docker/saas/docker-compose.yml up -d controlplane
 ```
 
-After turning it on, the next visitor that reaches `mark_qualified` in a
-Clara conversation will trigger a real tenant creation. Watch the first one:
+This is kept for legacy intake experiments only. It is not the current public
+onboarding path. For the live flow, create a tenant with type **Público** in
+the admin UI and start the discovery through Sofia in that tenant.
 
 ```bash
 docker logs -f controlplane | grep -E "(autoProvision|tenant_provisioned|provision_error)"
@@ -446,7 +377,7 @@ docker ps --filter "label=picoclaw.saas.managed=true" --format "table {{.Names}}
 
 Without this, `Mailer.Enabled()` returns `false` and `SendCredentialsEmail`
 just logs — the tenant owner never receives the email. The senha + magic link
-are then only visible in the admin dialog / Clara SSE response, which works
+are then only visible in the admin dialog / legacy intake response, which works
 for manual operator delivery but not for the SMB self-serve flow.
 
 Pick a provider with a free tier. We've validated **Brevo** (300 emails/day
@@ -571,15 +502,14 @@ Mailgun, etc. — only `SMTP_HOST/PORT/USER/PASSWORD` change.
 
 ### Resend a magic link
 
-If a visitor lost the credentials email (or just the magic link inside it):
+If an owner lost the credentials email (or just the magic link inside it):
 
 ```
 POST /api/v1/public/company-intakes/{id}/resend-link
 { "resume_token": "..." }
 ```
 
-Same per-IP rate limit as Clara chat. The browser already has the
-resume_token in localStorage (`picoclaw_pre_cadastro_clara`).
+Same per-IP rate limit as the public intake endpoints.
 
 ### Delete a Supabase-backed tenant
 
@@ -645,7 +575,7 @@ tenants entirely.
 | Verify fails for ES256 tokens | JWKS endpoint unreachable from controlplane | `curl https://<ref>.supabase.co/auth/v1/.well-known/jwks.json` from inside the container. |
 | Verify fails for HS256 tokens | Project uses asymmetric keys now; the HS256 token is from a different project or forged | Inspect the token: `echo $JWT | cut -d. -f1 | base64 -d`. |
 | Every dashboard request redirects to `/login` | `auth_backend='supabase'` but cookie not present, or wrong domain | Confirm cookie scope is `.jotaduo.com`, not `<sub>.jotaduo.com`. |
-| Auto-provision works manually but not via Clara | `PICOCLAW_SAAS_AUTO_PROVISION=false`, or visitor never hit /submit (mark_qualified alone no longer provisions — see lifecycle above) | `docker logs controlplane \| grep -E "clara:\|submit:"`; ensure intake has contact_email + company_name and reached the ClaraFinalize step. |
+| Legacy auto-provision does not run | `PICOCLAW_SAAS_AUTO_PROVISION=false`, missing default workspace, or intake never reached submit | `docker logs controlplane \| grep -E "autoProvision\|submit"`; for the live public flow, prefer admin-created **Público** tenants. |
 | Tenant subdomain returns TLS `unrecognized name` | Traefik only pre-issues certs for concrete `Host()` routers; the controlplane uses `HostRegexp` which doesn't trigger ACME | Confirm `picoclaw-tenant-router.service` is running on the VPS (see `docker/saas/scripts/tenant-router/install.sh` and `docs/operations/saas-vps-deploy.md` step 8). |
 
 ## Rollback (turn it all off)

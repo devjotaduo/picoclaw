@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sipeed/picoclaw/internal/saas/gatewayauth"
+	saasPolicy "github.com/sipeed/picoclaw/internal/saas/policy"
 )
 
 // LauncherDashboardCookieName is the HttpOnly cookie set after a successful password login.
@@ -72,6 +73,11 @@ type LauncherDashboardAuthConfig struct {
 	// X-Picoclaw-Internal-Token header bypass the cookie check. Empty
 	// disables the feature.
 	InternalToken string
+	// AnonymousPublicDashboard lets public onboarding tenants serve the
+	// visitor-facing chat shell without a dashboard cookie. Requests admitted
+	// this way are annotated as role=public; PolicyMiddleware still enforces
+	// the public role's feature limits.
+	AnonymousPublicDashboard bool
 }
 
 // LauncherInternalTokenHeader is the request header name child processes
@@ -181,6 +187,10 @@ func LauncherDashboardAuth(cfg LauncherDashboardAuthConfig, next http.Handler) h
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
+			if cfg.AnonymousPublicDashboard && isAnonymousPublicDashboardPath(r.Method, p) {
+				next.ServeHTTP(w, withAnonymousPublicClaims(r))
+				return
+			}
 			rejectLauncherDashboardAuth(w, r, p)
 			return
 		}
@@ -234,8 +244,53 @@ func LauncherDashboardAuth(cfg LauncherDashboardAuthConfig, next http.Handler) h
 				return
 			}
 		}
+		if cfg.AnonymousPublicDashboard && isAnonymousPublicDashboardPath(r.Method, p) {
+			next.ServeHTTP(w, withAnonymousPublicClaims(r))
+			return
+		}
 		rejectLauncherDashboardAuth(w, r, p)
 	})
+}
+
+func withAnonymousPublicClaims(r *http.Request) *http.Request {
+	claims := gatewayauth.Claims{
+		UserID: "anonymous",
+		Role:   saasPolicy.RolePublic,
+	}
+	ctx := context.WithValue(r.Context(), trustedGatewayClaimsContextKey{}, claims)
+	return r.WithContext(ctx)
+}
+
+func isAnonymousPublicDashboardPath(method, p string) bool {
+	if isPublicLauncherDashboardStatic(method, p) {
+		return true
+	}
+	if method == http.MethodGet && p == "/" {
+		return true
+	}
+	if method == http.MethodGet && p == "/api/auth/status" {
+		return true
+	}
+	if method == http.MethodGet && p == "/api/launcher/policy" {
+		return true
+	}
+	if isAnonymousPublicChatPath(method, p) {
+		return true
+	}
+	_, _, known := saasPolicy.FeatureForRequest(method, p)
+	return known
+}
+
+func isAnonymousPublicChatPath(method, p string) bool {
+	if method != http.MethodGet && method != http.MethodPost {
+		return false
+	}
+	switch p {
+	case "/api/public/chat", "/api/public/chat/stream", "/api/public/chat/health":
+		return true
+	default:
+		return strings.HasPrefix(p, "/api/public/chat/")
+	}
 }
 
 // canonicalAuthPath matches path cleaning used for routing decisions so

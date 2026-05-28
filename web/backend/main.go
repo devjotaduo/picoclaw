@@ -13,6 +13,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -62,6 +63,53 @@ func shouldEnableLauncherFileLogging(enableConsole, debug bool) bool {
 
 func shouldEnableLocalAutoLogin(noBrowser bool, probeHost string) bool {
 	return !noBrowser && isLoopbackLaunchHost(probeHost)
+}
+
+func anonymousPublicDashboardEnabled(configPath string) bool {
+	if envBool(os.Getenv("PICOCLAW_PUBLIC_TENANT")) {
+		return true
+	}
+	if !csvContains(os.Getenv("PICOCLAW_ALLOWED_CHANNELS"), config.ChannelPublicWeb) {
+		return false
+	}
+	activeProfile, ok := activeUIProfile(configPath)
+	return ok && activeProfile == "public"
+}
+
+func activeUIProfile(configPath string) (string, bool) {
+	if strings.TrimSpace(configPath) == "" {
+		return "", false
+	}
+	b, err := os.ReadFile(filepath.Join(filepath.Dir(configPath), "ui-visibility.json"))
+	if err != nil {
+		return "", false
+	}
+	var raw struct {
+		ActiveProfile string `json:"active_profile"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(raw.ActiveProfile), true
+}
+
+func envBool(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func csvContains(value, want string) bool {
+	want = strings.TrimSpace(want)
+	for _, part := range strings.Split(value, ",") {
+		if strings.TrimSpace(part) == want {
+			return true
+		}
+	}
+	return false
 }
 
 func isLoopbackLaunchHost(host string) bool {
@@ -620,11 +668,12 @@ func main() {
 	auditedMux := middleware.AuditLogger(policyMux)
 
 	dashAuth := middleware.LauncherDashboardAuth(middleware.LauncherDashboardAuthConfig{
-		ExpectedCookie:       dashboardSessionCookie,
-		AuthMode:             os.Getenv("PICOCLAW_AUTH_MODE"),
-		TrustedGatewaySecret: os.Getenv("PICOCLAW_TRUSTED_GATEWAY_SECRET"),
-		LocalAutoLogin:       localAutoLogin,
-		InternalToken:        launcherInternalToken,
+		ExpectedCookie:           dashboardSessionCookie,
+		AuthMode:                 os.Getenv("PICOCLAW_AUTH_MODE"),
+		TrustedGatewaySecret:     os.Getenv("PICOCLAW_TRUSTED_GATEWAY_SECRET"),
+		LocalAutoLogin:           localAutoLogin,
+		InternalToken:            launcherInternalToken,
+		AnonymousPublicDashboard: anonymousPublicDashboardEnabled(absPath),
 	}, auditedMux)
 
 	// Apply middleware stack
