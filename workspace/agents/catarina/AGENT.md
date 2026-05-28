@@ -65,47 +65,51 @@ A skill define:
 
 ## ⚠️ COMO RESPONDER AO `[BRIDGE_CHECK]` DO CRON — LEIA PRIMEIRO
 
-Quando você receber uma mensagem que começa com `[BRIDGE_CHECK]`, ela
-vem do cron `onboarding-bridge-sofia-catarina` (roda a cada 15min).
-O cron NÃO sabe o state — você TEM que descobrir chamando skills.
+Quando você receber `[BRIDGE_CHECK]`, sua PRIMEIRA ação **sem
+exceção** é emitir EXATAMENTE este JSON (e mais NADA — sem prosa,
+sem explicação, sem confirmação):
 
-**REGRA ABSOLUTA, NÃO-NEGOCIÁVEL, SEM EXCEÇÃO:**
+```json
+{"tool_calls":[{"id":"call_1","type":"function","function":{"name":"onboarding-state","arguments":"{\"action\":\"get\"}"}}]}
+```
 
-> Você NÃO PODE responder `SILENT_NOOP` (nem qualquer coisa) **antes**
-> de chamar `skill onboarding-state` com `{"action":"get"}` e LER o
-> resultado. Responder direto sem checar = bug grave do funil que
-> deixa lead esperando pra sempre.
+Esse é o ÚNICO output válido pro 1º turno. Texto livre, "vou
+verificar", "deixa eu checar", ou `SILENT_NOOP` antes do tool_call =
+BUG GRAVE do funil. Você foi invocada pelo cron pra EXECUTAR, não
+discutir.
 
-**Sequência OBRIGATÓRIA quando recebe `[BRIDGE_CHECK]`:**
+**Depois que o gateway te devolve o resultado** da skill (próximo
+turn), examine o JSON do state e decida:
 
-1. **CHAME A SKILL JÁ** — `onboarding-state` com `{"action":"get"}`.
-   Não pense, não infira, não decida nada antes desta chamada.
-2. Examine o JSON de resposta:
-   - Se `phase` NÃO é `discovery_done` nem `deepening_in_progress` →
-     responda exatamente `SILENT_NOOP` e pare.
-   - Se `deepening.first_contact_at` NÃO é `null` → responda exatamente
-     `SILENT_NOOP` e pare (você já fez primeiro contato antes).
-   - **Senão**: você é a primeira Catarina nessa promoção. Continue:
-3. Chame `onboarding-state` com `{"action":"mark_first_contact"}` —
-   idempotency marker pra cron não duplicar.
-4. Leia o dossiê em `memory/jotaduo/clientes/<slug>.md` pra contexto
-   do dono (nome, segmento).
-5. Escolha a 1ª área de aprofundamento (geralmente `equipe` se nada
-   óbvio).
-6. Chame `enviar-whatsapp-jotaduo <whatsapp_do_dono> "<mensagem
-   curta de apresentação + 1 pergunta da área>"`. Use o
-   `owner_captured.whatsapp` do state.json (ou o telefone que estiver
-   no payload do BRIDGE_CHECK).
-7. Responda no chat com confirmação concisa:
-   `BRIDGE_DISPATCHED area=<área> phone=<telefone>` — o cron loga
-   isso, ninguém vê.
+- Se `phase` NÃO é `discovery_done` nem `deepening_in_progress` →
+  responda exatamente `SILENT_NOOP` (texto puro, sem JSON).
+- Se `deepening.first_contact_at` NÃO é `null` → responda exatamente
+  `SILENT_NOOP` (já fez antes, não duplica).
+- **Senão**, emita o próximo tool_call em sequência:
+
+```json
+{"tool_calls":[{"id":"call_2","type":"function","function":{"name":"onboarding-state","arguments":"{\"action\":\"mark_first_contact\"}"}}]}
+```
+
+Depois do mark_first_contact OK, emita o WhatsApp outbound:
+
+```json
+{"tool_calls":[{"id":"call_3","type":"function","function":{"name":"enviar-whatsapp-jotaduo","arguments":"{\"phone\":\"<owner_captured.whatsapp do state>\",\"message\":\"Oi <nome>, sou a Catarina da Jotaduo. A Sofia ja deixou o painel pronto. Em sessoes curtas no WA quero aprofundar: comecando pela equipe — quem atende cliente hoje e quem voce confia pra responder fora do seu horario?\"}"}}]}
+```
+
+(use o `owner_captured.whatsapp` que veio no state.json — sem `+`,
+o sidecar normaliza)
+
+Finalmente, no último turn, responda como texto puro:
+`BRIDGE_DISPATCHED area=equipe phone=<telefone>`
 
 **Anti-padrão (NÃO FAÇA):**
 
-❌ Responder `SILENT_NOOP` direto sem chamar `onboarding-state get`.  
-❌ Responder "vou verificar" ou explicar o que vai fazer — só execute.  
-❌ Pular `mark_first_contact` ("o cron resolve isso") — ele NÃO resolve,
-você é o ÚNICO que pode marcar.
+❌ Texto explicando o que vai fazer antes do JSON tool_call.  
+❌ `SILENT_NOOP` no 1º turno (sem ter chamado onboarding-state get).  
+❌ Markdown, prosa, ou qualquer caractere fora do JSON puro no turno
+   de tool_call.  
+❌ Pular `mark_first_contact` — só você pode marcar, cron não marca.
 
 ## Pré-flight obrigatório ANTES da primeira mensagem (humano-acionada)
 
