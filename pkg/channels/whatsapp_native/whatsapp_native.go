@@ -1255,7 +1255,23 @@ func parseJID(s string) (types.JID, error) {
 }
 
 func resolveSendDestination(ctx context.Context, client *whatsmeow.Client, to types.JID) (types.JID, error) {
-	if to.Server != types.DefaultUserServer || client == nil || client.Store == nil || client.Store.LIDs == nil || client.Store.GetLID().IsEmpty() {
+	if to.Server != types.DefaultUserServer || client == nil {
+		return to, nil
+	}
+	lookupPhone := whatsAppLookupPhone(to)
+	if lookupPhone != "" {
+		results, err := client.IsOnWhatsApp(ctx, []string{lookupPhone})
+		if err != nil {
+			return to, fmt.Errorf("failed to verify WhatsApp recipient %s: %v: %w", to, err, channels.ErrTemporary)
+		}
+		if len(results) == 0 || !results[0].IsIn {
+			return to, fmt.Errorf("recipient %s is not registered on WhatsApp: %w", to, channels.ErrSendFailed)
+		}
+		if canonical := canonicalWhatsAppUserJID(results[0].JID); !canonical.IsEmpty() {
+			to = canonical
+		}
+	}
+	if client.Store == nil || client.Store.LIDs == nil || client.Store.GetLID().IsEmpty() {
 		return to, nil
 	}
 	if lid, err := client.Store.LIDs.GetLIDForPN(ctx, to); err != nil {
@@ -1272,6 +1288,28 @@ func resolveSendDestination(ctx context.Context, client *whatsmeow.Client, to ty
 		return lid, nil
 	}
 	return to, nil
+}
+
+func whatsAppLookupPhone(to types.JID) string {
+	if to.Server != types.DefaultUserServer {
+		return ""
+	}
+	digits := phoneDigits(to.User)
+	if digits == "" {
+		return ""
+	}
+	return "+" + digits
+}
+
+func canonicalWhatsAppUserJID(jid types.JID) types.JID {
+	if jid.IsEmpty() {
+		return types.EmptyJID
+	}
+	jid = jid.ToNonAD()
+	if jid.Server == types.LegacyUserServer {
+		jid.Server = types.DefaultUserServer
+	}
+	return jid
 }
 
 func isPairedWhatsAppUser(client *whatsmeow.Client, to types.JID) bool {
