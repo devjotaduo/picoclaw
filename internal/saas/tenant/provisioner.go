@@ -26,6 +26,66 @@ import (
 // operator prefers a different location.
 const sharedAuthHostPath = "/etc/picoclaw/shared-auth.json"
 
+// defaultSaaSLiteLLMModel must exist in docker/saas/litellm/config.yaml.
+// Tenants receive a per-tenant virtual LiteLLM key, so their config should
+// point at the controlplane-managed model name, not at raw upstream providers.
+const defaultSaaSLiteLLMModel = "gpt-4o-mini"
+
+func (p *Provisioner) sharedCLIModelRouting() (useClaude, useCodex bool) {
+	if p == nil || p.Cfg == nil {
+		return false, false
+	}
+	claudeDir, _ := resolveClaudeCLIAuthDir(p.Cfg.TenantClaudeCliAuthDir)
+	codexDir, _ := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
+	return claudeDir != "", codexDir != ""
+}
+
+func resolveClaudeCLIAuthDir(path string) (string, error) {
+	return resolveCLIAuthDir(path, ".credentials.json", ".claude")
+}
+
+func resolveCodexCLIAuthDir(path string) (string, error) {
+	return resolveCLIAuthDir(path, "auth.json", ".codex")
+}
+
+func resolveCLIAuthDir(path, markerFile, nestedDir string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", nil
+	}
+	if hasRegularFile(filepath.Join(path, markerFile)) {
+		return path, nil
+	}
+
+	nested := filepath.Join(path, nestedDir)
+	nestedInfo, err := os.Stat(nested)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	if nestedInfo.IsDir() && hasRegularFile(filepath.Join(nested, markerFile)) {
+		return nested, nil
+	}
+	return "", nil
+}
+
+func hasRegularFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
 // copySharedAuthIfPresent reads sharedAuthHostPath (or the
 // PICOCLAW_SHARED_AUTH_PATH override) and copies it into the tenant
 // volume at /root/.picoclaw/auth.json (overwriting whatever the
@@ -326,11 +386,21 @@ func (p *Provisioner) runProvision(
 			}
 		}
 
-		// 3. Per-tenant LiteLLM virtual key + placeholder substitution. The
-		// workspace's config.json carries "${LITELLM_KEY}" / "${LITELLM_URL}" /
-		// "${TENANT_ID}" placeholders that get filled in here. We never write
-		// config.json from scratch — operator owns the schema.
-		if p.LiteLLM != nil {
+		// 3. Model routing + placeholder substitution. Shared CLI auth is the
+		// preferred SaaS path when the operator mounted Claude/Codex credentials:
+		// no upstream API key is written into the tenant. LiteLLM remains the
+		// fallback for deployments that have not configured CLI auth dirs.
+		cliClaude, cliCodex := p.sharedCLIModelRouting()
+		if cliClaude || cliCodex {
+			if err := SubstituteConfigPlaceholders(t.VolumePath, map[string]string{
+				"${TENANT_ID}": t.ID,
+			}); err != nil {
+				return fmt.Errorf("substitute placeholders: %w", err)
+			}
+			if err := ApplySaaSCLIModelRouting(t.VolumePath, cliClaude, cliCodex); err != nil {
+				return fmt.Errorf("apply saas cli model routing: %w", err)
+			}
+		} else if p.LiteLLM != nil {
 			out, err := p.LiteLLM.GenerateKey(ctx, litellm.GenerateKeyInput{
 				TenantID:         t.ID,
 				MonthlyBudgetUSD: t.MonthlyBudgetUSD,
@@ -706,28 +776,30 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 	// Decouples the deploy from the auth setup: image bumps land fine
 	// without the operator step; the moment the operator creates the
 	// dir + writes credentials, every new tenant inherits the auth.
+	claudeAuthDir, claudeAuthErr := resolveClaudeCLIAuthDir(p.Cfg.TenantClaudeCliAuthDir)
+	codexAuthDir, codexAuthErr := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
 	for _, mount := range []struct {
 		dir    string
+		err    error
 		target string
 		label  string
 	}{
-		{p.Cfg.TenantClaudeCliAuthDir, "/root/.claude", "claude-cli"},
-		{p.Cfg.TenantCodexCliAuthDir, "/root/.codex", "codex-cli"},
+		{claudeAuthDir, claudeAuthErr, "/root/.claude", "claude-cli"},
+		{codexAuthDir, codexAuthErr, "/root/.codex", "codex-cli"},
 	} {
-		dir := strings.TrimSpace(mount.dir)
-		if dir == "" {
+		if mount.err != nil {
+			log.Printf("WARN: provisioner: tenant %s %s auth dir: %v (skipping mount)",
+				t.ID, mount.label, mount.err)
 			continue
 		}
-		if info, err := os.Stat(dir); err == nil && info.IsDir() {
-			spec.ExtraMounts = append(spec.ExtraMounts, ContainerMount{
-				Source:   dir,
-				Target:   mount.target,
-				ReadOnly: true,
-			})
-		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-			log.Printf("WARN: provisioner: tenant %s %s auth dir %s: %v (skipping mount)",
-				t.ID, mount.label, dir, err)
+		if mount.dir == "" {
+			continue
 		}
+		spec.ExtraMounts = append(spec.ExtraMounts, ContainerMount{
+			Source:   mount.dir,
+			Target:   mount.target,
+			ReadOnly: true,
+		})
 	}
 
 	return spec, nil

@@ -482,6 +482,303 @@ func SubstituteConfigPlaceholders(destDir string, replacements map[string]string
 	return nil
 }
 
+// SubstituteRedactedModelKeys rewrites the generated baseline's redacted
+// model credentials in .security.yml to the tenant's LiteLLM virtual key.
+// The sync script scrubs real dev keys from workspace/.security.yml before
+// embedding the baseline; in SaaS provisioning those redacted model keys are
+// placeholders, while non-model redacted values must stay untouched.
+func SubstituteRedactedModelKeys(destDir, litellmKey string) error {
+	if strings.TrimSpace(litellmKey) == "" {
+		return nil
+	}
+	full := filepath.Join(destDir, ".security.yml")
+	data, err := os.ReadFile(full)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("read .security.yml: %w", err)
+	}
+
+	var root map[string]any
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return fmt.Errorf("parse .security.yml: %w", err)
+	}
+	modelList, ok := root["model_list"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	changed := false
+	for _, rawEntry := range modelList {
+		entry, ok := rawEntry.(map[string]any)
+		if !ok {
+			continue
+		}
+		switch keys := entry["api_keys"].(type) {
+		case []any:
+			for i, rawKey := range keys {
+				if strings.TrimSpace(fmt.Sprint(rawKey)) == "REDACTED" {
+					keys[i] = litellmKey
+					changed = true
+				}
+			}
+		case []string:
+			for i, rawKey := range keys {
+				if strings.TrimSpace(rawKey) == "REDACTED" {
+					keys[i] = litellmKey
+					changed = true
+				}
+			}
+			entry["api_keys"] = keys
+		}
+	}
+	if !changed {
+		return nil
+	}
+
+	out, err := yaml.Marshal(root)
+	if err != nil {
+		return fmt.Errorf("marshal .security.yml: %w", err)
+	}
+	mode := os.FileMode(0o600)
+	if info, statErr := os.Stat(full); statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	if err := writeFileAtomic(full, out, mode); err != nil {
+		return fmt.Errorf("write .security.yml: %w", err)
+	}
+	return nil
+}
+
+const (
+	saaSCLIWorkspacePath          = "/root/.picoclaw/workspace"
+	defaultSaaSClaudeCLIModelName = "claude-cli-sonnet"
+	defaultSaaSClaudeCLIModel     = "sonnet"
+	defaultSaaSCodexCLIModelName  = "codex-cli-gpt-5"
+	defaultSaaSCodexCLIModel      = "gpt-5"
+)
+
+// ApplySaaSCLIModelRouting makes a provisioned non-raw tenant use shared
+// operator CLI auth mounts instead of upstream API keys. The auth material
+// lives outside the workspace and is injected read-only by the provisioner.
+func ApplySaaSCLIModelRouting(destDir string, enableClaude, enableCodex bool) error {
+	if !enableClaude && !enableCodex {
+		return fmt.Errorf("at least one saas cli provider must be enabled")
+	}
+
+	path := filepath.Join(destDir, "config.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read config.json: %w", err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("parse config.json: %w", err)
+	}
+
+	agents, err := configObject(cfg, "agents")
+	if err != nil {
+		return err
+	}
+	if agents == nil {
+		agents = map[string]any{}
+		cfg["agents"] = agents
+	}
+	defaults, err := configObject(agents, "defaults")
+	if err != nil {
+		return err
+	}
+	if defaults == nil {
+		defaults = map[string]any{}
+		agents["defaults"] = defaults
+	}
+
+	models := make([]any, 0, 2)
+	if enableClaude {
+		defaults["provider"] = "claude-cli"
+		defaults["model_name"] = defaultSaaSClaudeCLIModelName
+		if enableCodex {
+			defaults["model_fallbacks"] = []any{defaultSaaSCodexCLIModelName}
+		} else {
+			delete(defaults, "model_fallbacks")
+		}
+
+		claude := map[string]any{
+			"model_name": defaultSaaSClaudeCLIModelName,
+			"provider":   "claude-cli",
+			"model":      defaultSaaSClaudeCLIModel,
+			"workspace":  saaSCLIWorkspacePath,
+			"enabled":    true,
+		}
+		if enableCodex {
+			claude["fallbacks"] = []any{defaultSaaSCodexCLIModelName}
+		}
+		models = append(models, claude)
+	}
+	if enableCodex {
+		if !enableClaude {
+			defaults["provider"] = "codex-cli"
+			defaults["model_name"] = defaultSaaSCodexCLIModelName
+			delete(defaults, "model_fallbacks")
+		}
+		models = append(models, map[string]any{
+			"model_name": defaultSaaSCodexCLIModelName,
+			"provider":   "codex-cli",
+			"model":      defaultSaaSCodexCLIModel,
+			"workspace":  saaSCLIWorkspacePath,
+			"enabled":    true,
+		})
+	}
+	cfg["model_list"] = models
+
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config.json: %w", err)
+	}
+	if len(data) > 0 && data[len(data)-1] == '\n' {
+		out = append(out, '\n')
+	}
+	mode := os.FileMode(0o644)
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	if err := writeFileAtomic(path, out, mode); err != nil {
+		return fmt.Errorf("write config.json: %w", err)
+	}
+	if err := removeSecurityModelList(destDir); err != nil {
+		return err
+	}
+	return nil
+}
+
+func removeSecurityModelList(destDir string) error {
+	full := filepath.Join(destDir, ".security.yml")
+	data, err := os.ReadFile(full)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("read .security.yml: %w", err)
+	}
+
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return fmt.Errorf("parse .security.yml: %w", err)
+	}
+	if len(root.Content) == 0 || root.Content[0].Kind != yaml.MappingNode {
+		return nil
+	}
+
+	mapping := root.Content[0]
+	changed := false
+	next := mapping.Content[:0]
+	for i := 0; i < len(mapping.Content); i += 2 {
+		if i+1 >= len(mapping.Content) {
+			next = append(next, mapping.Content[i])
+			continue
+		}
+		key := mapping.Content[i]
+		if key.Value == "model_list" {
+			changed = true
+			continue
+		}
+		next = append(next, key, mapping.Content[i+1])
+	}
+	if !changed {
+		return nil
+	}
+	mapping.Content = next
+
+	out, err := yaml.Marshal(&root)
+	if err != nil {
+		return fmt.Errorf("marshal .security.yml: %w", err)
+	}
+	mode := os.FileMode(0o600)
+	if info, statErr := os.Stat(full); statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	if err := writeFileAtomic(full, out, mode); err != nil {
+		return fmt.Errorf("write .security.yml: %w", err)
+	}
+	return nil
+}
+
+// ApplySaaSLiteLLMModelRouting makes a provisioned non-raw tenant use the
+// SaaS-owned LiteLLM proxy instead of any provider/API keys that happened to
+// exist in the workspace template. The controlplane owns provider/model
+// credentials; tenant workspaces own prompts, skills, memory and channels.
+func ApplySaaSLiteLLMModelRouting(destDir, modelName, litellmURL, litellmKey string) error {
+	modelName = strings.TrimSpace(modelName)
+	litellmURL = strings.TrimRight(strings.TrimSpace(litellmURL), "/")
+	litellmKey = strings.TrimSpace(litellmKey)
+	if modelName == "" {
+		return fmt.Errorf("saas litellm model_name is required")
+	}
+	if litellmURL == "" {
+		return fmt.Errorf("saas litellm api_base is required")
+	}
+	if litellmKey == "" {
+		return fmt.Errorf("saas litellm api_key is required")
+	}
+
+	path := filepath.Join(destDir, "config.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read config.json: %w", err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("parse config.json: %w", err)
+	}
+
+	agents, err := configObject(cfg, "agents")
+	if err != nil {
+		return err
+	}
+	if agents == nil {
+		agents = map[string]any{}
+		cfg["agents"] = agents
+	}
+	defaults, err := configObject(agents, "defaults")
+	if err != nil {
+		return err
+	}
+	if defaults == nil {
+		defaults = map[string]any{}
+		agents["defaults"] = defaults
+	}
+	defaults["provider"] = "litellm"
+	defaults["model_name"] = modelName
+
+	cfg["model_list"] = []any{
+		map[string]any{
+			"model_name": modelName,
+			"provider":   "openai",
+			"model":      modelName,
+			"api_base":   litellmURL,
+			"api_keys":   []any{litellmKey},
+			"enabled":    true,
+		},
+	}
+
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config.json: %w", err)
+	}
+	if len(data) > 0 && data[len(data)-1] == '\n' {
+		out = append(out, '\n')
+	}
+	mode := os.FileMode(0o644)
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	if err := writeFileAtomic(path, out, mode); err != nil {
+		return fmt.Errorf("write config.json: %w", err)
+	}
+	return nil
+}
+
 // workspaceBuildLocks serializes concurrent BuildWorkspaceFrontend calls per
 // host_path. Two parallel "Compile" clicks would otherwise race on the same
 // frontend-dist/ output directory; we use an in-process mutex keyed on the

@@ -339,14 +339,6 @@ Current production state as of `2026-05-21`:
   propagate to NEW tenants automatically (existing tenants need
   re-provision or manual copy).
 
-Sofia public-onboarding contract (must not regress when touching `internal/saas/api/company_intakes_*.go`):
-
-- `mark_qualified` fires DURING the chat SSE flow but DOES NOT provision — it only sets `qualified_at` on the intake row. Contact email is empty at that point.
-- `POST /api/v1/public/company-intakes/{id}/submit` is where `AutoProvisioner.Run` is actually invoked, AFTER ClaraFinalize collected `contact_email` and `contact_whatsapp`. The response carries `tenant_provisioned`, `url`, `login_mode` (always `"password"` when Supabase is on), `check_email: true`, and `initial_password` — the SSE handler emits the password to the chat AND signals that an email also went out with the magic link included.
-- `ClaraMaxTurns` defaults to 120 (`~60 user turns`). The frontend warns at 50 / hard-stops at 56 to give a buffer before the backend cap. Don't reintroduce a lower cap without bumping both.
-- Both Clara (public) and Sofia (workspace persona inside tenant) exist. Do not collapse them — `internal/saas/clara/clara_system.txt` is the public marketing voice, `workspace/agents/sofia/AGENT.md` is the in-tenant onboarding agent that takes over post-provision.
-- **Public onboarding tenant** (`feat/public-onboarding-tenant`, mostly merged): the legacy in-controlplane Clara is being replaced by a Picoclaw tenant flagged `tenants.is_public=true`. Ingress goes through `pkg/channels/publicweb/` (anonymous SSE), bypasses Supabase JWT on `/api/public/chat*` only, and routes skill callbacks (`onboarding-mark-qualified`, `onboarding-submit-intake`) back to the controlplane via HMAC-authenticated `POST /api/v1/onboarding-callback`. The dedicated bootstrap endpoint + `scripts/provision-onboarding-tenant.sh` were removed in PR #104 — provision the singleton public tenant through the normal wizard with `tenant_type=publico` instead. Architecture deep-dive: `docs/architecture/public-onboarding-tenant.md`. Frontend cutover (Phase 10) is still a stub — `VITE_USE_ONBOARDING_TENANT` flag exists but the real fetch path still hits the legacy `/api/v1/public/company-intakes/*` endpoints until an SSE event-shape adapter lands. The legacy `company_intakes*.go` chain stays in place until Phase 11 deletes it after 1-2 weeks of stable parallel operation.
-
 ### Admin panel embutido em `web/frontend`
 
 O caminho essencial de operação de tenants (list, create, clone, suspend/resume/restart, rotate password) vive embutido no `picoclaw-launcher` em `web/frontend/src/routes/admin/*`. Ele NÃO substitui `web/saas-admin` — fluxos periféricos (audit, users, intakes públicos, CRM, AgentEdit, SkillsList, AgentSettings, AcceptInvite, ServerHealth, **Workspaces**) seguem em `adm.<dominio>`.
