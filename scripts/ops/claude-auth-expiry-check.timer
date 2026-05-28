@@ -1,0 +1,17 @@
+[Unit]
+Description=Daily check of claude-cli OAuth expiry on the VPS
+Requires=claude-auth-expiry-check.service
+
+[Timer]
+# Daily at 02:00 UTC. Picked so it runs BEFORE the 06:00 UTC backup
+# timer — operator who wakes up to "credentials expiring tomorrow"
+# can act before backup runs (and before any tenant traffic in BR
+# business hours).
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+# 5min spread to avoid noisy thundering herd if many VPS share infra.
+RandomizedDelaySec=5min
+Unit=claude-auth-expiry-check.service
+
+[Install]
+WantedBy=timers.target
