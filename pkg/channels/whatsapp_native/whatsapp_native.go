@@ -767,7 +767,11 @@ func (c *WhatsAppNativeChannel) sendWithSource(ctx context.Context, msg bus.Outb
 	if err != nil {
 		return nil, fmt.Errorf("invalid chat id %q: %w", msg.ChatID, err)
 	}
-	if client.Store != nil && client.Store.ID != nil && sameWhatsAppPhoneUser(client.Store.ID.User, to.User) {
+	to, err = resolveSendDestination(ctx, client, to)
+	if err != nil {
+		return nil, err
+	}
+	if isPairedWhatsAppUser(client, to) {
 		return nil, fmt.Errorf("recipient matches the paired WhatsApp account; use a different recipient: %w", channels.ErrSendFailed)
 	}
 
@@ -832,6 +836,13 @@ func (c *WhatsAppNativeChannel) sendMediaWithSource(ctx context.Context, msg bus
 	to, err := parseJID(msg.ChatID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid chat id %q: %w", msg.ChatID, err)
+	}
+	to, err = resolveSendDestination(ctx, client, to)
+	if err != nil {
+		return nil, err
+	}
+	if isPairedWhatsAppUser(client, to) {
+		return nil, fmt.Errorf("recipient matches the paired WhatsApp account; use a different recipient: %w", channels.ErrSendFailed)
 	}
 
 	store := c.GetMediaStore()
@@ -1241,6 +1252,37 @@ func parseJID(s string) (types.JID, error) {
 		return types.ParseJID(s)
 	}
 	return types.NewJID(s, types.DefaultUserServer), nil
+}
+
+func resolveSendDestination(ctx context.Context, client *whatsmeow.Client, to types.JID) (types.JID, error) {
+	if to.Server != types.DefaultUserServer || client == nil || client.Store == nil || client.Store.LIDs == nil || client.Store.GetLID().IsEmpty() {
+		return to, nil
+	}
+	if lid, err := client.Store.LIDs.GetLIDForPN(ctx, to); err != nil {
+		return to, fmt.Errorf("failed to resolve WhatsApp LID for %s: %v: %w", to, err, channels.ErrTemporary)
+	} else if !lid.IsEmpty() {
+		return lid, nil
+	}
+
+	info, err := client.GetUserInfo(ctx, []types.JID{to})
+	if err != nil {
+		return to, fmt.Errorf("failed to fetch WhatsApp user info for %s: %v: %w", to, err, channels.ErrTemporary)
+	}
+	if lid := info[to].LID; !lid.IsEmpty() {
+		return lid, nil
+	}
+	return to, nil
+}
+
+func isPairedWhatsAppUser(client *whatsmeow.Client, to types.JID) bool {
+	if client == nil || client.Store == nil {
+		return false
+	}
+	if client.Store.ID != nil && to.Server == types.DefaultUserServer && sameWhatsAppPhoneUser(client.Store.ID.User, to.User) {
+		return true
+	}
+	ownLID := client.Store.GetLID()
+	return !ownLID.IsEmpty() && to.Server == types.HiddenUserServer && ownLID.ToNonAD() == to.ToNonAD()
 }
 
 func sameWhatsAppPhoneUser(a, b string) bool {
