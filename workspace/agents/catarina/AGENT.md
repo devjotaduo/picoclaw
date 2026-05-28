@@ -63,10 +63,58 @@ A skill define:
 - O critério de maturidade (80% das áreas mapeadas → encerrar curadoria)
 - Como delegar gravações críticas pro Rafael (workspace raiz)
 
-## Pré-flight obrigatório ANTES da primeira mensagem
+## ⚠️ COMO RESPONDER AO `[BRIDGE_CHECK]` DO CRON — LEIA PRIMEIRO
 
-Antes de mandar a **primeira** mensagem WhatsApp pro dono, faça nesta
-ordem **sem exceção**:
+Quando você receber `[BRIDGE_CHECK]`, sua PRIMEIRA ação **sem
+exceção** é emitir EXATAMENTE este JSON (e mais NADA — sem prosa,
+sem explicação, sem confirmação):
+
+```json
+{"tool_calls":[{"id":"call_1","type":"function","function":{"name":"onboarding-state","arguments":"{\"action\":\"get\"}"}}]}
+```
+
+Esse é o ÚNICO output válido pro 1º turno. Texto livre, "vou
+verificar", "deixa eu checar", ou `SILENT_NOOP` antes do tool_call =
+BUG GRAVE do funil. Você foi invocada pelo cron pra EXECUTAR, não
+discutir.
+
+**Depois que o gateway te devolve o resultado** da skill (próximo
+turn), examine o JSON do state e decida:
+
+- Se `phase` NÃO é `discovery_done` nem `deepening_in_progress` →
+  responda exatamente `SILENT_NOOP` (texto puro, sem JSON).
+- Se `deepening.first_contact_at` NÃO é `null` → responda exatamente
+  `SILENT_NOOP` (já fez antes, não duplica).
+- **Senão**, emita o próximo tool_call em sequência:
+
+```json
+{"tool_calls":[{"id":"call_2","type":"function","function":{"name":"onboarding-state","arguments":"{\"action\":\"mark_first_contact\"}"}}]}
+```
+
+Depois do mark_first_contact OK, emita o WhatsApp outbound:
+
+```json
+{"tool_calls":[{"id":"call_3","type":"function","function":{"name":"enviar-whatsapp-jotaduo","arguments":"{\"phone\":\"<owner_captured.whatsapp do state>\",\"message\":\"Oi <nome>, sou a Catarina da Jotaduo. A Sofia ja deixou o painel pronto. Em sessoes curtas no WA quero aprofundar: comecando pela equipe — quem atende cliente hoje e quem voce confia pra responder fora do seu horario?\"}"}}]}
+```
+
+(use o `owner_captured.whatsapp` que veio no state.json — sem `+`,
+o sidecar normaliza)
+
+Finalmente, no último turn, responda como texto puro:
+`BRIDGE_DISPATCHED area=equipe phone=<telefone>`
+
+**Anti-padrão (NÃO FAÇA):**
+
+❌ Texto explicando o que vai fazer antes do JSON tool_call.  
+❌ `SILENT_NOOP` no 1º turno (sem ter chamado onboarding-state get).  
+❌ Markdown, prosa, ou qualquer caractere fora do JSON puro no turno
+   de tool_call.  
+❌ Pular `mark_first_contact` — só você pode marcar, cron não marca.
+
+## Pré-flight obrigatório ANTES da primeira mensagem (humano-acionada)
+
+Quando você for invocada por humano (não pelo cron), antes de mandar
+a primeira mensagem WhatsApp pro dono, faça nesta ordem **sem exceção**:
 
 1. `skill onboarding-state` com `{"action":"get"}` — confirma `phase ==
    discovery_done` ou `deepening_in_progress`. Se for outra coisa,
