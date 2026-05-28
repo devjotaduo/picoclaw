@@ -127,6 +127,123 @@ func TestSubstituteConfigPlaceholders_MissingFileIsOk(t *testing.T) {
 	}
 }
 
+func TestSubstituteRedactedModelKeysOnlyTouchesModelList(t *testing.T) {
+	dst := t.TempDir()
+	path := filepath.Join(dst, ".security.yml")
+	if err := os.WriteFile(path, []byte(`model_list:
+  openrouter-gpt-5.4:0:
+    api_keys:
+      - REDACTED
+      - keep-me
+web:
+  brave:
+    api_keys:
+      - REDACTED
+channel_list:
+  pico:
+    settings:
+      token: REDACTED
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SubstituteRedactedModelKeys(dst, "sk-litellm-e2e"); err != nil {
+		t.Fatalf("SubstituteRedactedModelKeys: %v", err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(got)
+	if !strings.Contains(text, "sk-litellm-e2e") {
+		t.Fatalf("model_list REDACTED key was not replaced:\n%s", text)
+	}
+	if !strings.Contains(text, "keep-me") {
+		t.Fatalf("existing non-redacted model key was lost:\n%s", text)
+	}
+	if strings.Count(text, "REDACTED") != 2 {
+		t.Fatalf("non-model REDACTED values should remain untouched:\n%s", text)
+	}
+}
+
+func TestApplySaaSLiteLLMModelRoutingMaterializesTenantModel(t *testing.T) {
+	dst := t.TempDir()
+	path := filepath.Join(dst, "config.json")
+	if err := os.WriteFile(path, []byte(`{
+  "version": 3,
+  "agents": {
+    "defaults": {
+      "workspace": "/root/.picoclaw/workspace",
+      "provider": "openrouter",
+      "model_name": "openrouter-gpt-5.4"
+    }
+  },
+  "channel_list": {
+    "public-web": {"enabled": true}
+  },
+  "model_list": [
+    {
+      "model_name": "openrouter-gpt-5.4",
+      "provider": "openrouter",
+      "model": "openai/gpt-5.4",
+      "api_base": "https://openrouter.ai/api/v1"
+    }
+  ]
+}
+`), 0o640); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ApplySaaSLiteLLMModelRouting(dst, "gpt-4o-mini", "http://litellm:4000", "sk-tenant-key"); err != nil {
+		t.Fatalf("ApplySaaSLiteLLMModelRouting: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o640 {
+		t.Fatalf("mode = %v, want 0640", info.Mode().Perm())
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(string(raw), "\n") {
+		t.Fatal("expected trailing newline to be preserved")
+	}
+
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	defaults := cfg["agents"].(map[string]any)["defaults"].(map[string]any)
+	if defaults["provider"] != "litellm" || defaults["model_name"] != "gpt-4o-mini" {
+		t.Fatalf("defaults not routed to LiteLLM: %#v", defaults)
+	}
+	models := cfg["model_list"].([]any)
+	if len(models) != 1 {
+		t.Fatalf("model_list len = %d, want 1", len(models))
+	}
+	model := models[0].(map[string]any)
+	if model["model_name"] != "gpt-4o-mini" ||
+		model["provider"] != "openai" ||
+		model["model"] != "gpt-4o-mini" ||
+		model["api_base"] != "http://litellm:4000" ||
+		model["enabled"] != true {
+		t.Fatalf("model not materialized for LiteLLM: %#v", model)
+	}
+	keys := model["api_keys"].([]any)
+	if len(keys) != 1 || keys[0] != "sk-tenant-key" {
+		t.Fatalf("api_keys = %#v, want tenant key", keys)
+	}
+	if _, ok := cfg["channel_list"]; !ok {
+		t.Fatal("unrelated channel_list was lost")
+	}
+}
+
 func TestSanitizeTenantSecurityConfigRemovesLegacyAllowedChannels(t *testing.T) {
 	dst := t.TempDir()
 	path := filepath.Join(dst, ".security.yml")

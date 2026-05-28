@@ -26,6 +26,11 @@ import (
 // operator prefers a different location.
 const sharedAuthHostPath = "/etc/picoclaw/shared-auth.json"
 
+// defaultSaaSLiteLLMModel must exist in docker/saas/litellm/config.yaml.
+// Tenants receive a per-tenant virtual LiteLLM key, so their config should
+// point at the controlplane-managed model name, not at raw upstream providers.
+const defaultSaaSLiteLLMModel = "gpt-4o-mini"
+
 // copySharedAuthIfPresent reads sharedAuthHostPath (or the
 // PICOCLAW_SHARED_AUTH_PATH override) and copies it into the tenant
 // volume at /root/.picoclaw/auth.json (overwriting whatever the
@@ -330,9 +335,10 @@ func (p *Provisioner) runProvision(
 		}
 
 		// 3. Per-tenant LiteLLM virtual key + placeholder substitution. The
-		// workspace's config.json carries "${LITELLM_KEY}" / "${LITELLM_URL}" /
-		// "${TENANT_ID}" placeholders that get filled in here. We never write
-		// config.json from scratch — operator owns the schema.
+		// workspace carries "${LITELLM_KEY}" / "${LITELLM_URL}" / "${TENANT_ID}"
+		// placeholders and the generated baseline may carry REDACTED
+		// model_list api_keys in .security.yml; both are filled in here. We
+		// never write config.json from scratch — operator owns the schema.
 		if p.LiteLLM != nil {
 			out, err := p.LiteLLM.GenerateKey(ctx, litellm.GenerateKeyInput{
 				TenantID:         t.ID,
@@ -352,6 +358,12 @@ func (p *Provisioner) runProvision(
 				"${TENANT_ID}":   t.ID,
 			}); err != nil {
 				return fmt.Errorf("substitute placeholders: %w", err)
+			}
+			if err := SubstituteRedactedModelKeys(t.VolumePath, out.Key); err != nil {
+				return fmt.Errorf("substitute redacted model keys: %w", err)
+			}
+			if err := ApplySaaSLiteLLMModelRouting(t.VolumePath, defaultSaaSLiteLLMModel, p.Cfg.LiteLLMURL, out.Key); err != nil {
+				return fmt.Errorf("apply saas litellm model routing: %w", err)
 			}
 		}
 

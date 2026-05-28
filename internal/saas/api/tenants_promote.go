@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -282,14 +283,7 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 	// readers see the promotion happened.
 	if state != nil {
 		actor := actorEmailFromCtx(r.Context())
-		if err := tenant.MarkOnboardingPromoted(r.Context(), t.ID, actor); err != nil {
-			log.Printf(
-				"promote %s: MarkOnboardingPromoted via skill failed, falling back to direct write: %v",
-				t.ID,
-				err,
-			)
-			markPromotedInState(t.VolumePath, actor)
-		}
+		markPromotedForPromote(r.Context(), t.ID, t.VolumePath, actor)
 	}
 
 	// Step 7.5: Restore the canonical workspace/AGENT.md from the
@@ -525,6 +519,22 @@ func markPromotedInState(volumePath, actorEmail string) {
 	}
 	if err := os.WriteFile(path, append(out, '\n'), 0o600); err != nil {
 		log.Printf("markPromotedInState: write %s: %v", path, err)
+	}
+}
+
+func markPromotedForPromote(ctx context.Context, tenantID, volumePath, actorEmail string) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		log.Printf("promote %s: docker CLI unavailable in controlplane; marking onboarding state directly", tenantID)
+		markPromotedInState(volumePath, actorEmail)
+		return
+	}
+	if err := tenant.MarkOnboardingPromoted(ctx, tenantID, actorEmail); err != nil {
+		log.Printf(
+			"promote %s: MarkOnboardingPromoted via skill failed, falling back to direct write: %v",
+			tenantID,
+			err,
+		)
+		markPromotedInState(volumePath, actorEmail)
 	}
 }
 

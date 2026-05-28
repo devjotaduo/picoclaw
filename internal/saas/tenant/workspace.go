@@ -568,6 +568,150 @@ func SubstituteConfigPlaceholders(destDir string, replacements map[string]string
 	return nil
 }
 
+// SubstituteRedactedModelKeys rewrites the generated baseline's redacted
+// model credentials in .security.yml to the tenant's LiteLLM virtual key.
+// The sync script scrubs real dev keys from workspace/.security.yml before
+// embedding the baseline; in SaaS provisioning those redacted model keys are
+// placeholders, while non-model redacted values must stay untouched.
+func SubstituteRedactedModelKeys(destDir, litellmKey string) error {
+	if strings.TrimSpace(litellmKey) == "" {
+		return nil
+	}
+	full := filepath.Join(destDir, ".security.yml")
+	data, err := os.ReadFile(full)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("read .security.yml: %w", err)
+	}
+
+	var root map[string]any
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return fmt.Errorf("parse .security.yml: %w", err)
+	}
+	modelList, ok := root["model_list"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	changed := false
+	for _, rawEntry := range modelList {
+		entry, ok := rawEntry.(map[string]any)
+		if !ok {
+			continue
+		}
+		switch keys := entry["api_keys"].(type) {
+		case []any:
+			for i, rawKey := range keys {
+				if strings.TrimSpace(fmt.Sprint(rawKey)) == "REDACTED" {
+					keys[i] = litellmKey
+					changed = true
+				}
+			}
+		case []string:
+			for i, rawKey := range keys {
+				if strings.TrimSpace(rawKey) == "REDACTED" {
+					keys[i] = litellmKey
+					changed = true
+				}
+			}
+			entry["api_keys"] = keys
+		}
+	}
+	if !changed {
+		return nil
+	}
+
+	out, err := yaml.Marshal(root)
+	if err != nil {
+		return fmt.Errorf("marshal .security.yml: %w", err)
+	}
+	mode := os.FileMode(0o600)
+	if info, statErr := os.Stat(full); statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	if err := writeFileAtomic(full, out, mode); err != nil {
+		return fmt.Errorf("write .security.yml: %w", err)
+	}
+	return nil
+}
+
+// ApplySaaSLiteLLMModelRouting makes a provisioned non-raw tenant use the
+// SaaS-owned LiteLLM proxy instead of any provider/API keys that happened to
+// exist in the workspace template. The controlplane owns provider/model
+// credentials; tenant workspaces own prompts, skills, memory and channels.
+func ApplySaaSLiteLLMModelRouting(destDir, modelName, litellmURL, litellmKey string) error {
+	modelName = strings.TrimSpace(modelName)
+	litellmURL = strings.TrimRight(strings.TrimSpace(litellmURL), "/")
+	litellmKey = strings.TrimSpace(litellmKey)
+	if modelName == "" {
+		return fmt.Errorf("saas litellm model_name is required")
+	}
+	if litellmURL == "" {
+		return fmt.Errorf("saas litellm api_base is required")
+	}
+	if litellmKey == "" {
+		return fmt.Errorf("saas litellm api_key is required")
+	}
+
+	path := filepath.Join(destDir, "config.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read config.json: %w", err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("parse config.json: %w", err)
+	}
+
+	agents, err := configObject(cfg, "agents")
+	if err != nil {
+		return err
+	}
+	if agents == nil {
+		agents = map[string]any{}
+		cfg["agents"] = agents
+	}
+	defaults, err := configObject(agents, "defaults")
+	if err != nil {
+		return err
+	}
+	if defaults == nil {
+		defaults = map[string]any{}
+		agents["defaults"] = defaults
+	}
+	defaults["provider"] = "litellm"
+	defaults["model_name"] = modelName
+
+	cfg["model_list"] = []any{
+		map[string]any{
+			"model_name": modelName,
+			"provider":   "openai",
+			"model":      modelName,
+			"api_base":   litellmURL,
+			"api_keys":   []any{litellmKey},
+			"enabled":    true,
+		},
+	}
+
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config.json: %w", err)
+	}
+	if len(data) > 0 && data[len(data)-1] == '\n' {
+		out = append(out, '\n')
+	}
+	mode := os.FileMode(0o644)
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	if err := writeFileAtomic(path, out, mode); err != nil {
+		return fmt.Errorf("write config.json: %w", err)
+	}
+	return nil
+}
+
 // workspaceBuildLocks serializes concurrent BuildWorkspaceFrontend calls per
 // host_path. Two parallel "Compile" clicks would otherwise race on the same
 // frontend-dist/ output directory; we use an in-process mutex keyed on the
