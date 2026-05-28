@@ -30,9 +30,11 @@ chmod 700 /etc/picoclaw/codex-auth
 
 ```bash
 # Linux/Mac:
+ssh root@<vps> 'mkdir -p /etc/picoclaw/codex-auth/.codex && chmod 700 /etc/picoclaw/codex-auth /etc/picoclaw/codex-auth/.codex'
 scp ~/.codex/auth.json root@<vps>:/etc/picoclaw/codex-auth/.codex/auth.json
 
 # Windows PowerShell:
+ssh root@<vps> 'mkdir -p /etc/picoclaw/codex-auth/.codex && chmod 700 /etc/picoclaw/codex-auth /etc/picoclaw/codex-auth/.codex'
 scp $env:USERPROFILE\.codex\auth.json root@<vps>:/etc/picoclaw/codex-auth/.codex/auth.json
 ```
 
@@ -65,24 +67,34 @@ docker compose -p picoclaw-saas \
   up -d --force-recreate controlplane
 ```
 
-### 4. Configurar tenant com fallback chain
+### 4. Configurar fallback chain
 
-No `config.json::model_list`, adicionar uma entrada codex E referenciar
-ela no `fallbacks` da entrada primária:
+Para tenants novos, quando Claude e Codex CLI auth estão válidos, o
+provisioner materializa automaticamente o primário `claude-cli-sonnet` com
+fallback `codex-cli-gpt-5`.
+
+Para tenants existentes que não serão reprovisionados, ajuste manualmente
+`agents.defaults.model_fallbacks` e o `model_list`:
 
 ```json
 {
-  "agents": {"defaults": {"model_name": "default", "provider": "claude-cli"}},
+  "agents": {
+    "defaults": {
+      "model_name": "claude-cli-sonnet",
+      "provider": "claude-cli",
+      "model_fallbacks": ["codex-cli-gpt-5"]
+    }
+  },
   "model_list": [
     {
-      "model_name": "default",
+      "model_name": "claude-cli-sonnet",
       "provider": "claude-cli",
       "model": "sonnet",
       "workspace": "/root/.picoclaw/workspace",
-      "fallbacks": ["codex-fallback"]
+      "fallbacks": ["codex-cli-gpt-5"]
     },
     {
-      "model_name": "codex-fallback",
+      "model_name": "codex-cli-gpt-5",
       "provider": "codex-cli",
       "model": "gpt-5",
       "workspace": "/root/.picoclaw/workspace"
@@ -93,13 +105,13 @@ ela no `fallbacks` da entrada primária:
 
 Quando o `claude-cli` retorna erro (rate-limit, token expirado, API
 indisponível), `pkg/providers/fallback.go` automaticamente tenta o
-`codex-fallback`. Sem intervenção manual.
+`codex-cli-gpt-5`. Sem intervenção manual.
 
 ## Verificação
 
 ```bash
 ssh root@<vps>
-docker exec tenant-<id> codex auth status 2>&1 | head -5
+docker exec tenant-<id> codex login status 2>&1 | head -5
 # Esperado: signed in, account info, etc.
 ```
 
@@ -109,6 +121,7 @@ Codex CLI tokens expiram igual claude. Refresh:
 
 ```bash
 # Atalho (operador re-uploads do local)
+ssh root@<vps> 'mkdir -p /etc/picoclaw/codex-auth/.codex'
 scp ~/.codex/auth.json root@<vps>:/etc/picoclaw/codex-auth/.codex/auth.json
 
 # OU interativo

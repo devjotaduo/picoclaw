@@ -53,11 +53,11 @@ func TestBuildSpec_ClaudeCliAuthBindMount(t *testing.T) {
 		}
 	})
 
-	t.Run("env set + dir exists → read-only mount attached", func(t *testing.T) {
+	t.Run("env set + claude credential dir exists → read-only mount attached", func(t *testing.T) {
 		// Real temp dir so os.Stat passes.
 		authDir := t.TempDir()
 		// Throw a placeholder file so it's not totally empty (more realistic).
-		if err := os.WriteFile(filepath.Join(authDir, "credentials.json"), []byte("{}"), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(authDir, ".credentials.json"), []byte("{}"), 0o600); err != nil {
 			t.Fatalf("seed credentials: %v", err)
 		}
 
@@ -87,6 +87,42 @@ func TestBuildSpec_ClaudeCliAuthBindMount(t *testing.T) {
 		}
 		if !found.ReadOnly {
 			t.Error("claude-cli auth mount MUST be read-only (tenant must not rotate the operator's tokens)")
+		}
+	})
+
+	t.Run("env can point at parent HOME dir from runbook", func(t *testing.T) {
+		parentDir := t.TempDir()
+		authDir := filepath.Join(parentDir, ".claude")
+		if err := os.MkdirAll(authDir, 0o700); err != nil {
+			t.Fatalf("mkdir claude auth dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(authDir, ".credentials.json"), []byte("{}"), 0o600); err != nil {
+			t.Fatalf("seed credentials: %v", err)
+		}
+
+		p := &Provisioner{
+			Cfg: &config.Config{
+				GatewaySharedSecret:    "gw",
+				TenantClaudeCliAuthDir: parentDir,
+			},
+		}
+		spec, err := p.buildSpec(context.Background(), &store.Tenant{ID: "t3-parent"})
+		if err != nil {
+			t.Fatalf("buildSpec: %v", err)
+		}
+
+		var found *ContainerMount
+		for i := range spec.ExtraMounts {
+			if spec.ExtraMounts[i].Target == "/root/.claude" {
+				found = &spec.ExtraMounts[i]
+				break
+			}
+		}
+		if found == nil {
+			t.Fatal("expected /root/.claude mount to be attached")
+		}
+		if found.Source != authDir {
+			t.Errorf("Source = %q, want nested claude auth dir %q", found.Source, authDir)
 		}
 	})
 
@@ -188,6 +224,87 @@ func TestBuildSpec_ClaudeCliAuthBindMount(t *testing.T) {
 		}
 		if !hasCodex {
 			t.Error("expected /root/.codex mount when TenantCodexCliAuthDir is set")
+		}
+	})
+}
+
+func TestProvisionerSharedCLIModelRoutingRequiresCredentialFiles(t *testing.T) {
+	t.Run("unset, missing, or empty dirs disable cli routing", func(t *testing.T) {
+		p := &Provisioner{Cfg: &config.Config{}}
+		claude, codex := p.sharedCLIModelRouting()
+		if claude || codex {
+			t.Fatalf("sharedCLIModelRouting() = %v, %v; want both false", claude, codex)
+		}
+
+		p.Cfg.TenantClaudeCliAuthDir = "/nonexistent/claude-auth-dir-xyz123"
+		p.Cfg.TenantCodexCliAuthDir = "/nonexistent/codex-auth-dir-xyz123"
+		claude, codex = p.sharedCLIModelRouting()
+		if claude || codex {
+			t.Fatalf("sharedCLIModelRouting() with missing dirs = %v, %v; want both false", claude, codex)
+		}
+
+		p.Cfg.TenantClaudeCliAuthDir = t.TempDir()
+		p.Cfg.TenantCodexCliAuthDir = t.TempDir()
+		claude, codex = p.sharedCLIModelRouting()
+		if claude || codex {
+			t.Fatalf("sharedCLIModelRouting() with empty dirs = %v, %v; want both false", claude, codex)
+		}
+	})
+
+	t.Run("existing claude and codex dirs enable both providers", func(t *testing.T) {
+		claudeDir := t.TempDir()
+		codexDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(claudeDir, ".credentials.json"), []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(codexDir, "auth.json"), []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		p := &Provisioner{
+			Cfg: &config.Config{
+				TenantClaudeCliAuthDir: claudeDir,
+				TenantCodexCliAuthDir:  codexDir,
+			},
+		}
+
+		claude, codex := p.sharedCLIModelRouting()
+		if !claude || !codex {
+			t.Fatalf("sharedCLIModelRouting() = %v, %v; want both true", claude, codex)
+		}
+	})
+
+	t.Run("codex can be used without claude", func(t *testing.T) {
+		codexDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(codexDir, "auth.json"), []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		p := &Provisioner{
+			Cfg: &config.Config{
+				TenantCodexCliAuthDir: codexDir,
+			},
+		}
+
+		claude, codex := p.sharedCLIModelRouting()
+		if claude || !codex {
+			t.Fatalf("sharedCLIModelRouting() = %v, %v; want false, true", claude, codex)
+		}
+	})
+
+	t.Run("regular file does not enable routing", func(t *testing.T) {
+		file := filepath.Join(t.TempDir(), "auth.json")
+		if err := os.WriteFile(file, []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		p := &Provisioner{
+			Cfg: &config.Config{
+				TenantClaudeCliAuthDir: file,
+				TenantCodexCliAuthDir:  file,
+			},
+		}
+
+		claude, codex := p.sharedCLIModelRouting()
+		if claude || codex {
+			t.Fatalf("sharedCLIModelRouting() with file paths = %v, %v; want both false", claude, codex)
 		}
 	})
 }

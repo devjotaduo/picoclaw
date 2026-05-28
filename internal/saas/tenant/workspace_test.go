@@ -244,6 +244,224 @@ func TestApplySaaSLiteLLMModelRoutingMaterializesTenantModel(t *testing.T) {
 	}
 }
 
+func TestApplySaaSCLIModelRoutingPrefersClaudeWithCodexFallback(t *testing.T) {
+	dst := t.TempDir()
+	path := writeTenantRoutingConfig(t, dst)
+	securityPath := filepath.Join(dst, ".security.yml")
+	if err := os.WriteFile(securityPath, []byte(`model_list:
+  openrouter-gpt-5.4:0:
+    api_keys:
+      - REDACTED
+channel_list:
+  public-web:
+    settings:
+      token: keep-me
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ApplySaaSCLIModelRouting(dst, true, true); err != nil {
+		t.Fatalf("ApplySaaSCLIModelRouting: %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(string(raw), "\n") {
+		t.Fatal("expected trailing newline to be preserved")
+	}
+
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	defaults := cfg["agents"].(map[string]any)["defaults"].(map[string]any)
+	if defaults["provider"] != "claude-cli" || defaults["model_name"] != "claude-cli-sonnet" {
+		t.Fatalf("defaults not routed to claude-cli: %#v", defaults)
+	}
+	defaultFallbacks := defaults["model_fallbacks"].([]any)
+	if len(defaultFallbacks) != 1 || defaultFallbacks[0] != "codex-cli-gpt-5" {
+		t.Fatalf("defaults model_fallbacks = %#v, want codex-cli-gpt-5", defaultFallbacks)
+	}
+	if _, ok := cfg["channel_list"]; !ok {
+		t.Fatal("unrelated channel_list was lost")
+	}
+	securityRaw, err := os.ReadFile(securityPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	securityText := string(securityRaw)
+	if strings.Contains(securityText, "model_list:") {
+		t.Fatalf(".security.yml model_list must not override CLI routing:\n%s", securityText)
+	}
+	if !strings.Contains(securityText, "token: keep-me") {
+		t.Fatalf(".security.yml unrelated channel secrets were lost:\n%s", securityText)
+	}
+
+	models := cfg["model_list"].([]any)
+	if len(models) != 2 {
+		t.Fatalf("model_list len = %d, want 2", len(models))
+	}
+	claude := models[0].(map[string]any)
+	if claude["model_name"] != "claude-cli-sonnet" ||
+		claude["provider"] != "claude-cli" ||
+		claude["model"] != "sonnet" ||
+		claude["workspace"] != "/root/.picoclaw/workspace" ||
+		claude["enabled"] != true {
+		t.Fatalf("claude-cli model not materialized: %#v", claude)
+	}
+	if _, ok := claude["api_keys"]; ok {
+		t.Fatalf("claude-cli model must not carry api_keys: %#v", claude)
+	}
+	if _, ok := claude["api_base"]; ok {
+		t.Fatalf("claude-cli model must not carry api_base: %#v", claude)
+	}
+	fallbacks := claude["fallbacks"].([]any)
+	if len(fallbacks) != 1 || fallbacks[0] != "codex-cli-gpt-5" {
+		t.Fatalf("claude-cli fallbacks = %#v, want codex-cli-gpt-5", fallbacks)
+	}
+
+	codex := models[1].(map[string]any)
+	if codex["model_name"] != "codex-cli-gpt-5" ||
+		codex["provider"] != "codex-cli" ||
+		codex["model"] != "gpt-5" ||
+		codex["workspace"] != "/root/.picoclaw/workspace" ||
+		codex["enabled"] != true {
+		t.Fatalf("codex-cli fallback model not materialized: %#v", codex)
+	}
+	if _, ok := codex["api_keys"]; ok {
+		t.Fatalf("codex-cli model must not carry api_keys: %#v", codex)
+	}
+	if _, ok := codex["api_base"]; ok {
+		t.Fatalf("codex-cli model must not carry api_base: %#v", codex)
+	}
+}
+
+func TestApplySaaSCLIModelRoutingSupportsCodexOnly(t *testing.T) {
+	dst := t.TempDir()
+	path := writeTenantRoutingConfig(t, dst)
+
+	if err := ApplySaaSCLIModelRouting(dst, false, true); err != nil {
+		t.Fatalf("ApplySaaSCLIModelRouting: %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	defaults := cfg["agents"].(map[string]any)["defaults"].(map[string]any)
+	if defaults["provider"] != "codex-cli" || defaults["model_name"] != "codex-cli-gpt-5" {
+		t.Fatalf("defaults not routed to codex-cli: %#v", defaults)
+	}
+	if _, ok := defaults["model_fallbacks"]; ok {
+		t.Fatalf("codex-only defaults must not carry stale model_fallbacks: %#v", defaults)
+	}
+	models := cfg["model_list"].([]any)
+	if len(models) != 1 {
+		t.Fatalf("model_list len = %d, want 1", len(models))
+	}
+	codex := models[0].(map[string]any)
+	if codex["model_name"] != "codex-cli-gpt-5" ||
+		codex["provider"] != "codex-cli" ||
+		codex["model"] != "gpt-5" ||
+		codex["workspace"] != "/root/.picoclaw/workspace" ||
+		codex["enabled"] != true {
+		t.Fatalf("codex-cli model not materialized: %#v", codex)
+	}
+	if _, ok := codex["fallbacks"]; ok {
+		t.Fatalf("codex-only model must not carry fallbacks: %#v", codex)
+	}
+	if _, ok := codex["api_keys"]; ok {
+		t.Fatalf("codex-cli model must not carry api_keys: %#v", codex)
+	}
+}
+
+func TestApplySaaSCLIModelRoutingSupportsClaudeOnly(t *testing.T) {
+	dst := t.TempDir()
+	path := writeTenantRoutingConfig(t, dst)
+
+	if err := ApplySaaSCLIModelRouting(dst, true, false); err != nil {
+		t.Fatalf("ApplySaaSCLIModelRouting: %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	defaults := cfg["agents"].(map[string]any)["defaults"].(map[string]any)
+	if defaults["provider"] != "claude-cli" || defaults["model_name"] != "claude-cli-sonnet" {
+		t.Fatalf("defaults not routed to claude-cli: %#v", defaults)
+	}
+	if _, ok := defaults["model_fallbacks"]; ok {
+		t.Fatalf("claude-only defaults must not carry stale model_fallbacks: %#v", defaults)
+	}
+	models := cfg["model_list"].([]any)
+	if len(models) != 1 {
+		t.Fatalf("model_list len = %d, want 1", len(models))
+	}
+	claude := models[0].(map[string]any)
+	if claude["model_name"] != "claude-cli-sonnet" ||
+		claude["provider"] != "claude-cli" ||
+		claude["model"] != "sonnet" ||
+		claude["workspace"] != "/root/.picoclaw/workspace" ||
+		claude["enabled"] != true {
+		t.Fatalf("claude-cli model not materialized: %#v", claude)
+	}
+	if _, ok := claude["fallbacks"]; ok {
+		t.Fatalf("claude-only model must not carry fallbacks: %#v", claude)
+	}
+}
+
+func TestApplySaaSCLIModelRoutingRejectsEmptySelection(t *testing.T) {
+	dst := t.TempDir()
+	writeTenantRoutingConfig(t, dst)
+
+	if err := ApplySaaSCLIModelRouting(dst, false, false); err == nil {
+		t.Fatal("expected error when neither CLI provider is enabled")
+	}
+}
+
+func writeTenantRoutingConfig(t *testing.T, dst string) string {
+	t.Helper()
+	path := filepath.Join(dst, "config.json")
+	if err := os.WriteFile(path, []byte(`{
+  "version": 3,
+  "agents": {
+    "defaults": {
+      "workspace": "/root/.picoclaw/workspace",
+      "provider": "openrouter",
+      "model_name": "openrouter-gpt-5.4",
+      "model_fallbacks": ["legacy-openrouter-fallback"]
+    }
+  },
+  "channel_list": {
+    "public-web": {"enabled": true}
+  },
+  "model_list": [
+    {
+      "model_name": "openrouter-gpt-5.4",
+      "provider": "openrouter",
+      "model": "openai/gpt-5.4",
+      "api_base": "https://openrouter.ai/api/v1",
+      "api_keys": ["REDACTED"]
+    }
+  ]
+}
+`), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 func TestSanitizeTenantSecurityConfigRemovesLegacyAllowedChannels(t *testing.T) {
 	dst := t.TempDir()
 	path := filepath.Join(dst, ".security.yml")

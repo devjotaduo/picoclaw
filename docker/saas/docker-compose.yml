@@ -323,6 +323,11 @@ services:
       # Empty default keeps existing deployments working pre-Fatia 3.
       PICOCLAW_JOTADUO_WA_URL: ${PICOCLAW_JOTADUO_WA_URL:-http://jotaduo-wa:18810}
       PICOCLAW_JOTADUO_WA_HMAC_SECRET: ${JOTADUO_WA_HMAC_SECRET:-}
+      # Shared CLI auth dirs. When set and mounted below, the provisioner
+      # routes new tenants to claude-cli and/or codex-cli instead of raw
+      # upstream API keys.
+      PICOCLAW_TENANT_CLAUDE_CLI_AUTH_DIR: ${PICOCLAW_TENANT_CLAUDE_CLI_AUTH_DIR:-}
+      PICOCLAW_TENANT_CODEX_CLI_AUTH_DIR: ${PICOCLAW_TENANT_CODEX_CLI_AUTH_DIR:-}
     volumes:
       - /srv/saas/tenants:/srv/saas/tenants
       - controlplane_data:/var/lib/picoclaw-saas
@@ -331,6 +336,10 @@ services:
       # Read-write so the admin file editor can persist edits and the
       # docker-spawned vite build can write to frontend-dist/.
       - /srv/picoclaw-workspaces:/srv/picoclaw-workspaces
+      # Pass-through binds so the controlplane can os.Stat the operator CLI
+      # auth dirs before adding read-only mounts to tenant containers.
+      - /etc/picoclaw/claude-auth:/etc/picoclaw/claude-auth:ro
+      - /etc/picoclaw/codex-auth:/etc/picoclaw/codex-auth:ro
       # NOTE: a landing de jotaduo.com (apex) é bakeada na imagem do
       # controlplane (Dockerfile stage 1b → /var/lib/picoclaw-landing/).
       # Sem bind-mount aqui = todo push em web/landing/ entra via CI/CD.
