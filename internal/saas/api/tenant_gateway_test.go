@@ -249,6 +249,37 @@ func TestIsPublicChatRoute(t *testing.T) {
 	}
 }
 
+func TestIsPublicTenantSignedRoute(t *testing.T) {
+	cases := []struct {
+		method string
+		path   string
+		want   bool
+	}{
+		{http.MethodGet, "/", true},
+		{http.MethodHead, "/", true},
+		{http.MethodGet, "/index.html", true},
+		{http.MethodGet, "/api/auth/status", true},
+		{http.MethodGet, "/api/launcher/ui-visibility", true},
+		{http.MethodGet, "/api/launcher/policy", true},
+		{http.MethodGet, "/api/gateway/status", true},
+		{http.MethodGet, "/pico/ws", true},
+		{http.MethodPost, "/api/public/chat", true},
+		{http.MethodGet, "/api/public/chat/stream", true},
+		{http.MethodGet, "/api/config", false},
+		{http.MethodGet, "/api/gateway/logs", false},
+		{http.MethodPost, "/api/gateway/restart", false},
+		{http.MethodGet, "/api/launcher/jotaduo-wa-inbound", false},
+		{http.MethodGet, "/api/launcher/ui-visibility/../jotaduo-wa-inbound", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			if got := isPublicTenantSignedRoute(tc.method, tc.path); got != tc.want {
+				t.Fatalf("isPublicTenantSignedRoute(%q, %q) = %v, want %v", tc.method, tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestIsPublicChatHealthRoute confirms only the canonical health probe
 // matches — chat / chat/stream pay the per-IP cap, while /health stays
 // uncounted so load-balancer probes don't burn the budget. Path traversal

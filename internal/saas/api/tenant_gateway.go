@@ -148,16 +148,19 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		}
 	}
 
-	// Public-onboarding tenants accept anonymous traffic on a tiny set of chat
-	// endpoints. Skip Supabase JWT but still sign trusted_gateway HMAC so the
-	// launcher knows the request came from the controlplane. Sentinel values
-	// are used for UserID/Role because the launcher's VerifyRequest rejects
-	// empty claims; the agent identifies the visitor via session id.
-	if t.IsPublic && isPublicChatRoute(r.URL.Path) {
+	// Public-onboarding tenants accept anonymous traffic only on the small app
+	// surface required to render Sofia and exchange chat messages. Skip
+	// Supabase JWT but still sign trusted_gateway HMAC so the launcher knows
+	// the request came from the controlplane. Sentinel values are used for
+	// UserID/Role because the launcher's VerifyRequest rejects empty claims;
+	// the agent identifies the visitor via session id.
+	if t.IsPublic && isPublicTenantSignedRoute(r.Method, r.URL.Path) {
 		// Anonymous + open-internet route — apply the per-IP cap before we
 		// burn LiteLLM budget on a flood. Health checks pass through
 		// uncounted so probes / load balancers stay cheap.
-		if h.PublicChatRateLimit != nil && !isPublicChatHealthRoute(r.URL.Path) {
+		if h.PublicChatRateLimit != nil &&
+			isPublicChatRoute(r.URL.Path) &&
+			!isPublicChatHealthRoute(r.URL.Path) {
 			if !h.PublicChatRateLimit.Allow(clientIP(r)) {
 				writeError(w, http.StatusTooManyRequests, "muitas mensagens, tenta de novo em um minuto")
 				return
@@ -528,6 +531,41 @@ func isPublicTenantStatic(method, rawPath string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func isPublicTenantSignedRoute(method, rawPath string) bool {
+	p := path.Clean("/" + strings.TrimPrefix(rawPath, "/"))
+	if isPublicChatRoute(p) {
+		return isPublicChatMethod(method, p)
+	}
+	if method != http.MethodGet && method != http.MethodHead {
+		return false
+	}
+	switch p {
+	case "/",
+		"/index.html",
+		"/api/auth/status",
+		"/api/launcher/ui-visibility",
+		"/api/launcher/policy",
+		"/api/gateway/status",
+		"/pico/ws":
+		return true
+	default:
+		return false
+	}
+}
+
+func isPublicChatMethod(method, p string) bool {
+	switch p {
+	case "/api/public/chat":
+		return method == http.MethodPost
+	case "/api/public/chat/stream",
+		"/api/public/chat/health":
+		return method == http.MethodGet || method == http.MethodHead
+	default:
+		return strings.HasPrefix(p, "/api/public/chat/") &&
+			(method == http.MethodGet || method == http.MethodHead || method == http.MethodPost)
 	}
 }
 

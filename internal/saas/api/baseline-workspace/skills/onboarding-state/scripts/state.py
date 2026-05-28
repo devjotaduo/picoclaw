@@ -26,6 +26,12 @@ except ImportError:
 
 
 VALID_AREAS = {"equipe", "casos-excecao", "faq", "historico", "regras-tacitas"}
+AREA_ALIASES = {
+    "profissionais": "equipe",
+    "excecoes": "casos-excecao",
+    "casos_excecao": "casos-excecao",
+    "casos excecao": "casos-excecao",
+}
 # Audit P1 #17: when Catarina has been waiting on the lead for longer than
 # this threshold without any response, surface a `lead_timeout_days: N` line
 # in `promotion.blocked_by` so the admin sees stale tenants in the panel.
@@ -81,15 +87,17 @@ def sanitize_long_text(value: str, max_len: int = SUMMARY_MAX_LEN) -> str:
 # old state.json files get migrated lazily on load (`migrate_state`)
 # instead of silently breaking parsers. Don't change semantics of an
 # existing version — bump and migrate.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def migrate_state(state: dict) -> dict:
     """Lazy upgrade of older state shapes to SCHEMA_VERSION. Idempotent.
 
-    v1 → v2: adds deepening.first_contact_at, .last_outreach_at,
+    v1 -> v2: adds deepening.first_contact_at, .last_outreach_at,
              .last_owner_response_at. Pre-v1 state (no schema_version
              key) is treated as v1.
+    v2 -> v3: adds bridge attempt/failure observability so the Sofia ->
+             Catarina bridge can retry safely after WhatsApp send errors.
     """
     version = state.get("schema_version", 1)
     if version < 2:
@@ -97,6 +105,11 @@ def migrate_state(state: dict) -> dict:
         deep.setdefault("first_contact_at", None)
         deep.setdefault("last_outreach_at", None)
         deep.setdefault("last_owner_response_at", None)
+    if version < 3:
+        deep = state.setdefault("deepening", {})
+        deep.setdefault("last_bridge_attempt_at", None)
+        deep.setdefault("last_bridge_failed_at", None)
+        deep.setdefault("last_bridge_error", None)
     state["schema_version"] = SCHEMA_VERSION
     return state
 
@@ -137,6 +150,9 @@ def empty_state() -> dict:
             "first_contact_at": None,
             "last_outreach_at": None,        # P1 #17: Catarina chama mark_outreach_sent
             "last_owner_response_at": None,  # P1 #17: Catarina chama mark_owner_response
+            "last_bridge_attempt_at": None,
+            "last_bridge_failed_at": None,
+            "last_bridge_error": None,
             "areas_covered": [],
             "areas_required": sorted(VALID_AREAS),
             "completed_at": None,
@@ -396,6 +412,27 @@ def op_mark_first_contact(state: dict, payload: dict) -> dict:
     # Calling first contact also counts as an outreach for the timeout clock.
     state["deepening"].setdefault("last_outreach_at", None)
     state["deepening"]["last_outreach_at"] = now_iso()
+    state["deepening"]["last_bridge_error"] = None
+    return state
+
+
+def op_mark_bridge_attempt(state: dict, payload: dict) -> dict:
+    state["deepening"].setdefault("last_bridge_attempt_at", None)
+    state["deepening"].setdefault("last_bridge_failed_at", None)
+    state["deepening"].setdefault("last_bridge_error", None)
+    state["deepening"]["last_bridge_attempt_at"] = now_iso()
+    state["deepening"]["last_bridge_error"] = None
+    return state
+
+
+def op_mark_bridge_failed(state: dict, payload: dict) -> dict:
+    state["deepening"].setdefault("last_bridge_failed_at", None)
+    state["deepening"].setdefault("last_bridge_error", None)
+    state["deepening"]["last_bridge_failed_at"] = now_iso()
+    state["deepening"]["last_bridge_error"] = sanitize_long_text(
+        payload.get("error") or "unknown bridge error",
+        500,
+    )
     return state
 
 
@@ -426,6 +463,7 @@ def op_mark_owner_response(state: dict, payload: dict) -> dict:
 
 def op_mark_area_complete(state: dict, payload: dict) -> dict:
     area = (payload.get("area") or "").strip().lower()
+    area = AREA_ALIASES.get(area, area)
     if area not in VALID_AREAS:
         raise SystemExit(
             f"mark_area_complete: area inválida {area!r}. Válidas: {sorted(VALID_AREAS)}"
@@ -466,6 +504,8 @@ OPERATIONS = {
     "init": op_init,
     "set_owner": op_set_owner,
     "mark_discovery_done": op_mark_discovery_done,
+    "mark_bridge_attempt": op_mark_bridge_attempt,
+    "mark_bridge_failed": op_mark_bridge_failed,
     "mark_first_contact": op_mark_first_contact,
     "mark_outreach_sent": op_mark_outreach_sent,
     "mark_owner_response": op_mark_owner_response,

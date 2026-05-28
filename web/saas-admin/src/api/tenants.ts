@@ -121,6 +121,7 @@ export async function suspendTenant(id: string) {
 export type PromoteTenantInput = {
   force?: boolean;
   owner_email?: string;
+  force_reason?: string;
 };
 
 export type PromoteTenantResponse = {
@@ -131,6 +132,7 @@ export type PromoteTenantResponse = {
   login_mode: "password";
   info?: string;
   warning?: string;
+  force_reason?: string;
 };
 
 // promoteTenant migrates a public tenant to a regular cliente: creates

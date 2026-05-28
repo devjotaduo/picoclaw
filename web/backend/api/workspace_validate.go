@@ -180,11 +180,18 @@ func truncateForErr(b []byte, n int) string {
 }
 
 // pythonExecutable retorna o binário Python a usar. Em Windows costuma
-// ser "python", em Linux "python3". A escolha conservadora é "python"
-// (PATH resolve), com fallback documentado se precisar.
+// ser "python", em Linux "python3". Preferimos python3 porque a imagem
+// launcher instala python3 explicitamente; python é fallback pra Windows/dev.
 func pythonExecutable() string {
-	// Em produção Linux/Docker o script roda como "python3".
-	// O launcher é dev/Windows: tentamos "python" primeiro.
-	// (LookPath caro pra cada request; deixamos shell resolver.)
-	return "python"
+	return resolvePythonExecutable(exec.LookPath)
+}
+
+func resolvePythonExecutable(lookPath func(string) (string, error)) string {
+	if p, err := lookPath("python3"); err == nil && strings.TrimSpace(p) != "" {
+		return p
+	}
+	if p, err := lookPath("python"); err == nil && strings.TrimSpace(p) != "" {
+		return p
+	}
+	return "python3"
 }

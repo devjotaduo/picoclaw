@@ -176,6 +176,27 @@
       "deleteAfterRun": false
     },
     {
+      "id": "onboarding-catarina-inbox-poller",
+      "name": "Catarina inbox poller (continue deepening)",
+      "enabled": true,
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/10 * * * *",
+        "tz": "America/Sao_Paulo"
+      },
+      "payload": {
+        "kind": "agent_turn",
+        "message": "Verifique respostas novas do dono usando verificar-respostas-jotaduo --consume. Se houver resposta, marque mark_owner_response, avance uma area de aprofundamento e envie a proxima pergunta curta pelo WhatsApp. Se nao houver resposta nova, nao envie mensagem.",
+        "channel": "cron",
+        "to": "onboarding-catarina-inbox-poller",
+        "agent_id": "catarina"
+      },
+      "state": {},
+      "createdAtMs": 0,
+      "updatedAtMs": 0,
+      "deleteAfterRun": false
+    },
+    {
       "id": "onboarding-bridge-sofia-catarina",
       "name": "Bridge Sofia → Catarina (auto-dispatch deepening)",
       "enabled": true,
