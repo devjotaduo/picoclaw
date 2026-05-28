@@ -22,6 +22,20 @@ entryPoints:
           permanent: true
   websecure:
     address: ":443"
+    transport:
+      respondingTimeouts:
+        # SSE streams pra Sofia/Catarina (em /api/public/chat/stream)
+        # ficam abertos enquanto durar a sessão do visitante. Cada turn
+        # da Sofia via claude-cli demora 60-180s; com o default de 60s
+        # do Traefik v3 (readTimeout), a connection era fechada
+        # exatamente quando a resposta longa ia chegar — saudação rápida
+        # da Sofia funcionava, mas qualquer turn com tool call cortava
+        # no meio (validado live em prod 2026-05-28: SSE puro fechava
+        # em exatos 61s).
+        # 0 = no limit. O cap downstream é o WriteTimeout do gateway
+        # HTTP server (pkg/channels/manager.go, 10min) que mata zumbis.
+        readTimeout: "0s"
+        idleTimeout: "0s"
 
 providers:
   docker:
