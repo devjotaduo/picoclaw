@@ -106,8 +106,8 @@ func TestLoadFileAcceptsLegacyRawRolePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal raw role policy: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "launcher_policy.json"), b, 0o644); err != nil {
-		t.Fatalf("Write legacy launcher_policy.json: %v", err)
+	if writeErr := os.WriteFile(filepath.Join(tmp, "launcher_policy.json"), b, 0o644); writeErr != nil {
+		t.Fatalf("Write legacy launcher_policy.json: %v", writeErr)
 	}
 
 	got, err := LoadFile(tmp)

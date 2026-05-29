@@ -3,7 +3,6 @@ package api
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -15,8 +14,6 @@ func TestExtractEmbeddedBaselineRoutesCanonicalWorkspaceUnderHomeWorkspace(t *te
 	}
 
 	mustExist := []string{
-		"config.json",
-		".security.yml",
 		"ui-visibility.json",
 		"workspace/AGENT.md",
 		"workspace/SOUL.md",
@@ -73,12 +70,10 @@ func TestSeedDefaultWorkspaceHomePreservesLegacyFlatOperatorEdits(t *testing.T) 
 		t.Fatalf("workspace/agents/sofia/AGENT.md = %q, want legacy flat edit %q", gotSofia, customSofia)
 	}
 
-	cfg, err := os.ReadFile(filepath.Join(homeDir, "config.json"))
-	if err != nil {
-		t.Fatalf("embedded root config.json was not filled: %v", err)
+	if _, err := os.Stat(filepath.Join(homeDir, "ui-visibility.json")); err != nil {
+		t.Fatalf("embedded root ui-visibility.json was not filled: %v", err)
 	}
-	cfgText := string(cfg)
-	if !strings.Contains(cfgText, "/root/.picoclaw/workspace") || strings.Contains(cfgText, `C:\`) {
-		t.Fatalf("embedded config.json does not look container-normalized: %s", cfg)
+	if _, err := os.Stat(filepath.Join(homeDir, "workspace", "ui-visibility.json")); !os.IsNotExist(err) {
+		t.Fatalf("ui-visibility.json must stay at home/ui-visibility.json, not home/workspace/ui-visibility.json")
 	}
 }

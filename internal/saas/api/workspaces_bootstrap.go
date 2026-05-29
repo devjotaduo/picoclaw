@@ -47,7 +47,7 @@ const canonicalWorkspaceSource = "/srv/picoclaw/workspace"
 // Idempotent: when a default-auto workspace already exists, this is a no-op.
 // Failures are logged and returned so the controlplane startup can decide
 // whether to keep going (recommended) or hard-fail on bootstrap issues —
-// current behaviour is to keep going with a WARN.
+// current behavior is to keep going with a WARN.
 func (h *Handler) EnsureDefaultWorkspace(ctx context.Context) error {
 	if h.Workspaces == nil {
 		return nil
@@ -89,7 +89,7 @@ func (h *Handler) EnsureDefaultWorkspace(ctx context.Context) error {
 		ID:                slug + "-" + randomHex(3),
 		Name:              "Default Business",
 		Slug:              slug,
-		Description:       "Auto-bootstrapped default workspace. Edit via admin UI to customise the template used for new tenants.",
+		Description:       "Auto-bootstrapped default workspace. Edit via admin UI to customize the template used for new tenants.",
 		HostPath:          hostPath,
 		IsDefaultAuto:     true,
 		IsAvailableManual: true,

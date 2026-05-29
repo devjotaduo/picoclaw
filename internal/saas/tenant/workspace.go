@@ -128,8 +128,8 @@ func SanitizeTenantSecurityConfig(volumePath string) error {
 	}
 
 	var root map[string]any
-	if err := yaml.Unmarshal(data, &root); err != nil {
-		return fmt.Errorf("parse .security.yml: %w", err)
+	if decodeErr := yaml.Unmarshal(data, &root); decodeErr != nil {
+		return fmt.Errorf("parse .security.yml: %w", decodeErr)
 	}
 	channels, ok := root["channels"].(map[string]any)
 	if !ok {
@@ -179,7 +179,7 @@ description: >
 
 Você é a **Sofia**, consultora de discovery da Jotaduo. Este tenant está em
 **modo público** — visitantes anônimos chegam aqui pra ser onboardados antes
-de virarem clients pagos. Sua missão única: conduzir o discovery em
+de virarem clientes pagos. Sua missão única: conduzir o discovery em
 conversas curtas seguindo o roteiro da skill ` + "`jotaduo-discovery`" + `.
 
 ## Antes de responder a PRIMEIRA mensagem, LEIA:
@@ -198,14 +198,14 @@ conversas curtas seguindo o roteiro da skill ` + "`jotaduo-discovery`" + `.
 - **NUNCA** se apresente como Rafael, picoclaw, "assistente do workspace"
   ou "equipe de agentes".
 - Você é **só a Sofia**. Não existe Rafael nem Clara nem Marcos nesta
-  conversa — eels existem no tenant cliente que esta empresa VAI virar
+  conversa — eles existem no tenant cliente que esta empresa VAI virar
   depois da promoção, mas o visitante não precisa saber agora.
 - Se perguntarem "quem é você": "Sou a Sofia, consultora de onboarding da
   Jotaduo. Vou te ajudar a entender seu negócio pra deixar tudo certinho
   aqui antes da sua equipe começar a atender."
 - Se perguntarem "vocês têm outros agentes": não liste a equipe.
   Resposta: "Depois que terminarmos esta etapa, sim — Clara atendendo
-  clients, Marcos cuidando de vendas, Camila no suporte. Mas isso é
+  clientes, Marcos cuidando de vendas, Camila no suporte. Mas isso é
   depois. Agora é só você e eu."
 
 ## Comportamento da PRIMEIRA mensagem (proativo)
@@ -243,7 +243,7 @@ Quando todas as 8 fases do ` + "`jotaduo-discovery`" + ` estiverem concluídas
 - ` + "`jotaduo-discovery`" + ` (principal — roteiro)
 - ` + "`onboarding-state`" + ` (state machine — init, set_owner, mark_*, get)
 - ` + "`memoria/atualizar-memoria`" + ` (gravar dossiê em
-  ` + "`memory/jotaduo/clients/<slug>.md`" + ` — use diretamente, Rafael não
+  ` + "`memory/jotaduo/clientes/<slug>.md`" + ` — use diretamente, Rafael não
   existe no chat público)
 - ` + "`notify_user`" + ` (sinalizar marcos pro admin no painel)
 
@@ -501,8 +501,8 @@ func SubstituteRedactedModelKeys(destDir, litellmKey string) error {
 	}
 
 	var root map[string]any
-	if err := yaml.Unmarshal(data, &root); err != nil {
-		return fmt.Errorf("parse .security.yml: %w", err)
+	if decodeErr := yaml.Unmarshal(data, &root); decodeErr != nil {
+		return fmt.Errorf("parse .security.yml: %w", decodeErr)
 	}
 	modelList, ok := root["model_list"].(map[string]any)
 	if !ok {
@@ -576,8 +576,8 @@ func ApplySaaSCLIModelRouting(destDir string, enableClaude, enableCodex bool) er
 		return fmt.Errorf("read config.json: %w", err)
 	}
 	var cfg map[string]any
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return fmt.Errorf("parse config.json: %w", err)
+	if decodeErr := json.Unmarshal(data, &cfg); decodeErr != nil {
+		return fmt.Errorf("parse config.json: %w", decodeErr)
 	}
 
 	agents, err := configObject(cfg, "agents")
@@ -666,8 +666,8 @@ func removeSecurityModelList(destDir string) error {
 	}
 
 	var root yaml.Node
-	if err := yaml.Unmarshal(data, &root); err != nil {
-		return fmt.Errorf("parse .security.yml: %w", err)
+	if decodeErr := yaml.Unmarshal(data, &root); decodeErr != nil {
+		return fmt.Errorf("parse .security.yml: %w", decodeErr)
 	}
 	if len(root.Content) == 0 || root.Content[0].Kind != yaml.MappingNode {
 		return nil
@@ -731,8 +731,8 @@ func ApplySaaSLiteLLMModelRouting(destDir, modelName, litellmURL, litellmKey str
 		return fmt.Errorf("read config.json: %w", err)
 	}
 	var cfg map[string]any
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return fmt.Errorf("parse config.json: %w", err)
+	if decodeErr := json.Unmarshal(data, &cfg); decodeErr != nil {
+		return fmt.Errorf("parse config.json: %w", decodeErr)
 	}
 
 	agents, err := configObject(cfg, "agents")

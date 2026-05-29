@@ -69,7 +69,7 @@ func anonymousPublicDashboardEnabled(configPath string) bool {
 	if envBool(os.Getenv("PICOCLAW_PUBLIC_TENANT")) {
 		return true
 	}
-	if !csvContains(os.Getenv("PICOCLAW_ALLOWED_CHANNELS"), config.ChannelPublicWeb) {
+	if !csvContains(os.Getenv("PICOCLAW_ALLOWED_CHANNELS"), config.ChannelPico) {
 		return false
 	}
 	activeProfile, ok := activeUIProfile(configPath)

@@ -6,6 +6,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -88,6 +90,57 @@ func TestLauncherBrowserLaunchSuffix(t *testing.T) {
 	if got := launcherBrowserLaunchSuffix(false, nil); got != "" {
 		t.Fatalf("empty suffix = %q, want empty", got)
 	}
+}
+
+func TestAnonymousPublicDashboardEnabled(t *testing.T) {
+	writeVisibility := func(t *testing.T, dir, profile string) string {
+		t.Helper()
+		configPath := filepath.Join(dir, "config.json")
+		body := []byte(`{"active_profile": "` + profile + `"}`)
+		if err := os.WriteFile(filepath.Join(dir, "ui-visibility.json"), body, 0o600); err != nil {
+			t.Fatalf("write ui-visibility.json: %v", err)
+		}
+		return configPath
+	}
+
+	t.Run("public tenant env sentinel wins", func(t *testing.T) {
+		t.Setenv("PICOCLAW_PUBLIC_TENANT", "true")
+		t.Setenv("PICOCLAW_ALLOWED_CHANNELS", "")
+
+		if !anonymousPublicDashboardEnabled(filepath.Join(t.TempDir(), "config.json")) {
+			t.Fatal("public tenant env should enable anonymous public dashboard")
+		}
+	})
+
+	t.Run("public profile uses pico channel", func(t *testing.T) {
+		t.Setenv("PICOCLAW_PUBLIC_TENANT", "")
+		t.Setenv("PICOCLAW_ALLOWED_CHANNELS", "whatsapp_native,pico")
+		configPath := writeVisibility(t, t.TempDir(), "public")
+
+		if !anonymousPublicDashboardEnabled(configPath) {
+			t.Fatal("active_profile=public with pico allowed should enable anonymous public dashboard")
+		}
+	})
+
+	t.Run("public profile without pico stays private", func(t *testing.T) {
+		t.Setenv("PICOCLAW_PUBLIC_TENANT", "")
+		t.Setenv("PICOCLAW_ALLOWED_CHANNELS", "whatsapp_native")
+		configPath := writeVisibility(t, t.TempDir(), "public")
+
+		if anonymousPublicDashboardEnabled(configPath) {
+			t.Fatal("active_profile=public without pico should not enable anonymous public dashboard")
+		}
+	})
+
+	t.Run("tenant profile stays private", func(t *testing.T) {
+		t.Setenv("PICOCLAW_PUBLIC_TENANT", "")
+		t.Setenv("PICOCLAW_ALLOWED_CHANNELS", "whatsapp_native,pico")
+		configPath := writeVisibility(t, t.TempDir(), "tenant")
+
+		if anonymousPublicDashboardEnabled(configPath) {
+			t.Fatal("active_profile=tenant should not enable anonymous public dashboard")
+		}
+	})
 }
 
 func TestResolveLauncherHostInput(t *testing.T) {
