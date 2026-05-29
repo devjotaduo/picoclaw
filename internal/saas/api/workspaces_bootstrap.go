@@ -57,11 +57,12 @@ func (h *Handler) EnsureDefaultWorkspace(ctx context.Context) error {
 	// step so installs bootstrapped by older binaries (flat home/AGENT.md
 	// instead of home/workspace/AGENT.md) heal on the next startup.
 	if existing, err := h.Workspaces.GetDefaultAuto(ctx); err == nil && existing != nil {
-		if err := ensureDefaultWorkspaceDirs(existing.HostPath); err != nil {
-			return fmt.Errorf("ensure default workspace dirs: %w", err)
+		if ensureErr := ensureDefaultWorkspaceDirs(existing.HostPath); ensureErr != nil {
+			return fmt.Errorf("ensure default workspace dirs: %w", ensureErr)
 		}
-		if err := seedDefaultWorkspaceHome(filepath.Join(existing.HostPath, tenant.WorkspaceHomeSubdir)); err != nil {
-			return fmt.Errorf("seed existing default workspace: %w", err)
+		existingHome := filepath.Join(existing.HostPath, tenant.WorkspaceHomeSubdir)
+		if seedErr := seedDefaultWorkspaceHome(existingHome); seedErr != nil {
+			return fmt.Errorf("seed existing default workspace: %w", seedErr)
 		}
 		return nil
 	} else if err != nil && !errors.Is(err, store.ErrWorkspaceNotFound) {
@@ -330,8 +331,8 @@ func copyDirMissing(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(dst, srcInfo.Mode().Perm()); err != nil {
-		return err
+	if mkdirErr := os.MkdirAll(dst, srcInfo.Mode().Perm()); mkdirErr != nil {
+		return mkdirErr
 	}
 	entries, err := os.ReadDir(src)
 	if err != nil {

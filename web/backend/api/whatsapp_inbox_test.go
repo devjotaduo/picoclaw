@@ -120,7 +120,7 @@ func TestApplyWhatsAppInboxUnavailableFallbackChats(t *testing.T) {
 	if got := string(body); !strings.Contains(got, `"chats":[]`) || !strings.Contains(got, `"unavailable":true`) {
 		t.Fatalf("fallback body = %s", got)
 	}
-	if got := res.Header.Get("X-PicoClaw-Upstream-Unavailable"); got != "whatsapp-native-inbox" {
+	if got := res.Header.Get("X-Picoclaw-Upstream-Unavailable"); got != "whatsapp-native-inbox" {
 		t.Fatalf("fallback header = %q", got)
 	}
 	if got := res.Header.Get("Content-Type"); got != "application/json" {

@@ -85,7 +85,7 @@ func applyWhatsAppInboxUnavailableFallback(res *http.Response) {
 	res.StatusCode = http.StatusOK
 	res.Status = "200 OK"
 	res.Header.Set("Content-Type", contentType)
-	res.Header.Set("X-PicoClaw-Upstream-Unavailable", "whatsapp-native-inbox")
+	res.Header.Set("X-Picoclaw-Upstream-Unavailable", "whatsapp-native-inbox")
 	res.Body = io.NopCloser(bytes.NewReader(body))
 	res.ContentLength = int64(len(body))
 	res.Header.Set("Content-Length", strconv.Itoa(len(body)))

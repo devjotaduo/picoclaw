@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	hmacSigHeader = "X-Jotaduo-WA-Signature"
+	hmacSigHeader = "X-Jotaduo-Wa-Signature"
 	hmacMaxSkew   = 5 * time.Minute
 	maxBodyBytes  = 1 << 20 // 1 MiB
 
@@ -38,8 +38,8 @@ type ServerConfig struct {
 type WhatsAppSender interface {
 	IsRunning() bool
 	IsPaired() bool
-	Send(context.Context, string, string) (SendResult, error)
-	HealthHandler(http.ResponseWriter, *http.Request)
+	Send(ctx context.Context, to string, text string) (SendResult, error)
+	HealthHandler(w http.ResponseWriter, r *http.Request)
 }
 
 // Server exposes the sidecar's HTTP surface. Three audiences:

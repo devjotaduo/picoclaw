@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,9 +18,7 @@ func TestLauncherUIVisibilityFallsBackToWorkspaceSeed(t *testing.T) {
 	}
 	if err := os.WriteFile(
 		filepath.Join(home, "workspace", uiVisibilityFilename),
-		[]byte(
-			`{"version":1,"active_profile":"public","default_profile":"public","default_visibility":false,"profiles":{"admin":{"visibility":{}},"tenant":{"visibility":{}},"public":{"visibility":{}},"waiting":{"visibility":{}}}}`,
-		),
+		launcherUIVisibilityFixture(t, "public", "public", false),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
@@ -46,18 +45,14 @@ func TestLauncherUIVisibilityRootFileWinsOverWorkspaceSeed(t *testing.T) {
 	}
 	if err := os.WriteFile(
 		filepath.Join(home, "workspace", uiVisibilityFilename),
-		[]byte(
-			`{"version":1,"active_profile":"public","default_profile":"public","default_visibility":false,"profiles":{"admin":{"visibility":{}},"tenant":{"visibility":{}},"public":{"visibility":{}},"waiting":{"visibility":{}}}}`,
-		),
+		launcherUIVisibilityFixture(t, "public", "public", false),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(
 		filepath.Join(home, uiVisibilityFilename),
-		[]byte(
-			`{"version":1,"active_profile":"tenant","default_profile":"tenant","default_visibility":true,"profiles":{"admin":{"visibility":{}},"tenant":{"visibility":{}},"public":{"visibility":{}},"waiting":{"visibility":{}}}}`,
-		),
+		launcherUIVisibilityFixture(t, "tenant", "tenant", true),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
@@ -89,9 +84,7 @@ func TestLauncherUIVisibilityFindsSourceWorkspaceFromDevBackendCwd(t *testing.T)
 	}
 	if err := os.WriteFile(
 		filepath.Join(repo, "workspace", uiVisibilityFilename),
-		[]byte(
-			`{"version":1,"active_profile":"public","default_profile":"public","default_visibility":false,"profiles":{"admin":{"visibility":{}},"tenant":{"visibility":{}},"public":{"visibility":{}},"waiting":{"visibility":{}}}}`,
-		),
+		launcherUIVisibilityFixture(t, "public", "public", false),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
@@ -119,4 +112,25 @@ func TestLauncherUIVisibilityFindsSourceWorkspaceFromDevBackendCwd(t *testing.T)
 	if !strings.Contains(rec.Body.String(), `"active_profile":"public"`) {
 		t.Fatalf("response did not come from source workspace seed: %s", rec.Body.String())
 	}
+}
+
+func launcherUIVisibilityFixture(t *testing.T, activeProfile, defaultProfile string, defaultVisibility bool) []byte {
+	t.Helper()
+
+	data, err := json.Marshal(map[string]any{
+		"version":            1,
+		"active_profile":     activeProfile,
+		"default_profile":    defaultProfile,
+		"default_visibility": defaultVisibility,
+		"profiles": map[string]any{
+			"admin":   map[string]any{"visibility": map[string]bool{}},
+			"tenant":  map[string]any{"visibility": map[string]bool{}},
+			"public":  map[string]any{"visibility": map[string]bool{}},
+			"waiting": map[string]any{"visibility": map[string]bool{}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal ui visibility fixture: %v", err)
+	}
+	return data
 }
