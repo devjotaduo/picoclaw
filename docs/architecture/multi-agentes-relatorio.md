@@ -344,6 +344,72 @@ Arquivos-chave:
 - `web/frontend/src/api/internal-agents.ts`
 - `web/frontend/src/components/agent/orchestration/orchestration-page.tsx`
 
+## Painel operacional do tenant promovido
+
+O tenant promovido tambem tem uma visao operacional em
+`/agent/dashboard`. Essa tela nao e so um feed de mensagens: ela agrega
+o trabalho publicado pelos agentes e vira o centro de acompanhamento do
+admin depois da promocao.
+
+A API principal e `GET /api/agent-dashboard`, com apoio de:
+
+- `POST /api/agent-dashboard/responses` para salvar resposta/decisao do
+  usuario a um item de agente.
+- `GET /api/agent-dashboard/artifacts/{asset...}` para servir arquivos
+  gerados em `workspace/output`.
+
+Fontes lidas hoje:
+
+| Fonte | Uso no painel |
+|---|---|
+| `workspace/agents/*/AGENT.md` | Descoberta dos agentes reais do tenant |
+| `workspace/dashboard/items/*.json` | Itens publicados diretamente para revisao |
+| `workspace/dashboard/responses/*.json` | Respostas salvas pelo admin |
+| `workspace/memory/melhorias.md` | Sugestoes e melhorias historicas |
+| `workspace/memory/relatorios.md` | Relatorios salvos |
+| `workspace/memory/padroes.md` | Padroes e analises |
+| `workspace/output/reports` | Relatorios gerados por agentes |
+| `workspace/output/plans` | Planos e proximas acoes |
+| `workspace/output/data` | Dados estruturados e metricas |
+| `workspace/output/analytics` | Analises operacionais |
+| `workspace/tests/relatorios` | Relatorios de teste/QA |
+| `workspace/cron/jobs.json` | Rotinas e tarefas agendadas |
+
+A UI atual organiza essa informacao em cinco abas:
+
+- **Geral**: status do tenant, onboarding, Catarina, KPIs, resumo de
+  agentes, fila e pulso WhatsApp.
+- **Agentes**: tabela operacional com agente, pendencias, relatorios,
+  planos, arquivos, ultima entrega e drawer de detalhe.
+- **Fila**: itens acionaveis que exigem resposta, aprovacao ou recusa.
+- **Relatorios**: relatorios, dados, analises, planos e arquivos
+  filtrados.
+- **Operacao**: prontidao das fontes, WhatsApp, relatorios, pendencias e
+  leitura atual dos filtros.
+
+Filtros globais disponiveis:
+
+- busca textual por agente, titulo, resumo, origem, plano ou arquivo;
+- agente;
+- status (`todos`, `precisa acao`, `concluidos`, `sem dados`);
+- origem (`WhatsApp`, `workspace/output`, relatorios, planos, cron,
+  testes).
+
+Arquivos-chave:
+
+- `web/backend/api/agent_dashboard.go`
+- `web/frontend/src/api/agent-dashboard.ts`
+- `web/frontend/src/lib/agent-dashboard.ts`
+- `web/frontend/src/lib/agent-dashboard-filters.ts`
+- `web/frontend/src/components/agent/dashboard/agent-dashboard-page.tsx`
+- `workspace/dashboard/items/README.md`
+
+Regra de produto: dados, relatorios e planos devem aparecer primeiro
+por agente e por status operacional. Painel grande separado de arquivos
+so deve existir quando o usuario esta na aba de relatorios ou no drawer
+do agente; na operacao diaria, o admin precisa ver responsavel,
+pendencia e proxima acao antes do artefato bruto.
+
 ## Fluxos praticos
 
 ### Fluxo 1: cliente no WhatsApp pede preco
