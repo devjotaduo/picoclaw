@@ -55,6 +55,7 @@ func (f *fakeWhatsApp) Send(_ context.Context, to, text string) (SendResult, err
 	f.text = text
 	return f.result, f.err
 }
+
 func (f *fakeWhatsApp) HealthHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -111,7 +112,11 @@ func TestRoutingRegisterAndRevokeViaHTTP(t *testing.T) {
 
 	// Revoke.
 	body = []byte(`{}`) // body is unused for DELETE but still HMAC'd
-	req = httptest.NewRequest(http.MethodDelete, "/internal/wa/routing/by-tenant/tenant-x", strings.NewReader(string(body)))
+	req = httptest.NewRequest(
+		http.MethodDelete,
+		"/internal/wa/routing/by-tenant/tenant-x",
+		strings.NewReader(string(body)),
+	)
 	req.Header.Set(hmacSigHeader, signHMAC(body))
 	w = httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)

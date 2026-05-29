@@ -17,7 +17,9 @@ func TestLauncherUIVisibilityFallsBackToWorkspaceSeed(t *testing.T) {
 	}
 	if err := os.WriteFile(
 		filepath.Join(home, "workspace", uiVisibilityFilename),
-		[]byte(`{"version":1,"active_profile":"public","default_profile":"public","default_visibility":false,"profiles":{"admin":{"visibility":{}},"tenant":{"visibility":{}},"public":{"visibility":{}},"waiting":{"visibility":{}}}}`),
+		[]byte(
+			`{"version":1,"active_profile":"public","default_profile":"public","default_visibility":false,"profiles":{"admin":{"visibility":{}},"tenant":{"visibility":{}},"public":{"visibility":{}},"waiting":{"visibility":{}}}}`,
+		),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
@@ -44,14 +46,18 @@ func TestLauncherUIVisibilityRootFileWinsOverWorkspaceSeed(t *testing.T) {
 	}
 	if err := os.WriteFile(
 		filepath.Join(home, "workspace", uiVisibilityFilename),
-		[]byte(`{"version":1,"active_profile":"public","default_profile":"public","default_visibility":false,"profiles":{"admin":{"visibility":{}},"tenant":{"visibility":{}},"public":{"visibility":{}},"waiting":{"visibility":{}}}}`),
+		[]byte(
+			`{"version":1,"active_profile":"public","default_profile":"public","default_visibility":false,"profiles":{"admin":{"visibility":{}},"tenant":{"visibility":{}},"public":{"visibility":{}},"waiting":{"visibility":{}}}}`,
+		),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(
 		filepath.Join(home, uiVisibilityFilename),
-		[]byte(`{"version":1,"active_profile":"tenant","default_profile":"tenant","default_visibility":true,"profiles":{"admin":{"visibility":{}},"tenant":{"visibility":{}},"public":{"visibility":{}},"waiting":{"visibility":{}}}}`),
+		[]byte(
+			`{"version":1,"active_profile":"tenant","default_profile":"tenant","default_visibility":true,"profiles":{"admin":{"visibility":{}},"tenant":{"visibility":{}},"public":{"visibility":{}},"waiting":{"visibility":{}}}}`,
+		),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
@@ -83,7 +89,9 @@ func TestLauncherUIVisibilityFindsSourceWorkspaceFromDevBackendCwd(t *testing.T)
 	}
 	if err := os.WriteFile(
 		filepath.Join(repo, "workspace", uiVisibilityFilename),
-		[]byte(`{"version":1,"active_profile":"public","default_profile":"public","default_visibility":false,"profiles":{"admin":{"visibility":{}},"tenant":{"visibility":{}},"public":{"visibility":{}},"waiting":{"visibility":{}}}}`),
+		[]byte(
+			`{"version":1,"active_profile":"public","default_profile":"public","default_visibility":false,"profiles":{"admin":{"visibility":{}},"tenant":{"visibility":{}},"public":{"visibility":{}},"waiting":{"visibility":{}}}}`,
+		),
 		0o644,
 	); err != nil {
 		t.Fatal(err)

@@ -194,17 +194,25 @@ role: Vendas
 
 # Marcos
 `)
-	writeDashboardFile(t, filepath.Join(workspace, "output", "reports", "2026-05-28-lia-marketing.md"), `# Relatório de campanha
+	writeDashboardFile(
+		t,
+		filepath.Join(workspace, "output", "reports", "2026-05-28-lia-marketing.md"),
+		`# Relatório de campanha
 
 Agente: Lia
 Resumo: Campanha pronta para revisão.
-`)
-	writeDashboardFile(t, filepath.Join(workspace, "output", "plans", "2026-05-28-catarina-aprofundamento.md"), `# Plano de aprofundamento
+`,
+	)
+	writeDashboardFile(
+		t,
+		filepath.Join(workspace, "output", "plans", "2026-05-28-catarina-aprofundamento.md"),
+		`# Plano de aprofundamento
 
 Responsavel: Catarina
 Status: em andamento
 Resumo: Próxima sessão com o dono.
-`)
+`,
+	)
 	writeDashboardFile(t, filepath.Join(workspace, "output", "data", "marcos-funil.json"), `{
   "title": "Dados do funil comercial",
   "agent": "Marcos",

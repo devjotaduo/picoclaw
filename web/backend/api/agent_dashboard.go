@@ -1230,7 +1230,20 @@ func dashboardFallbackAgentRefs() []struct {
 		name   string
 		tokens []string
 	}{
-		{id: "rafael", name: "Rafael", tokens: []string{"rafael", "assistente interno", "interno", "analytics", "padroes", "padrões", "relatorio diario", "relatório diário"}},
+		{
+			id:   "rafael",
+			name: "Rafael",
+			tokens: []string{
+				"rafael",
+				"assistente interno",
+				"interno",
+				"analytics",
+				"padroes",
+				"padrões",
+				"relatorio diario",
+				"relatório diário",
+			},
+		},
 		{id: "clara", name: "Clara", tokens: []string{"clara", "atendente principal", "atendimento inicial"}},
 		{id: "luna", name: "Luna", tokens: []string{"luna", "noturna", "fim de semana"}},
 		{id: "marcos", name: "Marcos", tokens: []string{"marcos", "vendas", "sales", "comercial"}},
@@ -1240,7 +1253,11 @@ func dashboardFallbackAgentRefs() []struct {
 		{id: "catarina", name: "Catarina", tokens: []string{"catarina", "aprofundamento", "aprofundar", "curadoria"}},
 		{id: "operador", name: "Operador", tokens: []string{"operador", "operator", "dev", "tecnico", "técnico"}},
 		{id: "qa-tester", name: "QA Tester", tokens: []string{"qa-tester", "qa tester", "qa", "teste", "testes"}},
-		{id: "transferencia-humana", name: "Atendimento Humano", tokens: []string{"atendimento humano", "humano", "transferencia", "transferência"}},
+		{
+			id:     "transferencia-humana",
+			name:   "Atendimento Humano",
+			tokens: []string{"atendimento humano", "humano", "transferencia", "transferência"},
+		},
 	}
 }
 

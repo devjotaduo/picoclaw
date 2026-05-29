@@ -478,7 +478,12 @@ func (p *Provisioner) runProvision(
 			if err := SubstituteRedactedModelKeys(t.VolumePath, out.Key); err != nil {
 				return fmt.Errorf("substitute redacted model keys: %w", err)
 			}
-			if err := ApplySaaSLiteLLMModelRouting(t.VolumePath, defaultSaaSLiteLLMModel, p.Cfg.LiteLLMURL, out.Key); err != nil {
+			if err := ApplySaaSLiteLLMModelRouting(
+				t.VolumePath,
+				defaultSaaSLiteLLMModel,
+				p.Cfg.LiteLLMURL,
+				out.Key,
+			); err != nil {
 				return fmt.Errorf("apply saas litellm model routing: %w", err)
 			}
 		}

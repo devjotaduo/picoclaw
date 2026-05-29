@@ -124,7 +124,12 @@ func seedDefaultWorkspaceHome(homeDir string) error {
 	workspaceDest := filepath.Join(homeDir, "workspace")
 	if _, err := os.Stat(workspaceDest); errors.Is(err, os.ErrNotExist) && isUsableDir(canonicalWorkspaceSource) {
 		if err := copyDir(canonicalWorkspaceSource, workspaceDest); err != nil {
-			log.Printf("WARN: bootstrap workspace: copy host %s -> %s failed (%v); will fall through to embed", canonicalWorkspaceSource, workspaceDest, err)
+			log.Printf(
+				"WARN: bootstrap workspace: copy host %s -> %s failed (%v); will fall through to embed",
+				canonicalWorkspaceSource,
+				workspaceDest,
+				err,
+			)
 		}
 	}
 

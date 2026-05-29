@@ -280,7 +280,15 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 	// (tenant was never public, e.g. cliente created directly).
 	if err := tenant.RestoreClienteAgentMD(t.VolumePath); err != nil {
 		log.Printf("promote %s: restore cliente AGENT.md failed: %v", t.ID, err)
-		rollbackPromoteToPublic(r.Context(), h.Tenants, t.ID, t.VolumePath, ownerEmail, originalAuthBackend, "RestoreClienteAgentMD")
+		rollbackPromoteToPublic(
+			r.Context(),
+			h.Tenants,
+			t.ID,
+			t.VolumePath,
+			ownerEmail,
+			originalAuthBackend,
+			"RestoreClienteAgentMD",
+		)
 		writeError(w, http.StatusInternalServerError,
 			"restaurar AGENT.md cliente falhou: "+err.Error()+" — DB foi revertido pra is_public=true")
 		return
@@ -291,7 +299,15 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 	// is a confusing partial state for the admin and owner.
 	if err := tenant.SetUIVisibilityActiveProfile(t.VolumePath, tenant.UIProfileTenant); err != nil {
 		log.Printf("promote %s: SetUIVisibilityActiveProfile failed: %v", t.ID, err)
-		rollbackPromoteToPublic(r.Context(), h.Tenants, t.ID, t.VolumePath, ownerEmail, originalAuthBackend, "SetUIVisibilityActiveProfile")
+		rollbackPromoteToPublic(
+			r.Context(),
+			h.Tenants,
+			t.ID,
+			t.VolumePath,
+			ownerEmail,
+			originalAuthBackend,
+			"SetUIVisibilityActiveProfile",
+		)
 		writeError(w, http.StatusInternalServerError,
 			"trocar ui-visibility pra tenant falhou: "+err.Error()+" — DB foi revertido pra is_public=true")
 		return
@@ -582,7 +598,12 @@ func rollbackPromoteToPublic(
 		log.Printf("promote %s: failed to restore public ui profile after %s rollback: %v", tenantID, failedStep, err)
 	}
 	if err := tenant.ApplyPublicSofiaAgentMD(volumePath); err != nil {
-		log.Printf("promote %s: failed to restore Sofia public AGENT.md after %s rollback: %v", tenantID, failedStep, err)
+		log.Printf(
+			"promote %s: failed to restore Sofia public AGENT.md after %s rollback: %v",
+			tenantID,
+			failedStep,
+			err,
+		)
 	}
 }
 
