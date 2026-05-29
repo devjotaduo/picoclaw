@@ -111,6 +111,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Company data readiness checklist used by the launcher onboarding card.
 	h.registerCompanyOnboardingRoutes(mux)
 
+	// Public-tenant onboarding state machine. Drives the tenant dashboard
+	// after Sofia/Catarina and after admin promotion.
+	h.registerOnboardingStateRoutes(mux)
+
 	// Aggregated operational dashboard for agent results, analyses, tasks,
 	// metrics, reports, and file-based dashboard publications.
 	h.registerAgentDashboardRoutes(mux)

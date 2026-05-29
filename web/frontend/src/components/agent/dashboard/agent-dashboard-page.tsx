@@ -36,6 +36,7 @@ import {
   listWhatsAppChats,
 } from "@/api/whatsapp"
 import { CatarinaProgressCard } from "@/components/agent/dashboard/catarina-progress-card"
+import { OnboardingLifecycleCard } from "@/components/agent/dashboard/onboarding-lifecycle-card"
 import { TenantStatusBanner } from "@/components/agent/dashboard/tenant-status-banner"
 import { AIOrbAvatar } from "@/components/chat/ai-orb-avatar"
 import { PageHeader } from "@/components/page-header"
@@ -240,11 +241,10 @@ export function AgentDashboardPage() {
                   e quantos campos do empresa.md já estão preenchidos. */}
               <TenantStatusBanner />
 
-              {/* Progresso de curadoria da Catarina por área temática.
-                  Mostra 0/5, 1/5, etc baseado em quais memory/<area>.md
-                  têm conteúdo. Só renderiza quando a query retorna dados —
-                  silencioso se memory/ ainda não foi populado. */}
-              <CatarinaProgressCard />
+              <section className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+                <OnboardingLifecycleCard />
+                <CatarinaProgressCard />
+              </section>
 
               {kpisHaveData ? (
                 <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
