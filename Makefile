@@ -429,23 +429,20 @@ sync-baseline:
 	@python3 ./scripts/sync-baseline-workspace.py
 
 ## check-baseline-sync: CI guard — fails if baseline-workspace is stale relative to workspace/
-##   Runs the sync, then `git diff` for the baseline tree (excluding SYNCED_FROM
-##   which has a timestamp that always changes between runs). Non-zero exit if
-##   any other file changed, meaning the developer forgot to commit the
+##   Runs the sync, then `git diff` for the baseline tree. Non-zero exit if
+##   any file changed, meaning the developer forgot to commit the
 ##   regenerated baseline after touching workspace/.
 check-baseline-sync:
 	@python3 ./scripts/sync-baseline-workspace.py
 	@git diff --quiet --exit-code -- \
 		'internal/saas/api/baseline-workspace/' \
-		':!internal/saas/api/baseline-workspace/SYNCED_FROM' \
 		|| ( \
 			echo ""; \
 			echo "ERROR: baseline-workspace is out of sync with workspace/"; \
 			echo "Run 'make sync-baseline' and commit the resulting changes."; \
 			echo ""; \
 			git diff --stat -- \
-				'internal/saas/api/baseline-workspace/' \
-				':!internal/saas/api/baseline-workspace/SYNCED_FROM'; \
+				'internal/saas/api/baseline-workspace/'; \
 			exit 1; \
 		)
 

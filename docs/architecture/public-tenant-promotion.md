@@ -509,7 +509,7 @@ Novo tenant em /srv/saas/tenants/<id>/ com TUDO de workspace/ presente
 2. Copy `workspace/` filtrando: drop runtime (sessions/, *.log), drop secrets (auth.json), drop scratch (mamiferos_*, etc.)
 3. Empty `memory/` contents (filenames preserved como stubs — sem dados de cliente no binário)
 4. Normalize `config.json`: `api_keys=["${LITELLM_KEY}"]`, paths Linux
-5. Escreve `SYNCED_FROM` com commit hash + timestamp
+5. Escreve `SYNCED_FROM` com hash SHA256 determinístico do conteúdo + file count
 
 ### Quando rodar
 
