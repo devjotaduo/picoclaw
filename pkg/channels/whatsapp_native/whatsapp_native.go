@@ -178,6 +178,33 @@ func (c *WhatsAppNativeChannel) Client() *whatsmeow.Client {
 	return c.client
 }
 
+// ResolveSendDestination returns the WhatsApp JID that a phone-number send
+// will actually target after recipient verification and PN -> LID migration.
+// Callers that need to route replies should register both the original chat ID
+// and this resolved JID, because inbound replies may arrive from the LID.
+func (c *WhatsAppNativeChannel) ResolveSendDestination(ctx context.Context, chatID string) (string, error) {
+	c.mu.Lock()
+	client := c.client
+	c.mu.Unlock()
+
+	if client == nil || !client.IsConnected() {
+		return "", fmt.Errorf("whatsapp connection not established: %w", channels.ErrTemporary)
+	}
+	if client.Store == nil || client.Store.ID == nil {
+		return "", fmt.Errorf("whatsapp not yet paired (QR login pending): %w", channels.ErrTemporary)
+	}
+
+	to, err := parseJID(chatID)
+	if err != nil {
+		return "", fmt.Errorf("invalid chat id %q: %w", chatID, err)
+	}
+	to, err = resolveSendDestination(ctx, client, to)
+	if err != nil {
+		return "", err
+	}
+	return to.String(), nil
+}
+
 // NewWhatsAppNativeChannel creates a WhatsApp channel that uses whatsmeow for connection.
 // storePath is the directory for the SQLite session store (e.g. workspace/whatsapp).
 func NewWhatsAppNativeChannel(
@@ -767,13 +794,20 @@ func (c *WhatsAppNativeChannel) sendWithSource(ctx context.Context, msg bus.Outb
 	if err != nil {
 		return nil, fmt.Errorf("invalid chat id %q: %w", msg.ChatID, err)
 	}
+	to, err = resolveSendDestination(ctx, client, to)
+	if err != nil {
+		return nil, err
+	}
+	if isPairedWhatsAppUser(client, to) {
+		return nil, fmt.Errorf("recipient matches the paired WhatsApp account; use a different recipient: %w", channels.ErrSendFailed)
+	}
 
 	messageID := client.GenerateMessageID()
 	waMsg := &waE2E.Message{
 		Conversation: proto.String(msg.Content),
 	}
 
-	_, sendErr := client.SendMessage(ctx, to, waMsg, whatsmeow.SendRequestExtra{ID: messageID})
+	resp, sendErr := client.SendMessage(ctx, to, waMsg, whatsmeow.SendRequestExtra{ID: messageID})
 	if sendErr != nil {
 		for _, obs := range c.snapshotObservers() {
 			obs.OnOutbound(ctx, OutboundObservation{
@@ -799,7 +833,10 @@ func (c *WhatsAppNativeChannel) sendWithSource(ctx context.Context, msg bus.Outb
 			Operator:  op,
 		})
 	}
-	return nil, nil
+	if resp.ID != "" {
+		messageID = string(resp.ID)
+	}
+	return []string{messageID}, nil
 }
 
 func (c *WhatsAppNativeChannel) sendMediaWithSource(ctx context.Context, msg bus.OutboundMediaMessage, source string) ([]string, error) {
@@ -826,6 +863,13 @@ func (c *WhatsAppNativeChannel) sendMediaWithSource(ctx context.Context, msg bus
 	to, err := parseJID(msg.ChatID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid chat id %q: %w", msg.ChatID, err)
+	}
+	to, err = resolveSendDestination(ctx, client, to)
+	if err != nil {
+		return nil, err
+	}
+	if isPairedWhatsAppUser(client, to) {
+		return nil, fmt.Errorf("recipient matches the paired WhatsApp account; use a different recipient: %w", channels.ErrSendFailed)
 	}
 
 	store := c.GetMediaStore()
@@ -1235,4 +1279,111 @@ func parseJID(s string) (types.JID, error) {
 		return types.ParseJID(s)
 	}
 	return types.NewJID(s, types.DefaultUserServer), nil
+}
+
+func resolveSendDestination(ctx context.Context, client *whatsmeow.Client, to types.JID) (types.JID, error) {
+	if to.Server != types.DefaultUserServer || client == nil {
+		return to, nil
+	}
+	lookupPhone := whatsAppLookupPhone(to)
+	if lookupPhone != "" {
+		results, err := client.IsOnWhatsApp(ctx, []string{lookupPhone})
+		if err != nil {
+			return to, fmt.Errorf("failed to verify WhatsApp recipient %s: %v: %w", to, err, channels.ErrTemporary)
+		}
+		if len(results) == 0 || !results[0].IsIn {
+			return to, fmt.Errorf("recipient %s is not registered on WhatsApp: %w", to, channels.ErrSendFailed)
+		}
+		if canonical := canonicalWhatsAppUserJID(results[0].JID); !canonical.IsEmpty() {
+			to = canonical
+		}
+	}
+	if client.Store == nil || client.Store.LIDs == nil || client.Store.GetLID().IsEmpty() {
+		return to, nil
+	}
+	if lid, err := client.Store.LIDs.GetLIDForPN(ctx, to); err != nil {
+		return to, fmt.Errorf("failed to resolve WhatsApp LID for %s: %v: %w", to, err, channels.ErrTemporary)
+	} else if !lid.IsEmpty() {
+		return lid, nil
+	}
+
+	info, err := client.GetUserInfo(ctx, []types.JID{to})
+	if err != nil {
+		return to, fmt.Errorf("failed to fetch WhatsApp user info for %s: %v: %w", to, err, channels.ErrTemporary)
+	}
+	if lid := info[to].LID; !lid.IsEmpty() {
+		return lid, nil
+	}
+	return to, nil
+}
+
+func whatsAppLookupPhone(to types.JID) string {
+	if to.Server != types.DefaultUserServer {
+		return ""
+	}
+	digits := phoneDigits(to.User)
+	if digits == "" {
+		return ""
+	}
+	return "+" + digits
+}
+
+func canonicalWhatsAppUserJID(jid types.JID) types.JID {
+	if jid.IsEmpty() {
+		return types.EmptyJID
+	}
+	jid = jid.ToNonAD()
+	if jid.Server == types.LegacyUserServer {
+		jid.Server = types.DefaultUserServer
+	}
+	return jid
+}
+
+func isPairedWhatsAppUser(client *whatsmeow.Client, to types.JID) bool {
+	if client == nil || client.Store == nil {
+		return false
+	}
+	if client.Store.ID != nil && to.Server == types.DefaultUserServer && sameWhatsAppPhoneUser(client.Store.ID.User, to.User) {
+		return true
+	}
+	ownLID := client.Store.GetLID()
+	return !ownLID.IsEmpty() && to.Server == types.HiddenUserServer && ownLID.ToNonAD() == to.ToNonAD()
+}
+
+func sameWhatsAppPhoneUser(a, b string) bool {
+	a = phoneDigits(a)
+	b = phoneDigits(b)
+	if a == "" || b == "" {
+		return false
+	}
+	if a == b {
+		return true
+	}
+	return sameBrazilianNinthDigitVariant(a, b)
+}
+
+func phoneDigits(s string) string {
+	var out strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			out.WriteRune(r)
+		}
+	}
+	return out.String()
+}
+
+func sameBrazilianNinthDigitVariant(a, b string) bool {
+	if !strings.HasPrefix(a, "55") || !strings.HasPrefix(b, "55") {
+		return false
+	}
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+	if len(b) != len(a)+1 || len(a) < 12 {
+		return false
+	}
+	if a[:4] != b[:4] {
+		return false
+	}
+	return b[4] == '9' && a[4:] == b[5:]
 }

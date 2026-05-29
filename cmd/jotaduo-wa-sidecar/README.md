@@ -44,9 +44,13 @@ purpose so skills can reuse the existing HMAC helper they already have.
 
 ### Admin token
 
-The `/pair*` endpoints accept the admin token via either the
-`X-Jotaduo-WA-Admin-Token` header (preferred) or a `?token=...` query string
-(so the operator can paste a link in the browser). Constant-time compared.
+The `/pair*` endpoints accept the admin token through either:
+
+1. an HttpOnly session cookie created by `POST /pair/login`; or
+2. the `X-Jotaduo-WA-Admin-Token` header for scripted checks.
+
+The token must not be passed in a query string. Query-string tokens leak via
+browser history, access logs, and copied URLs.
 
 ## Environment
 
@@ -77,9 +81,10 @@ inbound routing — tenants will re-register on the next outbound message.
 ### First-time pairing
 
 1. Compose brings up the service: `docker compose -f docker/saas/docker-compose.yml up -d jotaduo-wa`
-2. Open `https://adm.<base>/jotaduo-wa/pair?token=<JOTADUO_WA_ADMIN_TOKEN>`
-3. Scan the QR with the institutional WhatsApp (WhatsApp → Configurações → Aparelhos conectados → Conectar um aparelho)
-4. Page shows "pareado: 55119..." — done. `/readyz` flips to 200.
+2. Open `https://adm.<base>/jotaduo-wa/pair`
+3. Paste the admin token in the login form.
+4. Scan the QR with the institutional WhatsApp (WhatsApp → Configurações → Aparelhos conectados → Conectar um aparelho)
+5. Page shows "pareado: 55119..." — done. `/readyz` flips to 200.
 
 ### Re-pairing (lost phone, etc.)
 
@@ -103,6 +108,18 @@ docker build -f docker/saas/Dockerfile.jotaduo-wa -t picoclaw/jotaduo-wa .
 
 `docker compose up -d --build jotaduo-wa` brings the service up in dev
 alongside the rest of the SaaS stack.
+
+## Real delivery validation
+
+For production validation after a native WhatsApp change, use the operations
+runbook:
+
+- [docs/operations/jotaduo-wa-real-delivery.md](../../docs/operations/jotaduo-wa-real-delivery.md)
+
+The key checks are: sidecar `/readyz` returns OK, `send.py` returns a real
+`message_ids` value, the phone is registered in routing for the public
+tenant, and recent `jotaduo-wa` logs do not contain `Failed to issue privacy
+token` after the send.
 
 ## Inbound dispatch (fatia 4)
 

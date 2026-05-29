@@ -21,8 +21,8 @@ func (*WhatsApp) Start(context.Context) error      { return errStub }
 func (*WhatsApp) Stop(context.Context) error       { return nil }
 func (*WhatsApp) IsRunning() bool                  { return false }
 func (*WhatsApp) IsPaired() bool                   { return false }
-func (*WhatsApp) Send(context.Context, string, string) ([]string, error) {
-	return nil, errStub
+func (*WhatsApp) Send(context.Context, string, string) (SendResult, error) {
+	return SendResult{}, errStub
 }
 func (*WhatsApp) HealthHandler(w http.ResponseWriter, _ *http.Request) {
 	http.Error(w, errStub.Error(), http.StatusServiceUnavailable)

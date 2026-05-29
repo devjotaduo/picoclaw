@@ -82,7 +82,7 @@ export function ChatTestDrawer({
       role="complementary"
       aria-label={`Chat de teste com ${agentName}`}
       className={cn(
-        "border-border/60 bg-background fixed inset-y-0 right-0 z-30 flex flex-col border-l shadow-xl",
+        "border-border/60 bg-background fixed inset-y-0 right-0 z-[60] flex flex-col border-l shadow-xl",
         WIDTH_CLASS[width],
       )}
     >

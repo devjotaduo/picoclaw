@@ -95,6 +95,9 @@ export function PromoteTenantCard(props: { tenant: Tenant }) {
   const capturedEmail = state?.owner_captured?.email ?? "";
   const capturedName = state?.owner_captured?.name ?? "";
   const capturedWA = state?.owner_captured?.whatsapp ?? "";
+  const bridgeError = state?.deepening?.last_bridge_error?.trim() ?? "";
+  const bridgeFailedAt = state?.deepening?.last_bridge_failed_at ?? "";
+  const firstContactAt = state?.deepening?.first_contact_at ?? "";
 
   return (
     <>
@@ -125,6 +128,11 @@ export function PromoteTenantCard(props: { tenant: Tenant }) {
               ) : (
                 <p className="text-zinc-500">Sofia ainda não capturou email do dono.</p>
               )}
+              {capturedEmail && !capturedWA && (
+                <p className="text-amber-300">
+                  <strong>WhatsApp ausente.</strong> Catarina não consegue iniciar o aprofundamento sem esse número.
+                </p>
+              )}
 
               {state.discovery?.segment && (
                 <p>
@@ -141,6 +149,15 @@ export function PromoteTenantCard(props: { tenant: Tenant }) {
                   </span>
                 )}
               </p>
+
+              {(firstContactAt || bridgeError) && (
+                <p className={bridgeError ? "text-red-300" : "text-zinc-500"}>
+                  <strong>Bridge Catarina:</strong>{" "}
+                  {bridgeError
+                    ? `falhou${bridgeFailedAt ? ` em ${bridgeFailedAt}` : ""}: ${bridgeError}`
+                    : `primeiro contato enviado em ${firstContactAt}`}
+                </p>
+              )}
 
               {!ready && blockedBy.length > 0 && (
                 <p className="text-amber-300">
@@ -217,6 +234,12 @@ export function PromoteTenantCard(props: { tenant: Tenant }) {
             </span>
           </label>
 
+          {!ready && !force && (
+            <p className="text-xs text-amber-300">
+              Este tenant ainda não está pronto; marque "Forçar promoção" e registre o motivo para liberar manualmente.
+            </p>
+          )}
+
           {force && (
             <div>
               <label className="mb-1 block text-xs font-medium text-zinc-300">
@@ -246,6 +269,7 @@ export function PromoteTenantCard(props: { tenant: Tenant }) {
               disabled={
                 promoteM.isPending ||
                 (!emailOverride.trim() && !capturedEmail) ||
+                (!ready && !force) ||
                 (force && !forceReason.trim())
               }
             >

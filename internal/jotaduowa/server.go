@@ -1,6 +1,7 @@
 package jotaduowa
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -16,7 +17,7 @@ import (
 )
 
 const (
-	hmacSigHeader = "X-Jotaduo-WA-Signature"
+	hmacSigHeader = "X-Jotaduo-Wa-Signature"
 	hmacMaxSkew   = 5 * time.Minute
 	maxBodyBytes  = 1 << 20 // 1 MiB
 
@@ -27,8 +28,18 @@ const (
 type ServerConfig struct {
 	HMACSecret string
 	AdminToken string
-	WhatsApp   *WhatsApp
+	WhatsApp   WhatsAppSender
 	Routing    *Routing
+}
+
+// WhatsAppSender is the HTTP server surface implemented by the sidecar
+// WhatsApp wrapper. Tests use it to inject a fake sender without a real WA
+// session.
+type WhatsAppSender interface {
+	IsRunning() bool
+	IsPaired() bool
+	Send(ctx context.Context, to string, text string) (SendResult, error)
+	HealthHandler(w http.ResponseWriter, r *http.Request)
 }
 
 // Server exposes the sidecar's HTTP surface. Three audiences:
@@ -106,7 +117,7 @@ func (s *Server) Handler() http.Handler {
 	// in URLs — audit P0 from RELATORIO-GAPS-AUDIT-2026-05-27.
 	mux.HandleFunc("/pair", s.handlePairOrLogin)
 	mux.HandleFunc("/pair/login", s.handlePairLogin)
-	mux.HandleFunc("/pair/qr", s.requireAdminToken(s.cfg.WhatsApp.HealthHandler))
+	mux.HandleFunc("/pair/qr", s.requireAdminToken(s.handlePairQR))
 
 	return mux
 }
@@ -135,6 +146,17 @@ func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (s *Server) handlePairQR(w http.ResponseWriter, r *http.Request) {
+	wa := s.cfg.WhatsApp
+	if wa == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status": "not_running",
+		})
+		return
+	}
+	wa.HealthHandler(w, r)
 }
 
 // sendRequest is the body of POST /internal/wa/send.
@@ -166,7 +188,8 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request, body []byte)
 		writeError(w, http.StatusUnauthorized, "stale timestamp")
 		return
 	}
-	if !s.cfg.WhatsApp.IsPaired() {
+	wa := s.cfg.WhatsApp
+	if wa == nil || !wa.IsPaired() {
 		writeError(w, http.StatusServiceUnavailable, "whatsapp not paired")
 		return
 	}
@@ -174,23 +197,41 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request, body []byte)
 	// Auto-register the routing so the lead's reply lands back in the same
 	// tenant without the skill needing a second HTTP call. Tenants can still
 	// call /internal/wa/routing explicitly to bind extra numbers.
-	if err := s.cfg.Routing.Register(r.Context(), req.To, req.TenantID); err != nil {
-		log.Printf("jotaduo-wa: auto-register routing failed (tenant=%s to=%s): %v",
-			req.TenantID, req.To, err)
-		// Non-fatal — the send itself can still succeed.
-	}
+	s.registerRoutingAliases(r.Context(), req.TenantID, req.To)
 
-	ids, err := s.cfg.WhatsApp.Send(r.Context(), req.To, req.Text)
+	result, err := wa.Send(r.Context(), req.To, req.Text)
 	if err != nil {
 		log.Printf("jotaduo-wa: send failed (tenant=%s to=%s): %v", req.TenantID, req.To, err)
 		writeError(w, http.StatusBadGateway, "send failed: "+err.Error())
 		return
 	}
+	s.registerRoutingAliases(r.Context(), req.TenantID, result.RouteAliases...)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":      "sent",
-		"message_ids": ids,
+		"message_ids": result.MessageIDs,
 		"tenant_id":   req.TenantID,
 	})
+}
+
+func (s *Server) registerRoutingAliases(ctx context.Context, tenantID string, aliases ...string) {
+	if s.cfg.Routing == nil {
+		return
+	}
+	seen := make(map[string]struct{}, len(aliases))
+	for _, alias := range aliases {
+		alias = strings.TrimSpace(alias)
+		if alias == "" {
+			continue
+		}
+		if _, ok := seen[alias]; ok {
+			continue
+		}
+		seen[alias] = struct{}{}
+		if err := s.cfg.Routing.Register(ctx, alias, tenantID); err != nil {
+			log.Printf("jotaduo-wa: auto-register routing failed (tenant=%s alias=%s): %v",
+				tenantID, alias, err)
+		}
+	}
 }
 
 // routingRegisterRequest is the body of POST /internal/wa/routing.
@@ -248,7 +289,7 @@ func (s *Server) handleRoutingByTenant(w http.ResponseWriter, r *http.Request, _
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"tenant_id":     tenantID,
+			"tenant_id":      tenantID,
 			"routes_removed": n,
 		})
 	default:

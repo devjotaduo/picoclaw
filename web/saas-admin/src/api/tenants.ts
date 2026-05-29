@@ -166,6 +166,12 @@ export type OnboardingState = {
   };
   deepening: {
     started_at: string | null;
+    first_contact_at?: string | null;
+    last_outreach_at?: string | null;
+    last_owner_response_at?: string | null;
+    last_bridge_attempt_at?: string | null;
+    last_bridge_failed_at?: string | null;
+    last_bridge_error?: string | null;
     areas_covered: string[];
     areas_required: string[];
     completed_at: string | null;

@@ -1,8 +1,11 @@
 package api
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 	"net/http/httputil"
+	"strconv"
 	"strings"
 )
 
@@ -45,11 +48,59 @@ func (h *Handler) inboxReverseProxy() http.Handler {
 			rw.WriteHeader(http.StatusBadGateway)
 			_, _ = rw.Write([]byte(`{"error":"failed to reach gateway: ` + escapeJSONString(err.Error()) + `"}`))
 		},
+		ModifyResponse: func(res *http.Response) error {
+			applyWhatsAppInboxUnavailableFallback(res)
+			return nil
+		},
 		// FlushInterval -1 forces flush after every Write — required for SSE
 		// to stream events to the dashboard without buffering.
 		FlushInterval: -1,
 	}
 	return rp
+}
+
+func applyWhatsAppInboxUnavailableFallback(res *http.Response) {
+	if res == nil || res.StatusCode != http.StatusNotFound || res.Request == nil {
+		return
+	}
+	if res.Request.Method != http.MethodGet {
+		return
+	}
+	path := strings.TrimSuffix(res.Request.URL.Path, "/")
+	var body []byte
+	contentType := "application/json"
+	switch path {
+	case "/whatsapp_native/inbox", "/whatsapp_native/inbox/chats":
+		body = []byte(`{"chats":[],"unavailable":true,"error":"whatsapp native inbox unavailable"}`)
+	case "/whatsapp_native/inbox/reports":
+		body = []byte(emptyWhatsAppInboxReportJSON(res.Request))
+	case "/whatsapp_native/inbox/events":
+		body = []byte(": whatsapp native inbox unavailable\n\n")
+		contentType = "text/event-stream"
+		res.Header.Set("Cache-Control", "no-cache")
+	default:
+		return
+	}
+	_ = res.Body.Close()
+	res.StatusCode = http.StatusOK
+	res.Status = "200 OK"
+	res.Header.Set("Content-Type", contentType)
+	res.Header.Set("X-Picoclaw-Upstream-Unavailable", "whatsapp-native-inbox")
+	res.Body = io.NopCloser(bytes.NewReader(body))
+	res.ContentLength = int64(len(body))
+	res.Header.Set("Content-Length", strconv.Itoa(len(body)))
+}
+
+func emptyWhatsAppInboxReportJSON(r *http.Request) string {
+	from, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
+	to, _ := strconv.ParseInt(r.URL.Query().Get("to"), 10, 64)
+	return `{"from":` + strconv.FormatInt(from, 10) +
+		`,"to":` + strconv.FormatInt(to, 10) +
+		`,"contacts":0,"new_contacts":0,"messages":0,"inbound_messages":0,"outbound_messages":0,` +
+		`"agent_replies":0,"human_replies":0,"paused_chats":0,"qualified_leads":0,"handoffs":0,` +
+		`"unanswered":0,"avg_first_response_seconds":0,"by_intent":[],"by_priority":[],` +
+		`"by_lead_stage":[],"top_products":[],"daily":[],"unavailable":true,` +
+		`"error":"whatsapp native inbox unavailable"}`
 }
 
 // singleSlashJoin joins `base + suffix` ensuring exactly one slash between

@@ -1,6 +1,7 @@
 package jotaduowa
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -36,6 +37,27 @@ func newTestServer(t *testing.T) (*Server, *Routing) {
 		AdminToken: "admin-token",
 		Routing:    r,
 	}), r
+}
+
+type fakeWhatsApp struct {
+	running bool
+	paired  bool
+	result  SendResult
+	err     error
+	to      string
+	text    string
+}
+
+func (f *fakeWhatsApp) IsRunning() bool { return f.running }
+func (f *fakeWhatsApp) IsPaired() bool  { return f.paired }
+func (f *fakeWhatsApp) Send(_ context.Context, to, text string) (SendResult, error) {
+	f.to = to
+	f.text = text
+	return f.result, f.err
+}
+
+func (f *fakeWhatsApp) HealthHandler(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func TestHMACRejectsBadSignature(t *testing.T) {
@@ -90,7 +112,11 @@ func TestRoutingRegisterAndRevokeViaHTTP(t *testing.T) {
 
 	// Revoke.
 	body = []byte(`{}`) // body is unused for DELETE but still HMAC'd
-	req = httptest.NewRequest(http.MethodDelete, "/internal/wa/routing/by-tenant/tenant-x", strings.NewReader(string(body)))
+	req = httptest.NewRequest(
+		http.MethodDelete,
+		"/internal/wa/routing/by-tenant/tenant-x",
+		strings.NewReader(string(body)),
+	)
 	req.Header.Set(hmacSigHeader, signHMAC(body))
 	w = httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
@@ -107,6 +133,65 @@ func TestRoutingRegisterAndRevokeViaHTTP(t *testing.T) {
 	}
 	if got, _ := store.Lookup(req.Context(), "5511999998888"); got != "" {
 		t.Errorf("expected route gone after revoke, got %q", got)
+	}
+}
+
+func TestHandleSendRegistersResolvedRouteAliases(t *testing.T) {
+	r, err := OpenRouting(t.TempDir())
+	if err != nil {
+		t.Fatalf("OpenRouting: %v", err)
+	}
+	t.Cleanup(func() { _ = r.Close() })
+
+	wa := &fakeWhatsApp{
+		running: true,
+		paired:  true,
+		result: SendResult{
+			MessageIDs:   []string{"mid-1"},
+			RouteAliases: []string{"5511999998888@s.whatsapp.net", "39213068222606@lid"},
+		},
+	}
+	s := NewServer(ServerConfig{
+		HMACSecret: testHMACSecret,
+		AdminToken: "admin-token",
+		WhatsApp:   wa,
+		Routing:    r,
+	})
+
+	body, err := json.Marshal(sendRequest{
+		TenantID:  "tenant-public",
+		To:        "+5511999998888",
+		Text:      "Oi, teste real",
+		Timestamp: time.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("marshal send request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/internal/wa/send", strings.NewReader(string(body)))
+	req.Header.Set(hmacSigHeader, signHMAC(body))
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("send: expected 200, got %d (body=%s)", w.Code, w.Body.String())
+	}
+	if wa.to != "+5511999998888" || wa.text != "Oi, teste real" {
+		t.Fatalf("unexpected send call: to=%q text=%q", wa.to, wa.text)
+	}
+	for _, jid := range []string{
+		"5511999998888",
+		"5511999998888@s.whatsapp.net",
+		"39213068222606",
+		"39213068222606@lid",
+	} {
+		got, err := r.Lookup(req.Context(), jid)
+		if err != nil {
+			t.Fatalf("Lookup(%s): %v", jid, err)
+		}
+		if got != "tenant-public" {
+			t.Fatalf("Lookup(%s) = %q, want tenant-public", jid, got)
+		}
 	}
 }
 
@@ -200,11 +285,9 @@ func TestAdminAuthFlow(t *testing.T) {
 			t.Error("expected pair UI, got login form (cookie was not accepted)")
 		}
 
-		// /pair/qr with the cookie should ALSO succeed (auth was the gate).
-		// Actual handler delegates to WhatsApp.HealthHandler — in tests WA is
-		// nil so we'd panic; verify auth passed by checking we get past the
-		// 401 path, even if downstream errors are different. Skipping the
-		// downstream check is safe — TestAdminAuthFlow is about AUTH only.
+		// /pair/qr with the cookie should ALSO succeed through the auth gate.
+		// The default test server has no WhatsApp instance, so the downstream
+		// handler returns 503; TestAdminAuthFlow is about AUTH only.
 	})
 
 	// ?token= query string fallback → MUST be rejected (audit P0).
@@ -224,17 +307,6 @@ func TestAdminAuthFlow(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/pair/qr", nil)
 		req.Header.Set(adminTokenHeader, "admin-token")
 		w := httptest.NewRecorder()
-		// Don't assert the final status (downstream HealthHandler needs WA);
-		// just verify it's NOT 401 (auth passed). A panic from nil WA would
-		// be a test failure, so check the response is at least set.
-		defer func() {
-			// Recover from possible nil WhatsApp panic — auth passed if we
-			// reached the downstream handler.
-			if rec := recover(); rec != nil {
-				// Reached past auth into HealthHandler — auth OK.
-				return
-			}
-		}()
 		s.Handler().ServeHTTP(w, req)
 		if w.Code == http.StatusUnauthorized {
 			t.Error("header auth should succeed")

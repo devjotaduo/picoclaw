@@ -10,12 +10,19 @@ import { useQuery } from "@tanstack/react-query"
 import { useMemo } from "react"
 
 import {
+  type CompanyOnboardingStatus,
+  getCompanyOnboardingStatus,
+} from "@/api/company-onboarding"
+import { getOnboardingState } from "@/api/onboarding-state"
+import {
   DEFAULT_UI_VISIBILITY_POLICY,
   type UIVisibilityProfile,
   getLocalUIVisibilityPolicy,
 } from "@/api/ui-visibility"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { formatDashboardDate } from "@/lib/agent-dashboard"
+import { onboardingPhaseLabel } from "@/lib/onboarding-lifecycle"
 import { cn } from "@/lib/utils"
 
 // Banner que vai no TOPO do painel — comunica em uma olhada o estado
@@ -35,15 +42,6 @@ import { cn } from "@/lib/utils"
 
 interface TenantStatusBannerProps {
   className?: string
-}
-
-interface CompanyOnboardingStatus {
-  // Shape espera-se do /api/workspace/company-onboarding. Tolerante:
-  // se schema mudar, o banner ainda renderiza o status do profile.
-  status?: "blocked" | "incomplete" | "complete" | string
-  filled?: number
-  total?: number
-  missing?: string[]
 }
 
 const PROFILE_META: Record<
@@ -69,7 +67,7 @@ const PROFILE_META: Record<
     label: "Operação ativa",
     tone: "active",
     description:
-      "Equipe liberada — Clara, Marcos, Camila e demais agentes estão prontos.",
+      "Equipe liberada. Os agentes operacionais já podem atender com contexto.",
   },
   admin: {
     label: "Modo administrativo",
@@ -102,13 +100,14 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
 
   const onboardingQuery = useQuery<CompanyOnboardingStatus>({
     queryKey: ["company-onboarding", "dashboard-banner"],
-    queryFn: async () => {
-      const res = await fetch("/api/workspace/company-onboarding", {
-        cache: "no-store",
-      })
-      if (!res.ok) throw new Error(`status ${res.status}`)
-      return (await res.json()) as CompanyOnboardingStatus
-    },
+    queryFn: getCompanyOnboardingStatus,
+    retry: false,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  })
+  const onboardingStateQuery = useQuery({
+    queryKey: ["workspace-onboarding-state", "dashboard-banner"],
+    queryFn: getOnboardingState,
     retry: false,
     staleTime: 15_000,
     refetchInterval: 30_000,
@@ -117,22 +116,47 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
   const policy = policyQuery.data ?? DEFAULT_UI_VISIBILITY_POLICY
   const profile = (policy.active_profile ??
     policy.default_profile) as UIVisibilityProfile
-  const meta = PROFILE_META[profile] ?? PROFILE_META.tenant
+  const state = onboardingStateQuery.data?.state
+  const phase = state?.phase
+  const isPromoted = phase === "promoted"
+  const isTenantProfileOutOfSync =
+    profile === "tenant" && onboardingStateQuery.data?.exists && !isPromoted
+  const baseMeta = PROFILE_META[profile] ?? PROFILE_META.tenant
+  const meta =
+    profile === "tenant" && isPromoted
+      ? {
+          ...baseMeta,
+          label: "Tenant promovido",
+          description:
+            "Sofia concluiu o discovery, Catarina aprofundou o contexto e o admin liberou a operação.",
+        }
+      : isTenantProfileOutOfSync
+        ? {
+            ...baseMeta,
+            label: "Operação ativa com estado pendente",
+            description:
+              "A UI está liberada como tenant, mas a jornada ainda não marcou promoção.",
+          }
+        : baseMeta
   const tone = TONE_CLASSES[meta.tone]
 
   const readiness = useMemo(() => {
     const onb = onboardingQuery.data
     if (!onb) return null
-    const filled = typeof onb.filled === "number" ? onb.filled : null
+    const filled = typeof onb.completed === "number" ? onb.completed : null
     const total = typeof onb.total === "number" ? onb.total : null
     if (filled == null || total == null || total === 0) return null
     return {
       filled,
       total,
       pct: Math.round((filled / total) * 100),
-      missing: Array.isArray(onb.missing) ? onb.missing : [],
+      missing: Array.isArray(onb.items)
+        ? onb.items.filter((item) => !item.completed).map((item) => item.title)
+        : [],
     }
   }, [onboardingQuery.data])
+  const phaseLabel = phase ? onboardingPhaseLabel(phase) : null
+  const promotedAt = state?.promotion.promoted_at
 
   return (
     <section className={cn("flex flex-col gap-3", className)}>
@@ -160,11 +184,24 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
               <Badge variant="outline" className="border-current/30 text-xs">
                 {profile}
               </Badge>
+              {phaseLabel ? (
+                <Badge variant="outline" className="border-current/30 text-xs">
+                  {phaseLabel}
+                </Badge>
+              ) : null}
               {policyQuery.isFetching ? (
                 <IconLoader2 className="text-muted-foreground size-3 animate-spin" />
               ) : null}
             </div>
             <p className="text-sm opacity-80">{meta.description}</p>
+            {promotedAt ? (
+              <p className="mt-1 text-xs opacity-70">
+                Promovido em {formatDashboardDate(promotedAt ?? undefined)}
+                {state?.promotion.promoted_by
+                  ? ` por ${state.promotion.promoted_by}`
+                  : ""}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -204,6 +241,13 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
           {readiness.missing.length > 5
             ? ` (+${readiness.missing.length - 5} outros)`
             : ""}
+        </div>
+      ) : null}
+
+      {isTenantProfileOutOfSync ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-900 dark:text-amber-100">
+          Verifique a promoção no painel admin: o tenant já está com UI ativa,
+          mas a jornada ainda aparece como {phaseLabel}.
         </div>
       ) : null}
     </section>

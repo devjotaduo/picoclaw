@@ -24,7 +24,7 @@ func (h *Handler) registerLauncherUIVisibilityRoutes(mux *http.ServeMux) {
 // the SaaS provisioner wrote at create time. Returns 404 when the file
 // is missing — the frontend then falls back to its bundled default policy.
 func (h *Handler) handleGetLauncherUIVisibility(w http.ResponseWriter, r *http.Request) {
-	path := filepath.Join(h.homeDir(), uiVisibilityFilename)
+	path := h.uiVisibilityPath()
 	b, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -44,4 +44,59 @@ func (h *Handler) handleGetLauncherUIVisibility(w http.ResponseWriter, r *http.R
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(b)
+}
+
+func (h *Handler) uiVisibilityPath() string {
+	home := h.homeDir()
+	candidates := make([]string, 0, 8)
+	if home != "" {
+		candidates = append(candidates,
+			filepath.Join(home, uiVisibilityFilename),
+			filepath.Join(home, "workspace", uiVisibilityFilename),
+		)
+	}
+	if h.configPath != "" {
+		candidates = appendAncestorWorkspaceUICandidates(candidates, filepath.Dir(h.configPath))
+	}
+	if wd, err := os.Getwd(); err == nil {
+		candidates = appendAncestorWorkspaceUICandidates(candidates, wd)
+	}
+	for _, path := range uniquePaths(candidates) {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	if home != "" {
+		return filepath.Join(home, uiVisibilityFilename)
+	}
+	return uiVisibilityFilename
+}
+
+func appendAncestorWorkspaceUICandidates(candidates []string, dir string) []string {
+	for dir != "" {
+		candidates = append(candidates, filepath.Join(dir, "workspace", uiVisibilityFilename))
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return candidates
+}
+
+func uniquePaths(paths []string) []string {
+	seen := make(map[string]struct{}, len(paths))
+	unique := paths[:0]
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		key := filepath.Clean(path)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique = append(unique, path)
+	}
+	return unique
 }

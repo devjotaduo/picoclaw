@@ -26,6 +26,10 @@ const (
 	agentDashboardSourceMemory          = "workspace/memory"
 	agentDashboardSourceCron            = "workspace/cron/jobs.json"
 	agentDashboardSourceOutputReports   = "workspace/output/reports"
+	agentDashboardSourceOutputPlans     = "workspace/output/plans"
+	agentDashboardSourceOutputData      = "workspace/output/data"
+	agentDashboardSourceOutputAnalytics = "workspace/output/analytics"
+	agentDashboardSourceTestReports     = "workspace/tests/relatorios"
 )
 
 type agentDashboardResponse struct {
@@ -277,24 +281,26 @@ func buildAgentDashboardResponse(cfg *config.Config, now time.Time) agentDashboa
 	}
 
 	publishedItems := loadDashboardPublishedItems(workspace, &health)
-	memoryItems := loadDashboardMemoryItems(workspace, &health)
-	reportItems := loadDashboardOutputReports(workspace, &health)
+	memoryItems := loadDashboardMemoryItems(workspace, &health, agentMap)
+	generatedItems := loadDashboardGeneratedItems(workspace, &health, agentMap)
 	proposalItems := loadDashboardAgentProposals(cfg, &health)
 	items := make(
 		[]agentDashboardItem,
 		0,
-		len(publishedItems)+len(memoryItems)+len(reportItems)+len(proposalItems),
+		len(publishedItems)+len(memoryItems)+len(generatedItems)+len(proposalItems),
 	)
 	items = append(items, publishedItems...)
 	items = append(items, memoryItems...)
-	items = append(items, reportItems...)
+	items = append(items, generatedItems...)
 	items = append(items, proposalItems...)
 	normalizeDashboardItems(items)
-	artifacts := loadDashboardOutputArtifacts(workspace, &health)
+	reconcileDashboardItemAgents(items, agentMap)
+	artifacts := loadDashboardOutputArtifacts(workspace, &health, agentMap)
 	for _, item := range items {
 		artifacts = append(artifacts, item.Artifacts...)
 	}
 	artifacts = normalizeDashboardArtifacts(artifacts)
+	reconcileDashboardArtifactAgents(artifacts, agentMap)
 
 	tasks := loadDashboardCronTasks(workspace, &health)
 	for _, item := range items {
@@ -312,6 +318,7 @@ func buildAgentDashboardResponse(cfg *config.Config, now time.Time) agentDashboa
 			UpdatedAt: firstNonEmpty(item.UpdatedAt, item.CreatedAt),
 		})
 	}
+	reconcileDashboardTaskAgents(tasks, agentMap)
 
 	sort.SliceStable(items, func(i, j int) bool {
 		return dashboardSortStamp(items[i]) > dashboardSortStamp(items[j])
@@ -442,7 +449,11 @@ func loadDashboardPublishedItems(workspace string, health *agentDashboardHealth)
 	return items
 }
 
-func loadDashboardMemoryItems(workspace string, health *agentDashboardHealth) []agentDashboardItem {
+func loadDashboardMemoryItems(
+	workspace string,
+	health *agentDashboardHealth,
+	agentMap map[string]*agentDashboardAgent,
+) []agentDashboardItem {
 	memoryDir := filepath.Join(workspace, "memory")
 	missingMemory := true
 	if _, err := os.Stat(memoryDir); err == nil {
@@ -453,8 +464,8 @@ func loadDashboardMemoryItems(workspace string, health *agentDashboardHealth) []
 		return nil
 	}
 	melhorias := loadDashboardMelhorias(filepath.Join(memoryDir, "melhorias.md"), health)
-	relatorios := loadDashboardRelatoriosIndex(filepath.Join(memoryDir, "relatorios.md"), health)
-	padroes := loadDashboardPadroes(filepath.Join(memoryDir, "padroes.md"), health)
+	relatorios := loadDashboardRelatoriosIndex(filepath.Join(memoryDir, "relatorios.md"), health, agentMap)
+	padroes := loadDashboardPadroes(filepath.Join(memoryDir, "padroes.md"), health, agentMap)
 	items := make(
 		[]agentDashboardItem,
 		0,
@@ -511,7 +522,11 @@ func loadDashboardMelhorias(path string, health *agentDashboardHealth) []agentDa
 	return items
 }
 
-func loadDashboardRelatoriosIndex(path string, health *agentDashboardHealth) []agentDashboardItem {
+func loadDashboardRelatoriosIndex(
+	path string,
+	health *agentDashboardHealth,
+	agentMap map[string]*agentDashboardAgent,
+) []agentDashboardItem {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -531,13 +546,15 @@ func loadDashboardRelatoriosIndex(path string, health *agentDashboardHealth) []a
 		if len(cells) < 4 || strings.EqualFold(cells[0], "Período") || cells[2] == "—" {
 			continue
 		}
+		agentID, agentName := dashboardAgentRefFromText("Rafael", agentMap)
 		items = append(items, agentDashboardItem{
 			ID:        "relatorio-" + sanitizeDashboardID(cells[0]+"-"+cells[1]),
 			Type:      "report",
 			Status:    "done",
 			Title:     truncateDashboardText(cells[0]+" - "+cells[1], 120),
 			Summary:   truncateDashboardText(cells[3], 280),
-			AgentName: "Rafael",
+			AgentID:   agentID,
+			AgentName: firstNonEmpty(agentName, "Rafael"),
 			Source:    "workspace/memory/relatorios.md",
 			CreatedAt: normalizeDashboardDate(cells[1]),
 			UpdatedAt: normalizeDashboardDate(cells[1]),
@@ -546,7 +563,11 @@ func loadDashboardRelatoriosIndex(path string, health *agentDashboardHealth) []a
 	return items
 }
 
-func loadDashboardPadroes(path string, health *agentDashboardHealth) []agentDashboardItem {
+func loadDashboardPadroes(
+	path string,
+	health *agentDashboardHealth,
+	agentMap map[string]*agentDashboardAgent,
+) []agentDashboardItem {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -562,55 +583,163 @@ func loadDashboardPadroes(path string, health *agentDashboardHealth) []agentDash
 	if week == "" || week == "—" || generated == "—" {
 		return nil
 	}
+	agentID, agentName := dashboardAgentRefFromText("Rafael", agentMap)
 	return []agentDashboardItem{{
 		ID:        "padroes-" + sanitizeDashboardID(week),
 		Type:      "analysis",
 		Status:    "done",
 		Title:     "Padrões detectados - " + week,
 		Summary:   truncateDashboardText(markdownSectionText(content, "Último relatório de padrões"), 360),
-		AgentName: "Rafael",
+		AgentID:   agentID,
+		AgentName: firstNonEmpty(agentName, "Rafael"),
 		Source:    "workspace/memory/padroes.md",
 		CreatedAt: normalizeDashboardTime(generated),
 		UpdatedAt: normalizeDashboardTime(generated),
 	}}
 }
 
-func loadDashboardOutputReports(workspace string, health *agentDashboardHealth) []agentDashboardItem {
-	dir := filepath.Join(workspace, "output", "reports")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			health.MissingSources = append(health.MissingSources, agentDashboardSourceOutputReports)
-			return nil
-		}
-		health.Errors = append(health.Errors, fmt.Sprintf("%s: %v", agentDashboardSourceOutputReports, err))
-		return nil
+type agentDashboardGeneratedSource struct {
+	Source        string
+	Type          string
+	DefaultStatus string
+}
+
+func loadDashboardGeneratedItems(
+	workspace string,
+	health *agentDashboardHealth,
+	agentMap map[string]*agentDashboardAgent,
+) []agentDashboardItem {
+	sources := []agentDashboardGeneratedSource{
+		{Source: agentDashboardSourceOutputReports, Type: "report", DefaultStatus: "done"},
+		{Source: agentDashboardSourceOutputPlans, Type: "task", DefaultStatus: "pending"},
+		{Source: agentDashboardSourceOutputData, Type: "metric", DefaultStatus: "done"},
+		{Source: agentDashboardSourceOutputAnalytics, Type: "metric", DefaultStatus: "done"},
+		{Source: agentDashboardSourceTestReports, Type: "report", DefaultStatus: "done"},
 	}
-	items := make([]agentDashboardItem, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
+	items := make([]agentDashboardItem, 0)
+	for _, source := range sources {
+		root := filepath.Join(workspace, filepath.FromSlash(strings.TrimPrefix(source.Source, "workspace/")))
+		if _, err := os.Stat(root); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				health.MissingSources = append(health.MissingSources, source.Source)
+				continue
+			}
+			health.Errors = append(health.Errors, fmt.Sprintf("%s: %v", source.Source, err))
 			continue
 		}
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-		source := filepath.ToSlash(filepath.Join(agentDashboardSourceOutputReports, entry.Name()))
-		items = append(items, agentDashboardItem{
-			ID:        "report-" + sanitizeDashboardID(entry.Name()),
-			Type:      "report",
-			Status:    "done",
-			Title:     strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name())),
-			AgentName: "Rafael",
-			Source:    source,
-			CreatedAt: info.ModTime().UTC().Format(time.RFC3339),
-			UpdatedAt: info.ModTime().UTC().Format(time.RFC3339),
+		err := filepath.WalkDir(root, func(file string, entry os.DirEntry, err error) error {
+			if err != nil {
+				health.Errors = append(health.Errors, fmt.Sprintf("%s: %v", source.Source, err))
+				return nil
+			}
+			if entry.IsDir() || !allowedDashboardItemFileExt(filepath.Ext(entry.Name())) {
+				return nil
+			}
+			info, infoErr := entry.Info()
+			if infoErr != nil {
+				health.Errors = append(health.Errors, fmt.Sprintf("%s: %v", source.Source, infoErr))
+				return nil
+			}
+			item, ok := dashboardItemFromGeneratedFile(workspace, file, info, source, agentMap)
+			if ok {
+				items = append(items, item)
+			}
+			return nil
 		})
+		if err != nil {
+			health.Errors = append(health.Errors, fmt.Sprintf("%s: %v", source.Source, err))
+		}
 	}
 	return items
 }
 
-func loadDashboardOutputArtifacts(workspace string, health *agentDashboardHealth) []agentDashboardArtifact {
+func dashboardItemFromGeneratedFile(
+	workspace string,
+	file string,
+	info os.FileInfo,
+	generated agentDashboardGeneratedSource,
+	agentMap map[string]*agentDashboardAgent,
+) (agentDashboardItem, bool) {
+	rel, err := filepath.Rel(workspace, filepath.Clean(file))
+	if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." {
+		return agentDashboardItem{}, false
+	}
+	rel = filepath.ToSlash(rel)
+	source := "workspace/" + rel
+	content, _ := readDashboardFileSnippet(file, 256*1024)
+	fields := dashboardMetadataFromGeneratedContent(content)
+	title := firstNonEmpty(
+		fields["title"],
+		fields["titulo"],
+		fields["título"],
+		fields["name"],
+		fields["nome"],
+		markdownHeading(content),
+		dashboardArtifactTitle(rel),
+	)
+	if title == "" {
+		return agentDashboardItem{}, false
+	}
+	summary := firstNonEmpty(
+		fields["summary"],
+		fields["resumo"],
+		fields["description"],
+		fields["descrição"],
+		fields["descricao"],
+		markdownSummary(content),
+	)
+	agentRef := firstNonEmpty(
+		fields["agent"],
+		fields["agente"],
+		fields["agent_name"],
+		fields["agente recomendado"],
+		fields["responsável"],
+		fields["responsavel"],
+		fields["owner"],
+		source+" "+title+" "+content,
+	)
+	agentID, agentName := dashboardAgentRefFromText(agentRef, agentMap)
+	item := agentDashboardItem{
+		ID:        generated.Type + "-" + sanitizeDashboardID(rel),
+		Type:      normalizeDashboardType(firstNonEmpty(fields["type"], fields["tipo"], generated.Type)),
+		Status:    normalizeDashboardStatus(firstNonEmpty(fields["status"], generated.DefaultStatus)),
+		Title:     truncateDashboardText(title, 140),
+		Summary:   truncateDashboardText(summary, 360),
+		AgentID:   agentID,
+		AgentName: agentName,
+		Priority:  normalizeDashboardPriority(fields["priority"] + " " + fields["prioridade"]),
+		Source:    source,
+		CreatedAt: normalizeDashboardTime(firstNonEmpty(
+			fields["created_at"],
+			fields["created"],
+			fields["criado em"],
+			fields["data"],
+			fields["gerado em"],
+			info.ModTime().UTC().Format(time.RFC3339),
+		)),
+		UpdatedAt: normalizeDashboardTime(firstNonEmpty(
+			fields["updated_at"],
+			fields["updated"],
+			fields["atualizado em"],
+			fields["data"],
+			fields["gerado em"],
+			info.ModTime().UTC().Format(time.RFC3339),
+		)),
+	}
+	if item.Type == "task" {
+		item.DueAt = normalizeDashboardTime(firstNonEmpty(fields["due_at"], fields["prazo"], fields["vence em"]))
+	}
+	if artifact, ok := dashboardArtifactFromWorkspaceFile(workspace, file, info, agentMap); ok {
+		item.Artifacts = []agentDashboardArtifact{artifact}
+	}
+	return item, true
+}
+
+func loadDashboardOutputArtifacts(
+	workspace string,
+	health *agentDashboardHealth,
+	agentMap map[string]*agentDashboardAgent,
+) []agentDashboardArtifact {
 	root := filepath.Join(workspace, "output")
 	if _, err := os.Stat(root); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -633,7 +762,7 @@ func loadDashboardOutputArtifacts(workspace string, health *agentDashboardHealth
 			health.Errors = append(health.Errors, fmt.Sprintf("workspace/output: %v", infoErr))
 			return nil
 		}
-		artifact, ok := dashboardArtifactFromWorkspaceFile(workspace, file, info)
+		artifact, ok := dashboardArtifactFromWorkspaceFile(workspace, file, info, agentMap)
 		if ok {
 			artifacts = append(artifacts, artifact)
 		}
@@ -650,6 +779,116 @@ func loadDashboardOutputArtifacts(workspace string, health *agentDashboardHealth
 		artifacts = artifacts[:24]
 	}
 	return artifacts
+}
+
+func allowedDashboardItemFileExt(ext string) bool {
+	switch strings.ToLower(strings.TrimSpace(ext)) {
+	case ".md", ".txt", ".json", ".jsonl", ".csv":
+		return true
+	default:
+		return false
+	}
+}
+
+func readDashboardFileSnippet(file string, limit int64) (string, error) {
+	if limit <= 0 {
+		limit = 256 * 1024
+	}
+	handle, err := os.Open(file)
+	if err != nil {
+		return "", err
+	}
+	defer handle.Close()
+	data, err := io.ReadAll(io.LimitReader(handle, limit))
+	if err != nil {
+		return "", err
+	}
+	return strings.ReplaceAll(string(data), "\r\n", "\n"), nil
+}
+
+func dashboardMetadataFromGeneratedContent(content string) map[string]string {
+	fields := map[string]string{}
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return fields
+	}
+	var raw map[string]any
+	if strings.HasPrefix(trimmed, "{") && json.Unmarshal([]byte(trimmed), &raw) == nil {
+		for key, value := range raw {
+			if text := anyDashboardString(value); text != "" {
+				fields[cleanDashboardFieldKey(key)] = text
+			}
+		}
+		return fields
+	}
+	for _, line := range strings.Split(trimmed, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "{") && json.Unmarshal([]byte(line), &raw) == nil {
+			for key, value := range raw {
+				if text := anyDashboardString(value); text != "" {
+					fields[cleanDashboardFieldKey(key)] = text
+				}
+			}
+			return fields
+		}
+		break
+	}
+	for _, rawLine := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(rawLine)
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		key = cleanDashboardFieldKey(key)
+		value = strings.TrimSpace(strings.Trim(value, "`* "))
+		if key != "" && value != "" && len(value) <= 500 {
+			fields[key] = value
+		}
+	}
+	return fields
+}
+
+func cleanDashboardFieldKey(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.Trim(value, "*`# ")
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func markdownHeading(content string) string {
+	for _, rawLine := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if !strings.HasPrefix(line, "#") {
+			continue
+		}
+		return strings.TrimSpace(strings.TrimLeft(line, "# "))
+	}
+	return ""
+}
+
+func markdownSummary(content string) string {
+	inCodeBlock := false
+	out := make([]string, 0, 3)
+	for _, rawLine := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if strings.HasPrefix(line, "```") {
+			inCodeBlock = !inCodeBlock
+			continue
+		}
+		if inCodeBlock ||
+			line == "" ||
+			strings.HasPrefix(line, "#") ||
+			strings.HasPrefix(line, "|") ||
+			strings.HasPrefix(line, "---") ||
+			strings.HasPrefix(line, "<!--") ||
+			dashboardLooksLikeMarkdownField(line) {
+			continue
+		}
+		out = append(out, strings.TrimPrefix(line, "- "))
+		if len(out) >= 3 {
+			break
+		}
+	}
+	return strings.Join(out, " ")
 }
 
 func loadDashboardAgentProposals(cfg *config.Config, health *agentDashboardHealth) []agentDashboardItem {
@@ -797,12 +1036,37 @@ func addAgentDashboardAgent(agentMap map[string]*agentDashboardAgent, id, name, 
 		existing.Active = existing.Active || active
 		return
 	}
+	for _, existing := range agentMap {
+		if dashboardAgentsReferToSamePerson(existing, id, name) {
+			if existing.Name == "" || strings.EqualFold(existing.Name, existing.ID) {
+				existing.Name = firstNonEmpty(name, existing.Name)
+			}
+			if existing.Role == "" || existing.Role == "Agente interno" {
+				existing.Role = role
+			}
+			existing.Active = existing.Active || active
+			return
+		}
+	}
 	agentMap[id] = &agentDashboardAgent{
 		ID:     id,
 		Name:   firstNonEmpty(name, id),
 		Role:   firstNonEmpty(role, "Agente"),
 		Active: active,
 	}
+}
+
+func dashboardAgentsReferToSamePerson(existing *agentDashboardAgent, id, name string) bool {
+	if existing == nil {
+		return false
+	}
+	if strings.EqualFold(existing.Name, name) && strings.TrimSpace(name) != "" {
+		return true
+	}
+	refID, _ := dashboardAgentRefFromText(strings.Join([]string{id, name}, " "), map[string]*agentDashboardAgent{
+		existing.ID: existing,
+	})
+	return refID == existing.ID
 }
 
 func findDashboardAgent(agentMap map[string]*agentDashboardAgent, agentID, agentName string) *agentDashboardAgent {
@@ -819,7 +1083,182 @@ func findDashboardAgent(agentMap map[string]*agentDashboardAgent, agentID, agent
 			return agent
 		}
 	}
+	if id, _ := dashboardAgentRefFromText(agentName, agentMap); id != "" {
+		return agentMap[id]
+	}
 	return nil
+}
+
+func reconcileDashboardItemAgents(items []agentDashboardItem, agentMap map[string]*agentDashboardAgent) {
+	for i := range items {
+		agentID, agentName := dashboardAgentRefFromText(
+			strings.Join([]string{
+				items[i].AgentID,
+				items[i].AgentName,
+				items[i].Source,
+				items[i].Title,
+				items[i].Summary,
+			}, " "),
+			agentMap,
+		)
+		if agentID != "" {
+			items[i].AgentID = agentID
+			items[i].AgentName = agentName
+		}
+	}
+}
+
+func reconcileDashboardTaskAgents(tasks []agentDashboardTask, agentMap map[string]*agentDashboardAgent) {
+	for i := range tasks {
+		agentID, agentName := dashboardAgentRefFromText(
+			strings.Join([]string{
+				tasks[i].AgentID,
+				tasks[i].AgentName,
+				tasks[i].Source,
+				tasks[i].Title,
+			}, " "),
+			agentMap,
+		)
+		if agentID != "" {
+			tasks[i].AgentID = agentID
+			tasks[i].AgentName = agentName
+		}
+	}
+}
+
+func reconcileDashboardArtifactAgents(artifacts []agentDashboardArtifact, agentMap map[string]*agentDashboardAgent) {
+	for i := range artifacts {
+		agentID, agentName := dashboardAgentRefFromText(
+			strings.Join([]string{
+				artifacts[i].AgentID,
+				artifacts[i].AgentName,
+				artifacts[i].Source,
+				artifacts[i].Title,
+			}, " "),
+			agentMap,
+		)
+		if agentID != "" {
+			artifacts[i].AgentID = agentID
+			artifacts[i].AgentName = agentName
+		}
+	}
+}
+
+func dashboardAgentRefFromText(value string, agentMap map[string]*agentDashboardAgent) (string, string) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return "", ""
+	}
+	type match struct {
+		id     string
+		name   string
+		index  int
+		length int
+	}
+	best := match{index: len(value) + 1}
+	for _, agent := range sortedDashboardAgentPointers(agentMap) {
+		for _, token := range dashboardAgentTokens(agent.ID, agent.Name) {
+			if token == "" {
+				continue
+			}
+			if index := strings.Index(value, token); index >= 0 &&
+				(index < best.index || (index == best.index && len(token) > best.length)) {
+				best = match{id: agent.ID, name: agent.Name, index: index, length: len(token)}
+			}
+		}
+	}
+	if best.id != "" {
+		return best.id, best.name
+	}
+	for _, fallback := range dashboardFallbackAgentRefs() {
+		for _, token := range fallback.tokens {
+			if index := strings.Index(value, token); index >= 0 &&
+				(index < best.index || (index == best.index && len(token) > best.length)) {
+				best = match{id: fallback.id, name: fallback.name, index: index, length: len(token)}
+			}
+		}
+	}
+	if best.id != "" {
+		return best.id, best.name
+	}
+	return "", ""
+}
+
+func sortedDashboardAgentPointers(agentMap map[string]*agentDashboardAgent) []*agentDashboardAgent {
+	agents := make([]*agentDashboardAgent, 0, len(agentMap))
+	for _, agent := range agentMap {
+		agents = append(agents, agent)
+	}
+	sort.SliceStable(agents, func(i, j int) bool {
+		return strings.ToLower(agents[i].Name) < strings.ToLower(agents[j].Name)
+	})
+	return agents
+}
+
+func dashboardAgentTokens(id, name string) []string {
+	tokens := []string{
+		strings.ToLower(strings.TrimSpace(id)),
+		strings.ToLower(strings.TrimSpace(name)),
+	}
+	if first, _, ok := strings.Cut(name, " "); ok {
+		tokens = append(tokens, strings.ToLower(strings.TrimSpace(first)))
+	}
+	for _, part := range strings.FieldsFunc(id+" "+name, func(r rune) bool {
+		return r == '-' || r == '_' || r == '/' || r == ' '
+	}) {
+		if part = strings.ToLower(strings.TrimSpace(part)); len(part) >= 3 || part == "qa" {
+			tokens = append(tokens, part)
+		}
+	}
+	for _, fallback := range dashboardFallbackAgentRefs() {
+		if strings.EqualFold(id, fallback.id) ||
+			strings.Contains(strings.ToLower(name), strings.ToLower(fallback.name)) ||
+			strings.Contains(strings.ToLower(id), strings.ToLower(fallback.id)) {
+			tokens = append(tokens, fallback.tokens...)
+		}
+	}
+	return cleanDashboardTags(tokens)
+}
+
+func dashboardFallbackAgentRefs() []struct {
+	id     string
+	name   string
+	tokens []string
+} {
+	return []struct {
+		id     string
+		name   string
+		tokens []string
+	}{
+		{
+			id:   "rafael",
+			name: "Rafael",
+			tokens: []string{
+				"rafael",
+				"assistente interno",
+				"interno",
+				"analytics",
+				"padroes",
+				"padrões",
+				"relatorio diario",
+				"relatório diário",
+			},
+		},
+		{id: "clara", name: "Clara", tokens: []string{"clara", "atendente principal", "atendimento inicial"}},
+		{id: "luna", name: "Luna", tokens: []string{"luna", "noturna", "fim de semana"}},
+		{id: "marcos", name: "Marcos", tokens: []string{"marcos", "vendas", "sales", "comercial"}},
+		{id: "camila", name: "Camila", tokens: []string{"camila", "suporte", "pos-venda", "pós-venda", "support"}},
+		{id: "lia", name: "Lia", tokens: []string{"lia", "marketing", "campanha", "instagram", "conteudo", "conteúdo"}},
+		{id: "sofia", name: "Sofia", tokens: []string{"sofia", "onboarding", "discovery", "cadastro"}},
+		{id: "catarina", name: "Catarina", tokens: []string{"catarina", "aprofundamento", "aprofundar", "curadoria"}},
+		{id: "operador", name: "Operador", tokens: []string{"operador", "operator", "dev", "tecnico", "técnico"}},
+		{id: "qa-tester", name: "QA Tester", tokens: []string{"qa-tester", "qa tester", "qa", "teste", "testes"}},
+		{
+			id:     "transferencia-humana",
+			name:   "Atendimento Humano",
+			tokens: []string{"atendimento humano", "humano", "transferencia", "transferência"},
+		},
+	}
 }
 
 func normalizeDashboardItems(items []agentDashboardItem) {
@@ -975,6 +1414,25 @@ func dashboardLooksLikeMarkdownField(line string) bool {
 		"origem",
 		"status",
 		"prioridade",
+		"priority",
+		"tipo",
+		"type",
+		"titulo",
+		"título",
+		"title",
+		"nome",
+		"name",
+		"resumo",
+		"summary",
+		"descrição",
+		"descricao",
+		"description",
+		"agente",
+		"agent",
+		"agent_name",
+		"responsável",
+		"responsavel",
+		"owner",
 		"agente recomendado",
 		"o que foi percebido",
 		"o que foi feito",
@@ -1177,7 +1635,12 @@ func normalizeExplicitDashboardArtifacts(artifacts []agentDashboardArtifact) []a
 	return cleaned
 }
 
-func dashboardArtifactFromWorkspaceFile(workspace, file string, info os.FileInfo) (agentDashboardArtifact, bool) {
+func dashboardArtifactFromWorkspaceFile(
+	workspace string,
+	file string,
+	info os.FileInfo,
+	agentMap map[string]*agentDashboardAgent,
+) (agentDashboardArtifact, bool) {
 	ext := strings.ToLower(filepath.Ext(file))
 	kind := normalizeDashboardArtifactType("", "", file)
 	if kind == "" || !allowedDashboardArtifactExt(ext) {
@@ -1191,12 +1654,15 @@ func dashboardArtifactFromWorkspaceFile(workspace, file string, info os.FileInfo
 	if !strings.HasPrefix(rel, "output/") {
 		return agentDashboardArtifact{}, false
 	}
+	agentID, agentName := dashboardAgentRefFromText(rel, agentMap)
 	return agentDashboardArtifact{
 		ID:        "artifact-" + sanitizeDashboardID(rel),
 		Type:      kind,
 		Title:     dashboardArtifactTitle(rel),
 		Source:    "workspace/" + rel,
 		URL:       "/api/agent-dashboard/artifacts/" + escapeDashboardArtifactPath(rel),
+		AgentID:   agentID,
+		AgentName: agentName,
 		CreatedAt: info.ModTime().UTC().Format(time.RFC3339),
 	}, true
 }

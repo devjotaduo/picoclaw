@@ -332,6 +332,7 @@ func (b *Channel) UnmarshalYAML(value *yaml.Node) error {
 		return nil
 	}
 
+	beforeSettings := append(RawNode(nil), b.Settings...)
 	type alias Channel
 	a := alias(*b)
 	err := value.Decode(&a)
@@ -341,6 +342,20 @@ func (b *Channel) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	*b = *(*Channel)(&a)
+	if len(beforeSettings) > 0 && len(b.Settings) > 0 {
+		var base, override map[string]any
+		if err := json.Unmarshal(beforeSettings, &base); err != nil {
+			return err
+		}
+		if err := json.Unmarshal(b.Settings, &override); err != nil {
+			return err
+		}
+		merged, err := json.Marshal(mergeMap(base, override))
+		if err != nil {
+			return err
+		}
+		b.Settings = merged
+	}
 
 	if len(b.Settings) > 0 {
 		b.extend = nil

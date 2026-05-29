@@ -1,8 +1,16 @@
-import { IconBook2, IconExternalLink } from "@tabler/icons-react"
+import {
+  IconBook2,
+  IconCheck,
+  IconClock,
+  IconExternalLink,
+} from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { useMemo } from "react"
 
+import { getOnboardingState } from "@/api/onboarding-state"
+import { type MemoryFile, listMemoryFiles } from "@/api/workspace-memory"
 import { Button } from "@/components/ui/button"
+import { onboardingAreaProgress } from "@/lib/onboarding-lifecycle"
 import { cn } from "@/lib/utils"
 
 // Card que mostra progresso da curadoria da Catarina por área temática.
@@ -61,31 +69,41 @@ const AREA_DEFINITIONS: ReadonlyArray<{
   },
 ]
 
-interface MemoryFile {
-  name: string
-  size: number
-  // updated_at, path — não precisamos aqui
-}
-
-interface MemoryListResponse {
-  workspace: string
-  files: MemoryFile[]
-}
-
 export function CatarinaProgressCard({ className }: { className?: string }) {
-  const memoryQuery = useQuery<MemoryListResponse>({
+  const stateQuery = useQuery({
+    queryKey: ["workspace-onboarding-state", "catarina-progress"],
+    queryFn: getOnboardingState,
+    retry: false,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  })
+  const memoryQuery = useQuery({
     queryKey: ["workspace-memory", "catarina-progress"],
-    queryFn: async () => {
-      const res = await fetch("/api/workspace/memory", { cache: "no-store" })
-      if (!res.ok) throw new Error(`status ${res.status}`)
-      return (await res.json()) as MemoryListResponse
-    },
+    queryFn: listMemoryFiles,
     retry: false,
     staleTime: 30_000,
     refetchInterval: 60_000,
   })
 
   const progress = useMemo(() => {
+    const state = stateQuery.data?.state
+    if (stateQuery.data?.exists && state) {
+      const fromState = onboardingAreaProgress(state)
+      return {
+        areas: fromState.areas.map((area) => ({
+          key: area.key,
+          label: area.label,
+          filled: area.covered,
+          matchedFile: undefined,
+          bytes: 0,
+        })),
+        filled: fromState.covered,
+        total: fromState.total,
+        pct: fromState.pct,
+        source: "state" as const,
+      }
+    }
+
     const files = memoryQuery.data?.files ?? []
     const byName = new Map(files.map((f) => [f.name.toLowerCase(), f]))
     const areas = AREA_DEFINITIONS.map((area) => {
@@ -106,12 +124,19 @@ export function CatarinaProgressCard({ className }: { className?: string }) {
       filled: filledCount,
       total: areas.length,
       pct: Math.round((filledCount / areas.length) * 100),
+      source: "memory" as const,
     }
-  }, [memoryQuery.data])
+  }, [memoryQuery.data, stateQuery.data])
 
-  // Não renderiza se ainda não temos dados ou se a query errou — evita
-  // ruído no dashboard. Operador vê erros via console / log.
-  if (memoryQuery.isError || !memoryQuery.data) return null
+  if (!stateQuery.data && !memoryQuery.data && !stateQuery.isError) {
+    return null
+  }
+
+  // Não renderiza se ainda não temos dados ou se as duas fontes erraram —
+  // evita ruído no dashboard. Operador vê erros via console / log.
+  if (stateQuery.isError && (memoryQuery.isError || !memoryQuery.data?.files)) {
+    return null
+  }
 
   return (
     <section
@@ -130,7 +155,9 @@ export function CatarinaProgressCard({ className }: { className?: string }) {
               Aprofundamento (Catarina)
             </h3>
             <p className="text-muted-foreground text-xs">
-              Curadoria contínua das memórias por área temática
+              {progress.source === "state"
+                ? "Progresso registrado pela Catarina"
+                : "Estimado pelas memórias salvas"}
             </p>
           </div>
         </div>
@@ -180,7 +207,11 @@ export function CatarinaProgressCard({ className }: { className?: string }) {
                   : "text-muted-foreground/60",
               )}
             >
-              {area.filled ? "✓" : "—"}
+              {area.filled ? (
+                <IconCheck className="size-3.5" />
+              ) : (
+                <IconClock className="size-3.5" />
+              )}
             </span>
           </li>
         ))}
@@ -188,8 +219,8 @@ export function CatarinaProgressCard({ className }: { className?: string }) {
 
       <div className="flex justify-end">
         <Button type="button" variant="outline" size="sm" asChild>
-          <a href="/memory">
-            Abrir memórias
+          <a href="/readiness">
+            Ver prontidão
             <IconExternalLink className="ml-1 size-3" />
           </a>
         </Button>

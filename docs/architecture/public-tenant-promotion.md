@@ -40,7 +40,7 @@ Isso resolve dois problemas em um:
 - **Qualidade:** quando promove, a memória já está rica — clientes
   novos não passam pelo vazio inicial
 
-## Estado da implementação (2026-05-27)
+## Estado da implementação (2026-05-29)
 
 Status atual:
 
@@ -50,12 +50,16 @@ Status atual:
 | `POST /tenants/{id}/promote` backend | ✅ mergeada | #114 |
 | UI admin (PromoteTenantCard) | ✅ mergeada | #115 |
 | jotaduo-wa sidecar (5 fatias + 2 follow-ups) | ✅ deployado em prod | #118-#126 |
-| bridge automático Sofia→Catarina | 🟡 planejada | — |
+| bridge automático Sofia→Catarina | ✅ implementada via cron workspace | — |
 
 Fluxo end-to-end funciona manualmente e via WhatsApp institucional. A
-bridge automática Sofia→Catarina (que Catarina mande a 1ª mensagem
-sozinha quando Sofia conclui discovery) ainda é opcional; hoje quem
-dispara Catarina é Rafael via notify_user, ou admin via comando manual.
+bridge automática Sofia→Catarina roda no workspace pelo job
+`onboarding-bridge-sofia-catarina`: quando Sofia conclui discovery, o
+cron chama `workspace/skills/bridge-flow/scripts/run.sh`, registra a
+tentativa, envia a primeira mensagem da Catarina e só grava
+`deepening.first_contact_at` depois do envio WhatsApp retornar sucesso.
+Rafael/admin ficam como fallback operacional quando faltam telefone,
+credenciais do sidecar ou WhatsApp institucional ativo.
 
 ### Como Catarina alcança o lead (sidecar jotaduo-wa)
 
@@ -140,7 +144,7 @@ volume e recriar o container.
 ┌─────────────────────────────────────────────────────────────────────┐
 │  3. DEEPENING (Catarina, via WhatsApp institucional da Jotaduo)     │
 │  Pré-requisito: admin tem whatsapp_jotaduo_outbound configurado     │
-│  Trigger atual: Rafael delega via notify_user (Fatia 5 vai automatizar) │
+│  Trigger atual: cron workspace onboarding-bridge-sofia-catarina       │
 │                                                                      │
 │  Catarina manda 1ª mensagem ao número capturado por Sofia:           │
 │  "Oi <nome>, sou a Catarina. Sofia já fez o discovery — agora vou   │
@@ -210,7 +214,7 @@ volume e recriar o container.
 | Camada | Arquivo / Diretório | Função |
 |---|---|---|
 | **Frontend (SPA do launcher)** | `web/frontend/src/api/ui-visibility.ts` | Fetcha `/api/launcher/ui-visibility` e aplica o profile (esconde sidebar pra public, mostra full pra tenant) |
-| **Backend launcher** | `web/backend/api/launcher_ui_visibility.go` | Serve `home/ui-visibility.json` do volume pro SPA (PR #109) |
+| **Backend launcher** | `web/backend/api/launcher_ui_visibility.go` | Serve `home/ui-visibility.json` do volume pro SPA; em checkout local cai para `workspace/ui-visibility.json` |
 | **Backend controlplane — provisioner** | `internal/saas/tenant/provisioner.go` | `Create` (cria tenant), `Recreate` (rebuilda container env), `SetUIVisibilityActiveProfile` |
 | **Backend controlplane — handler create** | `internal/saas/api/tenants.go::handleCreateTenant` | Resolve `tenant_type` → UIProfile; público pula `EnsureInvited` / `SendCredentialsEmail` (PR #108) |
 | **Backend controlplane — handler promote** | `internal/saas/api/tenants_promote.go::handlePromoteTenant` | Endpoint da promoção (10 steps) (PR #114) |
@@ -218,6 +222,7 @@ volume e recriar o container.
 | **Store DB** | `internal/saas/store/tenants.go::Promote` | UPDATE atômica: is_public=false + owner_email + auth_backend |
 | **State machine no workspace** | `workspace/skills/onboarding-state/` | Skill Python que escreve `workspace/state/onboarding.json` (PR #113) |
 | **Discovery agent** | `workspace/agents/sofia/AGENT.md` + `workspace/skills/jotaduo-discovery/` | 8 fases + Phase 7.5 captura credenciais + Phase 8b.5 marca discovery_done |
+| **Bridge Sofia→Catarina** | `workspace/cron/jobs.json` + `workspace/skills/bridge-flow/scripts/run.sh` | Cron determinístico que dispara Catarina quando Sofia conclui discovery e WhatsApp institucional está pronto |
 | **Deepening agent** | `workspace/agents/catarina/AGENT.md` + `workspace/skills/aprofundar-empresa/` | 5 áreas via WhatsApp institucional, marca area_complete por área |
 | **UI admin** | `web/saas-admin/src/components/tenant/promote-tenant-card.tsx` | Card renderizado em TenantDetail quando is_public=true (PR #115) |
 
@@ -403,45 +408,29 @@ E no DB:
 - `tenants.owner_email`: `ops@<base>` (sentinel) → email real
 - `tenants.auth_backend`: `local` → `launcher`
 
-## Fatia 5 — bridge automático Sofia → Catarina (planejada)
+## Fatia 5 — bridge automático Sofia → Catarina (implementada)
 
-**Problema atual:** depois que Sofia chama `mark_discovery_done`, alguém
-precisa iniciar Catarina manualmente. Hoje o fluxo é:
-- Rafael recebe contexto via skill `notify_user` quando Sofia termina
-- Admin vê notification, decide momento de disparar Catarina
-- Admin manda mensagem manual no WhatsApp institucional, OU instrui
-  Rafael a fazê-lo
+**Estado atual:** a Opção A foi implementada como cron job determinístico
+no workspace. O job `onboarding-bridge-sofia-catarina` em
+`workspace/cron/jobs.json` roda a cada 15 minutos e executa:
 
-Isso adiciona latência humana entre discovery_done e o início do
-deepening. Em prod a meta é minutos, não dias.
-
-**Design proposto pra Fatia 5:**
-
-Existem 3 opções viáveis (pick uma):
-
-### Opção A — Cron job no workspace
-
-Novo job em `workspace/cron/jobs.json`:
-
-```json
-{
-  "id": "onboarding-bridge-poll",
-  "name": "Bridge Sofia → Catarina (poll state.json)",
-  "enabled": true,
-  "schedule": {"kind": "cron", "expr": "*/15 * * * *", "tz": "America/Sao_Paulo"},
-  "payload": {
-    "kind": "agent_turn",
-    "message": "Verifique workspace/state/onboarding.json. Se phase=discovery_done há mais de 30min e WhatsApp institucional configurado, inicie Catarina chamando aprofundar-empresa.iniciar-sessao com o owner capturado.",
-    "channel": "cron",
-    "to": "onboarding-bridge",
-    "agent_id": "catarina"
-  }
-}
+```sh
+sh /root/.picoclaw/workspace/skills/bridge-flow/scripts/run.sh
 ```
 
-**Prós:** simples, vive 100% no workspace (zero código Go), reusa
-infra existente de cron. **Contras:** Catarina precisa estar inicializada
-no tenant + WhatsApp ativo. Cada tenant publico precisa ter o job.
+O script:
+- lê `workspace/state/onboarding.json` via skill `onboarding-state`;
+- só dispara se `phase` for `discovery_done` ou `deepening_in_progress`;
+- não duplica envio quando `deepening.first_contact_at` já existe;
+- falha com estado auditável se o telefone do lead estiver ausente;
+- grava `mark_bridge_attempt` antes do envio;
+- envia a abertura da Catarina com `enviar-whatsapp-jotaduo`;
+- só grava `mark_first_contact` depois que `send.py` retorna sucesso.
+
+Isso remove a latência humana entre `discovery_done` e o início do
+deepening quando o WhatsApp institucional está configurado. Rafael/admin
+continuam como escape hatch manual quando o sidecar, segredo HMAC ou
+telefone do lead não estão disponíveis.
 
 ### Opção B — Webhook no controlplane
 
@@ -471,15 +460,11 @@ trigger-agent catarina`.
 periodic check. Mistura responsabilidades (provisioner deveria ser
 provisionar, não orchestrar agentes).
 
-### Recomendação
+### Recomendação futura
 
-**Opção A (cron job)** pra V2 — menor custo de mudança. Cron já é
-pattern aceito no workspace. Catarina mesma decide se pode iniciar
-(precondições: WhatsApp configurado, owner email válido, ainda não
-iniciou).
-
-Quando V2 ficar saturado (latência de 15min vira problema), migrar pra
-Opção B.
+Manter o cron workspace como implementação padrão. Quando a latência de
+até 15 minutos virar problema, migrar para a Opção B com evento no
+controlplane e fila de ações pós-discovery.
 
 ## Como o conteúdo de `workspace/` chega aos novos tenants
 

@@ -114,6 +114,252 @@ export function actionableDashboardItems(items: AgentDashboardItem[]) {
   return items.filter((item) => isActionableDashboardStatus(item.status))
 }
 
+export interface AgentDashboardWorkSummary {
+  agent: AgentDashboardAgent
+  items: AgentDashboardItem[]
+  tasks: AgentDashboardTask[]
+  artifacts: AgentDashboardArtifact[]
+  pending: number
+  reports: number
+  plans: number
+  files: number
+  total: number
+  latest_at?: string
+  latest_title?: string
+}
+
+export function buildAgentDashboardWorkSummaries(input: {
+  agents: AgentDashboardAgent[]
+  items: AgentDashboardItem[]
+  tasks: AgentDashboardTask[]
+  artifacts: AgentDashboardArtifact[]
+}): AgentDashboardWorkSummary[] {
+  const summaries = new Map<string, AgentDashboardWorkSummary>()
+  const ensureSummary = (agent: AgentDashboardAgent) => {
+    const key = agent.id || agent.name || "agent"
+    const existing = summaries.get(key)
+    if (existing) {
+      return existing
+    }
+    const next: AgentDashboardWorkSummary = {
+      agent,
+      items: [],
+      tasks: [],
+      artifacts: [],
+      pending: 0,
+      reports: 0,
+      plans: 0,
+      files: 0,
+      total: 0,
+    }
+    summaries.set(key, next)
+    return next
+  }
+
+  input.agents.forEach((agent) => ensureSummary(agent))
+  const unknown = () =>
+    ensureSummary({
+      id: "__unassigned",
+      name: "Sem responsável definido",
+      role: "Entrega sem agente associado",
+      active: false,
+      item_count: 0,
+      task_count: 0,
+    })
+
+  for (const item of input.items) {
+    const summary = findSummaryForAgentEntry(summaries, item) ?? unknown()
+    summary.items.push(item)
+  }
+  for (const task of input.tasks) {
+    const summary = findSummaryForAgentEntry(summaries, task) ?? unknown()
+    summary.tasks.push(task)
+  }
+  for (const artifact of input.artifacts) {
+    const summary = findSummaryForAgentEntry(summaries, artifact) ?? unknown()
+    summary.artifacts.push(artifact)
+  }
+
+  for (const summary of summaries.values()) {
+    summary.items.sort((a, b) =>
+      dashboardItemStamp(b).localeCompare(dashboardItemStamp(a)),
+    )
+    summary.tasks.sort((a, b) =>
+      dashboardTaskStamp(b).localeCompare(dashboardTaskStamp(a)),
+    )
+    summary.artifacts.sort((a, b) =>
+      String(b.created_at || b.id).localeCompare(String(a.created_at || a.id)),
+    )
+
+    const reportItems = summary.items.filter((item) =>
+      ["analysis", "report", "metric"].includes(item.type),
+    )
+    const taskItemKeys = summary.items
+      .filter((item) => item.type === "task")
+      .map((item) => `${item.source}:${item.id}`)
+    const taskKeys = new Set([
+      ...taskItemKeys,
+      ...summary.tasks.map((task) => `${task.source}:${task.id}`),
+    ])
+    summary.pending =
+      summary.items.filter((item) => isActionableDashboardStatus(item.status))
+        .length +
+      summary.tasks.filter((task) => isActionableDashboardStatus(task.status))
+        .length
+    summary.reports = reportItems.length
+    summary.plans = taskKeys.size
+    summary.files = summary.artifacts.length
+    summary.total =
+      summary.items.length + summary.tasks.length + summary.artifacts.length
+
+    const latest = [
+      ...summary.items.map((item) => ({
+        at: dashboardItemStamp(item),
+        title: item.title,
+      })),
+      ...summary.tasks.map((task) => ({
+        at: dashboardTaskStamp(task),
+        title: friendlyTaskTitle(task),
+      })),
+      ...summary.artifacts.map((artifact) => ({
+        at: artifact.created_at || "",
+        title: artifact.title,
+      })),
+    ]
+      .filter((entry) => entry.at || entry.title)
+      .sort((a, b) => b.at.localeCompare(a.at))[0]
+    summary.latest_at = latest?.at
+    summary.latest_title = latest?.title
+  }
+
+  return [...summaries.values()]
+    .filter((summary) => summary.agent.active || summary.total > 0)
+    .sort((a, b) => {
+      if (a.total > 0 !== b.total > 0) {
+        return a.total > 0 ? -1 : 1
+      }
+      if (a.latest_at || b.latest_at) {
+        return String(b.latest_at || "").localeCompare(
+          String(a.latest_at || ""),
+        )
+      }
+      if (a.agent.active !== b.agent.active) {
+        return a.agent.active ? -1 : 1
+      }
+      return friendlyAgentName(a.agent).localeCompare(
+        friendlyAgentName(b.agent),
+      )
+    })
+}
+
+function findSummaryForAgentEntry(
+  summaries: Map<string, AgentDashboardWorkSummary>,
+  entry: {
+    agent_id?: string
+    agent_name?: string
+    source?: string
+    title?: string
+  },
+) {
+  for (const summary of summaries.values()) {
+    if (matchesAgentEntry(summary.agent, entry)) {
+      return summary
+    }
+  }
+  return undefined
+}
+
+function matchesAgentEntry(
+  agent: AgentDashboardAgent,
+  entry: {
+    agent_id?: string
+    agent_name?: string
+    source?: string
+    title?: string
+  },
+) {
+  const tokens = agentIdentityTokens(agent)
+  const directValues = [entry.agent_id, entry.agent_name]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase())
+  if (directValues.length > 0) {
+    const directMatch = tokens.some((token) =>
+      directValues.some(
+        (value) => value === token || containsAgentToken(value, token),
+      ),
+    )
+    if (directMatch) {
+      return true
+    }
+    if (!directValues.every((value) => value === "main" || value === "agent")) {
+      return false
+    }
+  }
+
+  const haystack = [entry.source, entry.title]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+  if (!haystack) {
+    return false
+  }
+  return tokens.some((token) => containsAgentToken(haystack, token))
+}
+
+function containsAgentToken(value: string, token: string) {
+  if (!value || !token) {
+    return false
+  }
+  return new RegExp(
+    `(^|[^a-z0-9])${escapeRegExp(token)}(?=$|[^a-z0-9])`,
+    "i",
+  ).test(value)
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function agentIdentityTokens(agent: AgentDashboardAgent) {
+  const base = [agent.id, agent.name, friendlyAgentName(agent)]
+  const aliases: Record<string, string[]> = {
+    lia: ["marketing", "campanha", "instagram"],
+    marcos: ["vendas", "sales", "comercial"],
+    camila: ["suporte", "pos-venda", "pós-venda"],
+    sofia: ["onboarding", "discovery", "cadastro"],
+    catarina: ["aprofundamento", "curadoria"],
+    operador: ["operator", "tecnico", "técnico", "dev"],
+    rafael: [
+      "assistente interno",
+      "interno",
+      "analytics",
+      "padroes",
+      "padrões",
+      "relatorio diario",
+      "relatório diário",
+    ],
+    clara: ["atendente", "atendimento"],
+  }
+  const key = String(agent.id || agent.name).toLowerCase()
+  for (const [aliasKey, values] of Object.entries(aliases)) {
+    if (
+      key.includes(aliasKey) ||
+      String(agent.name).toLowerCase().includes(aliasKey)
+    ) {
+      base.push(...values)
+    }
+  }
+  return [...new Set(base)]
+    .flatMap((value) =>
+      String(value || "")
+        .toLowerCase()
+        .split(/[\s/_-]+/),
+    )
+    .concat(base.map((value) => String(value || "").toLowerCase()))
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 || token === "qa")
+}
+
 export function formatDashboardDate(value?: string) {
   if (!value) {
     return ""
@@ -296,6 +542,18 @@ export function friendlyDashboardSourceLabel(source?: string): string {
   if (value.includes("workspace/memory/padroes")) {
     return "Análise salva"
   }
+  if (value.includes("workspace/output/plans")) {
+    return "Plano gerado"
+  }
+  if (
+    value.includes("workspace/output/data") ||
+    value.includes("workspace/output/analytics")
+  ) {
+    return "Dados gerados"
+  }
+  if (value.includes("workspace/tests/relatorios")) {
+    return "Relatório de teste"
+  }
   if (value.includes("workspace/cron/jobs")) {
     return "Rotina automática"
   }
@@ -356,13 +614,50 @@ export function friendlyTaskSchedule(schedule?: string): string {
 export function friendlyAgentName(taskOrItem: {
   agent_name?: string
   agent_id?: string
+  name?: string
+  id?: string
 }): string {
-  const value = taskOrItem.agent_name || taskOrItem.agent_id || "Agente"
+  const value =
+    taskOrItem.agent_name ||
+    taskOrItem.name ||
+    taskOrItem.agent_id ||
+    taskOrItem.id ||
+    "Agente"
   switch (value.toLowerCase()) {
     case "main":
       return "Equipe principal"
+    case "assistente":
+    case "rafael":
+    case "rafael-assistente":
+    case "rafael-assistente-interno":
+      return "Rafael"
+    case "vendas":
+    case "sales":
+    case "marcos":
+    case "marcos-vendas":
+      return "Marcos"
     case "marketing":
-      return "Marketing"
+    case "lia":
+      return "Lia"
+    case "sofia":
+      return "Sofia"
+    case "catarina":
+      return "Catarina"
+    case "camila":
+    case "camila-suporte":
+      return "Camila"
+    case "clara":
+    case "clara-atendente":
+      return "Clara"
+    case "luna":
+    case "luna-atendente":
+      return "Luna"
+    case "operador":
+      return "Operador"
+    case "qa-tester":
+      return "QA Tester"
+    case "transferencia-humana":
+      return "Atendimento Humano"
     default:
       return value
   }

@@ -1,7 +1,11 @@
 import fs from "fs"
 import path from "path"
+import { fileURLToPath } from "url"
 
 import { type FullConfig, chromium, request } from "@playwright/test"
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 /**
  * Performs a one-time launcher dashboard login and persists the
@@ -10,6 +14,7 @@ import { type FullConfig, chromium, request } from "@playwright/test"
  * meaning specs never have to fight the login page.
  *
  * Inputs (env vars, set in CI or your shell):
+ *   E2E_EMAIL     — required when the launcher uses email+password auth
  *   E2E_PASSWORD  — required for runs against a launcher with auth on
  *   E2E_BASE_URL  — defaults to `use.baseURL` from the config
  *
@@ -23,7 +28,8 @@ export default async function globalSetup(config: FullConfig) {
     config.projects[0]?.use.baseURL ??
     "http://localhost:18800"
   const password = process.env.E2E_PASSWORD
-  const authFile = path.join(config.rootDir, "e2e", ".auth", "launcher.json")
+  const email = process.env.E2E_EMAIL?.trim()
+  const authFile = path.join(__dirname, ".auth", "launcher.json")
 
   if (!password) {
     if (process.env.CI) {
@@ -41,15 +47,24 @@ export default async function globalSetup(config: FullConfig) {
     return
   }
 
+  const loginData = email
+    ? { email, password: password.trim() }
+    : { password: password.trim() }
+
   // 1) Try the login API directly; this avoids spinning up a browser
   // when the server is reachable and the credential is good.
   const apiContext = await request.newContext({ baseURL })
   const apiRes = await apiContext.post("/api/auth/login", {
     headers: { "Content-Type": "application/json" },
-    data: { password: password.trim() },
+    data: loginData,
   })
   if (!apiRes.ok()) {
     const detail = (await apiRes.text()).slice(0, 200)
+    if (!email && apiRes.status() === 400 && detail.includes("email")) {
+      throw new Error(
+        "[e2e/global-setup] this launcher requires email+password auth; set E2E_EMAIL.",
+      )
+    }
     throw new Error(
       `[e2e/global-setup] login API returned ${apiRes.status()}: ${detail}`,
     )
@@ -61,7 +76,7 @@ export default async function globalSetup(config: FullConfig) {
   const ctx = await browser.newContext({ baseURL })
   const browserLoginRes = await ctx.request.post("/api/auth/login", {
     headers: { "Content-Type": "application/json" },
-    data: { password: password.trim() },
+    data: loginData,
   })
   if (!browserLoginRes.ok()) {
     const detail = (await browserLoginRes.text()).slice(0, 200)

@@ -16,3 +16,11 @@ type InboundMessage struct {
 
 // InboundHandler is invoked for every inbound WhatsApp message.
 type InboundHandler func(msg InboundMessage)
+
+// SendResult is returned by the sidecar WhatsApp wrapper after an outbound
+// send. RouteAliases are JIDs/numbers that should route replies to the same
+// tenant, including the WhatsApp-resolved LID when available.
+type SendResult struct {
+	MessageIDs   []string
+	RouteAliases []string
+}

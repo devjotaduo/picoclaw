@@ -139,7 +139,7 @@ Ver `references/state-schema.md` pro schema completo (campos, tipos, valores vá
 
 - **owner.email inválido** — script rejeita com erro claro. Sofia repete a pergunta.
 - **area duplicada** — `mark_area_complete` é idempotente; não conta a área 2x.
-- **promotion.ready sem owner capturado** — script bloqueia: precisa do email pra promover.
+- **promotion.ready sem owner capturado** — script bloqueia: precisa de email e WhatsApp pra promover e acionar Catarina.
 - **set_owner antes de init** — script auto-inicia. Não falha.
 
 ## Lead timeout monitoring (P1 #17)

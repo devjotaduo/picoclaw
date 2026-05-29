@@ -77,6 +77,8 @@ function NewTenantForm() {
   const workspaces = useQuery({
     queryKey: ["launcher-profiles"],
     queryFn: listLauncherProfiles,
+    enabled: Boolean(type),
+    retry: false,
   })
 
   // Públicos não têm owner — email é hidden e não obrigatório.

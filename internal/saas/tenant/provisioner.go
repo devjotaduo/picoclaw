@@ -27,6 +27,11 @@ const (
 	// operator prefers a different location.
 	sharedAuthHostPath = "/etc/picoclaw/shared-auth.json"
 
+	// defaultSaaSLiteLLMModel must exist in docker/saas/litellm/config.yaml.
+	// Tenants receive a per-tenant virtual LiteLLM key, so their config should
+	// point at the controlplane-managed model name, not at raw upstream providers.
+	defaultSaaSLiteLLMModel = "gpt-4o-mini"
+
 	tenantCodexCLIHomeRel       = ".codex"
 	tenantCodexCLIHomeContainer = "/root/.picoclaw/.codex"
 )
@@ -469,6 +474,17 @@ func (p *Provisioner) runProvision(
 				"${TENANT_ID}":   t.ID,
 			}); err != nil {
 				return fmt.Errorf("substitute placeholders: %w", err)
+			}
+			if err := SubstituteRedactedModelKeys(t.VolumePath, out.Key); err != nil {
+				return fmt.Errorf("substitute redacted model keys: %w", err)
+			}
+			if err := ApplySaaSLiteLLMModelRouting(
+				t.VolumePath,
+				defaultSaaSLiteLLMModel,
+				p.Cfg.LiteLLMURL,
+				out.Key,
+			); err != nil {
+				return fmt.Errorf("apply saas litellm model routing: %w", err)
 			}
 		}
 

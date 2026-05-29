@@ -109,7 +109,26 @@ func listWorkspaceAgents(workspace string) ([]workspaceAgentItem, error) {
 	order := workspaceAgentOrder(workspace)
 	agents := make([]workspaceAgentItem, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".md") {
+		if entry.IsDir() {
+			fullPath := filepath.Join(agentsDir, entry.Name(), "AGENT.md")
+			content, err := os.ReadFile(fullPath)
+			if err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					continue
+				}
+				return nil, err
+			}
+			agent := parseWorkspaceAgentFile(filepath.ToSlash(filepath.Join(entry.Name(), "AGENT.md")), string(content))
+			if agent.Name == "" {
+				continue
+			}
+			agent.ID = entry.Name()
+			agent.Path = filepath.ToSlash(filepath.Join("agents", entry.Name(), "AGENT.md"))
+			agent.Content = string(content)
+			agents = append(agents, agent)
+			continue
+		}
+		if !strings.EqualFold(filepath.Ext(entry.Name()), ".md") {
 			continue
 		}
 		fullPath := filepath.Join(agentsDir, entry.Name())

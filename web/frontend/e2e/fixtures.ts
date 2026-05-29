@@ -23,8 +23,8 @@ export const test = base.extend<{ editor: Page }>({
     await expect(
       page
         .getByRole("heading", { level: 2 })
-        .first()
-        .or(page.getByText(/agente/i).first()),
+        .or(page.getByText(/agente/i))
+        .first(),
     ).toBeVisible({ timeout: 15_000 })
     await run(page)
   },

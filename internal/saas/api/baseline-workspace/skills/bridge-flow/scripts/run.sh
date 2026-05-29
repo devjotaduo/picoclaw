@@ -59,6 +59,15 @@ fi
 
 # 3. Pre-conditions for outbound
 if [ -z "$PHONE" ]; then
+  ERR_JSON=$(python3 - <<'PY'
+import json
+print(json.dumps({
+    "action": "mark_bridge_failed",
+    "error": "owner phone missing in state.owner_captured.whatsapp",
+}))
+PY
+)
+  echo "$ERR_JSON" | python3 "$STATE_PY" >/dev/null 2>&1 || true
   echo "BRIDGE_ERROR: owner phone missing in state.owner_captured.whatsapp"
   exit 1
 fi
