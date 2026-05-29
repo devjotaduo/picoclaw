@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sipeed/picoclaw/internal/saas/gatewayauth"
+	saasPolicy "github.com/sipeed/picoclaw/internal/saas/policy"
 )
 
 // signGatewayHeaders is a thin wrapper over gatewayauth.AnnotateRequest used
@@ -75,6 +76,8 @@ func TestLauncherDashboardAuth_AllowsPublicPaths(t *testing.T) {
 		{http.MethodGet, "/api/auth/status", http.StatusTeapot},
 		{http.MethodPost, "/api/auth/setup", http.StatusTeapot},
 		{http.MethodPost, "/api/auth/logout", http.StatusTeapot},
+		{http.MethodPost, "/api/launcher/jotaduo-wa-inbound", http.StatusTeapot},
+		{http.MethodGet, "/api/launcher/jotaduo-wa-inbound", http.StatusUnauthorized},
 		{http.MethodGet, "/api/auth/logout", http.StatusUnauthorized},
 		{http.MethodGet, "/api/config", http.StatusUnauthorized},
 		{http.MethodGet, "/pico/ws", http.StatusUnauthorized},
@@ -113,7 +116,7 @@ func TestLauncherDashboardAuth_TrustedGatewayAllowsPublicStatic(t *testing.T) {
 	}
 }
 
-func TestLauncherDashboardAuth_TrustedGatewayAllowsPublicChatHealthOnly(t *testing.T) {
+func TestLauncherDashboardAuth_TrustedGatewayAllowsPublicJotaduoInboundOnly(t *testing.T) {
 	cfg := LauncherDashboardAuthConfig{
 		AuthMode:             "trusted_gateway",
 		TrustedGatewaySecret: "secret",
@@ -128,10 +131,51 @@ func TestLauncherDashboardAuth_TrustedGatewayAllowsPublicChatHealthOnly(t *testi
 		path   string
 		want   int
 	}{
-		{http.MethodGet, "/api/public/chat/health", http.StatusTeapot},
-		{http.MethodHead, "/api/public/chat/health", http.StatusUnauthorized},
-		{http.MethodPost, "/api/public/chat", http.StatusUnauthorized},
-		{http.MethodGet, "/api/public/chat/stream", http.StatusUnauthorized},
+		{http.MethodGet, "/api/gateway/status", http.StatusUnauthorized},
+		{http.MethodPost, "/api/launcher/jotaduo-wa-inbound", http.StatusTeapot},
+		{http.MethodGet, "/api/launcher/jotaduo-wa-inbound", http.StatusUnauthorized},
+		{http.MethodGet, "/api/config", http.StatusUnauthorized},
+	} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		h.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Fatalf("%s %s: status = %d, want %d", tc.method, tc.path, rec.Code, tc.want)
+		}
+	}
+}
+
+func TestLauncherDashboardAuth_AnonymousPublicDashboardAnnotatesPublicRole(t *testing.T) {
+	cfg := LauncherDashboardAuthConfig{
+		AuthMode:                 "trusted_gateway",
+		TrustedGatewaySecret:     "secret",
+		AnonymousPublicDashboard: true,
+	}
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := TrustedGatewayClaims(r)
+		if !ok {
+			t.Error("expected anonymous public claims")
+		}
+		if claims.Role != saasPolicy.RolePublic || claims.UserID != "anonymous" {
+			t.Errorf("claims = %#v, want anonymous public role", claims)
+		}
+		w.WriteHeader(http.StatusTeapot)
+	})
+	h := LauncherDashboardAuth(cfg, next)
+
+	for _, tc := range []struct {
+		method string
+		path   string
+		want   int
+	}{
+		{http.MethodGet, "/", http.StatusTeapot},
+		{http.MethodGet, "/api/auth/status", http.StatusTeapot},
+		{http.MethodGet, "/api/launcher/policy", http.StatusTeapot},
+		{http.MethodGet, "/pico/ws", http.StatusTeapot},
+		{http.MethodGet, "/api/gateway/status", http.StatusTeapot},
+		{http.MethodGet, "/api/config", http.StatusTeapot},
+		{http.MethodPut, "/api/config", http.StatusTeapot},
+		{http.MethodGet, "/admin", http.StatusFound},
 	} {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(tc.method, tc.path, nil)

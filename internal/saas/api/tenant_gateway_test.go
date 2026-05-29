@@ -24,6 +24,7 @@ func TestTenantSubdomainWithPort(t *testing.T) {
 		{"", "", false},                       // empty host
 		{"other.example.com", "", false},      // different domain
 		{"jotaduo.com.evil.com", "", false},   // suffix trap
+		{"ia.jotaduo.com:443", "", false},     // admin launcher host, not a tenant
 	}
 	for _, tc := range cases {
 		sub, ok := h.tenantSubdomain(tc.hostport)
@@ -196,59 +197,6 @@ func TestIsPublicTenantStaticAssetsPrefix(t *testing.T) {
 	}
 }
 
-// TestIsPublicChatRoute verifies the path matcher used by serveTenantHost to
-// decide whether a request on a public-onboarding tenant is eligible to skip
-// Supabase JWT verification. The matcher must:
-//   - accept the three canonical endpoints (chat, chat/stream, chat/health),
-//   - accept any deeper /api/public/chat/* path,
-//   - reject every other path even when it looks superficially "public",
-//   - resist path-traversal attacks that would otherwise escape /api/public/chat.
-//
-// Note: this helper alone is not the full bypass — serveTenantHost also requires
-// tenant.IsPublic=true. We test the path-matching logic in isolation here.
-func TestIsPublicChatRoute(t *testing.T) {
-	cases := []struct {
-		path string
-		want bool
-	}{
-		// Canonical accepted endpoints.
-		{"/api/public/chat", true},
-		{"/api/public/chat/stream", true},
-		{"/api/public/chat/health", true},
-		// Deeper paths under /api/public/chat/ are also accepted (room for
-		// future endpoints like /chat/history, /chat/typing, etc.).
-		{"/api/public/chat/anything", true},
-		{"/api/public/chat/nested/deep", true},
-		// Adjacent paths under /api/public must NOT be accepted — only chat.
-		{"/api/public", false},
-		{"/api/public/", false},
-		{"/api/public/other", false},
-		{"/api/public/admin", false},
-		// Sibling/superficially similar names must not match.
-		{"/api/public/chats", false},    // plural
-		{"/api/public/chatting", false}, // prefix-only
-		{"/api/publicchat", false},      // no slash separator
-		// Anything outside /api/public is private.
-		{"/api/agent/status", false},
-		{"/api/config", false},
-		{"/", false},
-		{"/launcher-login", false},
-		// Path traversal must be neutralized by path.Clean.
-		{"/api/public/chat/../config", false},
-		{"/api/public/chat/../../api/config", false},
-		// Empty / leading slash variants — exercises the TrimPrefix+Clean step.
-		{"api/public/chat", true},
-		{"//api/public/chat", true},
-	}
-	for _, tc := range cases {
-		t.Run(tc.path, func(t *testing.T) {
-			if got := isPublicChatRoute(tc.path); got != tc.want {
-				t.Errorf("isPublicChatRoute(%q) = %v, want %v", tc.path, got, tc.want)
-			}
-		})
-	}
-}
-
 func TestIsPublicTenantSignedRoute(t *testing.T) {
 	cases := []struct {
 		method string
@@ -263,8 +211,6 @@ func TestIsPublicTenantSignedRoute(t *testing.T) {
 		{http.MethodGet, "/api/launcher/policy", true},
 		{http.MethodGet, "/api/gateway/status", true},
 		{http.MethodGet, "/pico/ws", true},
-		{http.MethodPost, "/api/public/chat", true},
-		{http.MethodGet, "/api/public/chat/stream", true},
 		{http.MethodGet, "/api/config", false},
 		{http.MethodGet, "/api/gateway/logs", false},
 		{http.MethodPost, "/api/gateway/restart", false},
@@ -280,31 +226,20 @@ func TestIsPublicTenantSignedRoute(t *testing.T) {
 	}
 }
 
-// TestIsPublicChatHealthRoute confirms only the canonical health probe
-// matches — chat / chat/stream pay the per-IP cap, while /health stays
-// uncounted so load-balancer probes don't burn the budget. Path traversal
-// attempts that would otherwise smuggle in /health are normalized by
-// path.Clean before the comparison.
-func TestIsPublicChatHealthRoute(t *testing.T) {
+func TestIsPublicTenantRateLimitedRoute(t *testing.T) {
 	cases := []struct {
 		path string
 		want bool
 	}{
-		{"/api/public/chat/health", true},
-		{"/api/public/chat/health/", true},
-		{"/api/public/chat", false},
-		{"/api/public/chat/stream", false},
-		{"/api/public/chat/health/extra", false},
-		{"/api/public/chat/../chat/health", true},
-		{"/api/public/chat/health/../stream", false},
-		{"/health", false},
+		{"/pico/ws", true},
+		{"/api/auth/status", false},
+		{"/api/launcher/policy", false},
 		{"/", false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.path, func(t *testing.T) {
-			if got := isPublicChatHealthRoute(tc.path); got != tc.want {
-				t.Errorf("isPublicChatHealthRoute(%q) = %v, want %v", tc.path, got, tc.want)
+			if got := isPublicTenantRateLimitedRoute(tc.path); got != tc.want {
+				t.Fatalf("isPublicTenantRateLimitedRoute(%q) = %v, want %v", tc.path, got, tc.want)
 			}
 		})
 	}

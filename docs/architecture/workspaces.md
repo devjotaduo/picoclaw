@@ -13,7 +13,7 @@ control plane. One workspace = one selectable template that drives:
   per-workspace custom UI without needing a separate Docker image.
 
 This collapses what used to be three overlapping concepts
-(`TenantTemplateDir`, `LauncherProfile.SeedPath`, `AutoProvisionWorkspaceDir`)
+(`TenantTemplateDir`, `LauncherProfile.SeedPath`)
 into one. See [`saas-tenancy.md`](saas-tenancy.md) for the broader provisioning
 flow.
 
@@ -115,9 +115,9 @@ table plus the `tenants.launcher_profile_id` columns.
 
 Two boolean flags on each workspace:
 
-- **`is_default_auto`** — at most one workspace is the auto-provision
-  default. Clara's `AutoProvisioner.Run` picks this one when qualifying a
-  visitor. Marking another flips it (DB constraint enforces the uniqueness).
+- **`is_default_auto`** — at most one workspace is the default template
+  suggested by the admin UI and bootstrapping flow. Marking another flips it
+  (DB constraint enforces the uniqueness).
 - **`is_available_manual`** — appears in the admin "Create tenant" dropdown.
   Set to false for workspaces used only by automation or kept as drafts.
 
@@ -163,23 +163,6 @@ with a clear error otherwise.
 
 ---
 
-## Auto-provision (Clara)
-
-`internal/saas/api/company_intakes_provision.go`:
-
-```go
-ws, _ := a.Workspaces.GetDefaultAuto(ctx)
-out, _ := a.Provisioner.Create(ctx, tenant.CreateInput{
-    WorkspaceID: ws.ID,
-    ... // contact, supabase, etc.
-})
-```
-
-If no workspace is marked `is_default_auto`, auto-provision fails fast and
-the operator sees the error in the Clara chat. No legacy fallback.
-
----
-
 ## Clone tenant
 
 `Provisioner.CloneFromTenant`:
@@ -222,22 +205,21 @@ Operator's expected flow:
    pwsh scripts/build-workspace-zip.ps1 -SourceDir workspace \
        -Slug onboarding -Name "Onboarding"
    ```
-   Sofia is the discovery agent in `workspace/agents/sofia/`, and
-   `channel_list.public-web` is present (disabled by default — the
-   upload flow flips it on for the public variant). Edit
+   Sofia is the discovery agent in `workspace/agents/sofia/`. Public
+   tenants use the regular launcher chat channel (`pico`) and the provisioner
+   writes `active_profile=public` for the visitor surface. Edit
    `workspace/workspace/AGENT.md` locally before building if you want
    to customize. The upload runs `validateWorkspaceConfigSemantics`
    (see "Workspace upload validation" below) — fix any blockers it
    reports before continuing.
 2. Admin UI → New tenant → pick the **`Público`** card →
    workspace = the one from step 1 → submit. No owner email needed.
-3. Set `PICOCLAW_ONBOARDING_CALLBACK_SECRET` on the controlplane so the
-   skill callbacks from inside the tenant can authenticate. There is
-   no longer a warning surfaced at provision time — the misconfig
-   shows up as a 503 from `POST /api/v1/onboarding-callback` instead.
+3. Open the public tenant subdomain and start the visitor chat with Sofia.
+   Progress is tracked in `workspace/state/onboarding.json`; Catarina and the
+   admin promotion flow read that same state.
 
 See [`public-onboarding-tenant.md`](public-onboarding-tenant.md) for the
-visitor flow, public-web channel internals, and Turnstile gating.
+visitor flow and public tenant route contract.
 
 ---
 
@@ -315,9 +297,7 @@ linking back to `/workspaces`.
 | `PICOCLAW_WORKSPACE_DIR` | `/srv/picoclaw-workspaces` | Host root for workspaces |
 
 Retired (do not set; the loader no longer reads them):
-`TENANT_TEMPLATE_DIR`, `TENANT_PROFILE_DIR`,
-`PICOCLAW_SAAS_AUTO_PROVISION_PROFILE`,
-`PICOCLAW_SAAS_AUTO_PROVISION_WORKSPACE_DIR`.
+`TENANT_TEMPLATE_DIR`, `TENANT_PROFILE_DIR`.
 
 The `docker/saas/docker-compose.yml` bind-mounts the host workspace
 directory into the controlplane (read-write) and into the build sidecar.
@@ -347,11 +327,11 @@ attack patterns.
 
 | Concept | Then | Now |
 |---|---|---|
-| Tenant content source | `TenantTemplateDir` (raw copy) + `LauncherProfile.SeedPath` (overlay) + `AutoProvisionWorkspaceDir` (extra overlay for auto-provision) | One `Workspace.home/` directory |
+| Tenant content source | `TenantTemplateDir` (raw copy) + `LauncherProfile.SeedPath` (overlay) | One `Workspace.home/` directory |
 | Provisioning steps | 7 functions (`CopyVolumeRaw`, `ApplyProfileSeed`, `WriteLauncherPolicy`, `SeedDashboardPassword`, LiteLLM, `SeedPicoConfig`, `EnsureTenantWhatsAppNativeConfig`) plus `OverlayWorkspace` for auto-provision | 5 functions (mkdir, `CopyWorkspaceHome`, optional `SeedDashboardPassword`, LiteLLM + `SubstituteConfigPlaceholders`, `WriteLauncherPolicy`) |
 | Frontend per tenant | Single embedded dist baked into `picoclaw-launcher:latest` | Optional per-workspace custom build, bind-mounted; falls back to embed when not compiled |
 | Admin UI | `/launcher-profiles` with seed file manifest (`.saas-seed-files.json`), `exact` vs `templated` distinction | `/workspaces` with plain file editor; no manifest, no exact/templated split |
-| Selecting auto template | `PICOCLAW_SAAS_AUTO_PROVISION_PROFILE` env var | `is_default_auto` DB flag on a workspace |
+| Selecting default template | env/profile choice | `is_default_auto` DB flag on a workspace |
 | LiteLLM key in config | `SeedPicoConfig` wrote config.json from scratch | `home/config.json` carries `${LITELLM_KEY}` placeholder; substituted at provision time |
 
 The legacy `EnsureTenantWhatsAppNativeConfig` and `SeedPicoConfig`

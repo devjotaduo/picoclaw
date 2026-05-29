@@ -117,8 +117,8 @@ func TestShellTool_PropagatesChatEnvVars(t *testing.T) {
 	tool, err := NewExecTool("", false)
 	require.NoError(t, err)
 
-	ctx := WithToolContext(context.Background(), "public-web", "intake-abc-123")
-	ctx = WithToolSenderContext(ctx, "public-web:deadbeef0badc0de")
+	ctx := WithToolContext(context.Background(), "pico", "intake-abc-123")
+	ctx = WithToolSenderContext(ctx, "pico:deadbeef0badc0de")
 
 	args := map[string]any{
 		"action":  "run",
@@ -126,9 +126,9 @@ func TestShellTool_PropagatesChatEnvVars(t *testing.T) {
 	}
 	result := tool.Execute(ctx, args)
 	require.False(t, result.IsError, "expected success, got: %s", result.ForLLM)
-	require.Contains(t, result.ForUser, "ch=public-web")
+	require.Contains(t, result.ForUser, "ch=pico")
 	require.Contains(t, result.ForUser, "sid=intake-abc-123")
-	require.Contains(t, result.ForUser, "sender=public-web:deadbeef0badc0de")
+	require.Contains(t, result.ForUser, "sender=pico:deadbeef0badc0de")
 }
 
 // TestShellTool_OmitsEmptyChatEnvVars verifies that when no tool context is

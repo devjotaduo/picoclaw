@@ -277,6 +277,7 @@ export function ChatPage() {
   const { visible: isVisible, profile: activeProfile } = useUIVisibility(
     launcherPolicyQ.data,
   )
+  const isPublicTenant = activeProfile === "public"
 
   const {
     messages,
@@ -350,7 +351,10 @@ export function ChatPage() {
     oauthModels,
     localModels,
     handleSetDefault,
-  } = useChatModels({ isConnected: isGatewayRunning })
+  } = useChatModels({
+    isConnected: isGatewayRunning,
+    publicMode: isPublicTenant,
+  })
   const hasDefaultModel = Boolean(defaultModelName)
   const canChooseModel =
     apiKeyModels.length > 0 || oauthModels.length > 0 || localModels.length > 0
@@ -428,6 +432,13 @@ export function ChatPage() {
   }
 
   useEffect(() => {
+    if (isPublicTenant) {
+      setAgents([])
+      setMainAgentID("main")
+      setMainAgent(null)
+      return
+    }
+
     let cancelled = false
     getInternalAgents()
       .then((next) => {
@@ -450,7 +461,7 @@ export function ChatPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [isPublicTenant])
 
   useEffect(() => {
     if (scrollRef.current) {

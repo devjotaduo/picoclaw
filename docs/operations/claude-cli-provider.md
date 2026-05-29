@@ -53,7 +53,7 @@ com arquivos de credenciais.
 
 ```bash
 ls -la /etc/picoclaw/claude-auth/.claude/
-# Esperado: credentials.json + outros
+# Esperado: .credentials.json + outros
 ```
 
 ### 3. Ligar a feature no controlplane
@@ -73,17 +73,38 @@ docker compose -p picoclaw-saas \
   up -d --force-recreate controlplane
 ```
 
-### 4. Configurar um tenant pra usar claude-cli
+### 4. Roteamento do tenant
 
-No `config.json` do tenant (ou no template do workspace), no `model_list`:
+Para tenants novos, o provisioner faz isso automaticamente quando
+`PICOCLAW_TENANT_CLAUDE_CLI_AUTH_DIR` aponta para um diretório válido com
+`.credentials.json`: ele troca o `config.json` materializado para
+`provider="claude-cli"` e remove `model_list` sensível de `.security.yml`.
+
+Para tenants existentes, rode `recreate` depois de configurar a env no
+controlplane. O provisioner reescreve o `config.json` preservando o volume e
+anexa o mount `/root/.claude` ao novo container:
+
+```bash
+docker exec controlplane picoclaw-tenantctl recreate <tenant-id>
+```
+
+Se for necessário fazer um hotfix manual sem passar pelo lifecycle, ajuste o
+`config.json`:
 
 ```json
 {
+  "agents": {
+    "defaults": {
+      "provider": "claude-cli",
+      "model_name": "claude-cli-sonnet"
+    }
+  },
   "model_list": [
     {
-      "model_name": "default",
+      "model_name": "claude-cli-sonnet",
       "provider": "claude-cli",
-      "model": "sonnet"
+      "model": "sonnet",
+      "workspace": "/root/.picoclaw/workspace"
     }
   ]
 }
@@ -101,13 +122,14 @@ ou via API).
 `internal/saas/tenant/provisioner.go::buildSpec` checa:
 
 1. `p.Cfg.TenantClaudeCliAuthDir` está setado (= operator opted in)?
-2. O diretório existe no host?
+2. O diretório existe no host e contém `.credentials.json` direto ou em
+   `.claude/.credentials.json`?
 
 Se sim pra ambos, adiciona ao spec do container:
 
 ```yaml
 ExtraMounts:
-  - Source: /etc/picoclaw/claude-auth
+  - Source: /etc/picoclaw/claude-auth/.claude
     Target: /root/.claude
     ReadOnly: true
 ```
@@ -158,11 +180,11 @@ feature). Perda do dir = restore via restic OU re-upload do
 ## Fallback pra codex-cli quando claude rate-limita
 
 Subscription Max tem limite mensal. Quando bate, todos tenants
-claude-cli começam a falhar. Pra mitigar: configure `fallbacks:
-["codex-fallback"]` no `model_list` entry primário + adicione uma
-entry `codex-fallback` apontando pro codex CLI. O Picoclaw tem
-fallback chain nativo (`pkg/providers/fallback.go`) que retenta
-automaticamente sem intervenção. Setup completo:
+claude-cli começam a falhar. Pra mitigar, configure também
+`PICOCLAW_TENANT_CODEX_CLI_AUTH_DIR`; tenants novos recebem
+`agents.defaults.model_fallbacks=["codex-cli-gpt-5"]` automaticamente.
+Para tenants existentes, adicione esse fallback em `agents.defaults` e uma
+entrada `codex-cli` no `model_list`. Setup completo:
 [codex-cli-provider.md](codex-cli-provider.md).
 
 ## Por que read-only
@@ -181,5 +203,5 @@ estava no loop de qualquer jeito porque o OAuth do `/login` é interativo.
 |---|---|---|
 | `claude: command not found` no tenant | Imagem antiga (pre-PR que adicionou claude CLI) | `docker pull ghcr.io/devjotaduo/picoclaw-launcher:main` + recreate tenant |
 | `error: not authenticated` | Auth dir vazio ou token expirado | Rodar `claude /login` no host (passo 2) |
-| Tenant sem `/root/.claude/credentials.json` | `PICOCLAW_TENANT_CLAUDE_CLI_AUTH_DIR` não setado OU diretório vazio | Verificar env do controlplane + `ls /etc/picoclaw/claude-auth/.claude/` |
-| Cliente errado responde (não Sofia em tenant publico) | Config tenant aponta pra `provider: "openai"` ainda | Atualizar `model_list` no `config.json` do tenant pra `provider: "claude-cli"` |
+| Tenant sem `/root/.claude/.credentials.json` | `PICOCLAW_TENANT_CLAUDE_CLI_AUTH_DIR` não setado OU diretório vazio | Verificar env do controlplane + `ls /etc/picoclaw/claude-auth/.claude/` |
+| Cliente errado responde (não Sofia em tenant publico) | Config tenant aponta pra `provider: "openai"` ainda | Reprovisionar tenant novo ou atualizar `agents.defaults` + `model_list` no `config.json` do tenant pra `provider: "claude-cli"` |

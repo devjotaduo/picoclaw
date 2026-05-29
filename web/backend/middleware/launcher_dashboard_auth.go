@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sipeed/picoclaw/internal/saas/gatewayauth"
+	saasPolicy "github.com/sipeed/picoclaw/internal/saas/policy"
 )
 
 // LauncherDashboardCookieName is the HttpOnly cookie set after a successful password login.
@@ -72,6 +73,11 @@ type LauncherDashboardAuthConfig struct {
 	// X-Picoclaw-Internal-Token header bypass the cookie check. Empty
 	// disables the feature.
 	InternalToken string
+	// AnonymousPublicDashboard lets public onboarding tenants serve the
+	// visitor-facing chat shell without a dashboard cookie. Requests admitted
+	// this way are annotated as role=public; PolicyMiddleware still enforces
+	// the public role's feature limits.
+	AnonymousPublicDashboard bool
 }
 
 // LauncherInternalTokenHeader is the request header name child processes
@@ -170,13 +176,18 @@ func LauncherDashboardAuth(cfg LauncherDashboardAuthConfig, next http.Handler) h
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := canonicalAuthPath(r.URL.Path)
 		if isTrustedGatewayMode(cfg) {
-			if isPublicLauncherDashboardStatic(r.Method, p) || isPublicLauncherPublicChatHealth(r.Method, p) {
+			if isPublicLauncherDashboardStatic(r.Method, p) ||
+				isPublicLauncherJotaduoWAInbound(r.Method, p) {
 				next.ServeHTTP(w, r)
 				return
 			}
 			if claims, ok := validTrustedGatewayAuth(r, cfg); ok {
 				ctx := context.WithValue(r.Context(), trustedGatewayClaimsContextKey{}, claims)
 				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+			if cfg.AnonymousPublicDashboard && isAnonymousPublicDashboardPath(r.Method, p) {
+				next.ServeHTTP(w, withAnonymousPublicClaims(r))
 				return
 			}
 			rejectLauncherDashboardAuth(w, r, p)
@@ -232,8 +243,38 @@ func LauncherDashboardAuth(cfg LauncherDashboardAuthConfig, next http.Handler) h
 				return
 			}
 		}
+		if cfg.AnonymousPublicDashboard && isAnonymousPublicDashboardPath(r.Method, p) {
+			next.ServeHTTP(w, withAnonymousPublicClaims(r))
+			return
+		}
 		rejectLauncherDashboardAuth(w, r, p)
 	})
+}
+
+func withAnonymousPublicClaims(r *http.Request) *http.Request {
+	claims := gatewayauth.Claims{
+		UserID: "anonymous",
+		Role:   saasPolicy.RolePublic,
+	}
+	ctx := context.WithValue(r.Context(), trustedGatewayClaimsContextKey{}, claims)
+	return r.WithContext(ctx)
+}
+
+func isAnonymousPublicDashboardPath(method, p string) bool {
+	if isPublicLauncherDashboardStatic(method, p) {
+		return true
+	}
+	if method == http.MethodGet && p == "/" {
+		return true
+	}
+	if method == http.MethodGet && p == "/api/auth/status" {
+		return true
+	}
+	if method == http.MethodGet && p == "/api/launcher/policy" {
+		return true
+	}
+	_, _, known := saasPolicy.FeatureForRequest(method, p)
+	return known
 }
 
 // canonicalAuthPath matches path cleaning used for routing decisions so
@@ -339,7 +380,7 @@ func isPublicLauncherDashboardPath(method, p string) bool {
 	if isPublicLauncherDashboardStatic(method, p) {
 		return true
 	}
-	if isPublicLauncherPublicChatHealth(method, p) {
+	if isPublicLauncherJotaduoWAInbound(method, p) {
 		return true
 	}
 	switch p {
@@ -357,8 +398,8 @@ func isPublicLauncherDashboardPath(method, p string) bool {
 	return false
 }
 
-func isPublicLauncherPublicChatHealth(method, p string) bool {
-	return method == http.MethodGet && p == "/api/public/chat/health"
+func isPublicLauncherJotaduoWAInbound(method, p string) bool {
+	return method == http.MethodPost && p == "/api/launcher/jotaduo-wa-inbound"
 }
 
 // isPublicLauncherDashboardStatic allows the SPA login route and embedded

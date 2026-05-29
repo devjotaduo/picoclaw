@@ -72,9 +72,27 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 	if p.Cfg.TenantImage != "" {
 		t.ContainerImage = p.Cfg.TenantImage
 	}
-	if t.IsPublic {
-		if err := EnsurePublicWebChannelConfig(t.VolumePath); err != nil {
-			return fmt.Errorf("ensure public-web config: %w", err)
+	cliClaude, cliCodex := p.sharedCLIModelRouting()
+	if p.Cfg != nil {
+		codexDir, resolveErr := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
+		if resolveErr != nil {
+			return fmt.Errorf("resolve codex cli auth dir: %w", resolveErr)
+		}
+		if codexDir != "" {
+			if prepareErr := prepareCodexCLIHome(t.VolumePath, codexDir); prepareErr != nil {
+				return fmt.Errorf("prepare codex cli home: %w", prepareErr)
+			}
+		}
+	}
+	if cliClaude || cliCodex {
+		rawWorkspace, lookupErr := p.tenantUsesRawWorkspace(ctx, t)
+		if lookupErr != nil {
+			return fmt.Errorf("lookup workspace for cli routing: %w", lookupErr)
+		}
+		if !rawWorkspace {
+			if applyErr := ApplySaaSCLIModelRouting(t.VolumePath, cliClaude, cliCodex); applyErr != nil {
+				return fmt.Errorf("apply saas cli model routing: %w", applyErr)
+			}
 		}
 	}
 	spec, err := p.buildSpec(ctx, t)
@@ -100,6 +118,17 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 		return err
 	}
 	return p.Tenants.SetStatus(ctx, id, store.StatusActive, nil)
+}
+
+func (p *Provisioner) tenantUsesRawWorkspace(ctx context.Context, t *store.Tenant) (bool, error) {
+	if p == nil || p.Workspaces == nil || t == nil || t.WorkspaceID == nil || *t.WorkspaceID == "" {
+		return false, nil
+	}
+	ws, err := p.Workspaces.Get(ctx, *t.WorkspaceID)
+	if err != nil {
+		return false, err
+	}
+	return ws != nil && ws.IsRaw, nil
 }
 
 // SupabaseManager is the narrow interface the provisioner uses to mutate the

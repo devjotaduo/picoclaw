@@ -30,28 +30,28 @@ const (
 )
 
 type Tenant struct {
-	ID                            string
-	DisplayName                   string
-	OwnerEmail                    string
-	Subdomain                     string
-	Status                        TenantStatus
-	ContainerID                   *string
-	ContainerImage                string
-	VolumePath                    string
-	LiteLLMKeyID                  *string
-	LiteLLMKeyHash                *string
-	MonthlyBudgetUSD              *float64
-	MemLimitMB                    int
-	CPUQuota                      float64
-	InitialPasswordDelivered      bool
-	LastError                     *string
-	CreatedAt                     time.Time
-	SuspendedAt                   *time.Time
-	DeletedAt                     *time.Time
-	CleanupCompletedAt            *time.Time
-	CRMContactID                  *int64
-	CRMCompanyID                  *int64
-	CRMDealID                     *int64
+	ID                       string
+	DisplayName              string
+	OwnerEmail               string
+	Subdomain                string
+	Status                   TenantStatus
+	ContainerID              *string
+	ContainerImage           string
+	VolumePath               string
+	LiteLLMKeyID             *string
+	LiteLLMKeyHash           *string
+	MonthlyBudgetUSD         *float64
+	MemLimitMB               int
+	CPUQuota                 float64
+	InitialPasswordDelivered bool
+	LastError                *string
+	CreatedAt                time.Time
+	SuspendedAt              *time.Time
+	DeletedAt                *time.Time
+	CleanupCompletedAt       *time.Time
+	CRMContactID             *int64
+	CRMCompanyID             *int64
+	CRMDealID                *int64
 	// WorkspaceID points at the Workspace this tenant was provisioned from.
 	WorkspaceID             *string
 	WorkspaceVersionApplied *int64
@@ -62,8 +62,8 @@ type Tenant struct {
 	// for this tenant: "local" (sessions table) or "supabase" (verify JWT).
 	AuthBackend string
 	// IsPublic: when true, tenant launcher accepts anonymous traffic on
-	// /api/public/* routes (no Supabase JWT). Used by the onboarding tenant
-	// serving /pre-cadastro visitors.
+	// /api/public/* routes (no Supabase JWT). Used by public onboarding
+	// tenants where visitors start in Sofia's chat.
 	IsPublic bool
 }
 

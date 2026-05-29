@@ -20,11 +20,112 @@ import (
 	picoclawconfig "github.com/sipeed/picoclaw/pkg/config"
 )
 
-// sharedAuthHostPath is where the operator places auth.json with OAuth
-// credentials shared across all auto-provisioned tenants (Codex, Claude
-// CLI, GitHub, etc.). Override via PICOCLAW_SHARED_AUTH_PATH env if the
-// operator prefers a different location.
-const sharedAuthHostPath = "/etc/picoclaw/shared-auth.json"
+const (
+	// sharedAuthHostPath is where the operator places auth.json with OAuth
+	// credentials shared across all auto-provisioned tenants (Codex, Claude
+	// CLI, GitHub, etc.). Override via PICOCLAW_SHARED_AUTH_PATH env if the
+	// operator prefers a different location.
+	sharedAuthHostPath = "/etc/picoclaw/shared-auth.json"
+
+	tenantCodexCLIHomeRel       = ".codex"
+	tenantCodexCLIHomeContainer = "/root/.picoclaw/.codex"
+)
+
+func (p *Provisioner) sharedCLIModelRouting() (useClaude, useCodex bool) {
+	if p == nil || p.Cfg == nil {
+		return false, false
+	}
+	claudeDir, _ := resolveClaudeCLIAuthDir(p.Cfg.TenantClaudeCliAuthDir)
+	codexDir, _ := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
+	return claudeDir != "", codexDir != ""
+}
+
+func resolveClaudeCLIAuthDir(path string) (string, error) {
+	return resolveCLIAuthDir(path, ".credentials.json", ".claude")
+}
+
+func resolveCodexCLIAuthDir(path string) (string, error) {
+	return resolveCLIAuthDir(path, "auth.json", ".codex")
+}
+
+func resolveCLIAuthDir(path, markerFile, nestedDir string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", nil
+	}
+	if hasRegularFile(filepath.Join(path, markerFile)) {
+		return path, nil
+	}
+
+	nested := filepath.Join(path, nestedDir)
+	nestedInfo, err := os.Stat(nested)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	if nestedInfo.IsDir() && hasRegularFile(filepath.Join(nested, markerFile)) {
+		return nested, nil
+	}
+	return "", nil
+}
+
+func hasRegularFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+// prepareCodexCLIHome snapshots the minimum operator-managed Codex CLI auth
+// files into the tenant volume. Codex writes helper/config state during
+// `codex exec`, so a read-only bind at /root/.codex breaks the first real
+// turn. Copying just auth.json and config.toml keeps the operator source
+// immutable without leaking local sessions, memories, logs, or plugin caches.
+func prepareCodexCLIHome(volumePath, authDir string) error {
+	authDir = strings.TrimSpace(authDir)
+	if volumePath == "" || authDir == "" {
+		return nil
+	}
+	dest := filepath.Join(volumePath, tenantCodexCLIHomeRel)
+	srcAbs, srcErr := filepath.Abs(authDir)
+	dstAbs, dstErr := filepath.Abs(dest)
+	if srcErr == nil && dstErr == nil && srcAbs == dstAbs {
+		return nil
+	}
+	if err := os.RemoveAll(dest); err != nil {
+		return fmt.Errorf("reset codex home: %w", err)
+	}
+	if err := os.MkdirAll(dest, 0o700); err != nil {
+		return fmt.Errorf("mkdir codex home: %w", err)
+	}
+	for _, name := range []string{"auth.json", "config.toml"} {
+		src := filepath.Join(authDir, name)
+		info, err := os.Stat(src)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) && name == "config.toml" {
+				continue
+			}
+			return fmt.Errorf("stat codex %s: %w", name, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return fmt.Errorf("codex %s is not a regular file", name)
+		}
+		if err := copyFile(src, filepath.Join(dest, name), 0o600); err != nil {
+			return fmt.Errorf("copy codex %s: %w", name, err)
+		}
+	}
+	return nil
+}
 
 // copySharedAuthIfPresent reads sharedAuthHostPath (or the
 // PICOCLAW_SHARED_AUTH_PATH override) and copies it into the tenant
@@ -227,7 +328,7 @@ func (p *Provisioner) runProvision(
 	ws *store.Workspace,
 	skipDashboardPassword bool,
 	uiProfile UIVisibilityProfile,
-) (err error) {
+) error {
 	success := false
 	volumeCreated := false
 	litellmKeyCreated := false
@@ -272,9 +373,6 @@ func (p *Provisioner) runProvision(
 		}
 	}
 	if t.IsPublic {
-		if err := EnsurePublicWebChannelConfig(t.VolumePath); err != nil {
-			return fmt.Errorf("ensure public-web config: %w", err)
-		}
 		// Override workspace/AGENT.md so the main agent IS Sofia from the
 		// first message, instead of falling back to Rafael (front-line of
 		// the cliente team prompt). Canonical AGENT.md is preserved as
@@ -329,11 +427,30 @@ func (p *Provisioner) runProvision(
 			}
 		}
 
-		// 3. Per-tenant LiteLLM virtual key + placeholder substitution. The
-		// workspace's config.json carries "${LITELLM_KEY}" / "${LITELLM_URL}" /
-		// "${TENANT_ID}" placeholders that get filled in here. We never write
-		// config.json from scratch — operator owns the schema.
-		if p.LiteLLM != nil {
+		// 3. Model routing + placeholder substitution. Shared CLI auth is the
+		// preferred SaaS path when the operator mounted Claude/Codex credentials:
+		// no upstream API key is written into the tenant. LiteLLM remains the
+		// fallback for deployments that have not configured CLI auth dirs.
+		cliClaude, cliCodex := p.sharedCLIModelRouting()
+		if cliClaude || cliCodex {
+			if cliCodex {
+				codexDir, err := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
+				if err != nil {
+					return fmt.Errorf("resolve codex cli auth dir: %w", err)
+				}
+				if err := prepareCodexCLIHome(t.VolumePath, codexDir); err != nil {
+					return fmt.Errorf("prepare codex cli home: %w", err)
+				}
+			}
+			if err := SubstituteConfigPlaceholders(t.VolumePath, map[string]string{
+				"${TENANT_ID}": t.ID,
+			}); err != nil {
+				return fmt.Errorf("substitute placeholders: %w", err)
+			}
+			if err := ApplySaaSCLIModelRouting(t.VolumePath, cliClaude, cliCodex); err != nil {
+				return fmt.Errorf("apply saas cli model routing: %w", err)
+			}
+		} else if p.LiteLLM != nil {
 			out, err := p.LiteLLM.GenerateKey(ctx, litellm.GenerateKeyInput{
 				TenantID:         t.ID,
 				MonthlyBudgetUSD: t.MonthlyBudgetUSD,
@@ -592,7 +709,7 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 	//   - "supabase" backend (legacy): trusted_gateway — controlplane signs
 	//     auth headers because the launcher doesn't speak Supabase JWT.
 	//   - IsPublic tenants: trusted_gateway — controlplane signs anonymous
-	//     "public" claims for the public-web chat surface.
+	//     "public" claims for the tenant-root Sofia chat over /pico/ws.
 	//   - everything else (default "launcher"/"local"): launcher runs in its
 	//     native "local" mode with the dashboardauth.db bcrypt + HttpOnly
 	//     cookie, and the controlplane is a transparent reverse proxy. This
@@ -640,19 +757,8 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 		env["BROWSER_CDP_URL"] = u
 	}
 
-	// Public-onboarding tenants run skills that call the controlplane via
-	// HMAC-signed callback (mark-qualified.sh, submit-intake.sh). Both vars
-	// are read by the scripts; skipping them means the skills exit with a
-	// `required` env error and Clara has to apologize in chat. We propagate
-	// them only for IsPublic tenants — regular tenants have no business
-	// signing onboarding callbacks.
 	if t.IsPublic {
-		if s := p.Cfg.OnboardingCallbackSecret; s != "" {
-			env["PICOCLAW_ONBOARDING_CALLBACK_SECRET"] = s
-		}
-		if u := p.Cfg.OnboardingCallbackURL; u != "" {
-			env["PICOCLAW_ONBOARDING_CALLBACK_URL"] = u
-		}
+		env["PICOCLAW_PUBLIC_TENANT"] = "true"
 		// Catarina's `enviar-whatsapp-jotaduo` skill POSTs to the sidecar
 		// using these two envs. Both MUST be present for the skill to work —
 		// the script fails fast with a clear message if either is missing.
@@ -666,15 +772,10 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 			env["JOTADUO_WA_URL"] = p.Cfg.JotaduoWAURL
 			env["JOTADUO_WA_HMAC_SECRET"] = s
 		}
-		// publicweb is the channel anonymous visitors use via /api/public/chat*
-		// (SSE, no auth). pico stays in the allowlist because the launcher's
-		// embedded React SPA still renders for visitors on the tenant subdomain
-		// and falls back to /pico/ws for chat — disabling it makes the SPA
-		// show "Pico token unavailable" + WebSocket connection failed. The
-		// pico token is launcher-internal, not user-level auth, so anonymous
-		// access via WS is the same effective trust boundary as publicweb SSE.
-		// whatsapp_native stays as the legacy default for outbound messaging.
-		env["PICOCLAW_ALLOWED_CHANNELS"] = "whatsapp_native,pico,public-web"
+		// Public tenants use the same browser chat channel as the launcher:
+		// /pico/ws. The old anonymous SSE path is legacy and is intentionally
+		// not enabled for new or recreated public tenants.
+		env["PICOCLAW_ALLOWED_CHANNELS"] = "whatsapp_native,pico"
 	}
 
 	spec := ContainerSpec{
@@ -707,46 +808,57 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 				spec.Env["PICOCLAW_FRONTEND_DIST_DIR"] = WorkspaceFrontendMountTarget
 			}
 		case errors.Is(err, store.ErrWorkspaceNotFound):
-			log.Printf("WARN: provisioner: tenant %s references missing workspace %s; omitting frontend bind", t.ID, *t.WorkspaceID)
+			log.Printf(
+				"WARN: provisioner: tenant %s references missing workspace %s; omitting frontend bind",
+				t.ID,
+				*t.WorkspaceID,
+			)
 		default:
 			return ContainerSpec{}, fmt.Errorf("lookup workspace %s: %w", *t.WorkspaceID, err)
 		}
 	}
 
 	// Shared CLI provider auth dirs — bind-mount the operator's OAuth
-	// credentials read-only into every tenant. Tenants configured with
-	// provider="claude-cli" / "codex-cli" then call the bundled binary
-	// inside the container without per-tenant authentication.
+	// credentials for Claude read-only into every tenant. Codex gets a
+	// writable snapshot prepared under the tenant volume because `codex exec`
+	// writes helper/config state into CODEX_HOME.
 	//
-	// Mounted read-only so a compromised tenant cannot rotate / exfil
-	// the operator's tokens — refresh happens on the host.
+	// Claude remains mounted read-only so a compromised tenant cannot rotate
+	// the operator's source tokens — refresh happens on the host.
 	//
 	// Skip silently when env unset OR dir missing OR not a directory.
 	// Decouples the deploy from the auth setup: image bumps land fine
 	// without the operator step; the moment the operator creates the
 	// dir + writes credentials, every new tenant inherits the auth.
+	claudeAuthDir, claudeAuthErr := resolveClaudeCLIAuthDir(p.Cfg.TenantClaudeCliAuthDir)
+	codexAuthDir, codexAuthErr := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
+	if codexAuthErr != nil {
+		log.Printf("WARN: provisioner: tenant %s codex-cli auth dir: %v (skipping CODEX_HOME)",
+			t.ID, codexAuthErr)
+	} else if codexAuthDir != "" {
+		spec.Env["CODEX_HOME"] = tenantCodexCLIHomeContainer
+	}
 	for _, mount := range []struct {
 		dir    string
+		err    error
 		target string
 		label  string
 	}{
-		{p.Cfg.TenantClaudeCliAuthDir, "/root/.claude", "claude-cli"},
-		{p.Cfg.TenantCodexCliAuthDir, "/root/.codex", "codex-cli"},
+		{claudeAuthDir, claudeAuthErr, "/root/.claude", "claude-cli"},
 	} {
-		dir := strings.TrimSpace(mount.dir)
-		if dir == "" {
+		if mount.err != nil {
+			log.Printf("WARN: provisioner: tenant %s %s auth dir: %v (skipping mount)",
+				t.ID, mount.label, mount.err)
 			continue
 		}
-		if info, err := os.Stat(dir); err == nil && info.IsDir() {
-			spec.ExtraMounts = append(spec.ExtraMounts, ContainerMount{
-				Source:   dir,
-				Target:   mount.target,
-				ReadOnly: true,
-			})
-		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-			log.Printf("WARN: provisioner: tenant %s %s auth dir %s: %v (skipping mount)",
-				t.ID, mount.label, dir, err)
+		if mount.dir == "" {
+			continue
 		}
+		spec.ExtraMounts = append(spec.ExtraMounts, ContainerMount{
+			Source:   mount.dir,
+			Target:   mount.target,
+			ReadOnly: true,
+		})
 	}
 
 	return spec, nil

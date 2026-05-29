@@ -1,6 +1,11 @@
 package policy
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestDefaultRolePolicyRequestPermissions(t *testing.T) {
 	rp := DefaultRolePolicy()
@@ -26,6 +31,11 @@ func TestDefaultRolePolicyRequestPermissions(t *testing.T) {
 		{RoleOperator, "GET", "/api/internal-agents", false},
 		{RoleViewer, "GET", "/api/internal-agents", false},
 		{RoleViewer, "POST", "/api/agents", false},
+		{RolePublic, "GET", "/pico/ws", true},
+		{RolePublic, "POST", "/api/sessions", true},
+		{RolePublic, "GET", "/api/gateway/status", true},
+		{RolePublic, "PUT", "/api/config", false},
+		{RolePublic, "POST", "/api/gateway/restart", false},
 		{RolePlatformAdmin, "DELETE", "/api/models/0", true},
 	}
 
@@ -78,6 +88,40 @@ func TestNormalizeRolePolicyPreservesExplicitFineFeatures(t *testing.T) {
 	})
 	if got := rp[RoleViewer][FeatureSkillEditor]; got != AccessRead {
 		t.Fatalf("skill_editor = %q, want explicit read", got)
+	}
+}
+
+func TestLoadFileAcceptsLegacyRawRolePolicy(t *testing.T) {
+	tmp := t.TempDir()
+	raw := RolePolicy{
+		RolePublic: {
+			FeatureChat: AccessWrite,
+			FeatureLogs: AccessRead,
+		},
+		RoleViewer: {
+			FeatureChat: AccessNone,
+		},
+	}
+	b, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("Marshal raw role policy: %v", err)
+	}
+	if writeErr := os.WriteFile(filepath.Join(tmp, "launcher_policy.json"), b, 0o644); writeErr != nil {
+		t.Fatalf("Write legacy launcher_policy.json: %v", writeErr)
+	}
+
+	got, err := LoadFile(tmp)
+	if err != nil {
+		t.Fatalf("LoadFile legacy raw role policy: %v", err)
+	}
+	if got.RolePolicy[RolePublic][FeatureChat] != AccessWrite {
+		t.Fatalf("public chat = %q, want write", got.RolePolicy[RolePublic][FeatureChat])
+	}
+	if got.RolePolicy[RolePublic][FeatureLogs] != AccessRead {
+		t.Fatalf("public logs = %q, want read", got.RolePolicy[RolePublic][FeatureLogs])
+	}
+	if got.RolePolicy[RoleTenantOwner][FeatureModels] != AccessWrite {
+		t.Fatalf("tenant owner models = %q, want write from defaults", got.RolePolicy[RoleTenantOwner][FeatureModels])
 	}
 }
 

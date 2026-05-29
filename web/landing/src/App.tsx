@@ -6,7 +6,7 @@
  */
 
 const ADMIN_URL = "https://adm.jotaduo.com"
-const PRE_CADASTRO_URL = "/pre-cadastro"
+const PUBLIC_TENANT_CREATION_URL = `${ADMIN_URL}/tenants/new?type=publico`
 const SUPPORT_EMAIL = "dev@jotaduo.com"
 
 const networkRows = [
@@ -160,8 +160,8 @@ function Nav() {
               Entrar
             </a>
           </span>
-          <a className="button button-primary" href={PRE_CADASTRO_URL}>
-            Criar minha rede
+          <a className="button button-primary" href={PUBLIC_TENANT_CREATION_URL}>
+            Criar tenant público
           </a>
         </div>
       </div>
@@ -353,8 +353,8 @@ function Hero() {
             aprovação quando a decisão precisa de humano.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a className="button button-primary button-large" href={PRE_CADASTRO_URL}>
-              Criar minha rede
+            <a className="button button-primary button-large" href={PUBLIC_TENANT_CREATION_URL}>
+              Criar tenant público
             </a>
             <a className="button button-secondary button-large" href={ADMIN_URL}>
               Ver painel
@@ -617,7 +617,7 @@ function CallToAction() {
           prepara agentes para executar com revisão humana quando necessário.
         </p>
         <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <a className="button button-primary button-large" href={PRE_CADASTRO_URL}>
+          <a className="button button-primary button-large" href={PUBLIC_TENANT_CREATION_URL}>
             Montar rede inicial
           </a>
           <a className="button button-secondary button-large" href={ADMIN_URL}>

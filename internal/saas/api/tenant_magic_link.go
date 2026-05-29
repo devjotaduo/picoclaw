@@ -31,15 +31,13 @@ const magicLinkCookieName = "picoclaw_magic"
 // Operators can override per-call when generating via API.
 const defaultMagicLinkTTL = 24 * time.Hour
 
-// maxMagicLinkTTL caps how long a single link can stay valid. 30 days is
-// generous for "send link to lead, they may take a week to click" but
-// short enough that a leaked link expires before becoming dangerous.
+// maxMagicLinkTTL caps how long a single link can stay valid.
 const maxMagicLinkTTL = 30 * 24 * time.Hour
 
 // magicLinkClaims is the signed payload embedded in the URL token.
 //
-// Role is optional and defaults to "public" (the lead-onboarding case the
-// link was originally built for). Setting it to "tenant_owner" or
+// Role is optional and defaults to "public" (anonymous tenant access).
+// Setting it to "tenant_owner" or
 // "tenant_admin" makes the link grant that role on click — useful for
 // password-less owner access from the admin panel. The HMAC signature
 // covers the marshaled JSON, so the role field is tamper-proof; old
@@ -147,11 +145,6 @@ type magicLinkGenerateRequest struct {
 	// clamped to maxMagicLinkTTL (or to magicLinkRoleTTLCap when Role
 	// asks for an elevated role).
 	TTLSeconds int64 `json:"ttl_seconds,omitempty"`
-	// IntakeID optionally ties the link to a specific company_intakes row.
-	// When set, the onboarding-callback submit-intake handler auto-marks
-	// every active link tied to this intake as consumed (the visitor will
-	// see the thank-you page on any subsequent click).
-	IntakeID string `json:"intake_id,omitempty"`
 	// Role optionally elevates the link from the default "public" visitor
 	// role to "tenant_owner" / "tenant_admin". Empty / "public" produces
 	// the legacy lead-onboarding link. Validated against magicLinkAllowedRoles.
@@ -185,7 +178,6 @@ func (h *Handler) createTenantMagicAccessBundle(
 	t *store.Tenant,
 	role string,
 	ttl time.Duration,
-	intakeID string,
 ) (*tenantMagicAccessBundle, error) {
 	if h.Cfg.GatewaySharedSecret == "" {
 		return nil, errors.New("o painel não está configurado para gerar link de acesso")
@@ -220,9 +212,6 @@ func (h *Handler) createTenantMagicAccessBundle(
 		Nonce:     claims.Nonce,
 		TenantID:  t.ID,
 		ExpiresAt: time.Unix(claims.Exp, 0).UTC(),
-	}
-	if intakeID != "" {
-		storeRow.IntakeID = &intakeID
 	}
 	if h.MagicLinks != nil {
 		if err := h.MagicLinks.Insert(ctx, storeRow); err != nil {
@@ -283,7 +272,7 @@ func (h *Handler) handleGenerateMagicLink(w http.ResponseWriter, r *http.Request
 	if req.TTLSeconds > 0 {
 		ttl = time.Duration(req.TTLSeconds) * time.Second
 	}
-	bundle, err := h.createTenantMagicAccessBundle(r.Context(), t, req.Role, ttl, req.IntakeID)
+	bundle, err := h.createTenantMagicAccessBundle(r.Context(), t, req.Role, ttl)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "role must") {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -408,8 +397,8 @@ func (h *Handler) consumeMagicLink(w http.ResponseWriter, r *http.Request, t *st
 // magicLinkClaimsFromCookie reads + validates the per-tenant magic cookie
 // off the request and returns the claims when present, valid, AND not
 // marked consumed in the DB tracking row. The consumed check means a
-// visitor who already has the cookie set loses access the moment Clara
-// submits the intake (without waiting for cookie expiry).
+// visitor who already has the cookie set loses access as soon as an admin
+// revokes the link (without waiting for cookie expiry).
 func (h *Handler) magicLinkClaimsFromCookie(r *http.Request, t *store.Tenant) (magicLinkClaims, bool) {
 	c, err := r.Cookie(magicLinkCookieName)
 	if err != nil {
@@ -558,7 +547,7 @@ type magicLinkConsumeRequest struct {
 
 // handleConsumeMagicLink lets the operator mark a magic link consumed
 // without waiting for the intake-submit callback. Useful for ad-hoc links
-// not tied to an intake, or to short-circuit a stuck conversation.
+// or to short-circuit a stuck conversation.
 //
 // Admin-only (router enforces requirePlatformAdmin).
 func (h *Handler) handleConsumeMagicLink(w http.ResponseWriter, r *http.Request) {
@@ -597,7 +586,6 @@ func (h *Handler) handleConsumeMagicLink(w http.ResponseWriter, r *http.Request)
 
 type magicLinkListItem struct {
 	Nonce      string     `json:"nonce"`
-	IntakeID   *string    `json:"intake_id,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
 	ExpiresAt  time.Time  `json:"expires_at"`
 	ConsumedAt *time.Time `json:"consumed_at,omitempty"`
@@ -634,7 +622,6 @@ func (h *Handler) handleListMagicLinks(w http.ResponseWriter, r *http.Request) {
 	for _, m := range rows {
 		out = append(out, magicLinkListItem{
 			Nonce:      m.Nonce,
-			IntakeID:   m.IntakeID,
 			CreatedAt:  m.CreatedAt,
 			ExpiresAt:  m.ExpiresAt,
 			ConsumedAt: m.ConsumedAt,

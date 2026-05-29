@@ -358,12 +358,12 @@ func TestSharedHealthReadyTracksManagerLifecycle(t *testing.T) {
 
 func TestSetupHTTPServerRegistersWebhookSubpaths(t *testing.T) {
 	m := newTestManager()
-	m.channels["public-web"] = &mockWebhookChannel{path: "/api/public/chat"}
+	m.channels["webhook-test"] = &mockWebhookChannel{path: "/api/webhook-test"}
 
 	m.SetupHTTPServerListeners(nil, "127.0.0.1:0", nil)
 	m.httpServer = nil
 
-	for _, path := range []string{"/api/public/chat", "/api/public/chat/health", "/api/public/chat/stream"} {
+	for _, path := range []string{"/api/webhook-test", "/api/webhook-test/health", "/api/webhook-test/stream"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rec := httptest.NewRecorder()
 

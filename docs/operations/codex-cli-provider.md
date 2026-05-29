@@ -30,9 +30,11 @@ chmod 700 /etc/picoclaw/codex-auth
 
 ```bash
 # Linux/Mac:
+ssh root@<vps> 'mkdir -p /etc/picoclaw/codex-auth/.codex && chmod 700 /etc/picoclaw/codex-auth /etc/picoclaw/codex-auth/.codex'
 scp ~/.codex/auth.json root@<vps>:/etc/picoclaw/codex-auth/.codex/auth.json
 
 # Windows PowerShell:
+ssh root@<vps> 'mkdir -p /etc/picoclaw/codex-auth/.codex && chmod 700 /etc/picoclaw/codex-auth /etc/picoclaw/codex-auth/.codex'
 scp $env:USERPROFILE\.codex\auth.json root@<vps>:/etc/picoclaw/codex-auth/.codex/auth.json
 ```
 
@@ -65,41 +67,70 @@ docker compose -p picoclaw-saas \
   up -d --force-recreate controlplane
 ```
 
-### 4. Configurar tenant com fallback chain
+### 4. Configurar fallback chain
 
-No `config.json::model_list`, adicionar uma entrada codex E referenciar
-ela no `fallbacks` da entrada primária:
+Para tenants novos, quando Claude e Codex CLI auth estão válidos, o
+provisioner materializa automaticamente o primário `claude-cli-sonnet` com
+fallback `codex-cli-gpt-5`.
+
+O Codex não é bind-mounted em `/root/.codex`: o provisioner copia um snapshot
+mínimo (`auth.json` e, se existir, `config.toml`) para o volume do tenant e
+seta `CODEX_HOME=/root/.picoclaw/.codex`. Isso mantém o diretório do operador
+imutável, evita levar sessões/logs/memórias locais para o tenant e deixa o
+`codex exec` escrever helper/config state sem falhar em filesystem read-only.
+
+Para tenants existentes, rode `recreate` depois de configurar a env no
+controlplane. O provisioner copia um snapshot limpo de `auth.json`/`config.toml`
+para o volume, seta `CODEX_HOME` no novo container e materializa
+`agents.defaults.model_fallbacks=["codex-cli-gpt-5"]`:
+
+```bash
+docker exec controlplane picoclaw-tenantctl recreate <tenant-id>
+```
+
+Se for necessário fazer um hotfix manual sem passar pelo lifecycle, ajuste
+`agents.defaults.model_fallbacks` e o `model_list`:
 
 ```json
 {
-  "agents": {"defaults": {"model_name": "default", "provider": "claude-cli"}},
+  "agents": {
+    "defaults": {
+      "model_name": "claude-cli-sonnet",
+      "provider": "claude-cli",
+      "model_fallbacks": ["codex-cli-gpt-5"]
+    }
+  },
   "model_list": [
     {
-      "model_name": "default",
+      "model_name": "claude-cli-sonnet",
       "provider": "claude-cli",
       "model": "sonnet",
       "workspace": "/root/.picoclaw/workspace",
-      "fallbacks": ["codex-fallback"]
+      "fallbacks": ["codex-cli-gpt-5"]
     },
     {
-      "model_name": "codex-fallback",
+      "model_name": "codex-cli-gpt-5",
       "provider": "codex-cli",
-      "model": "gpt-5",
+      "model": "codex-cli",
       "workspace": "/root/.picoclaw/workspace"
     }
   ]
 }
 ```
 
+`"model": "codex-cli"` faz o provider não passar `-m`; o modelo efetivo vem do
+`config.toml` do auth dir do operador. Isso evita forçar um modelo não aceito
+por contas ChatGPT usadas via Codex CLI.
+
 Quando o `claude-cli` retorna erro (rate-limit, token expirado, API
 indisponível), `pkg/providers/fallback.go` automaticamente tenta o
-`codex-fallback`. Sem intervenção manual.
+`codex-cli-gpt-5`. Sem intervenção manual.
 
 ## Verificação
 
 ```bash
 ssh root@<vps>
-docker exec tenant-<id> codex auth status 2>&1 | head -5
+docker exec tenant-<id> codex login status 2>&1 | head -5
 # Esperado: signed in, account info, etc.
 ```
 
@@ -109,6 +140,7 @@ Codex CLI tokens expiram igual claude. Refresh:
 
 ```bash
 # Atalho (operador re-uploads do local)
+ssh root@<vps> 'mkdir -p /etc/picoclaw/codex-auth/.codex'
 scp ~/.codex/auth.json root@<vps>:/etc/picoclaw/codex-auth/.codex/auth.json
 
 # OU interativo
