@@ -1,6 +1,10 @@
 package api
 
 import (
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -91,6 +95,86 @@ func TestEscapeJSONString_ProducesValidJSON(t *testing.T) {
 		if !import_json(s) {
 			t.Errorf("escapeJSONString(%q) did not produce valid JSON", s)
 		}
+	}
+}
+
+func TestApplyWhatsAppInboxUnavailableFallbackChats(t *testing.T) {
+	req := &http.Request{
+		Method: http.MethodGet,
+		URL:    &url.URL{Path: "/whatsapp_native/inbox/chats"},
+	}
+	res := &http.Response{
+		StatusCode: http.StatusNotFound,
+		Status:     "404 Not Found",
+		Header:     http.Header{"Content-Type": []string{"text/plain; charset=utf-8"}},
+		Body:       io.NopCloser(strings.NewReader("not found")),
+		Request:    req,
+	}
+
+	applyWhatsAppInboxUnavailableFallback(res)
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("StatusCode = %d, want 200", res.StatusCode)
+	}
+	body, _ := io.ReadAll(res.Body)
+	if got := string(body); !strings.Contains(got, `"chats":[]`) || !strings.Contains(got, `"unavailable":true`) {
+		t.Fatalf("fallback body = %s", got)
+	}
+	if got := res.Header.Get("X-PicoClaw-Upstream-Unavailable"); got != "whatsapp-native-inbox" {
+		t.Fatalf("fallback header = %q", got)
+	}
+	if got := res.Header.Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+}
+
+func TestApplyWhatsAppInboxUnavailableFallbackReport(t *testing.T) {
+	req := &http.Request{
+		Method: http.MethodGet,
+		URL: &url.URL{
+			Path:     "/whatsapp_native/inbox/reports",
+			RawQuery: "from=10&to=20",
+		},
+	}
+	res := &http.Response{
+		StatusCode: http.StatusNotFound,
+		Status:     "404 Not Found",
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader("not found")),
+		Request:    req,
+	}
+
+	applyWhatsAppInboxUnavailableFallback(res)
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("StatusCode = %d, want 200", res.StatusCode)
+	}
+	body, _ := io.ReadAll(res.Body)
+	got := string(body)
+	for _, want := range []string{`"from":10`, `"to":20`, `"messages":0`, `"daily":[]`, `"unavailable":true`} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("fallback report missing %s: %s", want, got)
+		}
+	}
+}
+
+func TestApplyWhatsAppInboxUnavailableFallbackDoesNotMaskChatDetail(t *testing.T) {
+	req := &http.Request{
+		Method: http.MethodGet,
+		URL:    &url.URL{Path: "/whatsapp_native/inbox/chats/5511999999999@s.whatsapp.net"},
+	}
+	res := &http.Response{
+		StatusCode: http.StatusNotFound,
+		Status:     "404 Not Found",
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader("not found")),
+		Request:    req,
+	}
+
+	applyWhatsAppInboxUnavailableFallback(res)
+
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("StatusCode = %d, want 404", res.StatusCode)
 	}
 }
 

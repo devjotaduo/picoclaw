@@ -48,39 +48,45 @@ auditoria não está materializada como tenant público real.
   locators ambíguos depois das mudanças recentes da UI.
 - O drawer "Chat de teste" passou de `z-30` para `z-[60]`, ficando acima
   do header fixo e permitindo clicar no controle de largura.
+- `/api/launcher/ui-visibility` agora lê o arquivo da raiz do tenant e,
+  em checkout local, cai para `workspace/ui-visibility.json`, mantendo a
+  mesma precedência do volume provisionado.
+- `/api/whatsapp/chats`, `/api/whatsapp/reports` e o stream de eventos
+  agora retornam fallback explícito quando o gateway local não expõe
+  `whatsapp_native/inbox`; o painel deixa de quebrar em `404` e mostra
+  estado indisponível/zerado.
+- O wizard `/admin/tenants/new` não consulta mais
+  `/api/admin/saas/launcher-profiles` antes do usuário escolher o tipo de
+  tenant, removendo o `403` prematuro do primeiro passo.
+- A documentação do fluxo público foi atualizada: o bridge
+  Sofia→Catarina não é mais "planejado"; ele roda via cron workspace
+  `onboarding-bridge-sofia-catarina`.
 
-## Bloqueadores antes de produção
+## Pendências antes de produção
 
 1. **Criar tenant público real em staging/prod e validar o fluxo vivo.**
    O local respondeu `401`/`404` em `/api/public/chat*`, então não valida
    a entrada anônima Sofia. O caminho correto é criar pelo wizard
    `Novo tenant` com `tenant_type=publico`, não usar `/pre-cadastro`.
 
-2. **Habilitar e testar o proxy SaaS admin.**
-   `/api/admin/saas/launcher-profiles` retornou `403` porque
-   `PICOCLAW_SAAS_ADMIN_MODE` não está ativo neste launcher local. Em
-   staging/prod, validar `PICOCLAW_SAAS_ADMIN_MODE=true` com
-   `PICOCLAW_SAAS_BASE_URL`, email e senha do controlplane.
+2. **Habilitar e testar criação real pelo proxy SaaS admin.**
+   O primeiro passo do wizard não chama mais o proxy antes da hora, mas a
+   criação de tenant ainda precisa de `PICOCLAW_SAAS_ADMIN_MODE=true`,
+   `PICOCLAW_SAAS_BASE_URL` e credenciais reais do controlplane em
+   staging/prod.
 
-3. **Garantir `ui-visibility.json` em todo tenant criado.**
-   `/api/launcher/ui-visibility` retornou `404` no local porque o arquivo
-   não existe no `$PICOCLAW_HOME`. Em produção, o workspace usado pelo
-   tenant público precisa carregar esse arquivo e o provisioner precisa
-   escrever `active_profile=public`.
+3. **Confirmar materialização de `ui-visibility.json` no tenant criado.**
+   O local agora cai para `workspace/ui-visibility.json`, mas produção
+   ainda precisa validar que o provisioner escreve o arquivo na raiz do
+   volume e aplica `active_profile=public` no tenant público.
 
-4. **Validar WhatsApp inbox/report no gateway.**
-   `/api/whatsapp/chats` e `/api/whatsapp/reports` retornaram `404`.
-   O launcher só faz proxy para `/whatsapp_native/inbox/*`; o gateway
-   precisa expor esses endpoints ou o painel deve esconder/explicar o
-   recurso quando o canal estiver indisponível.
+4. **Validar WhatsApp real ponta a ponta.**
+   O painel local agora recebe fallback quando o inbox nativo está
+   indisponível, mas produção precisa confirmar envio real da Catarina,
+   resposta do lead, consumo por Catarina e relatório do inbox com dados
+   reais do sidecar/gateway.
 
-5. **Fechar a automação Sofia → Catarina.**
-   A documentação atual ainda marca a bridge automática como planejada.
-   Para produção com operação sem intervenção, Catarina precisa disparar
-   a primeira mensagem institucional quando Sofia marca discovery completo,
-   ou deve existir SOP explícito de acionamento manual pelo admin/Rafael.
-
-6. **Validar estado real de prontidão do tenant.**
+5. **Validar estado real de prontidão do tenant.**
    `validate-readiness` retornou `ok=false` no workspace local por faltar
    `nome`, `segmento`, `contato_email` e `contato_whatsapp`. Isso é
    esperado em workspace vazio, mas produção precisa bloquear promoção
@@ -102,4 +108,3 @@ auditoria não está materializada como tenant público real.
   - container recriado sem segredo institucional do WhatsApp
   - login do dono funcionando
   - painel completo disponível
-
