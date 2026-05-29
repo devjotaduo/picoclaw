@@ -20,18 +20,13 @@ import (
 	picoclawconfig "github.com/sipeed/picoclaw/pkg/config"
 )
 
-// sharedAuthHostPath is where the operator places auth.json with OAuth
-// credentials shared across all auto-provisioned tenants (Codex, Claude
-// CLI, GitHub, etc.). Override via PICOCLAW_SHARED_AUTH_PATH env if the
-// operator prefers a different location.
-const sharedAuthHostPath = "/etc/picoclaw/shared-auth.json"
-
-// defaultSaaSLiteLLMModel must exist in docker/saas/litellm/config.yaml.
-// Tenants receive a per-tenant virtual LiteLLM key, so their config should
-// point at the controlplane-managed model name, not at raw upstream providers.
-const defaultSaaSLiteLLMModel = "gpt-4o-mini"
-
 const (
+	// sharedAuthHostPath is where the operator places auth.json with OAuth
+	// credentials shared across all auto-provisioned tenants (Codex, Claude
+	// CLI, GitHub, etc.). Override via PICOCLAW_SHARED_AUTH_PATH env if the
+	// operator prefers a different location.
+	sharedAuthHostPath = "/etc/picoclaw/shared-auth.json"
+
 	tenantCodexCLIHomeRel       = ".codex"
 	tenantCodexCLIHomeContainer = "/root/.picoclaw/.codex"
 )
@@ -333,7 +328,7 @@ func (p *Provisioner) runProvision(
 	ws *store.Workspace,
 	skipDashboardPassword bool,
 	uiProfile UIVisibilityProfile,
-) (err error) {
+) error {
 	success := false
 	volumeCreated := false
 	litellmKeyCreated := false

@@ -216,8 +216,8 @@ func TestApplySaaSLiteLLMModelRoutingMaterializesTenantModel(t *testing.T) {
 	}
 
 	var cfg map[string]any
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		t.Fatal(err)
+	if decodeErr := json.Unmarshal(raw, &cfg); decodeErr != nil {
+		t.Fatal(decodeErr)
 	}
 	defaults := cfg["agents"].(map[string]any)["defaults"].(map[string]any)
 	if defaults["provider"] != "litellm" || defaults["model_name"] != "gpt-4o-mini" {

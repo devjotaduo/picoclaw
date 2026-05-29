@@ -128,8 +128,8 @@ func SanitizeTenantSecurityConfig(volumePath string) error {
 	}
 
 	var root map[string]any
-	if err := yaml.Unmarshal(data, &root); err != nil {
-		return fmt.Errorf("parse .security.yml: %w", err)
+	if decodeErr := yaml.Unmarshal(data, &root); decodeErr != nil {
+		return fmt.Errorf("parse .security.yml: %w", decodeErr)
 	}
 	channels, ok := root["channels"].(map[string]any)
 	if !ok {
@@ -501,8 +501,8 @@ func SubstituteRedactedModelKeys(destDir, litellmKey string) error {
 	}
 
 	var root map[string]any
-	if err := yaml.Unmarshal(data, &root); err != nil {
-		return fmt.Errorf("parse .security.yml: %w", err)
+	if decodeErr := yaml.Unmarshal(data, &root); decodeErr != nil {
+		return fmt.Errorf("parse .security.yml: %w", decodeErr)
 	}
 	modelList, ok := root["model_list"].(map[string]any)
 	if !ok {
@@ -576,8 +576,8 @@ func ApplySaaSCLIModelRouting(destDir string, enableClaude, enableCodex bool) er
 		return fmt.Errorf("read config.json: %w", err)
 	}
 	var cfg map[string]any
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return fmt.Errorf("parse config.json: %w", err)
+	if decodeErr := json.Unmarshal(data, &cfg); decodeErr != nil {
+		return fmt.Errorf("parse config.json: %w", decodeErr)
 	}
 
 	agents, err := configObject(cfg, "agents")
@@ -666,8 +666,8 @@ func removeSecurityModelList(destDir string) error {
 	}
 
 	var root yaml.Node
-	if err := yaml.Unmarshal(data, &root); err != nil {
-		return fmt.Errorf("parse .security.yml: %w", err)
+	if decodeErr := yaml.Unmarshal(data, &root); decodeErr != nil {
+		return fmt.Errorf("parse .security.yml: %w", decodeErr)
 	}
 	if len(root.Content) == 0 || root.Content[0].Kind != yaml.MappingNode {
 		return nil
@@ -731,8 +731,8 @@ func ApplySaaSLiteLLMModelRouting(destDir, modelName, litellmURL, litellmKey str
 		return fmt.Errorf("read config.json: %w", err)
 	}
 	var cfg map[string]any
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return fmt.Errorf("parse config.json: %w", err)
+	if decodeErr := json.Unmarshal(data, &cfg); decodeErr != nil {
+		return fmt.Errorf("parse config.json: %w", decodeErr)
 	}
 
 	agents, err := configObject(cfg, "agents")

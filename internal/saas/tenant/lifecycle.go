@@ -74,30 +74,25 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 	}
 	cliClaude, cliCodex := p.sharedCLIModelRouting()
 	if p.Cfg != nil {
-		if codexDir, err := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir); err != nil {
-			return fmt.Errorf("resolve codex cli auth dir: %w", err)
-		} else if codexDir != "" {
-			if err := prepareCodexCLIHome(t.VolumePath, codexDir); err != nil {
-				return fmt.Errorf("prepare codex cli home: %w", err)
+		codexDir, resolveErr := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
+		if resolveErr != nil {
+			return fmt.Errorf("resolve codex cli auth dir: %w", resolveErr)
+		}
+		if codexDir != "" {
+			if prepareErr := prepareCodexCLIHome(t.VolumePath, codexDir); prepareErr != nil {
+				return fmt.Errorf("prepare codex cli home: %w", prepareErr)
 			}
 		}
 	}
 	if cliClaude || cliCodex {
-		rawWorkspace, err := p.tenantUsesRawWorkspace(ctx, t)
-		if err != nil {
-			return fmt.Errorf("lookup workspace for cli routing: %w", err)
+		rawWorkspace, lookupErr := p.tenantUsesRawWorkspace(ctx, t)
+		if lookupErr != nil {
+			return fmt.Errorf("lookup workspace for cli routing: %w", lookupErr)
 		}
 		if !rawWorkspace {
-			if err := ApplySaaSCLIModelRouting(t.VolumePath, cliClaude, cliCodex); err != nil {
-				return fmt.Errorf("apply saas cli model routing: %w", err)
+			if applyErr := ApplySaaSCLIModelRouting(t.VolumePath, cliClaude, cliCodex); applyErr != nil {
+				return fmt.Errorf("apply saas cli model routing: %w", applyErr)
 			}
-		}
-	}
-	if codexDir, err := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir); err != nil {
-		return fmt.Errorf("resolve codex cli auth dir: %w", err)
-	} else if codexDir != "" {
-		if err := prepareCodexCLIHome(t.VolumePath, codexDir); err != nil {
-			return fmt.Errorf("prepare codex cli home: %w", err)
 		}
 	}
 	spec, err := p.buildSpec(ctx, t)
