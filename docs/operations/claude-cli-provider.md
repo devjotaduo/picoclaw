@@ -80,7 +80,15 @@ Para tenants novos, o provisioner faz isso automaticamente quando
 `.credentials.json`: ele troca o `config.json` materializado para
 `provider="claude-cli"` e remove `model_list` sensível de `.security.yml`.
 
-Para tenants existentes que não serão reprovisionados, ajuste manualmente o
+Para tenants existentes, rode `recreate` depois de configurar a env no
+controlplane. O provisioner reescreve o `config.json` preservando o volume e
+anexa o mount `/root/.claude` ao novo container:
+
+```bash
+docker exec controlplane picoclaw-tenantctl recreate <tenant-id>
+```
+
+Se for necessário fazer um hotfix manual sem passar pelo lifecycle, ajuste o
 `config.json`:
 
 ```json

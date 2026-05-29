@@ -73,7 +73,22 @@ Para tenants novos, quando Claude e Codex CLI auth estão válidos, o
 provisioner materializa automaticamente o primário `claude-cli-sonnet` com
 fallback `codex-cli-gpt-5`.
 
-Para tenants existentes que não serão reprovisionados, ajuste manualmente
+O Codex não é bind-mounted em `/root/.codex`: o provisioner copia um snapshot
+mínimo (`auth.json` e, se existir, `config.toml`) para o volume do tenant e
+seta `CODEX_HOME=/root/.picoclaw/.codex`. Isso mantém o diretório do operador
+imutável, evita levar sessões/logs/memórias locais para o tenant e deixa o
+`codex exec` escrever helper/config state sem falhar em filesystem read-only.
+
+Para tenants existentes, rode `recreate` depois de configurar a env no
+controlplane. O provisioner copia um snapshot limpo de `auth.json`/`config.toml`
+para o volume, seta `CODEX_HOME` no novo container e materializa
+`agents.defaults.model_fallbacks=["codex-cli-gpt-5"]`:
+
+```bash
+docker exec controlplane picoclaw-tenantctl recreate <tenant-id>
+```
+
+Se for necessário fazer um hotfix manual sem passar pelo lifecycle, ajuste
 `agents.defaults.model_fallbacks` e o `model_list`:
 
 ```json
