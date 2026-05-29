@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS company_intakes (
   crm_contact_id BIGINT,
   crm_company_id BIGINT,
   crm_deal_id BIGINT,
-  source TEXT NOT NULL DEFAULT 'pre-cadastro',
+  source TEXT NOT NULL DEFAULT 'legacy-intake',
   ip_hash TEXT NOT NULL DEFAULT '',
   user_agent TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

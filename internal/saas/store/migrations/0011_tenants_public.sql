@@ -7,4 +7,4 @@ CREATE INDEX IF NOT EXISTS tenants_is_public_idx ON tenants(is_public)
   WHERE is_public = true;
 
 COMMENT ON COLUMN tenants.is_public IS
-  'When true, tenant launcher accepts anonymous traffic on /api/public/* routes (no Supabase JWT). Used by the onboarding tenant serving /pre-cadastro visitors.';
+  'When true, tenant launcher accepts the minimal anonymous tenant-root Sofia chat surface without Supabase JWT.';

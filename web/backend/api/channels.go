@@ -42,7 +42,6 @@ var channelCatalog = []channelCatalogItem{
 	{Name: "matrix", ConfigKey: "matrix"},
 	{Name: "irc", ConfigKey: "irc"},
 	{Name: "mqtt", ConfigKey: "mqtt"},
-	{Name: config.ChannelPublicWeb, ConfigKey: config.ChannelPublicWeb},
 }
 
 type channelConfigResponse struct {
@@ -180,7 +179,6 @@ var channelSecretFieldMap = map[string][]string{
 	"whatsapp_native": {},
 	"maixcam":         {},
 	"mqtt":            {"username", "password"},
-	"public-web":      {},
 }
 
 func buildChannelConfigResponse(cfg *config.Config, item channelCatalogItem) channelConfigResponse {

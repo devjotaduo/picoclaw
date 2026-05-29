@@ -124,9 +124,6 @@ func (p *Provisioner) RunPostCloneChecks(ctx context.Context, tenantID string) [
 	containerHost := "tenant-" + t.ID
 	out = append(out, probeHTTPEndpoint(ctx, "tenant_health", containerHost, 18800, "/health"))
 	out = append(out, probeHTTPEndpoint(ctx, "tenant_ready", containerHost, 18800, "/ready"))
-	if t.IsPublic {
-		out = append(out, probeHTTPEndpoint(ctx, "public_chat_health", containerHost, 18800, "/api/public/chat/health"))
-	}
 	return out
 }
 

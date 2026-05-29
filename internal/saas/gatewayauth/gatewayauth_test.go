@@ -3,7 +3,6 @@ package gatewayauth
 import (
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 )
@@ -47,16 +46,15 @@ func TestVerifyRequestRejectsExpiredTimestamp(t *testing.T) {
 
 // TestVerifyRequest_AcceptsAnonymousSentinels proves the sentinel claims used
 // for public-onboarding tenant bypass survive Sign -> AnnotateRequest ->
-// VerifyRequest. The controlplane signs anonymous public-chat traffic with
+// VerifyRequest. The controlplane signs anonymous public tenant traffic with
 // UserID="anonymous" and Role="public" because the verifier rejects empty
-// UserID/Role; if these sentinels ever stopped round-tripping, every public
-// chat request would 401 at the launcher.
+// UserID/Role; if these sentinels ever stopped round-tripping, /pico/ws would
+// 401 at the launcher.
 func TestVerifyRequest_AcceptsAnonymousSentinels(t *testing.T) {
 	secret := "test-secret-1234567890"
 	now := time.Now()
 
-	req := httptest.NewRequest("POST", "https://onboarding.example.com/api/public/chat",
-		strings.NewReader(`{"message":"hi"}`))
+	req := httptest.NewRequest(http.MethodGet, "https://onboarding.example.com/pico/ws", nil)
 
 	AnnotateRequest(req, secret, Claims{
 		TenantID: "t-onboarding",

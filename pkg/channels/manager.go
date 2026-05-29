@@ -768,17 +768,11 @@ func (m *Manager) SetupHTTPServerListeners(listeners []net.Listener, addr string
 	// Discover and register webhook handlers and health checkers
 	m.registerHTTPHandlersLocked()
 
-	// WriteTimeout must accommodate the longest-lived response on the mux,
-	// which is the public-web SSE stream (`/api/public/chat/stream`): the
-	// stream stays open for the duration of the visitor's session, and
-	// each agent reply can take 30–180s when the LLM is claude-cli (cold
-	// start + Sonnet generation). At WriteTimeout=30s (the original
-	// value), the server killed the connection mid-stream, the handler
-	// returned via r.Context().Done(), `defer UnsubscribeStream` fired,
-	// and the next agent reply hit "publicweb: no active stream for
-	// session" — the bug behind the broken end-to-end funnel discovered
-	// 2026-05-28. 10min is well beyond any realistic LLM turn while still
-	// reaping zombie clients that hold sockets open indefinitely.
+	// WriteTimeout must accommodate long-lived webhook responses such as
+	// streaming channel handlers. Agent replies can take 30-180s when the
+	// LLM provider has a cold start or tool-call iteration, so keep this
+	// above the longest realistic turn while still reaping zombie clients
+	// that hold sockets open indefinitely.
 	//
 	// ReadTimeout stays at 30s — POST bodies are sub-KB JSON; no need
 	// to wait longer.

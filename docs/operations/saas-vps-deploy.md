@@ -207,7 +207,13 @@ docker compose exec controlplane /usr/local/bin/picoclaw-tenantctl \
 curl -sS https://${SAAS_BASE_DOMAIN}/                       # 200, SPA
 curl -sS https://admin.${SAAS_BASE_DOMAIN}/                 # 200, SPA
 # After creating a tenant público in the admin UI:
-curl -sS https://<public-subdomain>.${SAAS_BASE_DOMAIN}/api/public/chat/health
+curl -sS https://<public-subdomain>.${SAAS_BASE_DOMAIN}/api/launcher/ui-visibility
+curl -i -N --http1.1 \
+  -H 'Connection: Upgrade' \
+  -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+  -H 'Sec-WebSocket-Version: 13' \
+  https://<public-subdomain>.${SAAS_BASE_DOMAIN}/pico/ws
 ```
 
 ## Known landmines (already mitigated in repo)

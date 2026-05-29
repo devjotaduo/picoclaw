@@ -45,8 +45,8 @@ func TestCreateInput_Normalize(t *testing.T) {
 }
 
 // TestBuildSpec_PublicTenantInjectsPublicEnv locks the public-tenant contract:
-// public tenants get the sentinel env + public-web allowlist override, while
-// regular tenants keep the default allowlist.
+// public tenants get the sentinel env and keep the same browser chat channel
+// allowlist as regular tenants: whatsapp_native + pico.
 func TestBuildSpec_PublicTenantInjectsPublicEnv(t *testing.T) {
 	p := &Provisioner{
 		Cfg: &config.Config{
@@ -54,13 +54,13 @@ func TestBuildSpec_PublicTenantInjectsPublicEnv(t *testing.T) {
 		},
 	}
 
-	t.Run("public tenant gets public marker + public-web allowlist", func(t *testing.T) {
+	t.Run("public tenant gets public marker + pico allowlist", func(t *testing.T) {
 		spec, err := p.buildSpec(context.Background(), &store.Tenant{ID: "t1", IsPublic: true})
 		if err != nil {
 			t.Fatalf("buildSpec: %v", err)
 		}
-		if got := spec.Env["PICOCLAW_ALLOWED_CHANNELS"]; got != "whatsapp_native,pico,public-web" {
-			t.Errorf("ALLOWED_CHANNELS = %q, want %q", got, "whatsapp_native,pico,public-web")
+		if got := spec.Env["PICOCLAW_ALLOWED_CHANNELS"]; got != "whatsapp_native,pico" {
+			t.Errorf("ALLOWED_CHANNELS = %q, want %q", got, "whatsapp_native,pico")
 		}
 		if got := spec.Env["PICOCLAW_PUBLIC_TENANT"]; got != "true" {
 			t.Errorf("PUBLIC_TENANT = %q, want true", got)

@@ -205,9 +205,9 @@ Operator's expected flow:
    pwsh scripts/build-workspace-zip.ps1 -SourceDir workspace \
        -Slug onboarding -Name "Onboarding"
    ```
-   Sofia is the discovery agent in `workspace/agents/sofia/`, and
-   `channel_list.public-web` is present (disabled by default — the
-   upload flow flips it on for the public variant). Edit
+   Sofia is the discovery agent in `workspace/agents/sofia/`. Public
+   tenants use the regular launcher chat channel (`pico`) and the provisioner
+   writes `active_profile=public` for the visitor surface. Edit
    `workspace/workspace/AGENT.md` locally before building if you want
    to customize. The upload runs `validateWorkspaceConfigSemantics`
    (see "Workspace upload validation" below) — fix any blockers it
@@ -219,7 +219,7 @@ Operator's expected flow:
    admin promotion flow read that same state.
 
 See [`public-onboarding-tenant.md`](public-onboarding-tenant.md) for the
-visitor flow, public-web channel internals, and Turnstile gating.
+visitor flow and public tenant route contract.
 
 ---
 
