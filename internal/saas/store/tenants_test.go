@@ -39,7 +39,7 @@ func TestTenantStore_Insert_DefaultsToNotPublic(t *testing.T) {
 	}
 }
 
-// TestTenantStore_Insert_PublicTenant verifies the public-onboarding-tenant
+// TestTenantStore_Insert_PublicTenant verifies the public tenant
 // path: explicitly setting IsPublic=true persists and round-trips correctly.
 func TestTenantStore_Insert_PublicTenant(t *testing.T) {
 	db := openTestDB(t)

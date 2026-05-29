@@ -30,10 +30,9 @@ var (
 
 // buildToolEnv extends the parent process environment with PICOCLAW_CHAT_*
 // vars derived from the request-scoped tool context. Skill scripts run by
-// the agent (notably the public-onboarding tenant's onboarding-mark-qualified
-// and onboarding-submit-intake) read PICOCLAW_CHAT_SESSION_ID to identify
-// which intake row the controlplane callback should target, without the LLM
-// having to round-trip the ID through the conversation.
+// the agent read PICOCLAW_CHAT_SESSION_ID to correlate script output with
+// the active channel conversation, without the LLM having to round-trip the
+// ID through the conversation.
 //
 // Empty values are omitted so a CLI run (no chat context) doesn't shadow a
 // PICOCLAW_CHAT_* var the operator set deliberately in their shell.

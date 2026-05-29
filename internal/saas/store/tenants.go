@@ -62,8 +62,8 @@ type Tenant struct {
 	// for this tenant: "local" (sessions table) or "supabase" (verify JWT).
 	AuthBackend string
 	// IsPublic: when true, tenant launcher accepts anonymous traffic on
-	// /api/public/* routes (no Supabase JWT). Used by public onboarding
-	// tenants where visitors start in Sofia's chat.
+	// the public tenant route contract (no Supabase JWT). Visitors start
+	// in Sofia's chat.
 	IsPublic bool
 }
 

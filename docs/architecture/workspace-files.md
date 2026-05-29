@@ -148,7 +148,7 @@ or by SSH-editing the workspace on the host before the first auto-provision fire
 Workspaces page → "Validação do workspace" panel calls
 `GET /api/v1/workspaces/{id}/validate` and surfaces a checklist of every required + recommended
 file, marking which are present. A workspace with ANY required file missing will fail auto-
-provisioning — fix the gaps before Clara qualifies a lead.
+provisioning — fix the gaps before creating a tenant from that workspace.
 
 You can also hit the endpoint directly:
 

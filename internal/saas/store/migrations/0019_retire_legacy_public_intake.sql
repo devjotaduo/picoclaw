@@ -1,4 +1,4 @@
--- Retire the old Clara/pre-cadastro intake schema. Public onboarding now
+-- Retire the old Clara/pre-cadastro intake schema. The public tenant flow now
 -- starts inside an is_public=true tenant and uses Sofia over /pico/ws, with
 -- Catarina following up over the institutional WhatsApp sidecar.
 

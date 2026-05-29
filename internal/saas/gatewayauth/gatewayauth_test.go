@@ -45,7 +45,7 @@ func TestVerifyRequestRejectsExpiredTimestamp(t *testing.T) {
 }
 
 // TestVerifyRequest_AcceptsAnonymousSentinels proves the sentinel claims used
-// for public-onboarding tenant bypass survive Sign -> AnnotateRequest ->
+// for public tenant bypass survive Sign -> AnnotateRequest ->
 // VerifyRequest. The controlplane signs anonymous public tenant traffic with
 // UserID="anonymous" and Role="public" because the verifier rejects empty
 // UserID/Role; if these sentinels ever stopped round-tripping, /pico/ws would

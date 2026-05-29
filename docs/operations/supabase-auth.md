@@ -2,15 +2,15 @@
 
 This runbook covers the Supabase Auth integration that gates customer-tenant
 dashboard logins and the current tenant provisioning flow. The old public
-form route is not a live onboarding entrypoint anymore. Public onboarding now
-starts by creating a **Público** tenant in the admin UI and opening the
+form route is not a live onboarding entrypoint anymore. The public tenant flow
+now starts by creating a **Público** tenant in the admin UI and opening the
 tenant's public chat with Sofia.
 
 ## What this changes (and what it doesn't)
 
 | | Before | After |
 |---|---|---|
-| Provisioning public onboarding tenants | Manual scripts / legacy public form | Admin UI → New tenant → **Público** → tenant public chat |
+| Provisioning public tenants | Manual scripts / legacy public form | Admin UI → New tenant → **Público** → tenant public chat |
 | Provisioning customer tenants | Manual via admin UI | Promote a validated public tenant, or create manually |
 | Dashboard login for legacy tenants | bcrypt in `launcher-auth.db` (SQLite per tenant) | unchanged |
 | Dashboard login for new tenants | bcrypt | Supabase Auth (email + senha **e** magic link, ambos entregues no mesmo email transacional), JWT in `sb-*-auth-token` cookie on `.<base-domain>` |
@@ -22,7 +22,7 @@ Tenants carry an `auth_backend` column (`'local'` or `'supabase'`). The
 gateway middleware reads it per request and routes through the right
 verifier. Migration of legacy tenants is opt-in and out-of-scope here.
 
-## Current public onboarding path
+## Current Public Tenant Path
 
 ```
 Admin ──▶ adm.<base>/tenants/new

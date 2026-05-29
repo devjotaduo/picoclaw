@@ -218,7 +218,8 @@ type CreateInput struct {
 	// IsPublic marks the tenant as a public-facing service. When true,
 	// SkipDashboardPassword is forced on (no human owner password) and the
 	// resulting Tenant row has is_public=true so the gateway can later
-	// dispense with Supabase JWT verification on /api/public/* routes.
+	// dispense with Supabase JWT verification on the public tenant route
+	// contract.
 	IsPublic bool
 	// UIProfile selects which named visibility preset (in the workspace's
 	// ui-visibility.json) the new tenant boots with. Empty = leave the
@@ -390,9 +391,9 @@ func (p *Provisioner) runProvision(
 	}
 
 	// 1c. Patch memory/empresa.md com o nome da empresa que o admin
-	// digitou. Sem Clara public, este é o único dado de negócio que vem
-	// pré-preenchido — Sofia usa pra cumprimentar com contexto em vez de
-	// perguntar "qual o nome do seu negócio?" do zero. Marker "Status:
+	// digitou. No fluxo público atual, este é o único dado de negócio que
+	// vem pré-preenchido — Sofia usa pra cumprimentar com contexto em vez
+	// de perguntar "qual o nome do seu negócio?" do zero. Marker "Status:
 	// pendente de validação" é garantido pra o detector de onboarding
 	// (pkg/agent/onboarding_default.go) promover Sofia como default.
 	// Non-fatal: se falhar, segue (Sofia ainda funciona, só pergunta o
