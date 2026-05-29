@@ -13,6 +13,10 @@ import {
   normalizeAgentDashboardResponse,
   recentDashboardItems,
 } from "@/lib/agent-dashboard"
+import {
+  ALL_FILTER,
+  filterAgentWorkSummaries,
+} from "@/lib/agent-dashboard-filters"
 
 describe("agent dashboard helpers", () => {
   it("keeps only actionable items", () => {
@@ -187,7 +191,130 @@ describe("agent dashboard helpers", () => {
     expect(catarina?.pending).toBe(1)
     expect(rafael?.plans).toBe(1)
   })
+
+  it("filters multi-agent work by query, status and source", () => {
+    const summaries = buildSampleWorkSummaries()
+
+    expect(
+      filterAgentWorkSummaries(summaries, {
+        query: "campanha",
+        agentId: ALL_FILTER,
+        status: "all",
+        source: "all",
+      }).map((summary) => summary.agent.id),
+    ).toEqual(["lia"])
+    expect(
+      filterAgentWorkSummaries(summaries, {
+        query: "",
+        agentId: ALL_FILTER,
+        status: "actionable",
+        source: "all",
+      }).map((summary) => summary.agent.id),
+    ).toEqual(["catarina", "rafael-assistente-interno"])
+    expect(
+      filterAgentWorkSummaries(summaries, {
+        query: "",
+        agentId: ALL_FILTER,
+        status: "waiting",
+        source: "all",
+      }).map((summary) => summary.agent.id),
+    ).toEqual(["camila-suporte"])
+    expect(
+      filterAgentWorkSummaries(summaries, {
+        query: "",
+        agentId: ALL_FILTER,
+        status: "all",
+        source: "plans",
+      }).map((summary) => summary.agent.id),
+    ).toEqual(["catarina"])
+  })
 })
+
+function buildSampleWorkSummaries() {
+  return buildAgentDashboardWorkSummaries({
+    agents: [
+      {
+        id: "camila-suporte",
+        name: "Camila",
+        role: "Suporte",
+        active: true,
+        item_count: 0,
+        task_count: 0,
+      },
+      {
+        id: "lia",
+        name: "Lia",
+        role: "Marketing",
+        active: true,
+        item_count: 0,
+        task_count: 0,
+      },
+      {
+        id: "rafael-assistente-interno",
+        name: "Rafael",
+        role: "Assistente interno",
+        active: true,
+        item_count: 0,
+        task_count: 0,
+      },
+      {
+        id: "catarina",
+        name: "Catarina",
+        role: "Curadoria",
+        active: true,
+        item_count: 0,
+        task_count: 0,
+      },
+    ],
+    items: [
+      {
+        id: "report",
+        type: "report",
+        status: "done",
+        title: "Relatório de campanha",
+        source: "workspace/output/reports/lia.md",
+        agent_id: "lia",
+        agent_name: "Lia",
+        updated_at: "2026-05-28T12:00:00Z",
+      },
+    ],
+    tasks: [
+      {
+        id: "plan",
+        title: "Plano de aprofundamento",
+        status: "in_progress",
+        source: "workspace/output/plans/catarina.md",
+        agent_id: "catarina",
+        agent_name: "Catarina",
+      },
+      {
+        id: "analytics",
+        title: "Analytics — Relatório diário",
+        status: "scheduled",
+        source: "workspace/cron/jobs.json",
+        agent_id: "main",
+      },
+    ],
+    artifacts: [
+      {
+        id: "file",
+        type: "document",
+        title: "Arquivo gerado",
+        source: "workspace/output/marketing/post.md",
+        url: "/api/agent-dashboard/artifacts/output/marketing/post.md",
+        agent_id: "lia",
+        agent_name: "Lia",
+      },
+      {
+        id: "source-only",
+        type: "document",
+        title: "Briefing de campanha",
+        source: "workspace/output/marketing/briefing.md",
+        url: "/api/agent-dashboard/artifacts/output/marketing/briefing.md",
+      },
+    ],
+  })
+}
 
 function item(
   id: string,

@@ -1,19 +1,27 @@
 import {
+  IconAdjustmentsHorizontal,
   IconAlertTriangle,
   IconBell,
   IconBrandWhatsapp,
   IconCalendarEvent,
   IconChartBar,
+  IconChartLine,
   IconCheck,
   IconChecklist,
+  IconChevronRight,
   IconDeviceFloppy,
   IconExternalLink,
   IconFileAnalytics,
   IconFileText,
+  IconLayoutDashboard,
   IconLoader2,
+  IconMessages,
   IconPhoto,
   IconRefresh,
+  IconSearch,
+  IconSettings,
   IconSparkles,
+  IconTable,
   IconUsers,
   IconWorld,
   IconX,
@@ -27,6 +35,7 @@ import {
   type AgentDashboardAgent,
   type AgentDashboardArtifact,
   type AgentDashboardItem,
+  type AgentDashboardResponse,
   type AgentDashboardTask,
   getAgentDashboard,
   postAgentDashboardResponse,
@@ -44,6 +53,30 @@ import { PageHeader } from "@/components/page-header"
 import { type ApprovalDecision } from "@/components/tool-ui/approval-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   type AgentDashboardWorkSummary,
   actionableDashboardItems,
@@ -63,7 +96,19 @@ import {
   friendlyTaskTitle,
   recentDashboardItems,
 } from "@/lib/agent-dashboard"
+import {
+  ALL_FILTER,
+  type DashboardFilters,
+  type DashboardSourceFilter,
+  type DashboardStatusFilter,
+  dashboardArtifactMatchesFilters,
+  dashboardItemMatchesFilters,
+  dashboardTaskMatchesFilters,
+  filterAgentWorkSummaries,
+} from "@/lib/agent-dashboard-filters"
 import { cn } from "@/lib/utils"
+
+type DashboardTab = "overview" | "agents" | "queue" | "reports" | "settings"
 
 export function AgentDashboardPage() {
   const dashboardQuery = useQuery({
@@ -91,10 +136,19 @@ export function AgentDashboardPage() {
   })
 
   const dashboard = dashboardQuery.data
-  const items = dashboard?.items ?? []
-  const tasks = dashboard?.tasks ?? []
-  const agents = dashboard?.agents ?? []
-  const artifacts = dashboard?.artifacts ?? []
+  const items = useMemo(() => dashboard?.items ?? [], [dashboard?.items])
+  const tasks = useMemo(() => dashboard?.tasks ?? [], [dashboard?.tasks])
+  const agents = useMemo(() => dashboard?.agents ?? [], [dashboard?.agents])
+  const artifacts = useMemo(
+    () => dashboard?.artifacts ?? [],
+    [dashboard?.artifacts],
+  )
+  const [activeTab, setActiveTab] = useState<DashboardTab>("overview")
+  const [queryFilter, setQueryFilter] = useState("")
+  const [agentFilter, setAgentFilter] = useState(ALL_FILTER)
+  const [statusFilter, setStatusFilter] = useState<DashboardStatusFilter>("all")
+  const [sourceFilter, setSourceFilter] = useState<DashboardSourceFilter>("all")
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [approvalChoices, setApprovalChoices] = useState<
     Record<string, ApprovalDecision>
@@ -119,16 +173,6 @@ export function AgentDashboardPage() {
   })
   const chats = useMemo(() => chatsQuery.data ?? [], [chatsQuery.data])
   const whatsapp = useMemo(() => summarizeWhatsApp(chats), [chats])
-  const attentionItems = actionableDashboardItems(items).slice(0, 6)
-  const reportItems = recentDashboardItems(
-    items.filter((item) =>
-      ["analysis", "report", "metric"].includes(item.type),
-    ),
-    8,
-  )
-  const visibleTasks = [...tasks]
-    .sort((a, b) => dashboardTaskStamp(b).localeCompare(dashboardTaskStamp(a)))
-    .slice(0, 8)
   const agentWork = useMemo(
     () =>
       buildAgentDashboardWorkSummaries({
@@ -139,16 +183,63 @@ export function AgentDashboardPage() {
       }),
     [agents, items, tasks, artifacts],
   )
-
+  const filters = useMemo<DashboardFilters>(
+    () => ({
+      query: queryFilter,
+      agentId: agentFilter,
+      status: statusFilter,
+      source: sourceFilter,
+    }),
+    [agentFilter, queryFilter, sourceFilter, statusFilter],
+  )
+  const selectedFilterSummary = useMemo(
+    () =>
+      agentFilter === ALL_FILTER
+        ? undefined
+        : agentWork.find((summary) => summary.agent.id === agentFilter),
+    [agentFilter, agentWork],
+  )
+  const selectedAgentSummary = useMemo(
+    () =>
+      selectedAgentId
+        ? agentWork.find((summary) => summary.agent.id === selectedAgentId)
+        : undefined,
+    [agentWork, selectedAgentId],
+  )
+  const scopedItems = selectedFilterSummary?.items ?? items
+  const scopedTasks = selectedFilterSummary?.tasks ?? tasks
+  const scopedArtifacts = selectedFilterSummary?.artifacts ?? artifacts
+  const filteredAgentWork = useMemo(
+    () => filterAgentWorkSummaries(agentWork, filters),
+    [agentWork, filters],
+  )
+  const filteredAttentionItems = actionableDashboardItems(
+    scopedItems.filter((item) => dashboardItemMatchesFilters(item, filters)),
+  ).slice(0, 12)
+  const filteredReportItems = recentDashboardItems(
+    scopedItems.filter(
+      (item) =>
+        ["analysis", "report", "metric"].includes(item.type) &&
+        dashboardItemMatchesFilters(item, filters),
+    ),
+    12,
+  )
+  const filteredVisibleTasks = scopedTasks
+    .filter((task) => dashboardTaskMatchesFilters(task, filters))
+    .sort((a, b) => dashboardTaskStamp(b).localeCompare(dashboardTaskStamp(a)))
+    .slice(0, 12)
+  const filteredArtifacts = scopedArtifacts
+    .filter((artifact) => dashboardArtifactMatchesFilters(artifact, filters))
+    .slice(0, 12)
   // Cada panel só renderiza quando tem conteúdo — modo minimalista.
   // Não conta `agents.length` (sempre > 0 com agentes registrados) nem
   // `items.length` cru (pode incluir items não-actionable). Conta apenas
   // o que de fato vai renderizar.
-  const hasAttention = attentionItems.length > 0
-  const hasReports = reportItems.length > 0
-  const hasArtifacts = artifacts.length > 0
-  const hasTasks = visibleTasks.length > 0
-  const hasAgentWork = agentWork.length > 0
+  const hasAttention = filteredAttentionItems.length > 0
+  const hasReports = filteredReportItems.length > 0
+  const hasArtifacts = filteredArtifacts.length > 0
+  const hasTasks = filteredVisibleTasks.length > 0
+  const hasAgentWork = filteredAgentWork.length > 0
   const hasWhatsAppPulse = chats.length > 0
   const hasAnyDashboardData =
     hasAttention ||
@@ -262,56 +353,6 @@ export function AgentDashboardPage() {
                   e quantos campos do empresa.md já estão preenchidos. */}
               <TenantStatusBanner />
 
-              <section className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
-                <OnboardingLifecycleCard />
-                <CatarinaProgressCard />
-              </section>
-
-              {kpisHaveData ? (
-                <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                  <KpiCard
-                    icon={IconUsers}
-                    label="Agentes ativos"
-                    value={`${dashboard.metrics.active_agents}/${dashboard.metrics.agents}`}
-                    detail={`${compactDashboardCount(agents.length)} no painel`}
-                  />
-                  <KpiCard
-                    icon={IconBell}
-                    label="Pendências"
-                    value={dashboard.metrics.pending_items}
-                    detail={`${dashboard.metrics.alerts} alertas`}
-                    tone={dashboard.metrics.alerts > 0 ? "warning" : "default"}
-                  />
-                  <KpiCard
-                    icon={IconFileAnalytics}
-                    label="Relatórios"
-                    value={dashboard.metrics.reports}
-                    detail="análises salvas"
-                  />
-                  <KpiCard
-                    icon={IconCalendarEvent}
-                    label="Tarefas ativas"
-                    value={dashboard.metrics.active_tasks}
-                    detail={`${tasks.length} lembretes`}
-                  />
-                  <KpiCard
-                    icon={IconBrandWhatsapp}
-                    label="WhatsApp"
-                    value={
-                      chatsQuery.isError
-                        ? "offline"
-                        : compactDashboardCount(whatsapp.unread)
-                    }
-                    detail={
-                      chatsQuery.isError
-                        ? "gateway indisponível"
-                        : `${whatsapp.handoffs} pausados`
-                    }
-                    tone={chatsQuery.isError ? "danger" : "default"}
-                  />
-                </section>
-              ) : null}
-
               {dashboard.health.errors.length > 0 ||
               dashboard.health.missing_sources.length > 0 ||
               chatsQuery.isError ||
@@ -325,15 +366,14 @@ export function AgentDashboardPage() {
                 />
               ) : null}
 
-              {hasAgentWork ? (
-                <Panel
-                  title="Trabalho por agente"
-                  icon={<IconUsers className="size-4" />}
-                  badge={`${agentWork.length} agentes`}
-                >
-                  <AgentWorkGrid summaries={agentWork} />
-                </Panel>
-              ) : null}
+              <DashboardControlBar
+                filters={filters}
+                agentWork={agentWork}
+                onQueryChange={setQueryFilter}
+                onAgentChange={setAgentFilter}
+                onStatusChange={setStatusFilter}
+                onSourceChange={setSourceFilter}
+              />
 
               {!hasAnyDashboardData ? (
                 <StatePanel
@@ -343,86 +383,263 @@ export function AgentDashboardPage() {
                 />
               ) : null}
 
-              {/*
-                Layout minimalista: cada painel só aparece quando tem
-                conteúdo real. Os 2 painéis removidos eram redundantes —
-                "Resultados dos agentes" listava todos os agentes com
-                "0 itens" (info já no KPI "Agentes ativos"), e "Sugestões
-                e melhorias" só mostrava conteúdo seed das memórias.
-              */}
-              {hasAttention || hasWhatsAppPulse ? (
-                <section
-                  className={cn(
-                    "grid gap-4",
-                    hasAttention && hasWhatsAppPulse
-                      ? "xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]"
-                      : "",
-                  )}
-                >
-                  {hasAttention ? (
+              <Tabs
+                value={activeTab}
+                onValueChange={(value) => setActiveTab(value as DashboardTab)}
+                className="gap-4"
+              >
+                <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:inline-flex md:w-fit">
+                  <TabsTrigger value="overview">
+                    <IconLayoutDashboard className="size-4" />
+                    Geral
+                  </TabsTrigger>
+                  <TabsTrigger value="agents">
+                    <IconUsers className="size-4" />
+                    Agentes
+                  </TabsTrigger>
+                  <TabsTrigger value="queue">
+                    <IconMessages className="size-4" />
+                    Fila
+                  </TabsTrigger>
+                  <TabsTrigger value="reports">
+                    <IconChartLine className="size-4" />
+                    Relatórios
+                  </TabsTrigger>
+                  <TabsTrigger value="settings">
+                    <IconSettings className="size-4" />
+                    Operação
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="overview" className="flex flex-col gap-4">
+                  <section className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+                    <OnboardingLifecycleCard />
+                    <CatarinaProgressCard />
+                  </section>
+
+                  {kpisHaveData ? (
+                    <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                      <KpiCard
+                        icon={IconUsers}
+                        label="Agentes ativos"
+                        value={`${dashboard.metrics.active_agents}/${dashboard.metrics.agents}`}
+                        detail={`${compactDashboardCount(agents.length)} no painel`}
+                      />
+                      <KpiCard
+                        icon={IconBell}
+                        label="Pendências"
+                        value={dashboard.metrics.pending_items}
+                        detail={`${dashboard.metrics.alerts} alertas`}
+                        tone={
+                          dashboard.metrics.alerts > 0 ? "warning" : "default"
+                        }
+                      />
+                      <KpiCard
+                        icon={IconFileAnalytics}
+                        label="Relatórios"
+                        value={dashboard.metrics.reports}
+                        detail="análises salvas"
+                      />
+                      <KpiCard
+                        icon={IconCalendarEvent}
+                        label="Tarefas ativas"
+                        value={dashboard.metrics.active_tasks}
+                        detail={`${tasks.length} lembretes`}
+                      />
+                      <KpiCard
+                        icon={IconBrandWhatsapp}
+                        label="WhatsApp"
+                        value={
+                          chatsQuery.isError
+                            ? "offline"
+                            : compactDashboardCount(whatsapp.unread)
+                        }
+                        detail={
+                          chatsQuery.isError
+                            ? "gateway indisponível"
+                            : `${whatsapp.handoffs} pausados`
+                        }
+                        tone={chatsQuery.isError ? "danger" : "default"}
+                      />
+                    </section>
+                  ) : null}
+
+                  {hasAgentWork ? (
                     <Panel
-                      title="Fila de atenção"
-                      icon={<IconBell className="size-4" />}
-                      badge={`${attentionItems.length} itens`}
+                      title="Trabalho por agente"
+                      icon={<IconUsers className="size-4" />}
+                      badge={`${filteredAgentWork.length}/${agentWork.length} agentes`}
                     >
-                      <AgentChatList
-                        items={attentionItems}
-                        drafts={drafts}
-                        approvalChoices={approvalChoices}
-                        saving={saveResponseMutation.isPending}
-                        onDraftChange={handleDraftChange}
-                        onSave={handleSaveResponse}
-                        onDecision={handleApprovalDecision}
+                      <AgentWorkGrid
+                        summaries={filteredAgentWork.slice(0, 6)}
                       />
                     </Panel>
                   ) : null}
 
-                  {hasWhatsAppPulse ? (
-                    <Panel
-                      title="Pulso WhatsApp"
-                      icon={<IconBrandWhatsapp className="size-4" />}
-                      badge={chatsQuery.isError ? "offline" : "ao vivo"}
-                    >
-                      <WhatsAppPulse
-                        chats={chats}
-                        unavailable={chatsQuery.isError}
-                        messages={reportQuery.data?.messages}
-                        leads={reportQuery.data?.qualified_leads}
+                  <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.65fr)]">
+                    {hasAttention ? (
+                      <Panel
+                        title="Fila de atenção"
+                        icon={<IconBell className="size-4" />}
+                        badge={`${filteredAttentionItems.length} itens`}
+                      >
+                        <AgentChatList
+                          items={filteredAttentionItems.slice(0, 5)}
+                          drafts={drafts}
+                          approvalChoices={approvalChoices}
+                          saving={saveResponseMutation.isPending}
+                          compact
+                          onDraftChange={handleDraftChange}
+                          onSave={handleSaveResponse}
+                          onDecision={handleApprovalDecision}
+                        />
+                      </Panel>
+                    ) : null}
+
+                    {hasWhatsAppPulse ? (
+                      <Panel
+                        title="Pulso WhatsApp"
+                        icon={<IconBrandWhatsapp className="size-4" />}
+                        badge={chatsQuery.isError ? "offline" : "ao vivo"}
+                      >
+                        <WhatsAppPulse
+                          chats={chats}
+                          unavailable={chatsQuery.isError}
+                          messages={reportQuery.data?.messages}
+                          leads={reportQuery.data?.qualified_leads}
+                        />
+                      </Panel>
+                    ) : null}
+                  </section>
+                </TabsContent>
+
+                <TabsContent value="agents" className="flex flex-col gap-4">
+                  <Panel
+                    title="Agentes e entregas"
+                    icon={<IconTable className="size-4" />}
+                    badge={`${filteredAgentWork.length} visíveis`}
+                  >
+                    <AgentWorkOperations
+                      summaries={filteredAgentWork}
+                      onSelect={(summary) =>
+                        setSelectedAgentId(summary.agent.id)
+                      }
+                    />
+                  </Panel>
+                </TabsContent>
+
+                <TabsContent value="queue" className="flex flex-col gap-4">
+                  <section
+                    className={cn(
+                      "grid gap-4",
+                      hasAttention && hasWhatsAppPulse
+                        ? "xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]"
+                        : "",
+                    )}
+                  >
+                    {hasAttention ? (
+                      <Panel
+                        title="Fila de atenção"
+                        icon={<IconBell className="size-4" />}
+                        badge={`${filteredAttentionItems.length} itens`}
+                      >
+                        <AgentChatList
+                          items={filteredAttentionItems}
+                          drafts={drafts}
+                          approvalChoices={approvalChoices}
+                          saving={saveResponseMutation.isPending}
+                          onDraftChange={handleDraftChange}
+                          onSave={handleSaveResponse}
+                          onDecision={handleApprovalDecision}
+                        />
+                      </Panel>
+                    ) : (
+                      <StatePanel
+                        icon={<IconCheck className="size-5" />}
+                        title="Nada aguardando decisão"
+                        detail="Os filtros atuais não retornaram pendências de agentes."
+                        compact
                       />
+                    )}
+
+                    {hasWhatsAppPulse ? (
+                      <Panel
+                        title="Pulso WhatsApp"
+                        icon={<IconBrandWhatsapp className="size-4" />}
+                        badge={chatsQuery.isError ? "offline" : "ao vivo"}
+                      >
+                        <WhatsAppPulse
+                          chats={chats}
+                          unavailable={chatsQuery.isError}
+                          messages={reportQuery.data?.messages}
+                          leads={reportQuery.data?.qualified_leads}
+                        />
+                      </Panel>
+                    ) : null}
+                  </section>
+                </TabsContent>
+
+                <TabsContent value="reports" className="flex flex-col gap-4">
+                  {hasReports ? (
+                    <Panel
+                      title="Relatórios, dados e análises"
+                      icon={<IconChartBar className="size-4" />}
+                      badge={`${filteredReportItems.length} registros`}
+                    >
+                      <InsightList items={filteredReportItems} />
                     </Panel>
                   ) : null}
-                </section>
-              ) : null}
 
-              {hasReports ? (
-                <Panel
-                  title="Relatórios, dados e análises"
-                  icon={<IconChartBar className="size-4" />}
-                  badge={`${reportItems.length} registros`}
-                >
-                  <InsightList items={reportItems.slice(0, 5)} />
-                </Panel>
-              ) : null}
+                  {hasTasks ? (
+                    <Panel
+                      title="Planos e próximas ações"
+                      icon={<IconChecklist className="size-4" />}
+                      badge={`${filteredVisibleTasks.length} ativos`}
+                    >
+                      <TaskList tasks={filteredVisibleTasks} />
+                    </Panel>
+                  ) : null}
 
-              {hasArtifacts ? (
-                <Panel
-                  title="Arquivos e links gerados"
-                  icon={<IconExternalLink className="size-4" />}
-                  badge={`${artifacts.length} entregas`}
-                >
-                  <ArtifactGallery artifacts={artifacts} />
-                </Panel>
-              ) : null}
+                  {hasArtifacts ? (
+                    <Panel
+                      title="Arquivos e links gerados"
+                      icon={<IconExternalLink className="size-4" />}
+                      badge={`${filteredArtifacts.length} entregas`}
+                    >
+                      <ArtifactGallery artifacts={filteredArtifacts} />
+                    </Panel>
+                  ) : null}
 
-              {hasTasks ? (
-                <Panel
-                  title="Planos e próximas ações"
-                  icon={<IconChecklist className="size-4" />}
-                  badge={`${visibleTasks.length} ativos`}
-                >
-                  <TaskList tasks={visibleTasks} />
-                </Panel>
-              ) : null}
+                  {!hasReports && !hasTasks && !hasArtifacts ? (
+                    <StatePanel
+                      icon={<IconFileText className="size-5" />}
+                      title="Sem relatórios para os filtros atuais"
+                      detail="Remova filtros por origem ou agente para ampliar a visão."
+                      compact
+                    />
+                  ) : null}
+                </TabsContent>
+
+                <TabsContent value="settings" className="flex flex-col gap-4">
+                  <OperationalReadinessPanel
+                    dashboard={dashboard}
+                    chatsUnavailable={chatsQuery.isError}
+                    reportUnavailable={reportQuery.isError}
+                    filters={filters}
+                    agentWork={agentWork}
+                    filteredAgentWork={filteredAgentWork}
+                  />
+                </TabsContent>
+              </Tabs>
+
+              <AgentDetailsSheet
+                summary={selectedAgentSummary}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setSelectedAgentId(null)
+                  }
+                }}
+              />
             </>
           ) : null}
         </div>
@@ -480,20 +697,119 @@ function Panel({
   className?: string
 }) {
   return (
-    <section
-      className={cn("bg-card/85 rounded-lg border shadow-sm", className)}
-    >
-      <div className="flex min-h-11 items-center justify-between gap-3 border-b px-4 py-2.5">
+    <Card size="sm" className={cn("bg-card/85 gap-0 shadow-sm", className)}>
+      <CardHeader className="min-h-11 border-b py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="text-muted-foreground">{icon}</span>
-          <h2 className="text-foreground truncate text-sm font-semibold">
+          <CardTitle className="truncate text-sm font-semibold">
             {title}
-          </h2>
+          </CardTitle>
         </div>
-        {badge ? <Badge variant="outline">{badge}</Badge> : null}
-      </div>
-      <div className="p-3.5">{children}</div>
-    </section>
+        {badge ? (
+          <CardAction>
+            <Badge variant="outline">{badge}</Badge>
+          </CardAction>
+        ) : null}
+      </CardHeader>
+      <CardContent className="p-3.5">{children}</CardContent>
+    </Card>
+  )
+}
+
+function DashboardControlBar({
+  filters,
+  agentWork,
+  onQueryChange,
+  onAgentChange,
+  onStatusChange,
+  onSourceChange,
+}: {
+  filters: DashboardFilters
+  agentWork: AgentDashboardWorkSummary[]
+  onQueryChange: (value: string) => void
+  onAgentChange: (value: string) => void
+  onStatusChange: (value: DashboardStatusFilter) => void
+  onSourceChange: (value: DashboardSourceFilter) => void
+}) {
+  return (
+    <Card size="sm" className="bg-card/70 gap-0 shadow-sm">
+      <CardHeader className="border-b py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <IconAdjustmentsHorizontal className="text-muted-foreground size-4" />
+          <CardTitle className="text-sm font-semibold">
+            Filtros operacionais
+          </CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-3 p-3.5 lg:grid-cols-[minmax(220px,1fr)_180px_160px_160px]">
+        <div className="relative">
+          <IconSearch className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+          <Input
+            value={filters.query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Buscar agente, relatório, plano ou origem"
+            className="pl-8"
+          />
+        </div>
+
+        <Select value={filters.agentId} onValueChange={onAgentChange}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Agente" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value={ALL_FILTER}>Todos os agentes</SelectItem>
+              {agentWork.map((summary) => (
+                <SelectItem key={summary.agent.id} value={summary.agent.id}>
+                  {friendlyAgentName(summary.agent)}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filters.status}
+          onValueChange={(value) =>
+            onStatusChange(value as DashboardStatusFilter)
+          }
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="all">Todos status</SelectItem>
+              <SelectItem value="actionable">Precisa ação</SelectItem>
+              <SelectItem value="done">Concluídos</SelectItem>
+              <SelectItem value="waiting">Sem dados</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filters.source}
+          onValueChange={(value) =>
+            onSourceChange(value as DashboardSourceFilter)
+          }
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Origem" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="all">Todas origens</SelectItem>
+              <SelectItem value="whatsapp">WhatsApp</SelectItem>
+              <SelectItem value="output">Arquivos gerados</SelectItem>
+              <SelectItem value="reports">Relatórios</SelectItem>
+              <SelectItem value="plans">Planos</SelectItem>
+              <SelectItem value="cron">Rotinas</SelectItem>
+              <SelectItem value="tests">Testes</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -507,6 +823,357 @@ function AgentWorkGrid({
       {summaries.map((summary) => (
         <AgentWorkCard key={summary.agent.id} summary={summary} />
       ))}
+    </div>
+  )
+}
+
+function AgentWorkOperations({
+  summaries,
+  onSelect,
+}: {
+  summaries: AgentDashboardWorkSummary[]
+  onSelect: (summary: AgentDashboardWorkSummary) => void
+}) {
+  if (summaries.length === 0) {
+    return (
+      <StatePanel
+        icon={<IconUsers className="size-5" />}
+        title="Nenhum agente nos filtros atuais"
+        detail="Remova filtros ou busque por outro nome, canal ou status."
+        compact
+      />
+    )
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border">
+      <div className="bg-muted/30 text-muted-foreground hidden grid-cols-[minmax(180px,1.5fr)_repeat(4,minmax(74px,0.55fr))_minmax(220px,1.2fr)_36px] gap-3 border-b px-3 py-2 text-xs font-medium md:grid">
+        <span>Agente</span>
+        <span>Pend.</span>
+        <span>Rel.</span>
+        <span>Planos</span>
+        <span>Arq.</span>
+        <span>Última entrega</span>
+        <span />
+      </div>
+      <div className="divide-y">
+        {summaries.map((summary) => {
+          const agentName = friendlyAgentName(summary.agent)
+          return (
+            <button
+              key={summary.agent.id}
+              type="button"
+              className="hover:bg-muted/35 focus-visible:ring-ring grid w-full gap-3 px-3 py-3 text-left transition focus-visible:ring-2 focus-visible:outline-none md:grid-cols-[minmax(180px,1.5fr)_repeat(4,minmax(74px,0.55fr))_minmax(220px,1.2fr)_36px] md:items-center"
+              onClick={() => onSelect(summary)}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <AgentAvatar
+                  initials={getAgentInitials(agentName)}
+                  seed={agentName}
+                />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-foreground truncate text-sm font-semibold">
+                      {agentName}
+                    </span>
+                    <Badge
+                      variant={summary.total > 0 ? "secondary" : "outline"}
+                    >
+                      {summary.total > 0 ? "com dados" : "aguardando"}
+                    </Badge>
+                  </div>
+                  <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">
+                    {agentRoleLabel(summary.agent)}
+                  </p>
+                </div>
+              </div>
+
+              <AgentWorkCell label="Pend." value={summary.pending} />
+              <AgentWorkCell label="Rel." value={summary.reports} />
+              <AgentWorkCell label="Planos" value={summary.plans} />
+              <AgentWorkCell label="Arq." value={summary.files} />
+
+              <div className="text-muted-foreground min-w-0 text-xs leading-5">
+                <span className="text-foreground line-clamp-1 font-medium">
+                  {friendlyDashboardText(summary.latest_title) ||
+                    "Sem entrega publicada"}
+                </span>
+                {summary.latest_at ? (
+                  <span>{formatDashboardDate(summary.latest_at)}</span>
+                ) : null}
+              </div>
+
+              <IconChevronRight className="text-muted-foreground size-4 justify-self-end" />
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function AgentWorkCell({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="bg-muted/25 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs md:block md:bg-transparent md:px-0 md:py-0">
+      <span className="text-muted-foreground md:hidden">{label}</span>
+      <span className="text-foreground font-semibold">
+        {compactDashboardCount(value)}
+      </span>
+    </div>
+  )
+}
+
+function AgentDetailsSheet({
+  summary,
+  onOpenChange,
+}: {
+  summary?: AgentDashboardWorkSummary
+  onOpenChange: (open: boolean) => void
+}) {
+  const agentName = summary ? friendlyAgentName(summary.agent) : "Agente"
+  return (
+    <Sheet open={Boolean(summary)} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-xl lg:max-w-2xl">
+        <SheetHeader className="border-b">
+          <SheetTitle>{agentName}</SheetTitle>
+          <SheetDescription>
+            {summary
+              ? `${agentRoleLabel(summary.agent)} · ${summary.total} registros no painel`
+              : "Detalhe do agente"}
+          </SheetDescription>
+        </SheetHeader>
+
+        {summary ? (
+          <div className="flex flex-col gap-4 px-4 pb-6">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <AgentWorkMetric label="Pend." value={summary.pending} />
+              <AgentWorkMetric label="Rel." value={summary.reports} />
+              <AgentWorkMetric label="Planos" value={summary.plans} />
+              <AgentWorkMetric label="Arq." value={summary.files} />
+            </div>
+
+            <DetailSection title="Itens do agente" count={summary.items.length}>
+              {summary.items.length ? (
+                <div className="flex flex-col gap-2">
+                  {summary.items.slice(0, 8).map((item) => (
+                    <article
+                      key={dashboardItemKey(item)}
+                      className="bg-background/45 rounded-lg border px-3 py-2"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge status={item.status} />
+                        <Badge variant="secondary">
+                          {dashboardTypeLabel(item.type)}
+                        </Badge>
+                        <span className="text-muted-foreground text-xs">
+                          {formatDashboardDate(dashboardItemStamp(item))}
+                        </span>
+                      </div>
+                      <h3 className="text-foreground mt-2 line-clamp-2 text-sm font-semibold">
+                        {friendlyDashboardText(item.title)}
+                      </h3>
+                      {item.summary ? (
+                        <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-5">
+                          {friendlyDashboardText(item.summary)}
+                        </p>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  Nenhum item publicado por este agente.
+                </p>
+              )}
+            </DetailSection>
+
+            <DetailSection title="Planos" count={summary.tasks.length}>
+              {summary.tasks.length ? (
+                <TaskList tasks={summary.tasks.slice(0, 6)} />
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  Nenhum plano ativo para este agente.
+                </p>
+              )}
+            </DetailSection>
+
+            <DetailSection title="Arquivos" count={summary.artifacts.length}>
+              {summary.artifacts.length ? (
+                <ArtifactGallery artifacts={summary.artifacts.slice(0, 6)} />
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  Nenhum arquivo gerado por este agente.
+                </p>
+              )}
+            </DetailSection>
+          </div>
+        ) : null}
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+function DetailSection({
+  title,
+  count,
+  children,
+}: {
+  title: string
+  count: number
+  children: ReactNode
+}) {
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-foreground text-sm font-semibold">{title}</h3>
+        <Badge variant="outline">{count}</Badge>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function OperationalReadinessPanel({
+  dashboard,
+  chatsUnavailable,
+  reportUnavailable,
+  filters,
+  agentWork,
+  filteredAgentWork,
+}: {
+  dashboard: AgentDashboardResponse
+  chatsUnavailable: boolean
+  reportUnavailable: boolean
+  filters: DashboardFilters
+  agentWork: AgentDashboardWorkSummary[]
+  filteredAgentWork: AgentDashboardWorkSummary[]
+}) {
+  const issues = [
+    ...dashboard.health.missing_sources.map((source) => ({
+      title: friendlyDashboardSourceLabel(source),
+      detail: source,
+    })),
+    ...dashboard.health.errors.map((error) => ({
+      title: "Erro de leitura",
+      detail: error,
+    })),
+    ...(chatsUnavailable
+      ? [{ title: "WhatsApp offline", detail: "Gateway indisponível" }]
+      : []),
+    ...(reportUnavailable
+      ? [{ title: "Relatório WhatsApp offline", detail: "API indisponível" }]
+      : []),
+  ]
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
+      <Panel
+        title="Fontes e prontidão"
+        icon={<IconSettings className="size-4" />}
+        badge={issues.length ? `${issues.length} atenção` : "ok"}
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <SourceStatusCard
+            title="Agentes"
+            detail={`${agentWork.length} agentes conhecidos, ${filteredAgentWork.length} visíveis no filtro`}
+            ok={agentWork.length > 0}
+          />
+          <SourceStatusCard
+            title="WhatsApp"
+            detail={
+              chatsUnavailable ? "Gateway indisponível" : "Gateway respondendo"
+            }
+            ok={!chatsUnavailable}
+          />
+          <SourceStatusCard
+            title="Relatórios e planos"
+            detail={`${dashboard.metrics.reports} relatórios, ${dashboard.metrics.active_tasks} tarefas ativas`}
+            ok={
+              dashboard.metrics.reports > 0 ||
+              dashboard.metrics.active_tasks > 0
+            }
+          />
+          <SourceStatusCard
+            title="Fila de decisão"
+            detail={`${dashboard.metrics.pending_items} pendências, ${dashboard.metrics.alerts} alertas`}
+            ok={dashboard.metrics.alerts === 0}
+          />
+        </div>
+      </Panel>
+
+      <Panel
+        title="Leitura atual"
+        icon={<IconAdjustmentsHorizontal className="size-4" />}
+        badge="filtros"
+      >
+        <div className="flex flex-col gap-2 text-sm">
+          <ReadinessRow label="Busca" value={filters.query || "sem busca"} />
+          <ReadinessRow
+            label="Agente"
+            value={filters.agentId === ALL_FILTER ? "todos" : filters.agentId}
+          />
+          <ReadinessRow label="Status" value={filters.status} />
+          <ReadinessRow label="Origem" value={filters.source} />
+        </div>
+      </Panel>
+
+      {issues.length ? (
+        <Panel
+          title="Pontos de atenção"
+          icon={<IconAlertTriangle className="size-4" />}
+          badge={`${issues.length}`}
+          className="xl:col-span-2"
+        >
+          <div className="grid gap-2 md:grid-cols-2">
+            {issues.map((issue) => (
+              <div
+                key={`${issue.title}:${issue.detail}`}
+                className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm"
+              >
+                <div className="font-medium text-amber-800 dark:text-amber-200">
+                  {issue.title}
+                </div>
+                <div className="text-muted-foreground mt-1 line-clamp-2 text-xs">
+                  {issue.detail}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      ) : null}
+    </div>
+  )
+}
+
+function SourceStatusCard({
+  title,
+  detail,
+  ok,
+}: {
+  title: string
+  detail: string
+  ok: boolean
+}) {
+  return (
+    <div className="bg-background/45 rounded-lg border px-3 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-foreground text-sm font-semibold">{title}</span>
+        <Badge variant={ok ? "secondary" : "outline"}>
+          {ok ? "ok" : "atenção"}
+        </Badge>
+      </div>
+      <p className="text-muted-foreground mt-2 text-xs leading-5">{detail}</p>
+    </div>
+  )
+}
+
+function ReadinessRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-muted/30 flex items-center justify-between gap-3 rounded-md px-3 py-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-foreground truncate text-right font-medium">
+        {value}
+      </span>
     </div>
   )
 }
@@ -595,7 +1262,7 @@ function AgentChatList({
   onDecision?: (item: AgentDashboardItem, decision: ApprovalDecision) => void
 }) {
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {items.map((item) => (
         <AgentChatCard
           key={dashboardItemKey(item)}
@@ -757,7 +1424,7 @@ function AgentChatCard({
 
 function InsightList({ items }: { items: AgentDashboardItem[] }) {
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {items.map((item) => (
         <article
           key={dashboardItemKey(item)}
@@ -1098,7 +1765,7 @@ function dashboardItemKey(item: AgentDashboardItem) {
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-5">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {Array.from({ length: 5 }).map((_, index) => (
           <div key={index} className="bg-card rounded-lg border px-4 py-3">
