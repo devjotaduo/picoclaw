@@ -31,8 +31,10 @@ const sharedAuthHostPath = "/etc/picoclaw/shared-auth.json"
 // point at the controlplane-managed model name, not at raw upstream providers.
 const defaultSaaSLiteLLMModel = "gpt-4o-mini"
 
-const tenantCodexCLIHomeRel = ".codex"
-const tenantCodexCLIHomeContainer = "/root/.picoclaw/.codex"
+const (
+	tenantCodexCLIHomeRel       = ".codex"
+	tenantCodexCLIHomeContainer = "/root/.picoclaw/.codex"
+)
 
 func (p *Provisioner) sharedCLIModelRouting() (useClaude, useCodex bool) {
 	if p == nil || p.Cfg == nil {
@@ -811,7 +813,11 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 				spec.Env["PICOCLAW_FRONTEND_DIST_DIR"] = WorkspaceFrontendMountTarget
 			}
 		case errors.Is(err, store.ErrWorkspaceNotFound):
-			log.Printf("WARN: provisioner: tenant %s references missing workspace %s; omitting frontend bind", t.ID, *t.WorkspaceID)
+			log.Printf(
+				"WARN: provisioner: tenant %s references missing workspace %s; omitting frontend bind",
+				t.ID,
+				*t.WorkspaceID,
+			)
 		default:
 			return ContainerSpec{}, fmt.Errorf("lookup workspace %s: %w", *t.WorkspaceID, err)
 		}
