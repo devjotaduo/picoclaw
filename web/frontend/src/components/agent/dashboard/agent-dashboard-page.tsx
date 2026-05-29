@@ -24,6 +24,7 @@ import { useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import {
+  type AgentDashboardAgent,
   type AgentDashboardArtifact,
   type AgentDashboardItem,
   type AgentDashboardTask,
@@ -44,7 +45,9 @@ import { type ApprovalDecision } from "@/components/tool-ui/approval-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
+  type AgentDashboardWorkSummary,
   actionableDashboardItems,
+  buildAgentDashboardWorkSummaries,
   compactDashboardCount,
   dashboardArtifactLabel,
   dashboardItemStamp,
@@ -117,13 +120,25 @@ export function AgentDashboardPage() {
   const chats = useMemo(() => chatsQuery.data ?? [], [chatsQuery.data])
   const whatsapp = useMemo(() => summarizeWhatsApp(chats), [chats])
   const attentionItems = actionableDashboardItems(items).slice(0, 6)
-  const recentItems = recentDashboardItems(items, 8)
-  const reportItems = recentItems.filter((item) =>
-    ["analysis", "report", "metric"].includes(item.type),
+  const reportItems = recentDashboardItems(
+    items.filter((item) =>
+      ["analysis", "report", "metric"].includes(item.type),
+    ),
+    8,
   )
   const visibleTasks = [...tasks]
     .sort((a, b) => dashboardTaskStamp(b).localeCompare(dashboardTaskStamp(a)))
     .slice(0, 8)
+  const agentWork = useMemo(
+    () =>
+      buildAgentDashboardWorkSummaries({
+        agents,
+        items,
+        tasks,
+        artifacts,
+      }),
+    [agents, items, tasks, artifacts],
+  )
 
   // Cada panel só renderiza quando tem conteúdo — modo minimalista.
   // Não conta `agents.length` (sempre > 0 com agentes registrados) nem
@@ -133,9 +148,15 @@ export function AgentDashboardPage() {
   const hasReports = reportItems.length > 0
   const hasArtifacts = artifacts.length > 0
   const hasTasks = visibleTasks.length > 0
+  const hasAgentWork = agentWork.length > 0
   const hasWhatsAppPulse = chats.length > 0
   const hasAnyDashboardData =
-    hasAttention || hasReports || hasArtifacts || hasTasks || hasWhatsAppPulse
+    hasAttention ||
+    hasReports ||
+    hasArtifacts ||
+    hasTasks ||
+    hasAgentWork ||
+    hasWhatsAppPulse
 
   // KPIs row só renderiza quando ao menos um número for relevante OU o
   // WhatsApp estiver offline (estado que vale comunicar).
@@ -304,6 +325,16 @@ export function AgentDashboardPage() {
                 />
               ) : null}
 
+              {hasAgentWork ? (
+                <Panel
+                  title="Trabalho por agente"
+                  icon={<IconUsers className="size-4" />}
+                  badge={`${agentWork.length} agentes`}
+                >
+                  <AgentWorkGrid summaries={agentWork} />
+                </Panel>
+              ) : null}
+
               {!hasAnyDashboardData ? (
                 <StatePanel
                   icon={<IconSparkles className="size-5" />}
@@ -365,8 +396,9 @@ export function AgentDashboardPage() {
 
               {hasReports ? (
                 <Panel
-                  title="Relatórios e análises"
+                  title="Relatórios, dados e análises"
                   icon={<IconChartBar className="size-4" />}
+                  badge={`${reportItems.length} registros`}
                 >
                   <InsightList items={reportItems.slice(0, 5)} />
                 </Panel>
@@ -384,7 +416,7 @@ export function AgentDashboardPage() {
 
               {hasTasks ? (
                 <Panel
-                  title="Próximos lembretes"
+                  title="Planos e próximas ações"
                   icon={<IconChecklist className="size-4" />}
                   badge={`${visibleTasks.length} ativos`}
                 >
@@ -463,6 +495,84 @@ function Panel({
       <div className="p-3.5">{children}</div>
     </section>
   )
+}
+
+function AgentWorkGrid({
+  summaries,
+}: {
+  summaries: AgentDashboardWorkSummary[]
+}) {
+  return (
+    <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+      {summaries.map((summary) => (
+        <AgentWorkCard key={summary.agent.id} summary={summary} />
+      ))}
+    </div>
+  )
+}
+
+function AgentWorkCard({ summary }: { summary: AgentDashboardWorkSummary }) {
+  const agentName = friendlyAgentName(summary.agent)
+  const latestTitle = friendlyDashboardText(summary.latest_title)
+  const latestAt = formatDashboardDate(summary.latest_at)
+
+  return (
+    <article className="bg-background/45 rounded-lg border px-3 py-3">
+      <div className="flex items-start gap-3">
+        <AgentAvatar initials={getAgentInitials(agentName)} seed={agentName} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-foreground truncate text-sm font-semibold">
+              {agentName}
+            </h3>
+            <Badge variant={summary.total > 0 ? "secondary" : "outline"}>
+              {summary.total > 0 ? "com dados" : "aguardando"}
+            </Badge>
+          </div>
+          <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">
+            {agentRoleLabel(summary.agent)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-4 gap-2">
+        <AgentWorkMetric label="Pend." value={summary.pending} />
+        <AgentWorkMetric label="Rel." value={summary.reports} />
+        <AgentWorkMetric label="Planos" value={summary.plans} />
+        <AgentWorkMetric label="Arq." value={summary.files} />
+      </div>
+
+      <div className="text-muted-foreground mt-3 min-h-10 text-xs leading-5">
+        {latestTitle ? (
+          <>
+            <span className="text-foreground font-medium">Último: </span>
+            <span className="line-clamp-2 block">{latestTitle}</span>
+            {latestAt ? <span className="block">{latestAt}</span> : null}
+          </>
+        ) : (
+          "Ainda sem entrega publicada no painel."
+        )}
+      </div>
+    </article>
+  )
+}
+
+function AgentWorkMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="bg-muted/30 rounded-md px-2 py-2 text-center">
+      <div className="text-foreground text-sm font-semibold">
+        {compactDashboardCount(value)}
+      </div>
+      <div className="text-muted-foreground mt-0.5 text-[11px]">{label}</div>
+    </div>
+  )
+}
+
+function agentRoleLabel(agent: AgentDashboardAgent) {
+  if (agent.role && agent.role !== "Agente") {
+    return agent.role
+  }
+  return agent.active ? "Agente ativo" : "Agente inativo"
 }
 
 function AgentChatList({

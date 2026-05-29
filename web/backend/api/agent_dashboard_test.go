@@ -171,6 +171,77 @@ func TestAgentDashboardIncludesGeneratedArtifactsAndServesThem(t *testing.T) {
 	}
 }
 
+func TestAgentDashboardGroupsGeneratedWorkByAgent(t *testing.T) {
+	h, workspace := setupTemplateHandler(t)
+	writeDashboardFile(t, filepath.Join(workspace, "agents", "lia", "AGENT.md"), `---
+name: Lia
+role: Marketing
+---
+
+# Lia
+`)
+	writeDashboardFile(t, filepath.Join(workspace, "agents", "catarina", "AGENT.md"), `---
+name: Catarina
+role: Curadoria
+---
+
+# Catarina
+`)
+	writeWorkspaceAgentFile(t, workspace, "marcos-vendas.md", `---
+name: Marcos
+role: Vendas
+---
+
+# Marcos
+`)
+	writeDashboardFile(t, filepath.Join(workspace, "output", "reports", "2026-05-28-lia-marketing.md"), `# Relatório de campanha
+
+Agente: Lia
+Resumo: Campanha pronta para revisão.
+`)
+	writeDashboardFile(t, filepath.Join(workspace, "output", "plans", "2026-05-28-catarina-aprofundamento.md"), `# Plano de aprofundamento
+
+Responsavel: Catarina
+Status: em andamento
+Resumo: Próxima sessão com o dono.
+`)
+	writeDashboardFile(t, filepath.Join(workspace, "output", "data", "marcos-funil.json"), `{
+  "title": "Dados do funil comercial",
+  "agent": "Marcos",
+  "summary": "Dois leads qualificados aguardam proposta.",
+  "type": "metric"
+}`)
+
+	got := requestAgentDashboard(t, h)
+	var liaReport, marcosMetric *agentDashboardItem
+	var catarinaPlanTask *agentDashboardTask
+	for i := range got.Items {
+		if got.Items[i].Source == "workspace/output/reports/2026-05-28-lia-marketing.md" {
+			liaReport = &got.Items[i]
+		}
+		if got.Items[i].Source == "workspace/output/data/marcos-funil.json" {
+			marcosMetric = &got.Items[i]
+		}
+	}
+	for i := range got.Tasks {
+		if got.Tasks[i].Source == "workspace/output/plans/2026-05-28-catarina-aprofundamento.md" {
+			catarinaPlanTask = &got.Tasks[i]
+		}
+	}
+	if liaReport == nil || liaReport.AgentID != "lia" || liaReport.AgentName != "Lia" {
+		t.Fatalf("Lia report not grouped correctly: %#v", liaReport)
+	}
+	if marcosMetric == nil || marcosMetric.AgentID != "marcos-vendas" || marcosMetric.AgentName != "Marcos" {
+		t.Fatalf("Marcos metric not grouped correctly: %#v", marcosMetric)
+	}
+	if catarinaPlanTask == nil || catarinaPlanTask.AgentID != "catarina" || catarinaPlanTask.AgentName != "Catarina" {
+		t.Fatalf("Catarina plan task not grouped correctly: %#v", catarinaPlanTask)
+	}
+	if got.Metrics.Reports == 0 {
+		t.Fatalf("reports metric = %d, want at least 1", got.Metrics.Reports)
+	}
+}
+
 func TestAgentDashboardSavesUserResponse(t *testing.T) {
 	h, workspace := setupTemplateHandler(t)
 	body := strings.NewReader(`{"item_id":"MEL-1","agent_name":"Rafael","message":"Pode seguir com essa orientação."}`)

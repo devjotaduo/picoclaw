@@ -85,6 +85,34 @@ func TestListWorkspaceAgentsMissingDirectoryReturnsEmpty(t *testing.T) {
 	}
 }
 
+func TestListWorkspaceAgentsReadsDirectoryAgents(t *testing.T) {
+	_, workspace := setupTemplateHandler(t)
+	writeDashboardFile(t, filepath.Join(workspace, "agents", "sofia", "AGENT.md"), `---
+name: Sofia
+role: Onboarding
+visibility: internal
+---
+
+# Sofia
+
+Conduz o discovery inicial.
+`)
+
+	agents, err := listWorkspaceAgents(workspace)
+	if err != nil {
+		t.Fatalf("listWorkspaceAgents() error = %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("agents len = %d, want 1: %#v", len(agents), agents)
+	}
+	if agents[0].ID != "sofia" || agents[0].Path != "agents/sofia/AGENT.md" {
+		t.Fatalf("directory agent = %#v, want ID sofia and nested path", agents[0])
+	}
+	if agents[0].Content == "" {
+		t.Fatal("content should include nested AGENT.md")
+	}
+}
+
 func TestHandleGetWorkspaceAgentRawReadsMarkdown(t *testing.T) {
 	h, workspace := setupTemplateHandler(t)
 	content := `---

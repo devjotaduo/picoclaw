@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import type { AgentDashboardItem } from "@/api/agent-dashboard"
 import {
   actionableDashboardItems,
+  buildAgentDashboardWorkSummaries,
   dashboardArtifactLabel,
   dashboardPriorityLabel,
   dashboardStatusLabel,
@@ -81,6 +82,110 @@ describe("agent dashboard helpers", () => {
       ),
     ).not.toContain("workspace/")
     expect(dashboardArtifactLabel("site")).toBe("Site")
+  })
+
+  it("groups reports, plans and files by agent", () => {
+    const summaries = buildAgentDashboardWorkSummaries({
+      agents: [
+        {
+          id: "camila-suporte",
+          name: "Camila",
+          role: "Suporte",
+          active: true,
+          item_count: 0,
+          task_count: 0,
+        },
+        {
+          id: "lia",
+          name: "Lia",
+          role: "Marketing",
+          active: true,
+          item_count: 0,
+          task_count: 0,
+        },
+        {
+          id: "rafael-assistente-interno",
+          name: "Rafael",
+          role: "Assistente interno",
+          active: true,
+          item_count: 0,
+          task_count: 0,
+        },
+        {
+          id: "catarina",
+          name: "Catarina",
+          role: "Curadoria",
+          active: true,
+          item_count: 0,
+          task_count: 0,
+        },
+      ],
+      items: [
+        {
+          id: "report",
+          type: "report",
+          status: "done",
+          title: "Relatório de campanha",
+          source: "workspace/output/reports/lia.md",
+          agent_id: "lia",
+          agent_name: "Lia",
+          updated_at: "2026-05-28T12:00:00Z",
+        },
+      ],
+      tasks: [
+        {
+          id: "plan",
+          title: "Plano de aprofundamento",
+          status: "in_progress",
+          source: "workspace/output/plans/catarina.md",
+          agent_id: "catarina",
+          agent_name: "Catarina",
+        },
+        {
+          id: "analytics",
+          title: "Analytics — Relatório diário",
+          status: "scheduled",
+          source: "workspace/cron/jobs.json",
+          agent_id: "main",
+        },
+      ],
+      artifacts: [
+        {
+          id: "file",
+          type: "document",
+          title: "Arquivo gerado",
+          source: "workspace/output/marketing/post.md",
+          url: "/api/agent-dashboard/artifacts/output/marketing/post.md",
+          agent_id: "lia",
+          agent_name: "Lia",
+        },
+        {
+          id: "source-only",
+          type: "document",
+          title: "Briefing de campanha",
+          source: "workspace/output/marketing/briefing.md",
+          url: "/api/agent-dashboard/artifacts/output/marketing/briefing.md",
+        },
+      ],
+    })
+
+    const lia = summaries.find((summary) => summary.agent.id === "lia")
+    const camila = summaries.find(
+      (summary) => summary.agent.id === "camila-suporte",
+    )
+    const catarina = summaries.find(
+      (summary) => summary.agent.id === "catarina",
+    )
+    const rafael = summaries.find(
+      (summary) => summary.agent.id === "rafael-assistente-interno",
+    )
+
+    expect(lia?.reports).toBe(1)
+    expect(lia?.files).toBe(2)
+    expect(camila?.files).toBe(0)
+    expect(catarina?.plans).toBe(1)
+    expect(catarina?.pending).toBe(1)
+    expect(rafael?.plans).toBe(1)
   })
 })
 
