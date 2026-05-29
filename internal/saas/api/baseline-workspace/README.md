@@ -65,9 +65,11 @@ has been used as a dev sandbox with real conversations.
 
 ## Manifest
 
-`SYNCED_FROM` records the commit hash + timestamp of the sync. When
-something looks wrong in a tenant, check this file to know which
-version of `workspace/` produced the baseline — useful for postmortems.
+`SYNCED_FROM` records a deterministic SHA256 hash of the synced
+baseline content and the copied file count. When something looks wrong
+in a tenant, check this file to compare whether the embedded baseline
+matches the expected `workspace/` tree without creating timestamp-only
+CI churn.
 
 ## What this is NOT
 
