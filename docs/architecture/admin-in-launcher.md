@@ -39,33 +39,25 @@ rotas `/admin/*`. Caso contrário o grupo some e cada rota cai em
 ## Arquitetura
 
 ```
-[browser]  https://ia.jotaduo.com           (cookie picoclaw_dashboard)
+[browser]  https://ia.jotaduo.com
    │
    ▼
-[OpenResty] → http://127.0.0.1:18800
+[Traefik]  router concreto Host(`ia.<dominio>`) para ACME/TLS
    │
    ▼
-[picoclaw-launcher] (web/backend, Go)
-   ├── /api/*                                 (launcher próprio)
-   ├── /admin/* + /assets/* + /src/*          (SPA via embed ou Vite proxy)
-   └── /api/admin/saas/*                      ──► launcher proxy backend
-                                                       │
-                                                       ▼
-                                               [controlplane] http://127.0.0.1:18801
-                                               (autentica com SAAS_EMAIL/PASSWORD,
-                                                cookie de sessão fica no launcher)
+[controlplane] (internal/saas/api)
+   ├── trata ia.<dominio> como host administrativo, nao tenant
+   ├── serve SPA admin / landing fallback
+   └── proxy tenant apenas para subdominios de tenant reais
 ```
 
 Detalhes:
 
-- **Browser ↔ launcher**: cookie `picoclaw_dashboard` (auth padrão do
-  launcher). Nenhum cookie do controlplane atravessa o browser.
-- **Launcher ↔ controlplane**: o launcher mantém um `*saasAdminClient`
-  singleton (`web/backend/api/saas_client.go`) com cookie jar interno. Login
-  lazy no primeiro request; reconecta em 401.
-- **Proxy de path**: `/api/admin/saas/<rest>` no launcher vira
-  `/api/v1/<rest>` no controlplane. Query string passa adiante. Set-Cookie do
-  controlplane **não** é repassado para o browser — segurança.
+- **TLS**: `ia.<dominio>` precisa de `Host()` concreto no Traefik; `HostRegexp`
+  sozinho casa HTTP depois do handshake, mas nao emite certificado antes.
+- **Controlplane**: `ia.<dominio>` entra no mesmo admin SPA que `admin.<dominio>`;
+  `tenantSubdomain()` deve ignorar `ia` para nao tentar buscar tenant chamado
+  `ia`.
 
 ## Configuração
 

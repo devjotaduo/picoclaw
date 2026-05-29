@@ -52,7 +52,7 @@ func TestTenantDashboardAllowed(t *testing.T) {
 
 func TestTenantSubdomainSkipsAdminHosts(t *testing.T) {
 	h := &Handler{Cfg: &config.Config{TenantBaseDomain: "jotaduo.com"}}
-	for _, host := range []string{"jotaduo.com", "admin.jotaduo.com", "adm.jotaduo.com"} {
+	for _, host := range []string{"jotaduo.com", "admin.jotaduo.com", "adm.jotaduo.com", "ia.jotaduo.com"} {
 		if sub, ok := h.tenantSubdomain(host); ok {
 			t.Fatalf("tenantSubdomain(%q) = %q,true; want admin host skipped", host, sub)
 		}

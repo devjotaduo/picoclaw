@@ -46,6 +46,7 @@ func (h *Handler) tenantSubdomain(hostport string) (string, bool) {
 	if host == base ||
 		host == "admin."+base ||
 		host == "adm."+base ||
+		host == "ia."+base ||
 		host == "www."+base {
 		return "", false
 	}
@@ -159,8 +160,8 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		// Anonymous + open-internet route — apply the per-IP cap before we
 		// burn LiteLLM budget on a flood. Health checks pass through
 		// uncounted so probes / load balancers stay cheap.
-		if h.PublicChatRateLimit != nil && isPublicTenantRateLimitedRoute(r.URL.Path) {
-			if !h.PublicChatRateLimit.Allow(clientIP(r)) {
+		if h.PublicTenantRateLimit != nil && isPublicTenantRateLimitedRoute(r.URL.Path) {
+			if !h.PublicTenantRateLimit.Allow(clientIP(r)) {
 				writeError(w, http.StatusTooManyRequests, "muitas mensagens, tenta de novo em um minuto")
 				return
 			}
