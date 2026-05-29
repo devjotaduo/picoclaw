@@ -443,8 +443,8 @@ func summarizeTenant(t *store.Tenant) map[string]any {
 		"supabase_user_id": t.SupabaseUserID,
 		// auth_backend + is_public surfaced so the admin tenant list
 		// can show how the tenant authenticates and whether it accepts
-		// anonymous public-chat traffic. These two together determine
-		// whether the launcher runs in trusted_gateway vs local mode.
+		// anonymous public-tenant chat over /pico/ws. These two together
+		// determine whether the launcher runs in trusted_gateway vs local mode.
 		"auth_backend": t.AuthBackend,
 		"is_public":    t.IsPublic,
 	}

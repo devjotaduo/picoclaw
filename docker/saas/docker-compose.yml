@@ -335,7 +335,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=saas_edge"
-      - "traefik.http.routers.controlplane.rule=Host(`${SAAS_BASE_DOMAIN}`) || Host(`admin.${SAAS_BASE_DOMAIN}`) || HostRegexp(`[a-z0-9-]+\\.${SAAS_BASE_DOMAIN}`)"
+      - "traefik.http.routers.controlplane.rule=Host(`${SAAS_BASE_DOMAIN}`) || Host(`admin.${SAAS_BASE_DOMAIN}`) || Host(`ia.${SAAS_BASE_DOMAIN}`) || HostRegexp(`[a-z0-9-]+\\.${SAAS_BASE_DOMAIN}`)"
       - "traefik.http.routers.controlplane.entrypoints=websecure"
       - "traefik.http.routers.controlplane.tls.certresolver=letsencrypt"
       - "traefik.http.routers.controlplane.middlewares=security-headers@file"

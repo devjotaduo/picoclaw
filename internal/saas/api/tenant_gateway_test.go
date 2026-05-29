@@ -24,6 +24,7 @@ func TestTenantSubdomainWithPort(t *testing.T) {
 		{"", "", false},                       // empty host
 		{"other.example.com", "", false},      // different domain
 		{"jotaduo.com.evil.com", "", false},   // suffix trap
+		{"ia.jotaduo.com:443", "", false},     // admin launcher host, not a tenant
 	}
 	for _, tc := range cases {
 		sub, ok := h.tenantSubdomain(tc.hostport)

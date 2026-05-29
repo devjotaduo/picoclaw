@@ -40,15 +40,12 @@ type Handler struct {
 	MCPEncKey     []byte
 	Provisioner   *tenant.Provisioner
 	LoginAttempts *loginAttempts
-	// PublicChatRateLimit caps anonymous traffic to the public-onboarding
-	// tenant's chat endpoints (matched by isPublicChatRoute). Anonymous
-	// POST + SSE on the open internet needs SOME backstop — this is the
-	// in-process baseline; pair with Cloudflare Turnstile / WAF for
-	// stronger mitigation. Default: 60 hits / 1 min / IP (chat needs
-	// more headroom than the 5-min login limiter).
-	PublicChatRateLimit *rateLimiter
-	CRM                 *crmClient
-	Mailer              *mailer.Mailer
+	// PublicTenantRateLimit caps anonymous public-tenant chat traffic over
+	// /pico/ws. It is the in-process baseline; pair with upstream WAF rules
+	// for stronger mitigation. Default: 60 hits / 1 min / IP.
+	PublicTenantRateLimit *rateLimiter
+	CRM                   *crmClient
+	Mailer                *mailer.Mailer
 	// Supabase is the optional Auth client for tenants whose dashboard logins
 	// are gated by Supabase JWT instead of the legacy local sessions table.
 	// Nil when SUPABASE_* env vars are unset — controlplane stays fully
@@ -79,14 +76,13 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		MCP:            &store.WorkspaceMCPStore{DB: db},
 		Provisioner:    prov,
 		LoginAttempts:  newLoginAttempts(),
-		// Anonymous public-chat traffic gets a moderate per-IP cap when no
-		// upstream protection (Cloudflare Turnstile / WAF) is configured.
-		// 60/min/IP fits a normal multi-turn discovery chat (~30 user
-		// turns × POST + SSE GET counted together) while making a single
-		// IP unable to burn arbitrary LiteLLM budget.
-		PublicChatRateLimit: newRateLimiter(60, time.Minute),
-		Mailer:              mlr,
-		PromotedPasswords:   newPromotedPasswordCache(),
+		// Anonymous public-tenant traffic gets a moderate per-IP cap when no
+		// upstream WAF is configured. 60/min/IP fits a normal multi-turn
+		// discovery chat while preventing one IP from burning arbitrary
+		// LiteLLM budget.
+		PublicTenantRateLimit: newRateLimiter(60, time.Minute),
+		Mailer:                mlr,
+		PromotedPasswords:     newPromotedPasswordCache(),
 	}
 	if cfg.OpenCRMURL != "" {
 		h.CRM = newCRMClient(cfg.OpenCRMURL)

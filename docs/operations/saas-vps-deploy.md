@@ -206,6 +206,7 @@ docker compose exec controlplane /usr/local/bin/picoclaw-tenantctl \
 ```bash
 curl -sS https://${SAAS_BASE_DOMAIN}/                       # 200, SPA
 curl -sS https://admin.${SAAS_BASE_DOMAIN}/                 # 200, SPA
+curl -sS https://ia.${SAAS_BASE_DOMAIN}/                    # 200, admin SPA alias
 # After creating a tenant público in the admin UI:
 curl -sS https://<public-subdomain>.${SAAS_BASE_DOMAIN}/api/launcher/ui-visibility
 curl -i -N --http1.1 \
@@ -224,7 +225,8 @@ curl -i -N --http1.1 \
 | ACME error `unable to parse email address` with `${LE_EMAIL}` | Traefik does not interpolate env vars in static YAML | `traefik.yml` hard-codes `email: "dev@jotaduo.com"` (fork the file when reusing the stack) |
 | `Error while building configuration ... routers cannot be a standalone element` | Empty `routers: {}` / `services: {}` at top level of a dynamic file | Removed from `security-headers.yml` |
 | `Unable to parse certificate /etc/traefik/certs/dev.pem` | `dev-tls.yml` referenced mkcert files that don't exist in prod | Renamed to `dev-tls.yml.sample`; `dev-setup.sh` activates it for local dev only |
-| Bare `${SAAS_BASE_DOMAIN}` returns TLS `unrecognized name` | Controlplane router rule did not include apex domain | Rule now matches `Host(${SAAS_BASE_DOMAIN}) \|\| Host(admin.${SAAS_BASE_DOMAIN}) \|\| HostRegexp(…)` |
+| Bare `${SAAS_BASE_DOMAIN}` returns TLS `unrecognized name` | Controlplane router rule did not include apex domain | Rule now matches `Host(${SAAS_BASE_DOMAIN}) \|\| Host(admin.${SAAS_BASE_DOMAIN}) \|\| Host(ia.${SAAS_BASE_DOMAIN}) \|\| HostRegexp(…)` |
+| `ia.${SAAS_BASE_DOMAIN}` returns TLS `unrecognized name` | `ia` is an admin alias, not a tenant, so the tenant-router watcher never writes a concrete per-tenant router for it | Keep `ia` in the controlplane compose router as a concrete `Host()` and in `tenantSubdomain()`'s admin-host skip list |
 | Tenant subdomain returns TLS `unrecognized name` even though DNS resolves | Traefik does not pre-issue certs for `HostRegexp` matches; the `letsencrypt` resolver only fires per concrete `Host()` rule | `docker/saas/scripts/tenant-router/` installs a systemd watcher that writes a per-tenant `Host()` router into `traefik/dynamic/tenants.yml` on every docker container lifecycle event (debounced 3s) |
 
 ## Operational notes
