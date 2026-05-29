@@ -83,7 +83,7 @@ const TYPE_CARDS: TypeCard[] = [
     id: "publico",
     title: "Público",
     tagline: "Atendimento aberto, sem senha",
-    bullets: ["Visitante entra sem cadastro", "Ideal para descoberta e pré-cadastro", "Entrega endereço público, sem pacote interno"],
+    bullets: ["Visitante entra direto no chat", "Ideal para descoberta guiada com Sofia", "Entrega endereço público, sem pacote interno"],
     subdomainHint: "onboarding",
     displayNameHint: "Onboarding",
     icon: IconMessageCircle,

@@ -1,9 +1,9 @@
-# Public Tenant Onboarding
+# Public Tenant Runtime
 
-A public onboarding tenant is a normal Picoclaw tenant marked
-`is_public=true`. It is created through the admin "New tenant" wizard with
-tenant type **Público**. Visitors open the tenant subdomain and talk to
-**Sofia** in the same launcher chat used by every tenant: `/pico/ws`.
+A public tenant is a normal Picoclaw tenant marked `is_public=true`. It is
+created through the admin "New tenant" wizard with tenant type **Público**.
+Visitors open the tenant subdomain and talk to **Sofia** in the same launcher
+chat used by every tenant: `/pico/ws`.
 
 The standalone public intake and the old public SSE chat path are legacy.
 Do not build new product flows on them.

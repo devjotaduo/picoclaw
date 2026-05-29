@@ -86,7 +86,7 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 	//
 	// Tenants with auth_backend='supabase' still flow through the legacy
 	// Supabase /login + JWT branch below for backwards compat.
-	// Public-onboarding tenants (t.IsPublic) keep the HMAC-signed anonymous
+	// Public tenants (t.IsPublic) keep the HMAC-signed anonymous
 	// branch further down because the launcher's VerifyRequest rejects empty
 	// claims and /pico/ws still needs a tenant-scoped public identity.
 	useLauncherNativeAuth := t.AuthBackend != "supabase" && !t.IsPublic
@@ -149,7 +149,7 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 		}
 	}
 
-	// Public-onboarding tenants accept anonymous traffic only on the small app
+	// Public tenants accept anonymous traffic only on the small app
 	// surface required to render Sofia and exchange chat messages through the
 	// regular /pico/ws channel. Skip Supabase JWT but still sign
 	// trusted_gateway HMAC so the launcher knows the request came from the

@@ -388,7 +388,7 @@ if ($GenerateStubs) {
 
 # -- 3.5 Overlay -Public (channel_list.pico + memory reset) -------------------
 # Mantem o source dev intacto; aplica somente na copia staged. Justificativa
-# de cada peca esta em docs/architecture/public-onboarding-tenant.md.
+# de cada peca esta em docs/architecture/public-tenant-runtime.md.
 if ($Public) {
     Write-Section "Aplicando overlay -Public"
 

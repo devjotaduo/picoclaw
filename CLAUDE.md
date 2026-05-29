@@ -228,9 +228,9 @@ Each workspace contains three subdirs the admin manages via
 
 Two flags on each workspace row drive selection:
 
-- `is_default_auto` (DB-unique) — auto-provisioner uses this one when
-  Clara qualifies a lead. Without one marked, `AutoProvisioner.Run`
-  fails fast with a clear error (no fallback).
+- `is_default_auto` (DB-unique) — provisioner uses this one when the admin
+  creates a tenant without choosing a manual workspace. Without one marked,
+  tenant creation fails fast with a clear error (no fallback).
 - `is_available_manual` — appears in the admin "New tenant" dropdown.
   Set to `false` for workspaces dedicated to automation (e.g. the
   onboarding tenant slug).
@@ -270,8 +270,8 @@ tenant has done discovery but is awaiting operator liberation (see
 `handleAdminTenantDiscoveryLiberate`).
 
 The single-purpose `POST /tenants/onboarding/bootstrap` endpoint was
-removed in PR #104 — the public onboarding tenant is now created through
-the normal wizard with `tenant_type=publico` like any other tenant.
+removed in PR #104 — the public tenant is now created through the normal
+wizard with `tenant_type=publico` like any other tenant.
 
 ### Strict config mode for SaaS tenants (PR #104)
 

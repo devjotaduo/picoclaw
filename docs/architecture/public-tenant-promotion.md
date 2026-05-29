@@ -551,7 +551,7 @@ considerar:
 ## Referências cruzadas
 
 - [state-schema.md](../../workspace/skills/onboarding-state/references/state-schema.md) — schema canônico do onboarding.json
-- [public-onboarding-tenant.md](./public-onboarding-tenant.md) — design histórico (deprecated; superseded por este doc)
+- [public-tenant-runtime.md](./public-tenant-runtime.md) — contrato de runtime do tenant público
 - [saas-tenancy.md](./saas-tenancy.md) — multi-tenant topology no VPS
 - [workspaces.md](./workspaces.md) — como workspaces seedam tenants
 - [admin-in-launcher.md](./admin-in-launcher.md) — UI admin embutida no launcher

@@ -218,8 +218,8 @@ Operator's expected flow:
    Progress is tracked in `workspace/state/onboarding.json`; Catarina and the
    admin promotion flow read that same state.
 
-See [`public-onboarding-tenant.md`](public-onboarding-tenant.md) for the
-visitor flow and public tenant route contract.
+See [`public-tenant-runtime.md`](public-tenant-runtime.md) for the visitor
+flow and public tenant route contract.
 
 ---
 

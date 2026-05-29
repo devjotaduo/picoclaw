@@ -73,7 +73,7 @@ type LauncherDashboardAuthConfig struct {
 	// X-Picoclaw-Internal-Token header bypass the cookie check. Empty
 	// disables the feature.
 	InternalToken string
-	// AnonymousPublicDashboard lets public onboarding tenants serve the
+	// AnonymousPublicDashboard lets public tenants serve the
 	// visitor-facing chat shell without a dashboard cookie. Requests admitted
 	// this way are annotated as role=public; PolicyMiddleware still enforces
 	// the public role's feature limits.
