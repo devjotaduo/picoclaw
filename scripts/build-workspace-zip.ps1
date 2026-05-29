@@ -80,9 +80,9 @@
 
 .EXAMPLE
     # Publish the same dev workspace as the PUBLIC onboarding tenant
-    # template. -Public overlays the public-web channel + resets
-    # memory/empresa.md (so the Sofia onboarding default fires for
-    # anonymous visitors) + drops memory/jotaduo/ client dossiers.
+    # template. -Public keeps the pico channel enabled + resets memory/empresa.md
+    # (so the Sofia onboarding default fires for anonymous visitors) + drops
+    # memory/jotaduo/ client dossiers.
     pwsh ./scripts/build-workspace-zip.ps1 -SourceDir ./workspace `
         -Slug onboarding -Name "Onboarding" -Public -Upload
 #>
@@ -98,12 +98,11 @@ param(
     [bool]$IsAvailableManual = $true,
     [switch]$GenerateStubs,
     [switch]$KeepSecrets,
-    # Public-tenant overlay: enables the public-web channel + resets
-    # memory/empresa.md (so the Sofia onboarding-default override fires)
-    # + clears memory/jotaduo/ client dossiers. Use when packaging the
-    # workspace for is_public=true tenant provisioning. Local dev
-    # `workspace/` keeps its private state; the overlay is applied only
-    # against the staging copy.
+    # Public-tenant overlay: keeps pico enabled + resets memory/empresa.md
+    # (so the Sofia onboarding-default override fires) + clears memory/jotaduo/
+    # client dossiers. Use when packaging the workspace for is_public=true
+    # tenant provisioning. Local dev `workspace/` keeps its private state; the
+    # overlay is applied only against the staging copy.
     [switch]$Public,
     [string]$OutputPath,
     [switch]$Upload,
@@ -387,40 +386,54 @@ if ($GenerateStubs) {
     }
 }
 
-# -- 3.5 Overlay -Public (channel_list.public-web + memory reset) -------------
+# -- 3.5 Overlay -Public (channel_list.pico + memory reset) -------------------
 # Mantem o source dev intacto; aplica somente na copia staged. Justificativa
 # de cada peca esta em docs/architecture/public-onboarding-tenant.md.
 if ($Public) {
     Write-Section "Aplicando overlay -Public"
 
-    # a) Liga o canal public-web em channel_list. Se ja existir, so flipa
-    #    enabled=true; se nao, injeta a entrada canonica (mesmo shape que
-    #    estava em workspace-onboarding/config.json antes da deprecation).
+    # a) Tenant publico usa o chat normal via /pico/ws. Garante pico ligado
+    #    e remove a chave legada public-web se ela vier de templates antigos.
     if (Test-Path $configPath) {
         $cfg = Get-Content -Raw -Path $configPath | ConvertFrom-Json
         if (-not $cfg.channel_list) {
             $cfg | Add-Member -NotePropertyName channel_list -NotePropertyValue ([pscustomobject]@{}) -Force
         }
-        $pubWeb = [pscustomobject]@{
-            type     = 'public-web'
+
+        $picoChannel = [pscustomobject]@{
+            type    = 'pico'
             enabled  = $true
-            allow_from = @('*')
             settings = [pscustomobject]@{
-                rate_limit_per_ip       = 30
-                session_ttl_seconds     = 1800
-                require_captcha_header  = $true
+                ping_interval   = 30
+                read_timeout    = 60
+                write_timeout   = 10
+                max_connections = 100
             }
         }
-        # Idempotente: substitui se ja existir
-        if ($cfg.channel_list.PSObject.Properties.Match('public-web').Count -gt 0) {
-            $cfg.channel_list.'public-web' = $pubWeb
+
+        if ($cfg.channel_list.PSObject.Properties.Match('pico').Count -gt 0) {
+            if ($cfg.channel_list.pico.PSObject.Properties.Match('enabled').Count -gt 0) {
+                $cfg.channel_list.pico.enabled = $true
+            } else {
+                $cfg.channel_list.pico | Add-Member -NotePropertyName enabled -NotePropertyValue $true -Force
+            }
+            if ($cfg.channel_list.pico.PSObject.Properties.Match('type').Count -gt 0) {
+                $cfg.channel_list.pico.type = 'pico'
+            } else {
+                $cfg.channel_list.pico | Add-Member -NotePropertyName type -NotePropertyValue 'pico' -Force
+            }
         } else {
-            $cfg.channel_list | Add-Member -NotePropertyName 'public-web' -NotePropertyValue $pubWeb -Force
+            $cfg.channel_list | Add-Member -NotePropertyName 'pico' -NotePropertyValue $picoChannel -Force
+        }
+
+        if ($cfg.channel_list.PSObject.Properties.Match('public-web').Count -gt 0) {
+            $cfg.channel_list.PSObject.Properties.Remove('public-web')
+            Write-Ok "channel_list.public-web removido de home/config.json"
         }
         ($cfg | ConvertTo-Json -Depth 20) | Set-Content -Path $configPath -Encoding UTF8 -NoNewline
-        Write-Ok "channel_list.public-web habilitado em home/config.json"
+        Write-Ok "channel_list.pico habilitado em home/config.json"
     } else {
-        Write-Warn2 "home/config.json nao encontrado; pula overlay public-web"
+        Write-Warn2 "home/config.json nao encontrado; pula overlay pico"
     }
 
     # b) Reset memory/empresa.md pro estado-template que dispara o Sofia

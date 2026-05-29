@@ -195,7 +195,7 @@ func TestHandleGetChannelConfig_ReturnsDefaultShapeForMissingChannel(t *testing.
 }
 
 func TestChannelCatalogHonorsAllowedChannels(t *testing.T) {
-	t.Setenv(allowedChannelsEnv, "whatsapp_native,public-web")
+	t.Setenv(allowedChannelsEnv, "whatsapp_native,pico")
 
 	configPath, cleanup := setupOAuthTestEnv(t)
 	defer cleanup()
@@ -228,8 +228,11 @@ func TestChannelCatalogHonorsAllowedChannels(t *testing.T) {
 	if got["whatsapp_native"] != "whatsapp" {
 		t.Fatalf("whatsapp_native config key = %q, want whatsapp", got["whatsapp_native"])
 	}
-	if got["public-web"] != "public-web" {
-		t.Fatalf("public-web config key = %q, want public-web", got["public-web"])
+	if got["pico"] != "pico" {
+		t.Fatalf("pico config key = %q, want pico", got["pico"])
+	}
+	if _, ok := got["public-web"]; ok {
+		t.Fatal("public-web should not be exposed in the channel catalog")
 	}
 }
 

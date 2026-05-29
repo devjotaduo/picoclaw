@@ -80,14 +80,14 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 	// New default: the launcher runs in its native "local" auth mode
 	// (dashboardauth.db bcrypt + HttpOnly cookie). The controlplane is a
 	// transparent reverse proxy for everything except the legacy Supabase
-	// path and the public-chat anonymous surface. This fixes the WS
-	// disconnect after the Supabase JWT (1h, no refresh) expired.
+	// path and the public tenant's anonymous Sofia chat shell. This fixes
+	// the WS disconnect after the Supabase JWT (1h, no refresh) expired.
 	//
 	// Tenants with auth_backend='supabase' still flow through the legacy
 	// Supabase /login + JWT branch below for backwards compat.
 	// Public-onboarding tenants (t.IsPublic) keep the HMAC-signed anonymous
-	// branch further down because the launcher's VerifyRequest rejects
-	// empty claims and we need a stable identity for the public-web channel.
+	// branch further down because the launcher's VerifyRequest rejects empty
+	// claims and /pico/ws still needs a tenant-scoped public identity.
 	useLauncherNativeAuth := t.AuthBackend != "supabase" && !t.IsPublic
 
 	// Tenant-scoped login page. Served BY the controlplane (not the launcher)
@@ -149,11 +149,12 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 	}
 
 	// Public-onboarding tenants accept anonymous traffic only on the small app
-	// surface required to render Sofia and exchange chat messages. Skip
-	// Supabase JWT but still sign trusted_gateway HMAC so the launcher knows
-	// the request came from the controlplane. Sentinel values are used for
-	// UserID/Role because the launcher's VerifyRequest rejects empty claims;
-	// the agent identifies the visitor via session id.
+	// surface required to render Sofia and exchange chat messages through the
+	// regular /pico/ws channel. Skip Supabase JWT but still sign
+	// trusted_gateway HMAC so the launcher knows the request came from the
+	// controlplane. Sentinel values are used for UserID/Role because the
+	// launcher's VerifyRequest rejects empty claims; the agent identifies the
+	// visitor via session id.
 	if t.IsPublic && isPublicTenantSignedRoute(r.Method, r.URL.Path) {
 		// Anonymous + open-internet route — apply the per-IP cap before we
 		// burn LiteLLM budget on a flood. Health checks pass through
@@ -163,9 +164,6 @@ func (h *Handler) serveTenantHost(w http.ResponseWriter, r *http.Request, subdom
 				writeError(w, http.StatusTooManyRequests, "muitas mensagens, tenta de novo em um minuto")
 				return
 			}
-		}
-		if publicTenantRequiresTurnstile(r.Method, r.URL.Path) && !h.verifyPublicChatTurnstile(w, r) {
-			return
 		}
 		h.proxyTenantRequest(w, r, target, func(req *http.Request) {
 			h.signPublicTenantRequest(req, t)
@@ -246,13 +244,8 @@ func (h *Handler) proxyTenantRequest(
 	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
 		writeError(w, http.StatusBadGateway, "tenant gateway error: "+err.Error())
 	}
-	// FlushInterval=-1 forces a flush after every Write — required for
-	// SSE streams that go through this proxy (/api/public/chat/stream).
-	// Without it, ReverseProxy buffers chunks until either the upstream
-	// closes the body or some internal threshold trips, so the visitor
-	// sees the agent reply only after the entire stream ends. The
-	// downstream launcher proxy in web/backend/api/public_chat.go has
-	// the same setting for the same reason.
+	// FlushInterval=-1 keeps proxied streaming responses responsive and is
+	// harmless for normal HTTP. The public tenant chat itself uses /pico/ws.
 	proxy.FlushInterval = -1
 	proxy.ServeHTTP(w, r)
 }
@@ -534,9 +527,6 @@ func isPublicTenantStatic(method, rawPath string) bool {
 
 func isPublicTenantSignedRoute(method, rawPath string) bool {
 	p := path.Clean("/" + strings.TrimPrefix(rawPath, "/"))
-	if isPublicChatRoute(p) {
-		return isPublicChatMethod(method, p)
-	}
 	if method != http.MethodGet && method != http.MethodHead {
 		return false
 	}
@@ -554,51 +544,9 @@ func isPublicTenantSignedRoute(method, rawPath string) bool {
 	}
 }
 
-func isPublicChatMethod(method, p string) bool {
-	switch p {
-	case "/api/public/chat":
-		return method == http.MethodPost
-	case "/api/public/chat/stream",
-		"/api/public/chat/health":
-		return method == http.MethodGet || method == http.MethodHead
-	default:
-		return strings.HasPrefix(p, "/api/public/chat/") &&
-			(method == http.MethodGet || method == http.MethodHead || method == http.MethodPost)
-	}
-}
-
 func isPublicTenantRateLimitedRoute(rawPath string) bool {
 	p := path.Clean("/" + strings.TrimPrefix(rawPath, "/"))
-	if p == "/pico/ws" {
-		return true
-	}
-	return isPublicChatRoute(p) && !isPublicChatHealthRoute(p)
-}
-
-func publicTenantRequiresTurnstile(method, rawPath string) bool {
-	return method == http.MethodPost && isPublicChatRoute(rawPath)
-}
-
-// isPublicChatRoute returns true for the small set of paths a public-onboarding
-// tenant exposes to anonymous visitors (no Supabase JWT). Anything else still
-// goes through the normal authenticateTenantRequest path even on a public tenant.
-func isPublicChatRoute(rawPath string) bool {
-	p := path.Clean("/" + strings.TrimPrefix(rawPath, "/"))
-	switch p {
-	case "/api/public/chat",
-		"/api/public/chat/stream",
-		"/api/public/chat/health":
-		return true
-	}
-	return strings.HasPrefix(p, "/api/public/chat/")
-}
-
-// isPublicChatHealthRoute returns true for the health-probe endpoint that
-// load balancers / uptime monitors hit every few seconds. Excluded from
-// the per-IP cap so a single watchdog doesn't exhaust the budget; the cap
-// targets actual chat traffic (POST + SSE GET).
-func isPublicChatHealthRoute(rawPath string) bool {
-	return path.Clean("/"+strings.TrimPrefix(rawPath, "/")) == "/api/public/chat/health"
+	return p == "/pico/ws"
 }
 
 func isTenantLauncherForgotPasswordRoute(method, rawPath string) bool {

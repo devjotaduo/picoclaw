@@ -117,7 +117,7 @@ volume e recriar o container.
 │    - is_public=true                                                  │
 │    - auth_backend="local" (sem dashboardauth.db owner)               │
 │    - PICOCLAW_AUTH_MODE=trusted_gateway                              │
-│    - PICOCLAW_ALLOWED_CHANNELS=whatsapp_native,pico,public-web       │
+│    - PICOCLAW_ALLOWED_CHANNELS=whatsapp_native,pico                  │
 │    - ui-visibility.json::active_profile="public"                     │
 │  → tenant URL: https://<sub>.jotaduo.com                             │
 └─────────────────────────────────────────────────────────────────────┘
@@ -188,7 +188,7 @@ volume e recriar o container.
 │    7. Direct file write: state.json::promotion.promoted_at = now     │
 │    8. Provisioner.Recreate — container reboots com env novo:         │
 │       PICOCLAW_AUTH_MODE muda trusted_gateway → launcher native      │
-│       PICOCLAW_ALLOWED_CHANNELS volta pro default sem public-web     │
+│       PICOCLAW_ALLOWED_CHANNELS permanece no default whatsapp+pico   │
 │       launcher-auth.db (já seeded) é lido pelo launcher pra auth     │
 │    9. Mailer.SendCredentialsEmail (best-effort, goroutine)           │
 │    10. Audit log: tenant.promote                                     │
@@ -398,7 +398,7 @@ A diferença prática entre os dois estados:
 | Variável | Publico (`is_public=true`) | Cliente (`is_public=false`) |
 |---|---|---|
 | `PICOCLAW_AUTH_MODE` | `trusted_gateway` | `launcher` (native local) |
-| `PICOCLAW_ALLOWED_CHANNELS` | `whatsapp_native,pico,public-web` | `whatsapp_native,pico` (padrão) |
+| `PICOCLAW_ALLOWED_CHANNELS` | `whatsapp_native,pico` | `whatsapp_native,pico` (padrão) |
 | `PICOCLAW_TENANT_ID` | sempre | sempre |
 | `PICOCLAW_TRUSTED_GATEWAY_SECRET` | sempre | sempre (used pra outras chamadas internas) |
 | `PICOCLAW_CONFIG_STRICT` | `true` | `true` |

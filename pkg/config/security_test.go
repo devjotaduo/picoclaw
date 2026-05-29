@@ -31,38 +31,6 @@ func TestSecurityConfig(t *testing.T) {
 	})
 }
 
-func TestLoadSecurityConfigPreservesPublicWebNonSecureSettings(t *testing.T) {
-	cfg := &Config{
-		Channels: ChannelsConfig{
-			"public-web": {
-				Enabled: true,
-				Type:    ChannelPublicWeb,
-				Settings: RawNode(`{
-					"rate_limit_per_ip": 30,
-					"session_ttl_seconds": 1800,
-					"require_captcha_header": true
-				}`),
-			},
-		},
-	}
-	secPath := filepath.Join(t.TempDir(), ".security.yml")
-	require.NoError(t, os.WriteFile(secPath, []byte(`channel_list:
-  public-web:
-    settings:
-      rate_limit_per_ip: 9
-`), 0o600))
-
-	require.NoError(t, loadSecurityConfig(cfg, secPath))
-
-	decoded, err := cfg.Channels["public-web"].GetDecoded()
-	require.NoError(t, err)
-	settings, ok := decoded.(*PublicWebSettings)
-	require.True(t, ok)
-	assert.Equal(t, 9, settings.RateLimitPerIP)
-	assert.Equal(t, 1800, settings.SessionTTLSeconds)
-	assert.True(t, settings.RequireCaptchaHeader)
-}
-
 func TestSecurityPath(t *testing.T) {
 	tests := []struct {
 		name      string

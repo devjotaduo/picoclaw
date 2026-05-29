@@ -1,9 +1,12 @@
 import { Outlet, createRootRoute, useRouterState } from "@tanstack/react-router"
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools"
 import { useEffect, useState } from "react"
+import { Toaster } from "sonner"
 
 import { getLauncherAuthStatus } from "@/api/launcher-auth"
 import { AppLayout } from "@/components/app-layout"
+import { SidebarProvider } from "@/components/ui/sidebar"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { WaitingScreen } from "@/components/waiting-screen"
 import { initializeChatStore } from "@/features/chat/controller"
 import { useUIVisibility } from "@/hooks/use-ui-visibility"
@@ -34,9 +37,21 @@ const RootLayout = () => {
 
   const [authError, setAuthError] = useState<string | null>(null)
 
+  // Waiting/public tenants are anonymous surfaces. Wait for the real
+  // ui-visibility.json before deciding, because the frontend fallback resolves
+  // to "public" when no launcher policy is available yet.
+  const uiVisibility = useUIVisibility()
+  const isAnonymousTenantProfile =
+    !uiVisibility.isLoading &&
+    !uiVisibility.isError &&
+    (uiVisibility.profile === "public" || uiVisibility.profile === "waiting")
+  const isWaiting = uiVisibility.profile === "waiting"
+
   // Session guard: proactively check auth status on every page load.
   useEffect(() => {
-    if (isPublicPage) return
+    if (isPublicPage || uiVisibility.isLoading || isAnonymousTenantProfile) {
+      return
+    }
     void getLauncherAuthStatus()
       .then((s) => {
         if (!s.initialized) {
@@ -60,25 +75,31 @@ const RootLayout = () => {
           )
         }
       })
-  }, [isPublicPage])
+  }, [isAnonymousTenantProfile, isPublicPage, uiVisibility.isLoading])
 
   useEffect(() => {
-    if (isPublicPage) {
+    if (isPublicPage || uiVisibility.isLoading) {
       return
     }
-    initializeChatStore()
-  }, [isPublicPage])
+    initializeChatStore({ hydrateHistory: !isAnonymousTenantProfile })
+  }, [isAnonymousTenantProfile, isPublicPage, uiVisibility.isLoading])
 
   // Waiting screen: quando o tenant terminou o discovery e está aguardando
   // contato/liberação do admin, ui-visibility.json tem active_profile="waiting".
   // Renderiza overlay fullscreen com mensagem fixa em vez do app inteiro.
   // Funciona ANTES de qualquer outra UI — inclui páginas públicas (chat
   // anônimo), porque o cliente chega lá pela URL do tenant dele.
-  const uiVisibility = useUIVisibility()
-  const isWaiting = uiVisibility.profile === "waiting"
-
   if (isWaiting) {
     return <WaitingScreen />
+  }
+
+  if (!isPublicPage && uiVisibility.isLoading) {
+    return (
+      <TooltipProvider>
+        <div className="bg-background min-h-screen" />
+        <Toaster position="bottom-center" />
+      </TooltipProvider>
+    )
   }
 
   if (isPublicPage) {
@@ -89,6 +110,25 @@ const RootLayout = () => {
           <TanStackRouterDevtools position="bottom-right" />
         ) : null}
       </>
+    )
+  }
+
+  if (isAnonymousTenantProfile) {
+    return (
+      <TooltipProvider>
+        <SidebarProvider
+          defaultOpen={false}
+          className="bg-background flex h-dvh flex-col overflow-hidden"
+        >
+          <main className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+            <Outlet />
+          </main>
+          <Toaster position="bottom-center" />
+          {import.meta.env.DEV ? (
+            <TanStackRouterDevtools position="bottom-right" />
+          ) : null}
+        </SidebarProvider>
+      </TooltipProvider>
     )
   }
 

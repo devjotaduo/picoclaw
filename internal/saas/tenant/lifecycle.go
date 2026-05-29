@@ -72,11 +72,6 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 	if p.Cfg.TenantImage != "" {
 		t.ContainerImage = p.Cfg.TenantImage
 	}
-	if t.IsPublic {
-		if err := EnsurePublicWebChannelConfig(t.VolumePath); err != nil {
-			return fmt.Errorf("ensure public-web config: %w", err)
-		}
-	}
 	cliClaude, cliCodex := p.sharedCLIModelRouting()
 	if p.Cfg != nil {
 		if codexDir, err := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir); err != nil {

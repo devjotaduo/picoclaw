@@ -250,7 +250,7 @@ promoção, o recreate do container remove esses envs.
 
 | Cenário | Comportamento atual |
 |---|---|
-| Visitante abre o tenant antes do gateway subir | A UI mostra indisponibilidade temporária. O probe real é `GET /api/public/chat/health`. |
+| Visitante abre o tenant antes do gateway subir | A UI mostra indisponibilidade temporária. O probe real é o upgrade WebSocket em `/pico/ws`, depois de confirmar `active_profile=public` em `/api/launcher/ui-visibility`. |
 | Papel `public` sem policy de chat/logs | `/api/gateway/status` ou `/pico/ws` podem retornar 403 e a UI parece offline. O default precisa de `chat=write` e `logs=read`. |
 | Catarina já enviou a primeira mensagem | `first_contact_at` impede o bridge de disparar de novo. Use `mark_outreach_sent` só para novas mensagens intencionais. |
 | Lead demora a responder | `last_outreach_at` alimenta o alerta de timeout, mas não bloqueia promoção sozinho quando o restante está pronto. |

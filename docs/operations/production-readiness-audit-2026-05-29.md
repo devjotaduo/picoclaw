@@ -65,9 +65,10 @@ auditoria não está materializada como tenant público real.
 ## Pendências antes de produção
 
 1. **Criar tenant público real em staging/prod e validar o fluxo vivo.**
-   O local respondeu `401`/`404` em `/api/public/chat*`, então não valida
-   a entrada anônima Sofia. O caminho correto é criar pelo wizard
-   `Novo tenant` com `tenant_type=publico`, não usar `/pre-cadastro`.
+   O caminho correto é criar pelo wizard `Novo tenant` com
+   `tenant_type=publico`, abrir o subdomínio do tenant e validar Sofia pelo
+   chat real `/pico/ws`. Não usar a rota pública antiga nem a rota SSE
+   legada.
 
 2. **Habilitar e testar criação real pelo proxy SaaS admin.**
    O primeiro passo do wizard não chama mais o proxy antes da hora, mas a

@@ -607,6 +607,18 @@ func configureAllowedChannel(chMap map[string]any, item channelCatalogItem) {
 		chMap["type"] = item.ConfigKey
 	}
 
+	if item.Name == config.ChannelPico {
+		settings := map[string]any{}
+		if existing, ok := chMap["settings"].(map[string]any); ok {
+			settings = existing
+		}
+		if token, _ := settings["token"].(string); strings.TrimSpace(token) == "" {
+			settings["token"] = generateSecureToken()
+		}
+		chMap["settings"] = settings
+		return
+	}
+
 	if item.Name != "whatsapp" && item.Name != "whatsapp_native" {
 		return
 	}
@@ -637,6 +649,13 @@ func configureAllowedChannelConfig(ch *config.Channel, item channelCatalogItem) 
 	if ch.Type != wantType {
 		ch.Type = wantType
 		changed = true
+	}
+
+	if item.Name == config.ChannelPico {
+		if ensurePicoAllowedChannelToken(ch) {
+			changed = true
+		}
+		return changed
 	}
 
 	if item.Name != config.ChannelWhatsApp && item.Name != config.ChannelWhatsAppNative {
@@ -677,6 +696,32 @@ func configureAllowedChannelConfig(ch *config.Channel, item channelCatalogItem) 
 		}
 	}
 	return changed
+}
+
+func ensurePicoAllowedChannelToken(ch *config.Channel) bool {
+	decoded, err := ch.GetDecoded()
+	if err == nil {
+		if settings, ok := decoded.(*config.PicoSettings); ok {
+			if settings.Token.String() == "" {
+				settings.Token = *config.NewSecureString(generateSecureToken())
+				return true
+			}
+			return false
+		}
+	}
+
+	settings := map[string]any{}
+	if len(ch.Settings) > 0 {
+		_ = json.Unmarshal(ch.Settings, &settings)
+	}
+	if token, _ := settings["token"].(string); strings.TrimSpace(token) != "" {
+		return false
+	}
+	settings["token"] = generateSecureToken()
+	if raw, err := json.Marshal(settings); err == nil {
+		ch.Settings = config.RawNode(raw)
+	}
+	return true
 }
 
 func ensureWhatsAppNativeChannelConfig(cfg *config.Config) bool {

@@ -95,34 +95,6 @@ func TestRawNode_YAML_RoundTrip(t *testing.T) {
 	})
 }
 
-func TestChannelsConfig_UnmarshalYAML_MergesSettingsWithExistingJSON(t *testing.T) {
-	var channels ChannelsConfig
-	require.NoError(t, json.Unmarshal([]byte(`{
-		"public-web": {
-			"enabled": true,
-			"type": "public-web",
-			"settings": {
-				"rate_limit_per_ip": 30,
-				"session_ttl_seconds": 1800,
-				"require_captcha_header": true
-			}
-		}
-	}`), &channels))
-
-	require.NoError(t, yaml.Unmarshal([]byte(`public-web:
-  settings:
-    rate_limit_per_ip: 9
-`), &channels))
-
-	decoded, err := channels["public-web"].GetDecoded()
-	require.NoError(t, err)
-	settings, ok := decoded.(*PublicWebSettings)
-	require.True(t, ok)
-	assert.Equal(t, 9, settings.RateLimitPerIP)
-	assert.Equal(t, 1800, settings.SessionTTLSeconds)
-	assert.True(t, settings.RequireCaptchaHeader)
-}
-
 // ═══════════════════════════════════════════════════
 //  JSON unmarshal: extend.json
 // ═══════════════════════════════════════════════════

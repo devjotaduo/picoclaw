@@ -50,16 +50,6 @@ type Config struct {
 	// the provisioning flow expects. Default /srv/picoclaw-workspaces.
 	WorkspaceDir string
 
-	// TurnstileSecretKey is the server-side secret for Cloudflare Turnstile.
-	// When set, the controlplane verifies the X-Captcha-Token header on
-	// POST /api/public/chat before reverse-proxying to a public tenant. When
-	// empty the check is skipped — the tenant's own RequireCaptchaHeader
-	// flag still enforces "non-empty token" as defense in depth, but the
-	// token itself is not validated against Cloudflare. Get the secret from
-	// the Turnstile dashboard; the corresponding site key is used by the
-	// frontend widget and is NOT secret.
-	TurnstileSecretKey string
-
 	// BrowserCDPURL is the Chrome DevTools Protocol endpoint of the shared
 	// browser-sidecar service, propagated to every tenant container so the
 	// `agent-browser` Node CLI inside the tenant can connect remotely instead
@@ -167,8 +157,6 @@ func Load() (*Config, error) {
 	}
 
 	c.WorkspaceDir = envOr("PICOCLAW_WORKSPACE_DIR", "/srv/picoclaw-workspaces")
-
-	c.TurnstileSecretKey = os.Getenv("TURNSTILE_SECRET_KEY")
 
 	c.SupabaseProjectRef = os.Getenv("SUPABASE_PROJECT_REF")
 	c.SupabaseAnonKey = os.Getenv("SUPABASE_ANON_KEY")

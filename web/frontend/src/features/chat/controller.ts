@@ -511,7 +511,13 @@ export async function newChatSession() {
   }
 }
 
-export function initializeChatStore() {
+interface InitializeChatStoreOptions {
+  hydrateHistory?: boolean
+}
+
+export function initializeChatStore({
+  hydrateHistory = true,
+}: InitializeChatStoreOptions = {}) {
   if (initialized) {
     return
   }
@@ -542,6 +548,17 @@ export function initializeChatStore() {
   }
 
   unsubscribeGateway = store.sub(gatewayAtom, syncConnectionWithGateway)
+
+  if (!hydrateHistory) {
+    updateChatStore({
+      messages: [],
+      isTyping: false,
+      hasHydratedActiveSession: true,
+      contextUsage: undefined,
+    })
+    syncConnectionWithGateway(true)
+    return
+  }
 
   if (!readStoredSessionId()) {
     updateChatStore({ hasHydratedActiveSession: true })

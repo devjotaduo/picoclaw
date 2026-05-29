@@ -177,7 +177,6 @@ func LauncherDashboardAuth(cfg LauncherDashboardAuthConfig, next http.Handler) h
 		p := canonicalAuthPath(r.URL.Path)
 		if isTrustedGatewayMode(cfg) {
 			if isPublicLauncherDashboardStatic(r.Method, p) ||
-				isPublicLauncherPublicChatHealth(r.Method, p) ||
 				isPublicLauncherJotaduoWAInbound(r.Method, p) {
 				next.ServeHTTP(w, r)
 				return
@@ -274,23 +273,8 @@ func isAnonymousPublicDashboardPath(method, p string) bool {
 	if method == http.MethodGet && p == "/api/launcher/policy" {
 		return true
 	}
-	if isAnonymousPublicChatPath(method, p) {
-		return true
-	}
 	_, _, known := saasPolicy.FeatureForRequest(method, p)
 	return known
-}
-
-func isAnonymousPublicChatPath(method, p string) bool {
-	if method != http.MethodGet && method != http.MethodPost {
-		return false
-	}
-	switch p {
-	case "/api/public/chat", "/api/public/chat/stream", "/api/public/chat/health":
-		return true
-	default:
-		return strings.HasPrefix(p, "/api/public/chat/")
-	}
 }
 
 // canonicalAuthPath matches path cleaning used for routing decisions so
@@ -396,9 +380,6 @@ func isPublicLauncherDashboardPath(method, p string) bool {
 	if isPublicLauncherDashboardStatic(method, p) {
 		return true
 	}
-	if isPublicLauncherPublicChatHealth(method, p) {
-		return true
-	}
 	if isPublicLauncherJotaduoWAInbound(method, p) {
 		return true
 	}
@@ -415,10 +396,6 @@ func isPublicLauncherDashboardPath(method, p string) bool {
 		return method == http.MethodPost
 	}
 	return false
-}
-
-func isPublicLauncherPublicChatHealth(method, p string) bool {
-	return method == http.MethodGet && p == "/api/public/chat/health"
 }
 
 func isPublicLauncherJotaduoWAInbound(method, p string) bool {

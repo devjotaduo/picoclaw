@@ -8,6 +8,7 @@ import { refreshGatewayState } from "@/store/gateway"
 
 interface UseChatModelsOptions {
   isConnected: boolean
+  publicMode?: boolean
 }
 
 const FALLBACK_DEFAULT_MODEL_NAME = "default"
@@ -53,7 +54,10 @@ function resolveDefaultModelName(models: ModelInfo[], defaultModel: string) {
   return fallbackDefault?.model_name ?? ""
 }
 
-export function useChatModels({ isConnected }: UseChatModelsOptions) {
+export function useChatModels({
+  isConnected,
+  publicMode = false,
+}: UseChatModelsOptions) {
   const { t } = useTranslation()
   const [modelList, setModelList] = useState<ModelInfo[]>([])
   const [defaultModelName, setDefaultModelName] = useState("")
@@ -83,15 +87,19 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
   }, [syncDefaultModelName])
 
   useEffect(() => {
+    if (publicMode) {
+      return
+    }
     const timerId = setTimeout(() => {
       void loadModels()
     }, 0)
 
     return () => clearTimeout(timerId)
-  }, [isConnected, loadModels])
+  }, [isConnected, loadModels, publicMode])
 
   const handleSetDefault = useCallback(
     async (modelName: string) => {
+      if (publicMode) return
       if (modelName === defaultModelName) return
       const requestId = ++setDefaultRequestIdRef.current
 
@@ -116,7 +124,7 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
         toast.error(err instanceof Error ? err.message : t("models.loadError"))
       }
     },
-    [defaultModelName, syncDefaultModelName, t],
+    [defaultModelName, publicMode, syncDefaultModelName, t],
   )
 
   const defaultSelectableModels = useMemo(
@@ -126,8 +134,10 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
 
   const hasAvailableModels = useMemo(
     () =>
-      modelAccessRestricted || defaultSelectableModels.some((m) => m.available),
-    [defaultSelectableModels, modelAccessRestricted],
+      publicMode ||
+      modelAccessRestricted ||
+      defaultSelectableModels.some((m) => m.available),
+    [defaultSelectableModels, modelAccessRestricted, publicMode],
   )
 
   const oauthModels = useMemo(
@@ -152,9 +162,11 @@ export function useChatModels({ isConnected }: UseChatModelsOptions) {
   )
 
   return {
-    defaultModelName,
+    defaultModelName: publicMode
+      ? FALLBACK_DEFAULT_MODEL_NAME
+      : defaultModelName,
     hasAvailableModels,
-    modelAccessRestricted,
+    modelAccessRestricted: publicMode || modelAccessRestricted,
     apiKeyModels,
     oauthModels,
     localModels,

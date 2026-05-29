@@ -84,7 +84,7 @@ func TestHandleUpdateConfig_PreservesExecAllowRemoteDefaultWhenOmitted(t *testin
 }
 
 func TestHandlePatchConfig_EnforcesAllowedChannels(t *testing.T) {
-	t.Setenv(allowedChannelsEnv, "whatsapp_native,public-web")
+	t.Setenv(allowedChannelsEnv, "whatsapp_native,pico")
 
 	configPath, cleanup := setupOAuthTestEnv(t)
 	defer cleanup()
@@ -139,11 +139,18 @@ func TestHandlePatchConfig_EnforcesAllowedChannels(t *testing.T) {
 	if publicWeb == nil {
 		t.Fatal("missing public-web channel")
 	}
-	if !publicWeb.Enabled {
-		t.Fatal("public-web channel should be enabled by allowed channel policy")
+	if publicWeb.Enabled {
+		t.Fatal("public-web channel should stay disabled outside the allowed channel policy")
 	}
-	if got := publicWeb.Type; got != "public-web" {
-		t.Fatalf("public-web type = %q, want public-web", got)
+	pico := cfg.Channels.Get("pico")
+	if pico == nil {
+		t.Fatal("missing pico channel")
+	}
+	if !pico.Enabled {
+		t.Fatal("pico channel should be enabled by allowed channel policy")
+	}
+	if got := pico.Type; got != "pico" {
+		t.Fatalf("pico type = %q, want pico", got)
 	}
 }
 

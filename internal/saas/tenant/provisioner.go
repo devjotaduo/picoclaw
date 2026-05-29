@@ -376,9 +376,6 @@ func (p *Provisioner) runProvision(
 		}
 	}
 	if t.IsPublic {
-		if err := EnsurePublicWebChannelConfig(t.VolumePath); err != nil {
-			return fmt.Errorf("ensure public-web config: %w", err)
-		}
 		// Override workspace/AGENT.md so the main agent IS Sofia from the
 		// first message, instead of falling back to Rafael (front-line of
 		// the cliente team prompt). Canonical AGENT.md is preserved as
@@ -721,7 +718,7 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 	//   - "supabase" backend (legacy): trusted_gateway — controlplane signs
 	//     auth headers because the launcher doesn't speak Supabase JWT.
 	//   - IsPublic tenants: trusted_gateway — controlplane signs anonymous
-	//     "public" claims for the public-web chat surface.
+	//     "public" claims for the tenant-root Sofia chat over /pico/ws.
 	//   - everything else (default "launcher"/"local"): launcher runs in its
 	//     native "local" mode with the dashboardauth.db bcrypt + HttpOnly
 	//     cookie, and the controlplane is a transparent reverse proxy. This
@@ -784,15 +781,10 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 			env["JOTADUO_WA_URL"] = p.Cfg.JotaduoWAURL
 			env["JOTADUO_WA_HMAC_SECRET"] = s
 		}
-		// publicweb is the channel anonymous visitors use via /api/public/chat*
-		// (SSE, no auth). pico stays in the allowlist because the launcher's
-		// embedded React SPA still renders for visitors on the tenant subdomain
-		// and falls back to /pico/ws for chat — disabling it makes the SPA
-		// show "Pico token unavailable" + WebSocket connection failed. The
-		// pico token is launcher-internal, not user-level auth, so anonymous
-		// access via WS is the same effective trust boundary as publicweb SSE.
-		// whatsapp_native stays as the legacy default for outbound messaging.
-		env["PICOCLAW_ALLOWED_CHANNELS"] = "whatsapp_native,pico,public-web"
+		// Public tenants use the same browser chat channel as the launcher:
+		// /pico/ws. The old anonymous SSE path is legacy and is intentionally
+		// not enabled for new or recreated public tenants.
+		env["PICOCLAW_ALLOWED_CHANNELS"] = "whatsapp_native,pico"
 	}
 
 	spec := ContainerSpec{
