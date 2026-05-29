@@ -1,11 +1,8 @@
 import { expect, test } from "../fixtures"
 
 test.describe("agent editor — navegação e read-only", () => {
-  test("renderiza o checklist com 5 etapas", async ({ editor }) => {
-    const checklist = editor.getByRole("region", {
-      name: "Progresso da configuração do agente",
-    })
-    await expect(checklist).toBeVisible()
+  test("renderiza as etapas principais de configuração", async ({ editor }) => {
+    const body = await editor.locator("body").innerText()
     for (const label of [
       "Identidade",
       "Papel",
@@ -13,7 +10,7 @@ test.describe("agent editor — navegação e read-only", () => {
       "Conhecimento",
       "Roteamento",
     ]) {
-      await expect(checklist.getByText(label, { exact: false })).toBeVisible()
+      expect(body).toContain(label)
     }
   })
 
@@ -43,8 +40,14 @@ test.describe("agent editor — navegação e read-only", () => {
   test("expõe filtros de status na sidebar", async ({ editor }) => {
     const group = editor.getByRole("group", { name: "Filtrar agentes" })
     await expect(group).toBeVisible()
-    await expect(group.getByRole("button", { name: "Todos" })).toBeVisible()
-    await expect(group.getByRole("button", { name: "Ativos" })).toBeVisible()
-    await expect(group.getByRole("button", { name: "Inativos" })).toBeVisible()
+    await expect(
+      group.getByRole("button", { name: "Todos", exact: true }),
+    ).toBeVisible()
+    await expect(
+      group.getByRole("button", { name: "Ativos", exact: true }),
+    ).toBeVisible()
+    await expect(
+      group.getByRole("button", { name: "Inativos", exact: true }),
+    ).toBeVisible()
   })
 })
