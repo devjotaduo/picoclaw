@@ -93,8 +93,10 @@ type companyProfileSaveResponse struct {
 	BackupPaths map[string]string `json:"backup_paths,omitempty"`
 }
 
-const maxCompanyProfileBodyBytes = 128 * 1024
-const maxCompanyProfileFieldBytes = 16 * 1024
+const (
+	maxCompanyProfileBodyBytes  = 128 * 1024
+	maxCompanyProfileFieldBytes = 16 * 1024
+)
 
 var companyProfileGroups = []companyProfileGroupDef{
 	{
@@ -577,7 +579,11 @@ func (h *Handler) handlePutCompanyProfile(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if len(body) > maxCompanyProfileBodyBytes {
-		http.Error(w, fmt.Sprintf("company profile payload exceeds %d bytes", maxCompanyProfileBodyBytes), http.StatusRequestEntityTooLarge)
+		http.Error(
+			w,
+			fmt.Sprintf("company profile payload exceeds %d bytes", maxCompanyProfileBodyBytes),
+			http.StatusRequestEntityTooLarge,
+		)
 		return
 	}
 	var req companyProfileSaveRequest
@@ -666,7 +672,11 @@ func buildCompanyProfileResponse(workspace string, now time.Time) (companyProfil
 	}, nil
 }
 
-func saveCompanyProfileFields(workspace string, updates map[string]string, now time.Time) (companyProfileSaveResponse, error) {
+func saveCompanyProfileFields(
+	workspace string,
+	updates map[string]string,
+	now time.Time,
+) (companyProfileSaveResponse, error) {
 	if len(updates) == 0 {
 		return companyProfileSaveResponse{
 			Workspace: "workspace",
@@ -691,7 +701,11 @@ func saveCompanyProfileFields(workspace string, updates map[string]string, now t
 			return companyProfileSaveResponse{}, fmt.Errorf("unknown company profile field: %s", id)
 		}
 		if len([]byte(value)) > maxCompanyProfileFieldBytes {
-			return companyProfileSaveResponse{}, fmt.Errorf("company profile field %s exceeds %d bytes", id, maxCompanyProfileFieldBytes)
+			return companyProfileSaveResponse{}, fmt.Errorf(
+				"company profile field %s exceeds %d bytes",
+				id,
+				maxCompanyProfileFieldBytes,
+			)
 		}
 		updatesByFile[def.File] = append(updatesByFile[def.File], update{def: def, value: strings.TrimSpace(value)})
 	}

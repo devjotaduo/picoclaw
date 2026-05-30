@@ -14,17 +14,27 @@ import (
 
 func TestBuildCompanyProfileResponseSanitizesWorkspaceAndStatuses(t *testing.T) {
 	workspace := t.TempDir()
-	mustWriteCompanyOnboardingFile(t, workspace, filepath.Join("memory", "empresa.md"), `Nome: Empresa PME Brasil [ATUALIZAR]
+	mustWriteCompanyOnboardingFile(
+		t,
+		workspace,
+		filepath.Join("memory", "empresa.md"),
+		`Nome: Empresa PME Brasil [ATUALIZAR]
 Segmento: varejo
 Horário:
 - Segunda a sexta: 08h às 18h
 Status da informação: pendente de validação
-`)
-	mustWriteCompanyOnboardingFile(t, workspace, filepath.Join("config", "authorized-channels.md"), `# Canais autorizados
+`,
+	)
+	mustWriteCompanyOnboardingFile(
+		t,
+		workspace,
+		filepath.Join("config", "authorized-channels.md"),
+		`# Canais autorizados
 
 Canais autorizados:
 - WhatsApp principal
-`)
+`,
+	)
 
 	got, err := buildCompanyProfileResponse(
 		workspace,
