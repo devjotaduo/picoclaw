@@ -52,15 +52,7 @@ func (h *Handler) handleGetCompanyOnboarding(w http.ResponseWriter, _ *http.Requ
 }
 
 func buildCompanyOnboardingResponse(workspace string, now time.Time) (companyOnboardingResponse, error) {
-	memoryEmpresa, err := readWorkspaceTextFile(workspace, "memory", "empresa.md")
-	if err != nil {
-		return companyOnboardingResponse{}, err
-	}
-	companyProfile, err := readWorkspaceTextFile(workspace, "config", "company-profile.md")
-	if err != nil {
-		return companyOnboardingResponse{}, err
-	}
-	authorizedChannels, err := readWorkspaceTextFile(workspace, "config", "authorized-channels.md")
+	fields, err := companyProfileFieldValueMap(workspace)
 	if err != nil {
 		return companyOnboardingResponse{}, err
 	}
@@ -71,109 +63,91 @@ func buildCompanyOnboardingResponse(workspace string, now time.Time) (companyOnb
 			Title:       "Nome da empresa",
 			Description: "Nome real usado nas apresentações e respostas dos agentes.",
 			Source:      "Dados da empresa",
-			Completed: lineHasReadyValue(memoryEmpresa, "Nome") ||
-				lineHasReadyValue(companyProfile, "Nome da empresa"),
+			Completed:   companyProfileCompleted(fields, "company_name"),
 		},
 		{
 			ID:          "segment",
 			Title:       "Tipo de negócio",
 			Description: "Ex.: loja, clínica ou restaurante.",
 			Source:      "Dados da empresa",
-			Completed: lineHasReadyValue(memoryEmpresa, "Segmento") ||
-				lineHasReadyValue(companyProfile, "Segmento"),
+			Completed:   companyProfileCompleted(fields, "segment"),
 		},
 		{
 			ID:          "description",
 			Title:       "Resumo do que a empresa faz",
 			Description: "Explicação curta para os agentes responderem sem inventar.",
 			Source:      "Dados da empresa",
-			Completed: lineHasReadyValue(memoryEmpresa, "Descrição") ||
-				lineHasReadyValue(companyProfile, "Descrição curta"),
+			Completed:   companyProfileCompleted(fields, "description"),
 		},
 		{
 			ID:          "products",
 			Title:       "Produtos ou serviços",
 			Description: "Lista do que pode ser oferecido ou explicado ao cliente.",
 			Source:      "Dados da empresa",
-			Completed: lineHasReadyValue(memoryEmpresa, "Produtos ou serviços") ||
-				sectionHasReadyValues(companyProfile, "Produtos ou serviços"),
+			Completed:   companyProfileCompleted(fields, "products_services"),
 		},
 		{
 			ID:          "hours",
 			Title:       "Horário de atendimento",
 			Description: "Quando os agentes podem orientar o cliente e quando devem pedir retorno.",
 			Source:      "Dados da empresa",
-			Completed: lineHasReadyValue(memoryEmpresa, "Horário") ||
-				sectionHasReadyValues(companyProfile, "Horário de funcionamento"),
+			Completed:   companyProfileCompleted(fields, "business_hours"),
 		},
 		{
 			ID:          "location",
 			Title:       "Endereço e regiões atendidas",
 			Description: "Localização, cidade e área de atendimento sem dados genéricos.",
 			Source:      "Dados da empresa",
-			Completed: (lineHasReadyValue(memoryEmpresa, "Endereço") && lineHasReadyValue(memoryEmpresa, "Regiões atendidas")) ||
-				(lineHasReadyValue(companyProfile, "Endereço") && lineHasReadyValue(companyProfile, "Regiões atendidas")),
+			Completed:   companyProfileCompleted(fields, "address", "service_regions"),
 		},
 		{
 			ID:          "contacts",
 			Title:       "Canais oficiais",
 			Description: "WhatsApp, Instagram ou site que os agentes podem indicar ao cliente.",
 			Source:      "Dados da empresa",
-			Completed: lineHasReadyValue(memoryEmpresa, "WhatsApp") ||
-				lineHasReadyValue(companyProfile, "WhatsApp") ||
-				lineHasReadyValue(memoryEmpresa, "Site") ||
-				lineHasReadyValue(companyProfile, "Site"),
+			Completed:   companyProfileAnyCompleted(fields, "whatsapp", "site", "instagram"),
 		},
 		{
 			ID:          "payment",
 			Title:       "Pagamento e preços",
 			Description: "Formas de pagamento, permissão para falar preço e faixa aprovada.",
 			Source:      "Dados da empresa",
-			Completed: (lineHasReadyValue(memoryEmpresa, "Formas de pagamento") &&
-				lineHasReadyValue(memoryEmpresa, "Pode falar preço") &&
-				lineHasReadyValue(memoryEmpresa, "Faixa de preço")) ||
-				(sectionHasReadyValues(companyProfile, "Formas de pagamento") &&
-					lineHasReadyValue(companyProfile, "Pode informar preço") &&
-					sectionHasReadyValues(companyProfile, "Faixa de preço")),
+			Completed:   companyProfileCompleted(fields, "payment_methods", "can_quote_price", "price_range"),
 		},
 		{
 			ID:          "human",
 			Title:       "Quando chamar uma pessoa",
 			Description: "Situações em que o atendimento precisa ir para humano.",
 			Source:      "Regras dos agentes",
-			Completed: lineHasReadyValue(memoryEmpresa, "Quando chamar humano") ||
-				sectionHasReadyValues(companyProfile, "Quando chamar humano"),
+			Completed:   companyProfileCompleted(fields, "human_escalation"),
 		},
 		{
 			ID:          "limits",
 			Title:       "O que não pode inventar",
 			Description: "Limites claros para evitar resposta errada, promessa indevida ou dado sensível.",
 			Source:      "Regras dos agentes",
-			Completed: (lineHasReadyValue(memoryEmpresa, "Informações que nunca podem ser inventadas") &&
-				lineHasReadyValue(memoryEmpresa, "Informações proibidas de falar")) ||
-				(sectionHasReadyValues(companyProfile, "Informações que o agente nunca pode errar") &&
-					sectionHasReadyValues(companyProfile, "Informações proibidas de falar")),
+			Completed:   companyProfileCompleted(fields, "never_invent", "prohibited_info"),
 		},
 		{
 			ID:          "channels",
 			Title:       "Canais autorizados",
 			Description: "WhatsApp, Instagram e grupos liberados para atendimento.",
 			Source:      "Canais autorizados",
-			Completed:   documentLooksReady(authorizedChannels),
+			Completed:   companyProfileCompleted(fields, "authorized_channels"),
 		},
 		{
 			ID:          "detected-segment",
 			Title:       "Segmento confirmado pela Sofia",
 			Description: "Confirmação que libera perguntas específicas do tipo de negócio.",
 			Source:      "Onboarding",
-			Completed:   lineHasReadyValue(memoryEmpresa, "Segmento detectado"),
+			Completed:   companyProfileCompleted(fields, "detected_segment"),
 		},
 		{
 			ID:          "validated",
 			Title:       "Dados validados",
 			Description: "Confirmação final de que os agentes já podem usar essas informações.",
 			Source:      "Onboarding",
-			Completed:   lineHasReadyValue(memoryEmpresa, "Status da informação"),
+			Completed:   companyProfileCompleted(fields, "information_status"),
 		},
 	}
 
