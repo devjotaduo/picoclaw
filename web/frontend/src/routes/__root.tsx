@@ -84,6 +84,19 @@ const RootLayout = () => {
     initializeChatStore({ hydrateHistory: !isAnonymousTenantProfile })
   }, [isAnonymousTenantProfile, isPublicPage, uiVisibility.isLoading])
 
+  // Public/waiting tenant surfaces never mount AppLayout/app-header, so the
+  // theme toggle (useTheme) that applies the `.dark` class is absent — the
+  // chat would otherwise fall back to the bare light :root, where the
+  // dark-first chat components (e.g. suggestion cards with hardcoded #2d2d2d)
+  // render with broken colors. Force the app's default dark theme on these
+  // anonymous surfaces; they have no toggle, so this can't fight a user
+  // preference. The index.html bootstrap script handles the pre-paint default.
+  useEffect(() => {
+    if (isAnonymousTenantProfile || isWaiting) {
+      document.documentElement.classList.add("dark")
+    }
+  }, [isAnonymousTenantProfile, isWaiting])
+
   // Waiting screen: quando o tenant terminou o discovery e está aguardando
   // contato/liberação do admin, ui-visibility.json tem active_profile="waiting".
   // Renderiza overlay fullscreen com mensagem fixa em vez do app inteiro.

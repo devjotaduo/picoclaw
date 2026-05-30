@@ -9,6 +9,21 @@
     <link rel="manifest" href="/site.webmanifest?v=20260516" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>JotaDuo</title>
+    <script>
+      // Apply the persisted theme (default: dark) before first paint so no
+      // surface flashes the bare light :root — including the public tenant
+      // chat, which never mounts the app-header theme toggle. Mirrors
+      // getStoredTheme() in src/hooks/use-theme.ts.
+      ;(function () {
+        try {
+          if ((localStorage.getItem("theme") || "dark") === "dark") {
+            document.documentElement.classList.add("dark")
+          }
+        } catch (e) {
+          document.documentElement.classList.add("dark")
+        }
+      })()
+    </script>
   </head>
 
   <body>
