@@ -519,14 +519,43 @@ OPERATIONS = {
 }
 
 
+def read_raw_payload(argv: list[str]) -> str:
+    """Lê o JSON da ação. Prioridade: --payload-file <path>, --json <str>,
+    senão stdin.
+
+    A tool `exec` do agente NÃO entrega stdin pra action="run" (o arg `data`
+    só vale pra action="write" em sessão background — ver pkg/tools/shell.go),
+    então quando Sofia/Catarina/Rafael chamam essa skill via `exec` eles
+    DEVEM usar `--payload-file` (gravando o payload com write_file antes).
+    O pipe de stdin continua funcionando pra chamadas via shell — o cron
+    bridge-flow usa `echo '{...}' | state.py` e isso não muda."""
+    if "--payload-file" in argv:
+        idx = argv.index("--payload-file")
+        if idx + 1 >= len(argv):
+            raise SystemExit("--payload-file requer um caminho")
+        path = Path(argv[idx + 1])
+        if not path.is_file():
+            raise SystemExit(f"--payload-file não encontrado: {path}")
+        return path.read_text(encoding="utf-8").strip()
+    if "--json" in argv:
+        idx = argv.index("--json")
+        if idx + 1 >= len(argv):
+            raise SystemExit("--json requer uma string JSON")
+        return argv[idx + 1].strip()
+    return sys.stdin.read().strip()
+
+
 def main() -> int:
-    raw = sys.stdin.read().strip()
+    raw = read_raw_payload(sys.argv[1:])
     if not raw:
-        raise SystemExit("empty stdin — expected JSON action")
+        raise SystemExit(
+            "payload vazio — passe a ação via --payload-file <path>, "
+            "--json '<str>', ou stdin"
+        )
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as e:
-        raise SystemExit(f"stdin não é JSON válido: {e}")
+        raise SystemExit(f"payload não é JSON válido: {e}")
 
     action = payload.get("action")
     if action not in OPERATIONS:

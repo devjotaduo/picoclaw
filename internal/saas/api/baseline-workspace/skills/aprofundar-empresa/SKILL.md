@@ -155,14 +155,37 @@ Path EXATO: memory/empresa.md (relativo ao workspace raiz).
 ## State machine — sinalizar progresso pra a promoção
 
 **Após cada área fechar** (`memory/<chave>.md` gravado + validado), chame
-a skill `onboarding-state` pra registrar que a área foi coberta:
+a skill `onboarding-state` pra registrar que a área foi coberta — em 2
+passos, igual ao empresa.md.
+
+⚠️ **NUNCA** use `exec(..., stdin=...)`: a tool `exec` não entrega stdin pra
+`action="run"` (o arg só vale pra `action="write"` em sessão background) e
+teu sandbox bloqueia exec apontando pra raiz. Grava o payload no teu
+workspace e delega ao Rafael, que roda com `--payload-file`:
+
+**Passo 1 (Catarina):** grava o payload no teu sandbox:
 
 ```
+write_file(
+  path="memory/onboarding-area.tmp.json",
+  overwrite=true,
+  content='{"action":"mark_area_complete","area":"<chave>"}'
+)
+```
+
+**Passo 2 (delegate ao Rafael):**
+
+```
+delegate(
+  agent_id="main",
+  task="""Rode e me devolva o stdout EXATO:
+
 exec(
   action="run",
-  command="python skills/onboarding-state/scripts/state.py",
-  cwd="<workspace_root>",
-  stdin='{"action":"mark_area_complete","area":"<chave>"}'
+  command="python skills/onboarding-state/scripts/state.py --payload-file agents/catarina/memory/onboarding-area.tmp.json",
+  cwd="<seu workspace raiz>"
+)
+"""
 )
 ```
 
@@ -194,12 +217,27 @@ notify_user(
 `promotion.ready=true`** quando fechar a 5ª. Os 80% é pra você reduzir
 pressão na curadoria, não pra o admin promover sem deepening completo.
 Se o dono explicitamente recusar a 5ª área ("não precisa, é simples"),
-use o escape hatch:
+use o escape hatch — mesmo padrão 2-passos (NUNCA `stdin=`):
 
 ```
+write_file(
+  path="memory/onboarding-area.tmp.json",
+  overwrite=true,
+  content='{"action":"mark_ready_for_promotion","reason":"dono recusou aprofundamento — empresa simples"}'
+)
+```
+
+```
+delegate(
+  agent_id="main",
+  task="""Rode e me devolva o stdout EXATO:
+
 exec(
-  ...,
-  stdin='{"action":"mark_ready_for_promotion","reason":"dono recusou aprofundamento — empresa simples"}'
+  action="run",
+  command="python skills/onboarding-state/scripts/state.py --payload-file agents/catarina/memory/onboarding-area.tmp.json",
+  cwd="<seu workspace raiz>"
+)
+"""
 )
 ```
 
