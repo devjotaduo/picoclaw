@@ -61,13 +61,23 @@ atual.
 ## State machine do onboarding
 
 Esta skill **escreve em `workspace/state/onboarding.json`** via a skill
-`onboarding-state` em 3 momentos:
+`onboarding-state` em 2 momentos críticos:
 
-- **Turno 1** (logo no init): chama `onboarding-state` com `{"action":"init"}` pra criar o arquivo se for tenant publico fresh. Idempotente.
-- **Fase 7.5** (captura credenciais): chama `{"action":"set_owner","name":"...","email":"...","whatsapp":"..."}` depois que o dono confirmar os 3.
-- **Fase 8** (fim do discovery): chama `{"action":"mark_discovery_done","segment":"clinica","summary":"..."}` depois de gravar empresa.md.
+- **Fase 7.5** (captura credenciais): `set_owner` depois que o dono confirmar
+  nome + email + WhatsApp.
+- **Fase 8b.5** (fim do discovery): `mark_discovery_done` depois de gravar
+  empresa.md.
 
-O backend de promoção (`POST /api/v1/tenants/{id}/promote` no controlplane) **só libera** o tenant quando `onboarding.json::promotion.ready=true`. Sem `mark_discovery_done` + `set_owner`, esse flag fica `false` e o admin não consegue promover. Por isso seguir as 3 chamadas é não-negociável.
+(O `init` do turno 1 é **opcional** — `set_owner` auto-inicia o arquivo se
+ele não existir, então não precisa de uma chamada separada de `{"action":"init"}`.)
+
+⚠️ **Como chamar (vale pros dois):** SEMPRE via `write_file` (payload no teu
+sandbox) + `delegate` ao Rafael rodando `state.py --payload-file ...`. NUNCA
+`exec(..., stdin=...)` — a tool `exec` não entrega stdin pra `action="run"` e
+teu sandbox bloqueia exec apontando pra raiz. Os passos exatos estão nas
+Fases 7.5 e 8b.5 abaixo.
+
+O backend de promoção (`POST /api/v1/tenants/{id}/promote` no controlplane) **só libera** o tenant quando `onboarding.json::promotion.ready=true`. Sem `mark_discovery_done` + `set_owner`, esse flag fica `false` e o admin não consegue promover. Por isso seguir as 2 chamadas é não-negociável.
 
 ## Como escolher o arquivo de segmento
 
@@ -137,18 +147,43 @@ Aguarde + valide (10+ dígitos com DDI ou DDD).
 
 > "Conferindo: <Nome>, email <email@x.com>, WhatsApp <+55...>. Tá certo?"
 
-**Quando confirmar, grave via `onboarding-state`:**
+**Quando confirmar, grave via `onboarding-state` — em 2 passos.**
+
+⚠️ **NUNCA** chame `exec(..., stdin=...)`. A tool `exec` NÃO entrega stdin
+pra `action="run"` (o arg só existe pra `action="write"` em sessão
+background) **e** teu sandbox (`agents/sofia/`) bloqueia exec apontando pra
+raiz. Faça igual ao save_client: grava o payload no teu sandbox e delega ao
+Rafael, que roda com `--payload-file` (sem stdin).
+
+**Passo 1 (Sofia):** grava o payload DENTRO do teu workspace:
 
 ```
-exec(
-  action="run",
-  command="python skills/onboarding-state/scripts/state.py",
-  cwd="<workspace_root>",
-  stdin='{"action":"set_owner","name":"Eduardo Silva","email":"eduardo@x.com","whatsapp":"+5511999998888","captured_by":"sofia"}'
+write_file(
+  path="memory/onboarding-owner.tmp.json",
+  overwrite=true,
+  content='{"action":"set_owner","name":"<nome do dono>","email":"<email>","whatsapp":"<whatsapp>","captured_by":"sofia"}'
 )
 ```
 
-**Erros tratados:** se o script retornar `email inválido`, repita a pergunta de email só. Não recapture os outros. Se `whatsapp tem menos dígitos`, pede de novo.
+**Passo 2 (delegate ao Rafael):** ele tem workspace raiz e roda livre:
+
+```
+delegate(
+  agent_id="main",
+  task="""Rode e me devolva o stdout EXATO (sem reformatar):
+
+exec(
+  action="run",
+  command="python skills/onboarding-state/scripts/state.py --payload-file agents/sofia/memory/onboarding-owner.tmp.json",
+  cwd="<seu workspace raiz>"
+)
+"""
+)
+```
+
+**Erros tratados:** se o stdout tiver `set_owner: email inválido`, repita só
+a pergunta de email. Se `whatsapp tem N dígitos`, peça o WhatsApp de novo.
+NÃO recapture os outros campos.
 
 **Por que aqui e não antes:** se o dono não confirmar o time recomendado (Fase 7), o discovery pode pivotar — e aí captura de email seria prematura. Captura DEPOIS de Fase 7 = confirma intenção real.
 
@@ -394,14 +429,32 @@ machine**, e (opcionalmente) liberação.
 
 ### Passo 8b.5 — Marcar discovery_done
 
-**ASSIM QUE** terminar de gravar `memory/empresa.md` (via Rafael), chame:
+**ASSIM QUE** terminar de gravar `memory/empresa.md` (via Rafael), chame —
+mesmo padrão 2-passos do `set_owner` (NUNCA `stdin=`):
+
+**Passo 1 (Sofia):** grava o payload no teu sandbox:
 
 ```
+write_file(
+  path="memory/onboarding-discovery-done.tmp.json",
+  overwrite=true,
+  content='{"action":"mark_discovery_done","segment":"<segment_detectado>","summary":"<resumo executivo de 2-3 linhas do negocio>"}'
+)
+```
+
+**Passo 2 (delegate ao Rafael):**
+
+```
+delegate(
+  agent_id="main",
+  task="""Rode e me devolva o stdout EXATO:
+
 exec(
   action="run",
-  command="python skills/onboarding-state/scripts/state.py",
-  cwd="<workspace_root>",
-  stdin='{"action":"mark_discovery_done","segment":"<segment_detectado>","summary":"<resumo executivo de 2-3 linhas do negocio>"}'
+  command="python skills/onboarding-state/scripts/state.py --payload-file agents/sofia/memory/onboarding-discovery-done.tmp.json",
+  cwd="<seu workspace raiz>"
+)
+"""
 )
 ```
 
