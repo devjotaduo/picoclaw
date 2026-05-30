@@ -1,11 +1,14 @@
 # Tenant data backups (daily, R2, encrypted)
 
-Status: planned for `155.138.210.187`.
+Status: active for `155.138.210.187`.
 
 Live tenant data at `/srv/saas/tenants/` (per-tenant subdirs containing
 WhatsApp store, sessions, dashboard auth, workspace, memory) is the only
 state on this VPS that is **not recoverable from git**. This timer pushes
 a daily, encrypted, deduplicated snapshot to Cloudflare R2 via restic.
+The same snapshot also includes the institutional Jotaduo WhatsApp sidecar
+state at `/srv/picoclaw/jotaduo-wa/`, `/etc/picoclaw/`, and the Postgres
+logical dump staging dir.
 
 Source code, workspace templates, Docker images, postgres schema, etc.
 are all out of scope here — they have their own paths to recovery.
@@ -41,7 +44,8 @@ free; on GDrive it can hit per-day caps right when you need it.
         ├─ load creds from /etc/picoclaw/r2-backup.env (chmod 600)
         ├─ flock to prevent overlap
         ├─ restic init (first run only)
-        ├─ restic backup /srv/saas/tenants
+        ├─ pg_dumpall -> /var/lib/picoclaw-pg-dumps/
+        ├─ restic backup /srv/saas/tenants /srv/picoclaw/jotaduo-wa /etc/picoclaw /var/lib/picoclaw-pg-dumps
         │     --tag daily
         │     --exclude transient (*.tmp, *.lock, *-wal, *-shm, *-journal, .cache, runtime-user-env)
         ├─ restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
@@ -54,8 +58,9 @@ free; on GDrive it can hit per-day caps right when you need it.
 - Workspace templates (`/srv/saas/picoclaw-workspaces/` if present) —
   versioned in repo, re-deployable via CI.
 - Docker images — rebuilt by CI from source.
-- Postgres data (`/srv/saas/postgres/data/`) — needs `pg_dump`, not file
-  copy. Tracked separately.
+- Postgres data (`/srv/saas/postgres/data/`) — restored from the logical
+  `pg_dumpall` snapshots in `/var/lib/picoclaw-pg-dumps/`, not by file-copying
+  the live data dir.
 - Backups directory itself (`/srv/saas/backups/` if any) — would be
   recursive.
 
@@ -72,6 +77,8 @@ The installer:
 - Installs `restic` from apt if missing.
 - Creates `/etc/picoclaw/` (chmod 700) and seeds `r2-backup.env` from
   the template (chmod 600).
+- Creates `/srv/picoclaw/jotaduo-wa/` so the WhatsApp sidecar store can be
+  snapshotted even before first pairing.
 - Installs `/usr/local/bin/picoclaw-r2-backup.sh` and the systemd units.
 - Enables (but does not yet trigger) the daily timer.
 
@@ -93,8 +100,9 @@ systemctl start picoclaw-r2-backup.service
 journalctl -u picoclaw-r2-backup.service -f
 ```
 
-The first backup is a full upload of `/srv/saas/tenants/`. Plan for it
-to take longer than steady-state daily runs.
+The first backup is a full upload of tenant volumes, Jotaduo WhatsApp sidecar
+state, operator config, and Postgres dumps. Plan for it to take longer than
+steady-state daily runs.
 
 ## Operations
 
@@ -158,6 +166,36 @@ The two-step (restore-then-swap) is deliberate: restic's `--target /`
 would overwrite live tenant state immediately. Restoring to `/tmp` first
 lets you sanity-check before committing.
 
+## Restore Jotaduo WhatsApp sidecar state
+
+Use this when `jotaduo-wa` lost pairing or routing state. Restore to a temp
+directory first; do not overlay the live directory blindly.
+
+```bash
+set -a; source /etc/picoclaw/r2-backup.env; set +a
+export RESTIC_REPOSITORY="s3:${R2_ENDPOINT}/${R2_BUCKET}"
+export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+
+restic snapshots --path /srv/picoclaw/jotaduo-wa
+restic restore <snapshot-id> \
+    --target /tmp/restore-jotaduo-wa \
+    --include /srv/picoclaw/jotaduo-wa
+
+find /tmp/restore-jotaduo-wa/srv/picoclaw/jotaduo-wa -maxdepth 3 -type f
+
+docker stop jotaduo-wa
+mv /srv/picoclaw/jotaduo-wa "/srv/picoclaw/jotaduo-wa.broken-$(date +%s)"
+mv /tmp/restore-jotaduo-wa/srv/picoclaw/jotaduo-wa /srv/picoclaw/jotaduo-wa
+docker start jotaduo-wa
+docker exec jotaduo-wa wget -qO- http://127.0.0.1:18810/readyz
+```
+
+Expected key files after restore:
+
+- `/srv/picoclaw/jotaduo-wa/whatsapp/store.db`
+- `/srv/picoclaw/jotaduo-wa/routing.db`
+
 ## Tuning
 
 The default retention (7 daily + 4 weekly + 6 monthly = ~14 cópias) is
@@ -188,7 +226,8 @@ sudo systemctl edit picoclaw-r2-backup.service
 
 ## What this does NOT do
 
-- **No postgres backup.** Live DB needs `pg_dump`, separate timer.
+- **No raw Postgres data-dir backup.** Recovery uses the `pg_dumpall` files
+  in `/var/lib/picoclaw-pg-dumps/`.
 - **No alerting.** Failures land in `journalctl` only. Hook `OnFailure=`
   if you want pager alerts.
 - **No multi-region.** R2 buckets are region-bound. Add a second remote

@@ -7,5 +7,8 @@ Operational docs for debugging, diagnosis, and production troubleshooting.
 - [Jotaduo WA real delivery](jotaduo-wa-real-delivery.md): production runbook
   for validating Sofia -> Catarina -> WhatsApp sends through the `jotaduo-wa`
   sidecar.
+- [Public tenant production runbook](public-tenant-production-runbook.md):
+  live public tenant validation, WhatsApp inbound, promotion, tenant recreate,
+  and cleanup procedure.
 - [Supabase Auth](supabase-auth.md): runbook for Supabase-backed tenant auth
   and public-tenant promotion.

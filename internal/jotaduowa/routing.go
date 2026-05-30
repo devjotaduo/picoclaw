@@ -153,12 +153,16 @@ func (r *Routing) RevokeByTenant(ctx context.Context, tenantID string) (int64, e
 	return res.RowsAffected()
 }
 
-// normalizePhone strips a WhatsApp JID suffix and any whitespace/+ prefix
-// so lookups by either raw phone ("5511...") or full JID ("5511...@s.whatsapp.net")
-// hit the same row.
+// normalizePhone strips a WhatsApp JID suffix, device suffix, and any
+// whitespace/+ prefix so lookups by either raw phone ("5511..."), full JID
+// ("5511...@s.whatsapp.net"), or LID-with-device ("3921...:57@lid") hit the
+// same row.
 func normalizePhone(s string) string {
 	s = strings.TrimSpace(s)
 	if i := strings.IndexByte(s, '@'); i >= 0 {
+		s = s[:i]
+	}
+	if i := strings.IndexByte(s, ':'); i >= 0 {
 		s = s[:i]
 	}
 	s = strings.TrimPrefix(s, "+")

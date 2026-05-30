@@ -22,11 +22,13 @@ set -euo pipefail
 
 ENV_FILE="${PICOCLAW_R2_ENV_FILE:-/etc/picoclaw/r2-backup.env}"
 # Space-separated list of host paths included in each snapshot.
-# Default: tenant volumes + operator config tree (/etc/picoclaw holds
-# r2-backup.env + claude-auth/) + Postgres dump staging dir. Losing
-# /srv/saas/postgres/data/ is recoverable from the .sql.gz dumps in
-# the staging dir (audit P0 #3, 2026-05-27).
-BACKUP_PATHS="${PICOCLAW_BACKUP_PATHS:-/srv/saas/tenants /etc/picoclaw /var/lib/picoclaw-pg-dumps}"
+# Default: tenant volumes + institutional WhatsApp sidecar state +
+# operator config tree (/etc/picoclaw holds r2-backup.env + auth dirs) +
+# Postgres dump staging dir. Losing /srv/saas/postgres/data/ is
+# recoverable from the .sql.gz dumps in the staging dir (audit P0 #3,
+# 2026-05-27). Losing /srv/picoclaw/jotaduo-wa/whatsapp/store.db forces
+# manual WhatsApp re-pairing, so it is part of the default snapshot.
+BACKUP_PATHS="${PICOCLAW_BACKUP_PATHS:-/srv/saas/tenants /srv/picoclaw/jotaduo-wa /etc/picoclaw /var/lib/picoclaw-pg-dumps}"
 # Legacy single-path env still honored: older deploys may set
 # PICOCLAW_BACKUP_PATH to a single dir; preserve that override.
 LEGACY_BACKUP_PATH="${PICOCLAW_BACKUP_PATH:-}"
