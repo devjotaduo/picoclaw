@@ -304,11 +304,16 @@ func enforceAgentSubagents(cfg *config.Config, agentID string, agent *config.Age
 	if desired == nil {
 		return false
 	}
-	// Only allow calling agents that actually exist in this config. In the
-	// canonical 4-agent setup all targets exist, so this is a no-op; in a v2.0
-	// roster (e.g. attendant+assistant) it drops references to vendas/marketing
-	// that were never materialized — keeping the result stable across reboots.
-	desired = filterExistingAgents(cfg, desired)
+	// Filter to agents that actually exist ONLY in roster mode. The default
+	// 4-agent path always materializes every target, and callers may hand-build
+	// configs (e.g. main→[vendas] with no vendas agent yet) whose allow-lists
+	// must be preserved verbatim — so the default path stays byte-identical to
+	// pre-roster behavior. In a v2.0 roster (e.g. attendant+assistant) this
+	// drops references to vendas/marketing that were never materialized, keeping
+	// the result stable across reboots.
+	if cfg != nil && len(cfg.Agents.Roster) > 0 {
+		desired = filterExistingAgents(cfg, desired)
+	}
 	if len(desired) == 0 {
 		// No canonical sub-agent exists in this roster (e.g. main's "vendas"
 		// target isn't materialized in a 2-agent vertical). Strip stale entries
