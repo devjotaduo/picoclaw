@@ -72,8 +72,15 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 	if p.Cfg.TenantImage != "" {
 		t.ContainerImage = p.Cfg.TenantImage
 	}
-	cliClaude, cliCodex := p.sharedCLIModelRouting()
-	if p.Cfg != nil {
+	cliReq, err := TenantCLIAuthProvidersFromConfig(t.VolumePath)
+	if err != nil {
+		return fmt.Errorf("inspect tenant cli auth requirements: %w", err)
+	}
+	needCodex := cliReq.Codex
+	if !cliReq.Known {
+		_, needCodex = p.sharedCLIModelRouting()
+	}
+	if needCodex && p.Cfg != nil {
 		codexDir, resolveErr := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
 		if resolveErr != nil {
 			return fmt.Errorf("resolve codex cli auth dir: %w", resolveErr)
@@ -81,17 +88,6 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 		if codexDir != "" {
 			if prepareErr := prepareCodexCLIHome(t.VolumePath, codexDir); prepareErr != nil {
 				return fmt.Errorf("prepare codex cli home: %w", prepareErr)
-			}
-		}
-	}
-	if cliClaude || cliCodex {
-		rawWorkspace, lookupErr := p.tenantUsesRawWorkspace(ctx, t)
-		if lookupErr != nil {
-			return fmt.Errorf("lookup workspace for cli routing: %w", lookupErr)
-		}
-		if !rawWorkspace {
-			if applyErr := ApplySaaSCLIModelRouting(t.VolumePath, cliClaude, cliCodex); applyErr != nil {
-				return fmt.Errorf("apply saas cli model routing: %w", applyErr)
 			}
 		}
 	}

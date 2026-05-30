@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sipeed/picoclaw/internal/saas/api"
 	"github.com/sipeed/picoclaw/internal/saas/auth"
 	"github.com/sipeed/picoclaw/internal/saas/config"
 	"github.com/sipeed/picoclaw/internal/saas/litellm"
@@ -99,6 +100,18 @@ func newProvisioner() (*tenant.Provisioner, func(), error) {
 		return nil, nil, err
 	}
 	var llm *litellm.Client
+	secretsKey, secretKeyErr := api.ResolveSaaSSecretsEncryptionKey(cfg)
+	if secretKeyErr == nil {
+		if effective, err := api.LoadEffectiveLiteLLMConfig(
+			ctx,
+			cfg,
+			&store.PlatformSettingsStore{DB: db},
+			secretsKey,
+		); err == nil {
+			cfg.LiteLLMURL = effective.URL
+			cfg.LiteLLMMasterKey = effective.MasterKey
+		}
+	}
 	if strings.TrimSpace(cfg.LiteLLMURL) != "" && strings.TrimSpace(cfg.LiteLLMMasterKey) != "" {
 		llm = litellm.NewClient(cfg.LiteLLMURL, cfg.LiteLLMMasterKey)
 	}

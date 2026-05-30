@@ -7,6 +7,7 @@ import {
   IconFolder,
   IconLayoutDashboard,
   IconLink,
+  IconPlugConnected,
   IconPlus,
   IconSparkles,
   IconUsers,
@@ -71,6 +72,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: "Plataforma",
     items: [
       { label: "Links curtos", to: "/shortlinks", icon: IconLink, platformOnly: true },
+      { label: "LiteLLM", to: "/platform/litellm", icon: IconPlugConnected, platformOnly: true },
       { label: "Histórico", to: "/audit", icon: IconClipboardList, platformOnly: true },
       { label: "Equipe", to: "/users", icon: IconUserShield, platformOnly: true },
     ],

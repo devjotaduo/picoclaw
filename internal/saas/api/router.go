@@ -28,6 +28,8 @@ type Handler struct {
 	Invites        *store.InviteStore
 	Audit          *store.AuditStore
 	Tenants        *store.TenantStore
+	Platform       *store.PlatformSettingsStore
+	ModelRouting   *store.TenantModelRoutingStore
 	Workspaces     *store.WorkspaceStore
 	MagicLinks     *store.MagicLinkStore
 	PasswordResets *store.PasswordResetStore
@@ -38,6 +40,7 @@ type Handler struct {
 	// per-workspace MCP credentials. Nil when PICOCLAW_SAAS_MCP_ENCRYPTION_KEY
 	// is unset or invalid; PUT /api/v1/workspaces/{id}/mcp/* then returns 503.
 	MCPEncKey     []byte
+	SecretsEncKey []byte
 	Provisioner   *tenant.Provisioner
 	LoginAttempts *loginAttempts
 	// PublicTenantRateLimit caps anonymous public-tenant chat traffic over
@@ -68,6 +71,8 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		Invites:        &store.InviteStore{DB: db},
 		Audit:          &store.AuditStore{DB: db},
 		Tenants:        &store.TenantStore{DB: db},
+		Platform:       &store.PlatformSettingsStore{DB: db},
+		ModelRouting:   &store.TenantModelRoutingStore{DB: db},
 		Workspaces:     &store.WorkspaceStore{DB: db},
 		MagicLinks:     &store.MagicLinkStore{DB: db},
 		PasswordResets: &store.PasswordResetStore{DB: db},
@@ -116,6 +121,11 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		} else {
 			h.MCPEncKey = key
 		}
+	}
+	if key, err := resolveSaaSSecretsEncryptionKey(cfg); err != nil {
+		log.Printf("WARN: SaaS secrets encryption key invalid (%v); platform secret writes will be disabled", err)
+	} else {
+		h.SecretsEncKey = key
 	}
 
 	return h
@@ -188,6 +198,9 @@ func (h *Handler) Routes() http.Handler {
 				r.Use(h.requirePlatformAdmin)
 				r.Post("/tenants", h.handleCreateTenant)
 				r.Get("/launcher-policy/catalog", h.handleGetLauncherPolicyCatalog)
+				r.Get("/platform/litellm", h.handleGetPlatformLiteLLM)
+				r.Put("/platform/litellm", h.handlePutPlatformLiteLLM)
+				r.Post("/platform/litellm/test", h.handleTestPlatformLiteLLM)
 
 				// Workspaces — single source of truth for tenant content.
 				r.Get("/workspaces", h.handleListWorkspaces)
@@ -228,6 +241,8 @@ func (h *Handler) Routes() http.Handler {
 				r.Post("/tenants/{id}/resume", h.handleResumeTenant)
 				r.Post("/tenants/{id}/restart", h.handleRestartTenant)
 				r.Post("/tenants/{id}/recreate", h.handleRecreateTenant)
+				r.Get("/tenants/{id}/model-routing", h.handleGetTenantModelRouting)
+				r.Put("/tenants/{id}/model-routing", h.handlePutTenantModelRouting)
 				r.Post("/tenants/{id}/rotate-password", h.handleRotatePassword)
 				r.Post("/tenants/{id}/magic-link", h.handleGenerateMagicLink)
 				r.Get("/tenants/{id}/magic-links", h.handleListMagicLinks)

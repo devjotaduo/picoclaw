@@ -226,6 +226,27 @@ type CreateInput struct {
 	// workspace's baseline active_profile untouched. Set by the admin form
 	// when the operator picks a "tenant type" card (publico/admin/cliente).
 	UIProfile UIVisibilityProfile
+	// ModelRouting lets the SaaS admin decide, at create time, whether this
+	// tenant uses LiteLLM virtual-key routing or shared CLI auth routing and in
+	// what fallback order. Nil keeps the legacy auto mode.
+	ModelRouting *ModelRoutingConfig
+}
+
+type ModelRoutingConfig struct {
+	Mode    string
+	LiteLLM LiteLLMModelRoutingConfig
+	CLI     CLIModelRoutingConfig
+}
+
+type LiteLLMModelRoutingConfig struct {
+	ModelName     string
+	APIBase       string
+	Fallbacks     []string
+	AllowedModels []string
+}
+
+type CLIModelRoutingConfig struct {
+	Order []string
 }
 
 // normalize applies CreateInput defaults and consistency rules. Currently
@@ -308,7 +329,15 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		return nil, fmt.Errorf("insert tenant: %w", err)
 	}
 
-	if err := p.runProvision(ctx, t, password, ws, in.SkipDashboardPassword, in.UIProfile); err != nil {
+	if err := p.runProvision(
+		ctx,
+		t,
+		password,
+		ws,
+		in.SkipDashboardPassword,
+		in.UIProfile,
+		in.ModelRouting,
+	); err != nil {
 		msg := err.Error()
 		_ = p.Tenants.SetStatus(ctx, id, store.StatusError, &msg)
 		return nil, err
@@ -334,7 +363,8 @@ func (p *Provisioner) runProvision(
 	ws *store.Workspace,
 	skipDashboardPassword bool,
 	uiProfile UIVisibilityProfile,
-) error {
+	modelRouting *ModelRoutingConfig,
+) (err error) {
 	success := false
 	volumeCreated := false
 	litellmKeyCreated := false
@@ -433,61 +463,14 @@ func (p *Provisioner) runProvision(
 			}
 		}
 
-		// 3. Model routing + placeholder substitution. Shared CLI auth is the
-		// preferred SaaS path when the operator mounted Claude/Codex credentials:
-		// no upstream API key is written into the tenant. LiteLLM remains the
-		// fallback for deployments that have not configured CLI auth dirs.
-		cliClaude, cliCodex := p.sharedCLIModelRouting()
-		if cliClaude || cliCodex {
-			if cliCodex {
-				codexDir, err := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
-				if err != nil {
-					return fmt.Errorf("resolve codex cli auth dir: %w", err)
-				}
-				if err := prepareCodexCLIHome(t.VolumePath, codexDir); err != nil {
-					return fmt.Errorf("prepare codex cli home: %w", err)
-				}
-			}
-			if err := SubstituteConfigPlaceholders(t.VolumePath, map[string]string{
-				"${TENANT_ID}": t.ID,
-			}); err != nil {
-				return fmt.Errorf("substitute placeholders: %w", err)
-			}
-			if err := ApplySaaSCLIModelRouting(t.VolumePath, cliClaude, cliCodex); err != nil {
-				return fmt.Errorf("apply saas cli model routing: %w", err)
-			}
-		} else if p.LiteLLM != nil {
-			out, err := p.LiteLLM.GenerateKey(ctx, litellm.GenerateKeyInput{
-				TenantID:         t.ID,
-				MonthlyBudgetUSD: t.MonthlyBudgetUSD,
-			})
-			if err != nil {
-				return fmt.Errorf("litellm key: %w", err)
-			}
-			litellmKeyCreated = true
-			h := sha256.Sum256([]byte(out.Key))
-			if err := p.Tenants.SetLiteLLMKey(ctx, t.ID, out.KeyName, hex.EncodeToString(h[:])); err != nil {
-				return fmt.Errorf("save litellm key: %w", err)
-			}
-			if err := SubstituteConfigPlaceholders(t.VolumePath, map[string]string{
-				"${LITELLM_KEY}": out.Key,
-				"${LITELLM_URL}": p.Cfg.LiteLLMURL,
-				"${TENANT_ID}":   t.ID,
-			}); err != nil {
-				return fmt.Errorf("substitute placeholders: %w", err)
-			}
-			if err := SubstituteRedactedModelKeys(t.VolumePath, out.Key); err != nil {
-				return fmt.Errorf("substitute redacted model keys: %w", err)
-			}
-			if err := ApplySaaSLiteLLMModelRouting(
-				t.VolumePath,
-				defaultSaaSLiteLLMModel,
-				p.Cfg.LiteLLMURL,
-				out.Key,
-			); err != nil {
-				return fmt.Errorf("apply saas litellm model routing: %w", err)
-			}
+		// 3. Model routing + placeholder substitution. The SaaS admin may
+		// explicitly choose LiteLLM or CLI order in the create flow. Nil keeps
+		// legacy auto mode: shared CLI when auth is configured, otherwise LiteLLM.
+		createdKey, routingErr := p.applySaaSModelRouting(ctx, t, modelRouting)
+		if routingErr != nil {
+			return routingErr
 		}
+		litellmKeyCreated = createdKey
 
 		// 4. RBAC from the workspace's role_policy_json DB column.
 		if err := WriteLauncherPolicy(t.VolumePath, ws.RolePolicy()); err != nil {
@@ -531,6 +514,225 @@ func (p *Provisioner) runProvision(
 	}
 	success = true
 	return nil
+}
+
+func (p *Provisioner) applySaaSModelRouting(
+	ctx context.Context,
+	t *store.Tenant,
+	routing *ModelRoutingConfig,
+) (litellmKeyCreated bool, err error) {
+	mode := "auto"
+	if routing != nil && strings.TrimSpace(routing.Mode) != "" {
+		mode = strings.ToLower(strings.TrimSpace(routing.Mode))
+	}
+
+	switch mode {
+	case "auto":
+		if order := p.availableSaaSCLIOrder(); len(order) > 0 {
+			if err := p.applySaaSCLIModelRouting(t, order); err != nil {
+				return false, err
+			}
+			return false, nil
+		}
+		if p.LiteLLM == nil {
+			return false, nil
+		}
+		return p.applySaaSLiteLLMModelRouting(ctx, t, LiteLLMModelRoutingConfig{
+			ModelName: defaultSaaSLiteLLMModel,
+		}, false)
+	case "cli":
+		order := []string(nil)
+		if routing != nil {
+			order = routing.CLI.Order
+		}
+		if len(compactUniqueStrings(order)) == 0 {
+			order = p.availableSaaSCLIOrder()
+		}
+		if len(order) == 0 {
+			return false, fmt.Errorf("saas cli routing requested, but no shared CLI auth is configured")
+		}
+		availableOrder, err := p.validateSaaSCLIOrderAvailable(order)
+		if err != nil {
+			return false, err
+		}
+		if err := p.applySaaSCLIModelRouting(t, availableOrder); err != nil {
+			return false, err
+		}
+		return false, nil
+	case "litellm":
+		if routing == nil {
+			routing = &ModelRoutingConfig{}
+		}
+		return p.applySaaSLiteLLMModelRouting(ctx, t, routing.LiteLLM, true)
+	default:
+		return false, fmt.Errorf("unknown model_routing.mode %q (expected auto, litellm, or cli)", mode)
+	}
+}
+
+func (p *Provisioner) ApplyModelRouting(ctx context.Context, t *store.Tenant, routing *ModelRoutingConfig) error {
+	if p == nil {
+		return fmt.Errorf("provisioner is nil")
+	}
+	if t == nil {
+		return fmt.Errorf("tenant is nil")
+	}
+	hadLiteLLMKey := t.LiteLLMKeyID != nil && strings.TrimSpace(*t.LiteLLMKeyID) != ""
+	if hadLiteLLMKey && p.LiteLLM != nil {
+		if err := p.LiteLLM.DeleteKey(ctx, t.ID); err != nil {
+			return fmt.Errorf("delete existing litellm key: %w", err)
+		}
+	}
+	if hadLiteLLMKey && p.Tenants != nil {
+		if err := p.Tenants.ClearLiteLLMKey(ctx, t.ID); err != nil {
+			return fmt.Errorf("clear existing litellm key: %w", err)
+		}
+		t.LiteLLMKeyID = nil
+		t.LiteLLMKeyHash = nil
+	}
+	createdKey, err := p.applySaaSModelRouting(ctx, t, routing)
+	if err != nil {
+		return err
+	}
+	if !createdKey && p.Tenants != nil {
+		if err := p.Tenants.ClearLiteLLMKey(ctx, t.ID); err != nil {
+			return fmt.Errorf("clear litellm key: %w", err)
+		}
+	}
+	return nil
+}
+
+func (p *Provisioner) applySaaSCLIModelRouting(t *store.Tenant, order []string) error {
+	if needsProvider(order, "codex-cli") {
+		codexDir, err := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
+		if err != nil {
+			return fmt.Errorf("resolve codex cli auth dir: %w", err)
+		}
+		if err := prepareCodexCLIHome(t.VolumePath, codexDir); err != nil {
+			return fmt.Errorf("prepare codex cli home: %w", err)
+		}
+	}
+	if err := SubstituteConfigPlaceholders(t.VolumePath, map[string]string{
+		"${TENANT_ID}": t.ID,
+	}); err != nil {
+		return fmt.Errorf("substitute placeholders: %w", err)
+	}
+	if err := ApplySaaSCLIModelRoutingFromOrder(t.VolumePath, order); err != nil {
+		return fmt.Errorf("apply saas cli model routing: %w", err)
+	}
+	return nil
+}
+
+func (p *Provisioner) applySaaSLiteLLMModelRouting(
+	ctx context.Context,
+	t *store.Tenant,
+	cfg LiteLLMModelRoutingConfig,
+	restrictKeyToRouting bool,
+) (bool, error) {
+	if p.LiteLLM == nil {
+		return false, fmt.Errorf("saas litellm routing requested, but LiteLLM is not configured")
+	}
+	modelName := strings.TrimSpace(cfg.ModelName)
+	if modelName == "" {
+		modelName = defaultSaaSLiteLLMModel
+	}
+	apiBase := strings.TrimSpace(cfg.APIBase)
+	if apiBase == "" && p.Cfg != nil {
+		apiBase = p.Cfg.LiteLLMURL
+	}
+	fallbacks := compactUniqueStrings(cfg.Fallbacks)
+	allowedModels := compactUniqueStrings(cfg.AllowedModels)
+	if restrictKeyToRouting && len(allowedModels) == 0 {
+		allowedModels = append([]string{modelName}, fallbacks...)
+	}
+
+	out, err := p.LiteLLM.GenerateKey(ctx, litellm.GenerateKeyInput{
+		TenantID:         t.ID,
+		MonthlyBudgetUSD: t.MonthlyBudgetUSD,
+		Models:           allowedModels,
+	})
+	if err != nil {
+		return false, fmt.Errorf("litellm key: %w", err)
+	}
+	h := sha256.Sum256([]byte(out.Key))
+	if err := p.Tenants.SetLiteLLMKey(ctx, t.ID, out.KeyName, hex.EncodeToString(h[:])); err != nil {
+		return true, fmt.Errorf("save litellm key: %w", err)
+	}
+	if err := SubstituteConfigPlaceholders(t.VolumePath, map[string]string{
+		"${LITELLM_KEY}": out.Key,
+		"${LITELLM_URL}": apiBase,
+		"${TENANT_ID}":   t.ID,
+	}); err != nil {
+		return true, fmt.Errorf("substitute placeholders: %w", err)
+	}
+	if err := SubstituteRedactedModelKeys(t.VolumePath, out.Key); err != nil {
+		return true, fmt.Errorf("substitute redacted model keys: %w", err)
+	}
+	if err := ApplySaaSLiteLLMModelRoutingWithFallbacks(
+		t.VolumePath,
+		modelName,
+		fallbacks,
+		apiBase,
+		out.Key,
+	); err != nil {
+		return true, fmt.Errorf("apply saas litellm model routing: %w", err)
+	}
+	return true, nil
+}
+
+func (p *Provisioner) availableSaaSCLIOrder() []string {
+	order := []string{}
+	if ok, _, _ := p.saasCLIAuthAvailable("claude-cli"); ok {
+		order = append(order, "claude-cli")
+	}
+	if ok, _, _ := p.saasCLIAuthAvailable("codex-cli"); ok {
+		order = append(order, "codex-cli")
+	}
+	return order
+}
+
+func (p *Provisioner) validateSaaSCLIOrderAvailable(order []string) ([]string, error) {
+	specs, err := normalizeSaaSCLIOrder(order)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		ok, _, err := p.saasCLIAuthAvailable(spec.Provider)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("saas cli provider %s requested, but its auth dir is not configured", spec.Provider)
+		}
+		out = append(out, spec.Provider)
+	}
+	return out, nil
+}
+
+func (p *Provisioner) saasCLIAuthAvailable(provider string) (bool, string, error) {
+	if p == nil || p.Cfg == nil {
+		return false, "", nil
+	}
+	switch provider {
+	case "claude-cli":
+		dir, err := resolveClaudeCLIAuthDir(p.Cfg.TenantClaudeCliAuthDir)
+		return dir != "", dir, err
+	case "codex-cli":
+		dir, err := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
+		return dir != "", dir, err
+	default:
+		return false, "", fmt.Errorf("unsupported saas cli provider %q", provider)
+	}
+}
+
+func needsProvider(order []string, provider string) bool {
+	for _, raw := range order {
+		spec, ok := saasCLIModelSpecFor(raw)
+		if ok && spec.Provider == provider {
+			return true
+		}
+	}
+	return false
 }
 
 // CloneInput parameters for CloneFromTenant. SourceTenantID is the existing
@@ -835,47 +1037,45 @@ func (p *Provisioner) buildSpec(ctx context.Context, t *store.Tenant) (Container
 		}
 	}
 
-	// Shared CLI provider auth dirs — bind-mount the operator's OAuth
-	// credentials for Claude read-only into every tenant. Codex gets a
-	// writable snapshot prepared under the tenant volume because `codex exec`
-	// writes helper/config state into CODEX_HOME.
+	// Shared CLI provider auth dirs — bind-mount only the CLI auth a tenant's
+	// materialized config.json actually references. Codex gets a writable
+	// snapshot prepared under the tenant volume because `codex exec` writes
+	// helper/config state into CODEX_HOME.
 	//
 	// Claude remains mounted read-only so a compromised tenant cannot rotate
 	// the operator's source tokens — refresh happens on the host.
 	//
-	// Skip silently when env unset OR dir missing OR not a directory.
-	// Decouples the deploy from the auth setup: image bumps land fine
-	// without the operator step; the moment the operator creates the
-	// dir + writes credentials, every new tenant inherits the auth.
-	claudeAuthDir, claudeAuthErr := resolveClaudeCLIAuthDir(p.Cfg.TenantClaudeCliAuthDir)
-	codexAuthDir, codexAuthErr := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
-	if codexAuthErr != nil {
-		log.Printf("WARN: provisioner: tenant %s codex-cli auth dir: %v (skipping CODEX_HOME)",
-			t.ID, codexAuthErr)
-	} else if codexAuthDir != "" {
-		spec.Env["CODEX_HOME"] = tenantCodexCLIHomeContainer
+	// If config.json cannot be inspected (legacy unit tests or unusual
+	// bootstrap paths), fall back to the previous deploy-wide detection.
+	cliReq, err := TenantCLIAuthProvidersFromConfig(t.VolumePath)
+	if err != nil {
+		return ContainerSpec{}, fmt.Errorf("inspect tenant cli auth requirements: %w", err)
 	}
-	for _, mount := range []struct {
-		dir    string
-		err    error
-		target string
-		label  string
-	}{
-		{claudeAuthDir, claudeAuthErr, "/root/.claude", "claude-cli"},
-	} {
-		if mount.err != nil {
-			log.Printf("WARN: provisioner: tenant %s %s auth dir: %v (skipping mount)",
-				t.ID, mount.label, mount.err)
-			continue
+	needClaude, needCodex := cliReq.Claude, cliReq.Codex
+	if !cliReq.Known {
+		needClaude, needCodex = p.sharedCLIModelRouting()
+	}
+	if needCodex {
+		codexAuthDir, codexAuthErr := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
+		if codexAuthErr != nil {
+			log.Printf("WARN: provisioner: tenant %s codex-cli auth dir: %v (skipping CODEX_HOME)",
+				t.ID, codexAuthErr)
+		} else if codexAuthDir != "" {
+			spec.Env["CODEX_HOME"] = tenantCodexCLIHomeContainer
 		}
-		if mount.dir == "" {
-			continue
+	}
+	if needClaude {
+		claudeAuthDir, claudeAuthErr := resolveClaudeCLIAuthDir(p.Cfg.TenantClaudeCliAuthDir)
+		if claudeAuthErr != nil {
+			log.Printf("WARN: provisioner: tenant %s claude-cli auth dir: %v (skipping mount)",
+				t.ID, claudeAuthErr)
+		} else if claudeAuthDir != "" {
+			spec.ExtraMounts = append(spec.ExtraMounts, ContainerMount{
+				Source:   claudeAuthDir,
+				Target:   "/root/.claude",
+				ReadOnly: true,
+			})
 		}
-		spec.ExtraMounts = append(spec.ExtraMounts, ContainerMount{
-			Source:   mount.dir,
-			Target:   mount.target,
-			ReadOnly: true,
-		})
 	}
 
 	return spec, nil

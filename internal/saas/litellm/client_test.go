@@ -107,6 +107,24 @@ func TestDeleteKey(t *testing.T) {
 	}
 }
 
+func TestTestConnectionHitsModelsEndpoint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/models" {
+			t.Errorf("path: %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sk-master-test" {
+			t.Errorf("Authorization = %q", got)
+		}
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "sk-master-test")
+	if err := c.TestConnection(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestGetSpendLogs(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/spend/logs" {

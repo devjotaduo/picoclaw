@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Copy, Check, Sparkles, Bot, ExternalLink, PlusCircle, ScrollText, FolderTree, Link2, Mail } from "lucide-react";
@@ -19,8 +19,13 @@ import {
   cloneTenant,
   getTenantSanity,
   listTenantMagicLinks,
+  getTenantModelRouting,
+  updateTenantModelRouting,
   type MagicLinkRole,
   type SanityCheck,
+  type TenantCLIProvider,
+  type TenantModelRoutingInput,
+  type TenantModelRoutingMode,
 } from "@/api/tenants";
 import {
   getCRMContact,
@@ -34,6 +39,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
 import { CopyText } from "@/components/ui/copy-text";
@@ -43,6 +56,7 @@ import { PromoteTenantCard } from "@/components/tenant/promote-tenant-card";
 import { ResendCredentialsDialog } from "@/components/tenant/resend-credentials-dialog";
 import { RotatedPasswordDialog } from "@/components/tenant/rotated-password-dialog";
 import { formatDate, formatInt, formatUSD, relativeTime } from "@/lib/utils";
+import { joinModelList, splitModelList } from "@/lib/model-routing";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/toast";
 
@@ -606,6 +620,8 @@ export function TenantDetail() {
         </Card>
       </div>
 
+      {isPlatformAdmin && <TenantModelRoutingCard tenantId={tenant.id} />}
+
       {isPlatformAdmin && tenant.is_public && (
         <div className="mt-4">
           <PromoteTenantCard tenant={tenant} />
@@ -977,6 +993,206 @@ export function TenantDetail() {
         </div>
       </Dialog>
     </div>
+  );
+}
+
+type CLIOrderPreset = "claude-codex" | "codex-claude" | "claude" | "codex";
+
+function cliOrderFromPreset(value: CLIOrderPreset): TenantCLIProvider[] {
+  switch (value) {
+    case "codex-claude":
+      return ["codex-cli", "claude-cli"];
+    case "claude":
+      return ["claude-cli"];
+    case "codex":
+      return ["codex-cli"];
+    default:
+      return ["claude-cli", "codex-cli"];
+  }
+}
+
+function presetFromCLIOrder(order: TenantCLIProvider[] | undefined): CLIOrderPreset {
+  const value = (order ?? []).join(",");
+  switch (value) {
+    case "codex-cli,claude-cli":
+      return "codex-claude";
+    case "claude-cli":
+      return "claude";
+    case "codex-cli":
+      return "codex";
+    default:
+      return "claude-codex";
+  }
+}
+
+function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const q = useQuery({
+    queryKey: ["tenant-model-routing", tenantId],
+    queryFn: () => getTenantModelRouting(tenantId),
+  });
+  const [mode, setMode] = useState<TenantModelRoutingMode>("auto");
+  const [litellmModelName, setLiteLLMModelName] = useState("gpt-4o-mini");
+  const [litellmAPIBase, setLiteLLMAPIBase] = useState("");
+  const [litellmFallbacks, setLiteLLMFallbacks] = useState("");
+  const [litellmAllowedModels, setLiteLLMAllowedModels] = useState("");
+  const [cliOrderPreset, setCLIOrderPreset] = useState<CLIOrderPreset>("claude-codex");
+
+  useEffect(() => {
+    if (!q.data) return;
+    setMode(q.data.mode);
+    setLiteLLMModelName(q.data.litellm?.model_name || "gpt-4o-mini");
+    setLiteLLMAPIBase(q.data.litellm?.api_base || "");
+    setLiteLLMFallbacks(joinModelList(q.data.litellm?.fallbacks));
+    setLiteLLMAllowedModels(joinModelList(q.data.litellm?.allowed_models));
+    setCLIOrderPreset(presetFromCLIOrder(q.data.cli?.order));
+  }, [q.data]);
+
+  const updateM = useMutation({
+    mutationFn: () => updateTenantModelRouting(tenantId, buildTenantModelRoutingInput()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tenant-model-routing", tenantId] });
+      qc.invalidateQueries({ queryKey: ["tenant", tenantId] });
+      toast({ type: "success", message: "Roteamento salvo e área recriada." });
+    },
+    onError: (e: { error?: string }) =>
+      toast({ type: "error", message: e?.error ?? "Falha ao atualizar roteamento." }),
+  });
+
+  function buildTenantModelRoutingInput(): TenantModelRoutingInput {
+    if (mode === "litellm") {
+      return {
+        mode,
+        litellm: {
+          model_name: litellmModelName.trim() || undefined,
+          api_base: litellmAPIBase.trim() || undefined,
+          fallbacks: splitModelList(litellmFallbacks),
+          allowed_models: splitModelList(litellmAllowedModels),
+        },
+      };
+    }
+    if (mode === "cli") {
+      return { mode, cli: { order: cliOrderFromPreset(cliOrderPreset) } };
+    }
+    return { mode: "auto" };
+  }
+
+  return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle>Roteamento de modelo</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 text-xs">
+        {q.isError ? (
+          <div className="rounded border border-red-900/50 bg-red-950/30 p-3 text-red-300">
+            {(q.error as { error?: string })?.error ?? "Falha ao carregar roteamento."}
+          </div>
+        ) : null}
+        <div className="grid gap-4 border-b border-zinc-800 pb-4 md:grid-cols-3">
+          <Field>
+            <FieldLabel>Origem</FieldLabel>
+            <Select
+              value={mode}
+              onValueChange={(value) => setMode(value as TenantModelRoutingMode)}
+              disabled={q.isLoading}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Automático</SelectItem>
+                <SelectItem value="litellm">LiteLLM</SelectItem>
+                <SelectItem value="cli">CLIs compartilhados</SelectItem>
+              </SelectContent>
+            </Select>
+            <FieldDescription>Salvar recria a área e aplica o config.json materializado.</FieldDescription>
+          </Field>
+
+          {mode === "cli" ? (
+            <Field>
+              <FieldLabel>Ordem dos CLIs</FieldLabel>
+              <Select
+                value={cliOrderPreset}
+                onValueChange={(value) => setCLIOrderPreset(value as CLIOrderPreset)}
+                disabled={q.isLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="claude-codex">Claude CLI → Codex CLI</SelectItem>
+                  <SelectItem value="codex-claude">Codex CLI → Claude CLI</SelectItem>
+                  <SelectItem value="claude">Somente Claude CLI</SelectItem>
+                  <SelectItem value="codex">Somente Codex CLI</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          ) : null}
+
+          {mode === "litellm" ? (
+            <>
+              <Field>
+                <FieldLabel htmlFor="tenant-litellm-model">Modelo principal</FieldLabel>
+                <Input
+                  id="tenant-litellm-model"
+                  value={litellmModelName}
+                  onChange={(event) => setLiteLLMModelName(event.target.value)}
+                  placeholder="gpt-4o-mini"
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="tenant-litellm-api-base">API base</FieldLabel>
+                <Input
+                  id="tenant-litellm-api-base"
+                  value={litellmAPIBase}
+                  onChange={(event) => setLiteLLMAPIBase(event.target.value)}
+                  placeholder="Usar LiteLLM global"
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="tenant-litellm-fallbacks">Fallbacks</FieldLabel>
+                <Textarea
+                  id="tenant-litellm-fallbacks"
+                  value={litellmFallbacks}
+                  onChange={(event) => setLiteLLMFallbacks(event.target.value)}
+                  placeholder={"claude-haiku-4-5\ndeepseek-chat"}
+                />
+              </Field>
+              <Field className="md:col-span-2">
+                <FieldLabel htmlFor="tenant-litellm-allowed">Modelos liberados na chave</FieldLabel>
+                <Textarea
+                  id="tenant-litellm-allowed"
+                  value={litellmAllowedModels}
+                  onChange={(event) => setLiteLLMAllowedModels(event.target.value)}
+                  placeholder="Vazio = principal + fallbacks"
+                />
+              </Field>
+            </>
+          ) : null}
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] text-zinc-500">
+            A área pode ficar indisponível por alguns segundos durante a recriação.
+          </p>
+          <Button
+            onClick={() => {
+              if (
+                confirm(
+                  "Salvar o roteamento e recriar a área agora?\n\nA área do cliente pode ficar indisponível por alguns segundos.",
+                )
+              ) {
+                updateM.mutate();
+              }
+            }}
+            disabled={q.isLoading || updateM.isPending}
+          >
+            {updateM.isPending ? "Salvando..." : "Salvar e recriar área"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

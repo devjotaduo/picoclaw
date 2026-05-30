@@ -561,6 +561,51 @@ const (
 	defaultSaaSCodexCLIModel = "codex-cli"
 )
 
+type saasCLIModelSpec struct {
+	Provider  string
+	ModelName string
+	Model     string
+}
+
+func saasCLIModelSpecFor(provider string) (saasCLIModelSpec, bool) {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "claude", "claude-cli":
+		return saasCLIModelSpec{
+			Provider:  "claude-cli",
+			ModelName: defaultSaaSClaudeCLIModelName,
+			Model:     defaultSaaSClaudeCLIModel,
+		}, true
+	case "codex", "codex-cli":
+		return saasCLIModelSpec{
+			Provider:  "codex-cli",
+			ModelName: defaultSaaSCodexCLIModelName,
+			Model:     defaultSaaSCodexCLIModel,
+		}, true
+	default:
+		return saasCLIModelSpec{}, false
+	}
+}
+
+func normalizeSaaSCLIOrder(order []string) ([]saasCLIModelSpec, error) {
+	specs := make([]saasCLIModelSpec, 0, len(order))
+	seen := map[string]bool{}
+	for _, raw := range order {
+		spec, ok := saasCLIModelSpecFor(raw)
+		if !ok {
+			return nil, fmt.Errorf("unsupported saas cli provider %q (expected claude-cli or codex-cli)", raw)
+		}
+		if seen[spec.Provider] {
+			continue
+		}
+		seen[spec.Provider] = true
+		specs = append(specs, spec)
+	}
+	if len(specs) == 0 {
+		return nil, fmt.Errorf("at least one saas cli provider must be enabled")
+	}
+	return specs, nil
+}
+
 // ApplySaaSCLIModelRouting makes a provisioned non-raw tenant use shared
 // operator CLI auth mounts instead of upstream API keys. The auth material
 // lives outside the workspace; Claude is injected read-only and Codex is
@@ -568,6 +613,21 @@ const (
 func ApplySaaSCLIModelRouting(destDir string, enableClaude, enableCodex bool) error {
 	if !enableClaude && !enableCodex {
 		return fmt.Errorf("at least one saas cli provider must be enabled")
+	}
+	order := make([]string, 0, 2)
+	if enableClaude {
+		order = append(order, "claude-cli")
+	}
+	if enableCodex {
+		order = append(order, "codex-cli")
+	}
+	return ApplySaaSCLIModelRoutingFromOrder(destDir, order)
+}
+
+func ApplySaaSCLIModelRoutingFromOrder(destDir string, order []string) error {
+	specs, err := normalizeSaaSCLIOrder(order)
+	if err != nil {
+		return err
 	}
 
 	path := filepath.Join(destDir, "config.json")
@@ -597,41 +657,31 @@ func ApplySaaSCLIModelRouting(destDir string, enableClaude, enableCodex bool) er
 		agents["defaults"] = defaults
 	}
 
-	models := make([]any, 0, 2)
-	if enableClaude {
-		defaults["provider"] = "claude-cli"
-		defaults["model_name"] = defaultSaaSClaudeCLIModelName
-		if enableCodex {
-			defaults["model_fallbacks"] = []any{defaultSaaSCodexCLIModelName}
-		} else {
-			delete(defaults, "model_fallbacks")
-		}
-
-		claude := map[string]any{
-			"model_name": defaultSaaSClaudeCLIModelName,
-			"provider":   "claude-cli",
-			"model":      defaultSaaSClaudeCLIModel,
-			"workspace":  saaSCLIWorkspacePath,
-			"enabled":    true,
-		}
-		if enableCodex {
-			claude["fallbacks"] = []any{defaultSaaSCodexCLIModelName}
-		}
-		models = append(models, claude)
+	defaults["provider"] = specs[0].Provider
+	defaults["model_name"] = specs[0].ModelName
+	fallbackNames := make([]any, 0, len(specs)-1)
+	for _, spec := range specs[1:] {
+		fallbackNames = append(fallbackNames, spec.ModelName)
 	}
-	if enableCodex {
-		if !enableClaude {
-			defaults["provider"] = "codex-cli"
-			defaults["model_name"] = defaultSaaSCodexCLIModelName
-			delete(defaults, "model_fallbacks")
-		}
-		models = append(models, map[string]any{
-			"model_name": defaultSaaSCodexCLIModelName,
-			"provider":   "codex-cli",
-			"model":      defaultSaaSCodexCLIModel,
+	if len(fallbackNames) > 0 {
+		defaults["model_fallbacks"] = fallbackNames
+	} else {
+		delete(defaults, "model_fallbacks")
+	}
+
+	models := make([]any, 0, len(specs))
+	for i, spec := range specs {
+		model := map[string]any{
+			"model_name": spec.ModelName,
+			"provider":   spec.Provider,
+			"model":      spec.Model,
 			"workspace":  saaSCLIWorkspacePath,
 			"enabled":    true,
-		})
+		}
+		if i == 0 && len(fallbackNames) > 0 {
+			model["fallbacks"] = fallbackNames
+		}
+		models = append(models, model)
 	}
 	cfg["model_list"] = models
 
@@ -712,9 +762,18 @@ func removeSecurityModelList(destDir string) error {
 // exist in the workspace template. The controlplane owns provider/model
 // credentials; tenant workspaces own prompts, skills, memory and channels.
 func ApplySaaSLiteLLMModelRouting(destDir, modelName, litellmURL, litellmKey string) error {
+	return ApplySaaSLiteLLMModelRoutingWithFallbacks(destDir, modelName, nil, litellmURL, litellmKey)
+}
+
+func ApplySaaSLiteLLMModelRoutingWithFallbacks(
+	destDir, modelName string,
+	fallbackModels []string,
+	litellmURL, litellmKey string,
+) error {
 	modelName = strings.TrimSpace(modelName)
 	litellmURL = strings.TrimRight(strings.TrimSpace(litellmURL), "/")
 	litellmKey = strings.TrimSpace(litellmKey)
+	fallbackModels = compactUniqueStrings(fallbackModels)
 	if modelName == "" {
 		return fmt.Errorf("saas litellm model_name is required")
 	}
@@ -753,17 +812,29 @@ func ApplySaaSLiteLLMModelRouting(destDir, modelName, litellmURL, litellmKey str
 	}
 	defaults["provider"] = "litellm"
 	defaults["model_name"] = modelName
+	if len(fallbackModels) > 0 {
+		defaults["model_fallbacks"] = stringsToAnySlice(fallbackModels)
+	} else {
+		delete(defaults, "model_fallbacks")
+	}
 
-	cfg["model_list"] = []any{
-		map[string]any{
-			"model_name": modelName,
+	modelNames := append([]string{modelName}, fallbackModels...)
+	models := make([]any, 0, len(modelNames))
+	for i, name := range modelNames {
+		model := map[string]any{
+			"model_name": name,
 			"provider":   "openai",
-			"model":      modelName,
+			"model":      name,
 			"api_base":   litellmURL,
 			"api_keys":   []any{litellmKey},
 			"enabled":    true,
-		},
+		}
+		if i == 0 && len(fallbackModels) > 0 {
+			model["fallbacks"] = stringsToAnySlice(fallbackModels)
+		}
+		models = append(models, model)
 	}
+	cfg["model_list"] = models
 
 	out, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
@@ -780,6 +851,69 @@ func ApplySaaSLiteLLMModelRouting(destDir, modelName, litellmURL, litellmKey str
 		return fmt.Errorf("write config.json: %w", err)
 	}
 	return nil
+}
+
+func compactUniqueStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
+}
+
+func stringsToAnySlice(values []string) []any {
+	out := make([]any, 0, len(values))
+	for _, value := range values {
+		out = append(out, value)
+	}
+	return out
+}
+
+type TenantCLIAuthRequirements struct {
+	Known  bool
+	Claude bool
+	Codex  bool
+}
+
+func TenantCLIAuthProvidersFromConfig(volumePath string) (TenantCLIAuthRequirements, error) {
+	if strings.TrimSpace(volumePath) == "" {
+		return TenantCLIAuthRequirements{}, nil
+	}
+	path := filepath.Join(volumePath, "config.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return TenantCLIAuthRequirements{}, nil
+		}
+		return TenantCLIAuthRequirements{}, fmt.Errorf("read config.json: %w", err)
+	}
+
+	var cfg map[string]any
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return TenantCLIAuthRequirements{}, fmt.Errorf("parse config.json: %w", err)
+	}
+
+	req := TenantCLIAuthRequirements{Known: true}
+	list, _ := cfg["model_list"].([]any)
+	for _, raw := range list {
+		model, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(fmt.Sprint(model["provider"]))) {
+		case "claude-cli":
+			req.Claude = true
+		case "codex-cli":
+			req.Codex = true
+		}
+	}
+	return req, nil
 }
 
 // workspaceBuildLocks serializes concurrent BuildWorkspaceFrontend calls per
