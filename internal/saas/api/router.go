@@ -202,6 +202,13 @@ func (h *Handler) Routes() http.Handler {
 				r.Put("/platform/litellm", h.handlePutPlatformLiteLLM)
 				r.Post("/platform/litellm/test", h.handleTestPlatformLiteLLM)
 
+				// Shared claude-cli auth: rotate the operator's long-lived
+				// Claude token (from `claude setup-token`) that every
+				// claude-cli tenant mounts read-only. Requires the auth dir
+				// to be mounted read-write into the controlplane.
+				r.Get("/platform/cli-auth/claude", h.handleGetClaudeCLIAuth)
+				r.Put("/platform/cli-auth/claude", h.handlePutClaudeCLIAuth)
+
 				// Workspaces — single source of truth for tenant content.
 				r.Get("/workspaces", h.handleListWorkspaces)
 				r.Post("/workspaces", h.handleCreateWorkspace)

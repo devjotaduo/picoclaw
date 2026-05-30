@@ -151,6 +151,33 @@ Os tenants pegam automatic na próxima chamada (mount é live).
 **Sinal de que precisa renovar**: tenant chat retorna erro do
 claude-cli mencionando "unauthorized", "token expired", ou OAuth.
 
+### Token long-lived (recomendado) — acaba com o refresh diário
+
+O OAuth normal (`/login`) gera um access token de vida curta (~horas) que
+expira todo dia. Use `claude setup-token` (requer subscription) pra gerar
+um token **long-lived** (`sk-ant-oat…`, ~1 ano):
+
+```bash
+claude setup-token   # na máquina do operador; OAuth no browser
+```
+
+O token é gravado no `.credentials.json` como `accessToken` com um
+`expiresAt` lá no futuro (~2030) e `refreshToken` vazio — assim o `claude`
+nunca tenta refresh e sempre manda o token long-lived como bearer. Vale
+pra todos os tenants claude-cli (mesmo mount), sem expiração diária.
+Rotacione ~1x por ano.
+
+### Painel admin (`adm.<base>` → Plataforma → Token Claude)
+
+`platform_admin` pode rotacionar o token long-lived pelo painel
+(`/platform/cli-auth`), sem SSH: cola o `sk-ant-oat…` e o controlplane
+escreve o `.credentials.json` no formato no-refresh. **Requer** que o
+controlplane monte `PICOCLAW_TENANT_CLAUDE_CLI_AUTH_DIR` **read-write** —
+por padrão é read-only. No `docker-compose.prod.yml`, o bind
+`/etc/picoclaw/claude-auth` precisa ser `:rw` no serviço `controlplane`
+(depois `up -d --force-recreate controlplane`). Sem isso, o `PUT` retorna
+erro de filesystem read-only. Endpoint: `internal/saas/api/platform_cli_auth.go`.
+
 ## Atalho usado no bootstrap (operador já tem Claude Code local)
 
 Se você JÁ usa Claude Code na sua máquina (Mac/Linux/Windows), o arquivo

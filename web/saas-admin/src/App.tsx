@@ -21,6 +21,7 @@ import { TenantLogs } from "@/pages/TenantLogs";
 import { UserManagement } from "@/pages/UserManagement";
 import { PlatformDashboard } from "@/pages/PlatformDashboard";
 import { PlatformLiteLLM } from "@/pages/PlatformLiteLLM";
+import { PlatformClaudeAuth } from "@/pages/PlatformClaudeAuth";
 import { ServerHealth } from "@/pages/ServerHealth";
 import { ChangePassword } from "@/pages/ChangePassword";
 import { Shortlinks } from "@/pages/Shortlinks";
@@ -82,6 +83,7 @@ export default function App() {
         <Route path="/dashboard" element={<RequirePlatform><PlatformDashboard /></RequirePlatform>} />
         <Route path="/server-health" element={<RequirePlatform><ServerHealth /></RequirePlatform>} />
         <Route path="/platform/litellm" element={<RequirePlatform><PlatformLiteLLM /></RequirePlatform>} />
+        <Route path="/platform/cli-auth" element={<RequirePlatform><PlatformClaudeAuth /></RequirePlatform>} />
         <Route path="/shortlinks" element={<RequirePlatform><Shortlinks /></RequirePlatform>} />
         <Route path="/account/password" element={<ChangePassword />} />
         <Route path="/crm" element={<RequirePlatform><Navigate to="/crm/contacts" replace /></RequirePlatform>} />
