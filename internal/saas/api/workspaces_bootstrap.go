@@ -277,6 +277,9 @@ func repairLegacyFlatWorkspaceHome(homeDir string) error {
 	}
 	for _, entry := range entries {
 		rel := entry.Name()
+		if rel == "workspace" {
+			continue
+		}
 		targetRel, ok := embeddedBaselineTargetRel(rel)
 		if !ok || !strings.HasPrefix(targetRel, "workspace/") {
 			continue

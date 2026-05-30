@@ -77,3 +77,22 @@ func TestSeedDefaultWorkspaceHomePreservesLegacyFlatOperatorEdits(t *testing.T) 
 		t.Fatalf("ui-visibility.json must stay at home/ui-visibility.json, not home/workspace/ui-visibility.json")
 	}
 }
+
+func TestSeedDefaultWorkspaceHomeDoesNotCopyWorkspaceIntoItself(t *testing.T) {
+	homeDir := t.TempDir()
+	workspaceAgent := filepath.Join(homeDir, "workspace", "AGENT.md")
+	if err := os.MkdirAll(filepath.Dir(workspaceAgent), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(workspaceAgent, []byte("# Canonical workspace\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := seedDefaultWorkspaceHome(homeDir); err != nil {
+		t.Fatalf("seedDefaultWorkspaceHome: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(homeDir, "workspace", "workspace")); !os.IsNotExist(err) {
+		t.Fatalf("seedDefaultWorkspaceHome must not create workspace/workspace, stat err=%v", err)
+	}
+}
