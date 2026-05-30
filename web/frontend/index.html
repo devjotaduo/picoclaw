@@ -14,7 +14,7 @@
       // surface flashes the bare light :root — including the public tenant
       // chat, which never mounts the app-header theme toggle. Mirrors
       // getStoredTheme() in src/hooks/use-theme.ts.
-      (function () {
+      ;(function () {
         try {
           if ((localStorage.getItem("theme") || "dark") === "dark") {
             document.documentElement.classList.add("dark")
