@@ -21,11 +21,16 @@ const (
 	NotificationKindData    NotificationKind = "data"
 	NotificationKindWarning NotificationKind = "warning"
 	NotificationKindBilling NotificationKind = "billing"
+	// NotificationKindApproval marks a notification that requires an owner
+	// decision (approve/reject) — used by the v2.0 assistant→attendant config
+	// proposal flow. The CTA points at the pending proposal so the dashboard
+	// can render an approve/reject card.
+	NotificationKindApproval NotificationKind = "approval"
 )
 
 func (k NotificationKind) valid() bool {
 	switch k {
-	case NotificationKindData, NotificationKindWarning, NotificationKindBilling:
+	case NotificationKindData, NotificationKindWarning, NotificationKindBilling, NotificationKindApproval:
 		return true
 	}
 	return false
