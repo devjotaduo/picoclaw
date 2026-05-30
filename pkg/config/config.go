@@ -298,6 +298,13 @@ type AgentsConfig struct {
 	// (the SaaS multi-tenant scenario still needs the seed for guaranteed
 	// orchestration topology). Default false preserves existing behavior.
 	SkipSpecialistSeed bool `json:"skip_specialist_seed,omitempty"`
+	// Roster declares which agents the orchestrator should materialize for
+	// this tenant, by role name ("attendant", "assistant", "sales",
+	// "marketing"). When non-empty, EnsureSpecialistConfig materializes ONLY
+	// these agents (v2.0 vertical tenants: typically ["attendant","assistant"])
+	// instead of the canonical 4-agent baseline. Empty (the default) preserves
+	// the legacy 4-agent seed. SkipSpecialistSeed still wins over both.
+	Roster []string `json:"roster,omitempty"`
 }
 
 // AgentModelConfig supports both string and structured model config.

@@ -259,6 +259,11 @@ type CreateInput struct {
 	// tenant uses LiteLLM virtual-key routing or shared CLI auth routing and in
 	// what fallback order. Nil keeps the legacy auto mode.
 	ModelRouting *ModelRoutingConfig
+	// Roster declares which agents (by role name, e.g. "attendant",
+	// "assistant") the in-tenant orchestrator should materialize at boot. Set
+	// from the tenant type catalog. Empty keeps the workspace's own roster /
+	// legacy 4-agent seed (public tenants pass empty so Sofia stays solo).
+	Roster []string
 }
 
 type ModelRoutingConfig struct {
@@ -370,6 +375,7 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		in.SkipDashboardPassword,
 		in.UIProfile,
 		in.ModelRouting,
+		in.Roster,
 	); err != nil {
 		msg := err.Error()
 		_ = p.Tenants.SetStatus(ctx, id, store.StatusError, &msg)
@@ -397,6 +403,7 @@ func (p *Provisioner) runProvision(
 	skipDashboardPassword bool,
 	uiProfile UIVisibilityProfile,
 	modelRouting *ModelRoutingConfig,
+	roster []string,
 ) (err error) {
 	success := false
 	volumeCreated := false
@@ -496,6 +503,16 @@ func (p *Provisioner) runProvision(
 	// exact bytes they shipped — typically an existing tenant volume
 	// re-bundled, or a self-hosted LiteLLM-free setup.
 	if !ws.IsRaw {
+		// 1d. Agent roster (v2.0). When the tenant type declares a roster
+		// (e.g. ["attendant","assistant"]), patch agents.roster into config.json
+		// so the in-tenant orchestrator materializes exactly those agents at
+		// boot instead of the legacy 4-agent seed. No-op for an empty roster
+		// (public tenants keep Sofia solo). Runs before placeholder
+		// substitution + ValidateBundle so a malformed patch fails fast.
+		if err := SetAgentsRoster(t.VolumePath, roster); err != nil {
+			return fmt.Errorf("set agents roster: %w", err)
+		}
+
 		// 2. Dashboard password (skipped for Supabase / public tenants).
 		if !skipDashboardPassword {
 			if err := SeedDashboardCredentials(ctx, t.VolumePath, t.OwnerEmail, password); err != nil {

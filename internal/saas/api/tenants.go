@@ -216,6 +216,15 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(req.WorkspaceID) == "" && resolvedType.DefaultWorkspaceID != "" {
 		req.WorkspaceID = resolvedType.DefaultWorkspaceID
 	}
+	// Agent roster from the catalog (e.g. ["attendant","assistant"]). Empty for
+	// publico/admin so those tenants keep their solo/legacy roster.
+	var roster []string
+	if len(resolvedType.Roster) > 0 {
+		if err := json.Unmarshal(resolvedType.Roster, &roster); err != nil {
+			writeError(w, http.StatusBadRequest, "roster do tipo de tenant está malformado")
+			return
+		}
+	}
 	modelRouting, err := req.ModelRouting.toTenantConfig()
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -306,6 +315,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		IsPublic:              uiProfile == tenant.UIProfilePublic,
 		UIProfile:             uiProfile,
 		ModelRouting:          modelRouting,
+		Roster:                roster,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
