@@ -37,6 +37,21 @@ export type Tenant = {
 //   "cliente" → active_profile=tenant  → owner dashboard, no admin tools (default)
 // Maps in internal/saas/api/tenants.go::resolveUIProfile.
 export type TenantType = "publico" | "admin" | "cliente";
+export type TenantModelRoutingMode = "auto" | "litellm" | "cli";
+export type TenantCLIProvider = "claude-cli" | "codex-cli";
+
+export type TenantModelRoutingInput = {
+  mode: TenantModelRoutingMode;
+  litellm?: {
+    model_name?: string;
+    api_base?: string;
+    fallbacks?: string[];
+    allowed_models?: string[];
+  };
+  cli?: {
+    order?: TenantCLIProvider[];
+  };
+};
 
 export type CreateTenantInput = {
   display_name: string;
@@ -51,6 +66,10 @@ export type CreateTenantInput = {
   // workspace_id is required: it selects the Workspace whose home/ subtree
   // seeds the tenant volume and whose frontend-dist/ is bind-mounted.
   workspace_id: string;
+  // model_routing lets the SaaS admin decide whether the materialized tenant
+  // uses LiteLLM virtual-key routing or shared Claude/Codex CLI auth, plus
+  // the ordered fallback chain.
+  model_routing?: TenantModelRoutingInput;
 };
 
 export type CreateTenantResponse = {

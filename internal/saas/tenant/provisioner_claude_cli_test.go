@@ -231,6 +231,43 @@ func TestBuildSpec_ClaudeCliAuthBindMount(t *testing.T) {
 			t.Errorf("CODEX_HOME = %q, want %q", got, tenantCodexCLIHomeContainer)
 		}
 	})
+
+	t.Run("tenant routed to litellm does not receive shared cli auth", func(t *testing.T) {
+		claudeDir := t.TempDir()
+		codexDir := t.TempDir()
+		volume := t.TempDir()
+		_ = os.WriteFile(filepath.Join(claudeDir, ".credentials.json"), []byte("{}"), 0o600)
+		_ = os.WriteFile(filepath.Join(codexDir, "auth.json"), []byte("{}"), 0o600)
+		if err := os.WriteFile(filepath.Join(volume, "config.json"), []byte(`{
+  "agents": {"defaults": {"provider": "litellm", "model_name": "gpt-4o-mini"}},
+  "model_list": [
+    {"model_name": "gpt-4o-mini", "provider": "openai", "model": "gpt-4o-mini", "api_base": "http://litellm:4000", "api_keys": ["sk-tenant"]}
+  ]
+}
+`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		p := &Provisioner{
+			Cfg: &config.Config{
+				GatewaySharedSecret:    "gw",
+				TenantClaudeCliAuthDir: claudeDir,
+				TenantCodexCliAuthDir:  codexDir,
+			},
+		}
+		spec, err := p.buildSpec(context.Background(), &store.Tenant{ID: "t-litellm", VolumePath: volume})
+		if err != nil {
+			t.Fatalf("buildSpec: %v", err)
+		}
+		if _, ok := spec.Env["CODEX_HOME"]; ok {
+			t.Fatalf("CODEX_HOME should be unset for LiteLLM-routed tenant")
+		}
+		for _, m := range spec.ExtraMounts {
+			if m.Target == "/root/.claude" || m.Target == "/root/.codex" {
+				t.Fatalf("unexpected CLI auth mount for LiteLLM-routed tenant: %+v", m)
+			}
+		}
+	})
 }
 
 func TestPrepareCodexCLIHomeCopiesWritableSnapshot(t *testing.T) {

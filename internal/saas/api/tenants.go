@@ -39,6 +39,27 @@ type createTenantReq struct {
 	// — the frontend speaks the admin vocabulary, the volume speaks the
 	// runtime vocabulary, and we translate at the boundary.
 	TenantType string `json:"tenant_type,omitempty"`
+	// ModelRouting is the SaaS-admin controlled source of truth for newly
+	// materialized tenant model auth: LiteLLM virtual key values, CLI auth
+	// selection, and fallback order.
+	ModelRouting *createTenantModelRoutingReq `json:"model_routing,omitempty"`
+}
+
+type createTenantModelRoutingReq struct {
+	Mode    string                         `json:"mode,omitempty"`
+	LiteLLM createTenantLiteLLMRoutingReq  `json:"litellm,omitempty"`
+	CLI     createTenantCLIModelRoutingReq `json:"cli,omitempty"`
+}
+
+type createTenantLiteLLMRoutingReq struct {
+	ModelName     string   `json:"model_name,omitempty"`
+	APIBase       string   `json:"api_base,omitempty"`
+	Fallbacks     []string `json:"fallbacks,omitempty"`
+	AllowedModels []string `json:"allowed_models,omitempty"`
+}
+
+type createTenantCLIModelRoutingReq struct {
+	Order []string `json:"order,omitempty"`
 }
 
 // resolveUIProfile maps the admin-facing tenant type to the runtime
@@ -57,6 +78,57 @@ func resolveUIProfile(tenantType string) (tenant.UIVisibilityProfile, error) {
 	}
 }
 
+func (req *createTenantModelRoutingReq) toTenantConfig() (*tenant.ModelRoutingConfig, error) {
+	if req == nil {
+		return nil, nil
+	}
+	mode := strings.ToLower(strings.TrimSpace(req.Mode))
+	if mode == "" {
+		mode = "auto"
+	}
+	switch mode {
+	case "auto", "litellm", "cli":
+	default:
+		return nil, fmt.Errorf("unknown model_routing.mode %q (expected auto, litellm, or cli)", req.Mode)
+	}
+
+	order := cleanStringList(req.CLI.Order)
+	for _, provider := range order {
+		switch strings.ToLower(strings.TrimSpace(provider)) {
+		case "claude", "claude-cli", "codex", "codex-cli":
+		default:
+			return nil, fmt.Errorf("unsupported model_routing.cli.order provider %q", provider)
+		}
+	}
+
+	return &tenant.ModelRoutingConfig{
+		Mode: mode,
+		LiteLLM: tenant.LiteLLMModelRoutingConfig{
+			ModelName:     strings.TrimSpace(req.LiteLLM.ModelName),
+			APIBase:       strings.TrimSpace(req.LiteLLM.APIBase),
+			Fallbacks:     cleanStringList(req.LiteLLM.Fallbacks),
+			AllowedModels: cleanStringList(req.LiteLLM.AllowedModels),
+		},
+		CLI: tenant.CLIModelRoutingConfig{
+			Order: order,
+		},
+	}, nil
+}
+
+func cleanStringList(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := map[string]bool{}
+	for _, value := range in {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
+}
+
 func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	var req createTenantReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -68,6 +140,11 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	req.Subdomain = strings.TrimSpace(strings.ToLower(req.Subdomain))
 
 	uiProfile, err := resolveUIProfile(req.TenantType)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	modelRouting, err := req.ModelRouting.toTenantConfig()
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -156,6 +233,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		AuthBackend:           authBackend,
 		IsPublic:              uiProfile == tenant.UIProfilePublic,
 		UIProfile:             uiProfile,
+		ModelRouting:          modelRouting,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

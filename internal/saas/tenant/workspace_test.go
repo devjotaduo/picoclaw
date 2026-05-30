@@ -244,6 +244,57 @@ func TestApplySaaSLiteLLMModelRoutingMaterializesTenantModel(t *testing.T) {
 	}
 }
 
+func TestApplySaaSLiteLLMModelRoutingWithFallbacksMaterializesOrder(t *testing.T) {
+	dst := t.TempDir()
+	path := writeTenantRoutingConfig(t, dst)
+
+	if err := ApplySaaSLiteLLMModelRoutingWithFallbacks(
+		dst,
+		"gpt-4o-mini",
+		[]string{"claude-haiku-4-5", "deepseek-chat"},
+		"http://litellm:4000",
+		"sk-tenant-key",
+	); err != nil {
+		t.Fatalf("ApplySaaSLiteLLMModelRoutingWithFallbacks: %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	defaults := cfg["agents"].(map[string]any)["defaults"].(map[string]any)
+	if defaults["provider"] != "litellm" || defaults["model_name"] != "gpt-4o-mini" {
+		t.Fatalf("defaults not routed to LiteLLM primary: %#v", defaults)
+	}
+	defaultFallbacks := defaults["model_fallbacks"].([]any)
+	if len(defaultFallbacks) != 2 || defaultFallbacks[0] != "claude-haiku-4-5" || defaultFallbacks[1] != "deepseek-chat" {
+		t.Fatalf("defaults model_fallbacks = %#v", defaultFallbacks)
+	}
+
+	models := cfg["model_list"].([]any)
+	if len(models) != 3 {
+		t.Fatalf("model_list len = %d, want 3", len(models))
+	}
+	for i, want := range []string{"gpt-4o-mini", "claude-haiku-4-5", "deepseek-chat"} {
+		model := models[i].(map[string]any)
+		if model["model_name"] != want || model["model"] != want || model["api_base"] != "http://litellm:4000" {
+			t.Fatalf("model[%d] = %#v", i, model)
+		}
+		keys := model["api_keys"].([]any)
+		if len(keys) != 1 || keys[0] != "sk-tenant-key" {
+			t.Fatalf("model[%d].api_keys = %#v", i, keys)
+		}
+	}
+	primaryFallbacks := models[0].(map[string]any)["fallbacks"].([]any)
+	if len(primaryFallbacks) != 2 || primaryFallbacks[0] != "claude-haiku-4-5" || primaryFallbacks[1] != "deepseek-chat" {
+		t.Fatalf("primary fallbacks = %#v", primaryFallbacks)
+	}
+}
+
 func TestApplySaaSCLIModelRoutingPrefersClaudeWithCodexFallback(t *testing.T) {
 	dst := t.TempDir()
 	path := writeTenantRoutingConfig(t, dst)
@@ -335,6 +386,52 @@ channel_list:
 	}
 	if _, ok := codex["api_base"]; ok {
 		t.Fatalf("codex-cli model must not carry api_base: %#v", codex)
+	}
+}
+
+func TestApplySaaSCLIModelRoutingFromOrderSupportsCodexFirst(t *testing.T) {
+	dst := t.TempDir()
+	path := writeTenantRoutingConfig(t, dst)
+
+	if err := ApplySaaSCLIModelRoutingFromOrder(dst, []string{"codex-cli", "claude-cli"}); err != nil {
+		t.Fatalf("ApplySaaSCLIModelRoutingFromOrder: %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	defaults := cfg["agents"].(map[string]any)["defaults"].(map[string]any)
+	if defaults["provider"] != "codex-cli" || defaults["model_name"] != "codex-cli-gpt-5" {
+		t.Fatalf("defaults not routed to codex-cli: %#v", defaults)
+	}
+	defaultFallbacks := defaults["model_fallbacks"].([]any)
+	if len(defaultFallbacks) != 1 || defaultFallbacks[0] != "claude-cli-sonnet" {
+		t.Fatalf("defaults model_fallbacks = %#v, want claude-cli-sonnet", defaultFallbacks)
+	}
+
+	models := cfg["model_list"].([]any)
+	if len(models) != 2 {
+		t.Fatalf("model_list len = %d, want 2", len(models))
+	}
+	codex := models[0].(map[string]any)
+	if codex["model_name"] != "codex-cli-gpt-5" || codex["provider"] != "codex-cli" {
+		t.Fatalf("first model should be codex-cli, got %#v", codex)
+	}
+	fallbacks := codex["fallbacks"].([]any)
+	if len(fallbacks) != 1 || fallbacks[0] != "claude-cli-sonnet" {
+		t.Fatalf("codex fallbacks = %#v, want claude-cli-sonnet", fallbacks)
+	}
+	claude := models[1].(map[string]any)
+	if claude["model_name"] != "claude-cli-sonnet" || claude["provider"] != "claude-cli" {
+		t.Fatalf("second model should be claude-cli, got %#v", claude)
+	}
+	if _, ok := claude["fallbacks"]; ok {
+		t.Fatalf("last fallback model must not carry fallbacks: %#v", claude)
 	}
 }
 

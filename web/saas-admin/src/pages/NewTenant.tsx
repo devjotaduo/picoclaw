@@ -17,6 +17,8 @@ import {
   markPasswordDelivered,
   type CreateTenantInput,
   type CreateTenantResponse,
+  type TenantCLIProvider,
+  type TenantModelRoutingMode,
   type TenantType,
 } from "@/api/tenants";
 import { listWorkspaces } from "@/api/workspaces";
@@ -39,6 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -98,6 +101,33 @@ function parseTenantTypeParam(value: string | null): TenantType | null {
   return value === "publico" || value === "admin" || value === "cliente" ? value : null;
 }
 
+type CLIOrderPreset = "claude-codex" | "codex-claude" | "claude" | "codex";
+
+function cliOrderFromPreset(value: CLIOrderPreset): TenantCLIProvider[] {
+  switch (value) {
+    case "codex-claude":
+      return ["codex-cli", "claude-cli"];
+    case "claude":
+      return ["claude-cli"];
+    case "codex":
+      return ["codex-cli"];
+    default:
+      return ["claude-cli", "codex-cli"];
+  }
+}
+
+function splitModelList(value: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of value.split(/[\n,]/)) {
+    const item = part.trim();
+    if (!item || seen.has(item)) continue;
+    seen.add(item);
+    out.push(item);
+  }
+  return out;
+}
+
 export function NewTenant() {
   const nav = useNavigate();
   const [searchParams] = useSearchParams();
@@ -108,6 +138,12 @@ export function NewTenant() {
     "cliente";
   const [tenantType, setTenantType] = useState<TenantType>(initialTenantType);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [modelRoutingMode, setModelRoutingMode] = useState<TenantModelRoutingMode>("auto");
+  const [litellmModelName, setLiteLLMModelName] = useState("gpt-4o-mini");
+  const [litellmAPIBase, setLiteLLMAPIBase] = useState("");
+  const [litellmFallbacks, setLiteLLMFallbacks] = useState("");
+  const [litellmAllowedModels, setLiteLLMAllowedModels] = useState("");
+  const [cliOrderPreset, setCLIOrderPreset] = useState<CLIOrderPreset>("claude-codex");
   const [form, setForm] = useState<CreateTenantInput>({
     display_name: "",
     owner_email: "",
@@ -189,10 +225,28 @@ export function NewTenant() {
       subdomainRef.current?.focus();
       return;
     }
+    const modelRouting: CreateTenantInput["model_routing"] =
+      modelRoutingMode === "litellm"
+        ? {
+            mode: "litellm",
+            litellm: {
+              model_name: litellmModelName.trim() || undefined,
+              api_base: litellmAPIBase.trim() || undefined,
+              fallbacks: splitModelList(litellmFallbacks),
+              allowed_models: splitModelList(litellmAllowedModels),
+            },
+          }
+        : modelRoutingMode === "cli"
+          ? {
+              mode: "cli",
+              cli: { order: cliOrderFromPreset(cliOrderPreset) },
+            }
+          : { mode: "auto" };
     m.mutate({
       ...form,
       tenant_type: tenantType,
       owner_email: needsOwnerEmail ? form.owner_email : "",
+      model_routing: modelRouting,
     });
   };
 
@@ -377,41 +431,126 @@ export function NewTenant() {
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pt-3">
-                  <div className="grid gap-4 rounded-lg border bg-muted/20 p-4 md:grid-cols-3">
-                    <Field>
-                      <FieldLabel htmlFor="budget">Limite mensal (USD)</FieldLabel>
-                      <Input
-                        id="budget"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={form.monthly_budget_usd ?? ""}
-                        onChange={(e) => setForm({ ...form, monthly_budget_usd: e.target.value === "" ? undefined : Number(e.target.value) })}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="mem">Memória MB</FieldLabel>
-                      <Input
-                        id="mem"
-                        type="number"
-                        min="128"
-                        max="8192"
-                        value={form.mem_limit_mb ?? 512}
-                        onChange={(e) => setForm({ ...form, mem_limit_mb: Number(e.target.value) })}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="cpu">Uso de CPU</FieldLabel>
-                      <Input
-                        id="cpu"
-                        type="number"
-                        step="0.1"
-                        min="0.1"
-                        max="8"
-                        value={form.cpu_quota ?? 0.5}
-                        onChange={(e) => setForm({ ...form, cpu_quota: Number(e.target.value) })}
-                      />
-                    </Field>
+                  <div className="flex flex-col gap-4 rounded-lg border bg-muted/20 p-4">
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <Field>
+                        <FieldLabel htmlFor="budget">Limite mensal (USD)</FieldLabel>
+                        <Input
+                          id="budget"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={form.monthly_budget_usd ?? ""}
+                          onChange={(e) => setForm({ ...form, monthly_budget_usd: e.target.value === "" ? undefined : Number(e.target.value) })}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="mem">Memória MB</FieldLabel>
+                        <Input
+                          id="mem"
+                          type="number"
+                          min="128"
+                          max="8192"
+                          value={form.mem_limit_mb ?? 512}
+                          onChange={(e) => setForm({ ...form, mem_limit_mb: Number(e.target.value) })}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="cpu">Uso de CPU</FieldLabel>
+                        <Input
+                          id="cpu"
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          max="8"
+                          value={form.cpu_quota ?? 0.5}
+                          onChange={(e) => setForm({ ...form, cpu_quota: Number(e.target.value) })}
+                        />
+                      </Field>
+                    </div>
+
+                    <div className="grid gap-4 border-t pt-4 md:grid-cols-3">
+                      <Field>
+                        <FieldLabel>Roteamento de modelo</FieldLabel>
+                        <Select
+                          value={modelRoutingMode}
+                          onValueChange={(value) => setModelRoutingMode(value as TenantModelRoutingMode)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">Automático</SelectItem>
+                            <SelectItem value="litellm">LiteLLM</SelectItem>
+                            <SelectItem value="cli">CLIs compartilhados</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FieldDescription>Define a origem da chave e a cadeia principal do tenant.</FieldDescription>
+                      </Field>
+
+                      {modelRoutingMode === "cli" ? (
+                        <Field>
+                          <FieldLabel>Ordem dos CLIs</FieldLabel>
+                          <Select
+                            value={cliOrderPreset}
+                            onValueChange={(value) => setCLIOrderPreset(value as CLIOrderPreset)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="claude-codex">Claude CLI → Codex CLI</SelectItem>
+                              <SelectItem value="codex-claude">Codex CLI → Claude CLI</SelectItem>
+                              <SelectItem value="claude">Somente Claude CLI</SelectItem>
+                              <SelectItem value="codex">Somente Codex CLI</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FieldDescription>O backend valida se o auth escolhido existe no host.</FieldDescription>
+                        </Field>
+                      ) : null}
+
+                      {modelRoutingMode === "litellm" ? (
+                        <>
+                          <Field>
+                            <FieldLabel htmlFor="litellm-model">Modelo principal LiteLLM</FieldLabel>
+                            <Input
+                              id="litellm-model"
+                              value={litellmModelName}
+                              onChange={(e) => setLiteLLMModelName(e.target.value)}
+                              placeholder="gpt-4o-mini"
+                            />
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="litellm-api-base">API base no tenant</FieldLabel>
+                            <Input
+                              id="litellm-api-base"
+                              value={litellmAPIBase}
+                              onChange={(e) => setLiteLLMAPIBase(e.target.value)}
+                              placeholder="Usar LITELLM_URL"
+                            />
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="litellm-fallbacks">Fallbacks</FieldLabel>
+                            <Textarea
+                              id="litellm-fallbacks"
+                              value={litellmFallbacks}
+                              onChange={(e) => setLiteLLMFallbacks(e.target.value)}
+                              placeholder={"claude-haiku-4-5\ndeepseek-chat"}
+                            />
+                            <FieldDescription>Um por linha, na ordem de tentativa.</FieldDescription>
+                          </Field>
+                          <Field className="md:col-span-2">
+                            <FieldLabel htmlFor="litellm-allowed">Modelos liberados na chave</FieldLabel>
+                            <Textarea
+                              id="litellm-allowed"
+                              value={litellmAllowedModels}
+                              onChange={(e) => setLiteLLMAllowedModels(e.target.value)}
+                              placeholder="Vazio = principal + fallbacks"
+                            />
+                          </Field>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
                 </CollapsibleContent>
               </Collapsible>
