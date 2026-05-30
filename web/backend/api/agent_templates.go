@@ -225,8 +225,8 @@ type agentTemplateApplyResponse struct {
 }
 
 const (
-	agentTemplateDefaultMaxTokens     = 8192
-	agentTemplateMinContextWindow     = 131072
+	agentTemplateDefaultMaxTokens      = 8192
+	agentTemplateMinContextWindow      = 131072
 	agentTemplateSummarizeMsgThreshold = 20
 	agentTemplateSummarizeTokenPercent = 75
 )
@@ -1244,69 +1244,105 @@ func (h *Handler) handleApplyAgentTemplate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	res, status, err := h.applyAgentDefinition(&req)
+	if err != nil {
+		writeJSONError(w, status, err.Error())
+		return
+	}
+	if res.Warning != "" {
+		w.Header().Set("X-Picoclaw-Warning", res.Warning)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(agentTemplateApplyResponse{
+		Status:       "applied",
+		AgentID:      res.AgentID,
+		Workspace:    res.Workspace,
+		AgentPath:    res.AgentPath,
+		SoulPath:     res.SoulPath,
+		BehaviorPath: res.BehaviorPath,
+		Reload:       res.Reload,
+	})
+}
+
+// applyAgentResult is the outcome of applyAgentDefinition.
+type applyAgentResult struct {
+	AgentID      string
+	Workspace    string
+	AgentPath    string
+	SoulPath     string
+	BehaviorPath string
+	Reload       string
+	// Warning carries a non-fatal issue (e.g. the agent_config round-trip file
+	// failed to write) — the rendered runtime files already succeeded.
+	Warning string
+}
+
+// applyAgentDefinition is the reusable core of the agent-template apply flow,
+// shared by the HTTP editor (handleApplyAgentTemplate) and the assistant
+// agent's configure-attendant tool. It assumes req is already normalized
+// (normalizeDashboardAgentID) and validated (validateAgentTemplateRequest).
+//
+// CALLER AUTHORIZATION IS THE CALLER'S RESPONSIBILITY: the HTTP editor is
+// dashboard-gated; an agent-initiated caller must verify
+// RoleConfig.Assistant.CanEditAgents (and target allow-list) before calling.
+//
+// Returns (result, httpStatus, err): on success status is 0 and err is nil; on
+// failure status is the HTTP status the HTTP handler should surface (400 for
+// request problems surfaced after config load, 500 for internal failures).
+func (h *Handler) applyAgentDefinition(req *agentTemplateApplyRequest) (*applyAgentResult, int, error) {
 	h.agentTemplateMu.Lock()
 	defer h.agentTemplateMu.Unlock()
 
 	cfg, err := config.LoadConfig(h.configPath)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
-		return
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to load config: %w", err)
 	}
 	configChanged := ensureAgentTemplateRuntimeDefaults(&cfg.Agents.Defaults)
-	if err := normalizeTemplateRequestSkills(&req, availableTemplateSkillNames(cfg)); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return
+	if err := normalizeTemplateRequestSkills(req, availableTemplateSkillNames(cfg)); err != nil {
+		return nil, http.StatusBadRequest, err
 	}
 
-	workspace, agentConfigChanged := ensureAgentEntryForTemplate(cfg, agentID, &req)
+	workspace, agentConfigChanged := ensureAgentEntryForTemplate(cfg, req.AgentID, req)
 	configChanged = configChanged || agentConfigChanged
 	if workspace == "" {
-		writeJSONError(w, http.StatusInternalServerError, "workspace path is not configured")
-		return
+		return nil, http.StatusInternalServerError, errors.New("workspace path is not configured")
 	}
 
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to ensure workspace directory: %v", err))
-		return
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to ensure workspace directory: %w", err)
 	}
 
-	agentMD, err := renderAgentMarkdown(&req)
+	agentMD, err := renderAgentMarkdown(req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to render AGENT.md: %v", err))
-		return
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to render AGENT.md: %w", err)
 	}
 
-	soulMD, err := renderSoulMarkdown(&req)
+	soulMD, err := renderSoulMarkdown(req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to render SOUL.md: %v", err))
-		return
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to render SOUL.md: %w", err)
 	}
 
 	agentPath := filepath.Join(workspace, "AGENT.md")
 	soulPath := filepath.Join(workspace, "SOUL.md")
 
 	if err := backupIfExists(agentPath); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to back up AGENT.md: %v", err))
-		return
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to back up AGENT.md: %w", err)
 	}
 	if err := backupIfExists(soulPath); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to back up SOUL.md: %v", err))
-		return
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to back up SOUL.md: %w", err)
 	}
 
 	if err := os.WriteFile(agentPath, []byte(agentMD), 0o644); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to write AGENT.md: %v", err))
-		return
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to write AGENT.md: %w", err)
 	}
 	if err := os.WriteFile(soulPath, []byte(soulMD), 0o644); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to write SOUL.md: %v", err))
-		return
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to write SOUL.md: %w", err)
 	}
 
 	behaviorPath := filepath.Join(workspace, "behavior.json")
 	if err := backupIfExists(behaviorPath); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to back up behavior.json: %v", err))
-		return
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to back up behavior.json: %w", err)
 	}
 	snapshot := behaviorRuntimeSnapshot{
 		agentTemplateBehavior: req.Behavior,
@@ -1314,12 +1350,18 @@ func (h *Handler) handleApplyAgentTemplate(w http.ResponseWriter, r *http.Reques
 	}
 	behaviorJSON, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to encode behavior.json: %v", err))
-		return
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to encode behavior.json: %w", err)
 	}
 	if err := os.WriteFile(behaviorPath, behaviorJSON, 0o644); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to write behavior.json: %v", err))
-		return
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to write behavior.json: %w", err)
+	}
+
+	result := &applyAgentResult{
+		AgentID:      req.AgentID,
+		Workspace:    workspace,
+		AgentPath:    agentPath,
+		SoulPath:     soulPath,
+		BehaviorPath: behaviorPath,
 	}
 
 	// Persist the full apply payload so the agent editor page can reopen and
@@ -1327,21 +1369,20 @@ func (h *Handler) handleApplyAgentTemplate(w http.ResponseWriter, r *http.Reques
 	// into the rendered markdown (professionals, products, schedule, etc.).
 	// Best-effort: rendered files are already the runtime source of truth, so
 	// a failure here should not fail the apply call.
-	if err := saveAgentConfig(workspace, &req); err != nil {
-		w.Header().Set("X-Picoclaw-Warning", fmt.Sprintf("failed to save agent_config: %v", err))
+	if err := saveAgentConfig(workspace, req); err != nil {
+		result.Warning = fmt.Sprintf("failed to save agent_config: %v", err)
 	}
 
 	// Persist active template ID for the main agent and agents.list metadata for
 	// non-main agents. Unlike the editor round-trip file, this config write is
 	// required for newly created agents to be visible to the runtime registry.
-	if agentID == routing.DefaultAgentID && cfg.Agents.Defaults.ActiveTemplateID != req.TemplateID {
+	if req.AgentID == routing.DefaultAgentID && cfg.Agents.Defaults.ActiveTemplateID != req.TemplateID {
 		cfg.Agents.Defaults.ActiveTemplateID = req.TemplateID
 		configChanged = true
 	}
 	if configChanged {
 		if err := config.SaveConfig(h.configPath, cfg); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to save agent registry config: %v", err))
-			return
+			return nil, http.StatusInternalServerError, fmt.Errorf("failed to save agent registry config: %w", err)
 		}
 	}
 
@@ -1349,18 +1390,8 @@ func (h *Handler) handleApplyAgentTemplate(w http.ResponseWriter, r *http.Reques
 	// tool allowlist) are picked up without restarting the process. Without
 	// this, AGENT.md body changes apply on the next turn (mtime cache) but
 	// the agent instance keeps the previous model/skills selection.
-	reloadStatus := requestGatewayReload()
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(agentTemplateApplyResponse{
-		Status:       "applied",
-		AgentID:      agentID,
-		Workspace:    workspace,
-		AgentPath:    agentPath,
-		SoulPath:     soulPath,
-		BehaviorPath: behaviorPath,
-		Reload:       reloadStatus,
-	})
+	result.Reload = requestGatewayReload()
+	return result, 0, nil
 }
 
 // requestGatewayReload posts to the local gateway's /reload endpoint so
