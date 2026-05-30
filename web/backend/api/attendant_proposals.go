@@ -231,7 +231,7 @@ func (h *Handler) handleCreateAttendantProposal(w http.ResponseWriter, r *http.R
 		Title:     "Mudança proposta no atendente",
 		Body:      summary,
 		AgentID:   p.ProposedBy,
-		CTAURL:    "/agent/proposals/" + p.ID,
+		CTAURL:    "/agent/proposals",
 		CTALabel:  "Revisar",
 		CreatedAt: time.Now().UTC(),
 	})
