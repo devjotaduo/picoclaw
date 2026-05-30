@@ -561,6 +561,38 @@ func (p *Provisioner) applySaaSModelRouting(
 	}
 }
 
+func (p *Provisioner) ApplyModelRouting(ctx context.Context, t *store.Tenant, routing *ModelRoutingConfig) error {
+	if p == nil {
+		return fmt.Errorf("provisioner is nil")
+	}
+	if t == nil {
+		return fmt.Errorf("tenant is nil")
+	}
+	hadLiteLLMKey := t.LiteLLMKeyID != nil && strings.TrimSpace(*t.LiteLLMKeyID) != ""
+	if hadLiteLLMKey && p.LiteLLM != nil {
+		if err := p.LiteLLM.DeleteKey(ctx, t.ID); err != nil {
+			return fmt.Errorf("delete existing litellm key: %w", err)
+		}
+	}
+	if hadLiteLLMKey && p.Tenants != nil {
+		if err := p.Tenants.ClearLiteLLMKey(ctx, t.ID); err != nil {
+			return fmt.Errorf("clear existing litellm key: %w", err)
+		}
+		t.LiteLLMKeyID = nil
+		t.LiteLLMKeyHash = nil
+	}
+	createdKey, err := p.applySaaSModelRouting(ctx, t, routing)
+	if err != nil {
+		return err
+	}
+	if !createdKey && p.Tenants != nil {
+		if err := p.Tenants.ClearLiteLLMKey(ctx, t.ID); err != nil {
+			return fmt.Errorf("clear litellm key: %w", err)
+		}
+	}
+	return nil
+}
+
 func (p *Provisioner) applySaaSCLIModelRouting(t *store.Tenant, order []string) error {
 	if needsProvider(order, "codex-cli") {
 		codexDir, err := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)

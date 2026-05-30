@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { splitModelList } from "@/lib/model-routing";
 import { cn } from "@/lib/utils";
 
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -114,18 +115,6 @@ function cliOrderFromPreset(value: CLIOrderPreset): TenantCLIProvider[] {
     default:
       return ["claude-cli", "codex-cli"];
   }
-}
-
-function splitModelList(value: string): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const part of value.split(/[\n,]/)) {
-    const item = part.trim();
-    if (!item || seen.has(item)) continue;
-    seen.add(item);
-    out.push(item);
-  }
-  return out;
 }
 
 export function NewTenant() {

@@ -100,6 +100,16 @@ func (c *Client) DeleteKey(ctx context.Context, tenantID string) error {
 	return c.do(ctx, http.MethodPost, "/key/delete", body, nil)
 }
 
+func (c *Client) TestConnection(ctx context.Context) error {
+	if strings.TrimSpace(c.baseURL) == "" {
+		return errors.New("litellm: base URL not configured")
+	}
+	if strings.TrimSpace(c.masterKey) == "" {
+		return errors.New("litellm: master key not configured")
+	}
+	return c.do(ctx, http.MethodGet, "/models", nil, nil)
+}
+
 // SpendRecord is one row from /spend/logs.
 type SpendRecord struct {
 	RequestID        string    `json:"request_id"`

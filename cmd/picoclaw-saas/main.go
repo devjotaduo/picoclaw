@@ -51,6 +51,16 @@ func run() error {
 	defer dk.Close()
 
 	var llm *litellm.Client
+	secretsKey, secretKeyErr := api.ResolveSaaSSecretsEncryptionKey(cfg)
+	if secretKeyErr != nil {
+		log.Printf("WARN: SaaS secrets encryption key invalid: %v", secretKeyErr)
+	}
+	if effective, err := api.LoadEffectiveLiteLLMConfig(ctx, cfg, &store.PlatformSettingsStore{DB: db}, secretsKey); err != nil {
+		log.Printf("WARN: LiteLLM platform settings unavailable: %v (falling back to env)", err)
+	} else {
+		cfg.LiteLLMURL = effective.URL
+		cfg.LiteLLMMasterKey = effective.MasterKey
+	}
 	if cfg.LiteLLMURL != "" && cfg.LiteLLMMasterKey != "" {
 		llm = litellm.NewClient(cfg.LiteLLMURL, cfg.LiteLLMMasterKey)
 	} else {

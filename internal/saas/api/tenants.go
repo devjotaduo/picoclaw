@@ -247,6 +247,10 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		"tenant_id": out.TenantID,
 		"url":       out.URL,
 	}
+	if err := h.persistTenantModelRouting(r.Context(), out.TenantID, modelRouting); err != nil {
+		log.Printf("tenant create: save model routing failed for tenant %s: %v", out.TenantID, err)
+		resp["warning"] = "Cliente criado, mas não foi possível salvar o roteamento de modelo no painel."
+	}
 
 	// Public tenants have no human owner — skip user/membership creation,
 	// credentials email, and CRM contact. The ops sentinel email is just an

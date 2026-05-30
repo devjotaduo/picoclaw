@@ -243,6 +243,19 @@ export async function recreateTenant(id: string) {
   return api<void>(`/api/v1/tenants/${encodeURIComponent(id)}/recreate`, { method: "POST" });
 }
 
+export type TenantModelRouting = TenantModelRoutingInput;
+
+export async function getTenantModelRouting(id: string) {
+  return api<TenantModelRouting>(`/api/v1/tenants/${encodeURIComponent(id)}/model-routing`);
+}
+
+export async function updateTenantModelRouting(id: string, input: TenantModelRoutingInput) {
+  return api<TenantModelRouting>(`/api/v1/tenants/${encodeURIComponent(id)}/model-routing`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
 // Clone provisions a fresh tenant whose home/ subtree is a raw copy of the
 // source tenant's volume. All secrets / dashboard password / sessions
 // carry over — the new tenant is functionally a twin until the operator

@@ -279,6 +279,12 @@ func (s *TenantStore) SetLiteLLMKey(ctx context.Context, id, keyID, keyHash stri
 	return err
 }
 
+func (s *TenantStore) ClearLiteLLMKey(ctx context.Context, id string) error {
+	const q = `UPDATE tenants SET litellm_key_id = NULL, litellm_key_hash = NULL WHERE id = $1`
+	_, err := s.DB.Pool.Exec(ctx, q, id)
+	return err
+}
+
 // SetWorkspaceApplied records which workspace the tenant currently runs from.
 // Provisioner writes this at create time; the future "Re-apply workspace"
 // admin action will rewrite both columns when the operator pushes a new
