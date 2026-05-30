@@ -189,8 +189,9 @@ docker start jotaduo-wa
 ```
 
 **Backup**: `whatsapp/store.db` é insubstituível — perder = re-pareamento
-com o celular do Jotaduo. Incluir no backup R2 diário (TODO operacional;
-hoje não está coberto pelo backup script).
+com o celular do Jotaduo. O backup R2 diário cobre
+`/srv/picoclaw/jotaduo-wa` pelo script
+`scripts/backups/picoclaw-r2-backup.sh`.
 
 `routing.db` é recuperável — se perdida, o primeiro outbound de cada
 tenant publico reregistra naturalmente.
@@ -265,7 +266,8 @@ nenhuma rota (Catarina nunca mandou mensagem pra esse número antes).
   **não pode** ser usado no celular do dono pro dia-a-dia simultaneamente.
   Pareamento como "aparelho conectado" coexiste, mas se o dono logar com
   WhatsApp Web/Desktop ou trocar de celular, o sidecar perde a conexão.
-- **Backup do store.db não automatizado** (TODO ops). Perda = re-pareamento
+- **Backup do store.db é R2 diário**, mas restore precisa ser testado
+  antes de trocar o estado vivo. Perda sem snapshot recente = re-pareamento
   manual via QR.
 - **Deploy de sidecar deve ser via GHA + timer** — o VPS atual puxa
   `ghcr.io/devjotaduo/picoclaw-jotaduo-wa:main`, retaga para

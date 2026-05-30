@@ -36,6 +36,11 @@ chmod 0700 "$SECRETS_DIR"
 mkdir -p /var/lib/picoclaw-pg-dumps
 chmod 0700 /var/lib/picoclaw-pg-dumps
 
+# Institutional WhatsApp sidecar state. The directory is safe to snapshot
+# empty on hosts that are not paired yet, and required once jotaduo-wa is live.
+mkdir -p /srv/picoclaw/jotaduo-wa
+chmod 0700 /srv/picoclaw/jotaduo-wa
+
 if [ ! -f "$ENV_FILE" ]; then
   echo "==> seeding $ENV_FILE from template (you MUST edit it before the backup will run)"
   install -m 0600 "$SRC_DIR/r2-backup.env.example" "$ENV_FILE"

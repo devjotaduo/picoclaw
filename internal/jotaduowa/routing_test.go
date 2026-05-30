@@ -33,6 +33,7 @@ func TestRoutingRoundTrip(t *testing.T) {
 		{"5511999998888", "tenant-a"},
 		{"5511777776666", "tenant-a"},
 		{"5511777776666@s.whatsapp.net", "tenant-a"},
+		{"5511777776666:42@s.whatsapp.net", "tenant-a"},
 		{"5521555554444", "tenant-b"},
 		{"+5521555554444", "tenant-b"},
 		{"5599998887777", ""}, // unmapped
@@ -102,5 +103,27 @@ func TestRoutingRegisterRebind(t *testing.T) {
 	}
 	if got != "tenant-new" {
 		t.Errorf("rebind should win: got %q, want tenant-new", got)
+	}
+}
+
+func TestRoutingLookupNormalizesLIDDeviceSuffix(t *testing.T) {
+	dir := t.TempDir()
+	r, err := OpenRouting(dir)
+	if err != nil {
+		t.Fatalf("OpenRouting: %v", err)
+	}
+	t.Cleanup(func() { _ = r.Close() })
+	ctx := context.Background()
+
+	if registerErr := r.Register(ctx, "39213068222606@lid", "tenant-public"); registerErr != nil {
+		t.Fatalf("Register lid: %v", registerErr)
+	}
+
+	got, err := r.Lookup(ctx, "39213068222606:57@lid")
+	if err != nil {
+		t.Fatalf("Lookup lid with device suffix: %v", err)
+	}
+	if got != "tenant-public" {
+		t.Fatalf("Lookup lid with device suffix = %q, want tenant-public", got)
 	}
 }

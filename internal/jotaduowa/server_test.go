@@ -184,6 +184,7 @@ func TestHandleSendRegistersResolvedRouteAliases(t *testing.T) {
 		"5511999998888@s.whatsapp.net",
 		"39213068222606",
 		"39213068222606@lid",
+		"39213068222606:57@lid",
 	} {
 		got, err := r.Lookup(req.Context(), jid)
 		if err != nil {
