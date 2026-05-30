@@ -466,9 +466,9 @@ func (p *Provisioner) runProvision(
 		// 3. Model routing + placeholder substitution. The SaaS admin may
 		// explicitly choose LiteLLM or CLI order in the create flow. Nil keeps
 		// legacy auto mode: shared CLI when auth is configured, otherwise LiteLLM.
-		createdKey, err := p.applySaaSModelRouting(ctx, t, modelRouting)
-		if err != nil {
-			return err
+		createdKey, routingErr := p.applySaaSModelRouting(ctx, t, modelRouting)
+		if routingErr != nil {
+			return routingErr
 		}
 		litellmKeyCreated = createdKey
 

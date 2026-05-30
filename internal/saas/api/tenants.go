@@ -247,8 +247,8 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		"tenant_id": out.TenantID,
 		"url":       out.URL,
 	}
-	if err := h.persistTenantModelRouting(r.Context(), out.TenantID, modelRouting); err != nil {
-		log.Printf("tenant create: save model routing failed for tenant %s: %v", out.TenantID, err)
+	if persistErr := h.persistTenantModelRouting(r.Context(), out.TenantID, modelRouting); persistErr != nil {
+		log.Printf("tenant create: save model routing failed for tenant %s: %v", out.TenantID, persistErr)
 		resp["warning"] = "Cliente criado, mas não foi possível salvar o roteamento de modelo no painel."
 	}
 

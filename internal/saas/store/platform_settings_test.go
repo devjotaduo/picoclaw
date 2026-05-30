@@ -23,8 +23,13 @@ func TestPlatformSettingsStore_UpsertAndGet(t *testing.T) {
 		t.Fatalf("unexpected setting: %+v", got)
 	}
 
-	if err := settings.Upsert(ctx, store.PlatformSettingLiteLLMMasterKey, "ciphertext", true); err != nil {
-		t.Fatal(err)
+	if upsertErr := settings.Upsert(
+		ctx,
+		store.PlatformSettingLiteLLMMasterKey,
+		"ciphertext",
+		true,
+	); upsertErr != nil {
+		t.Fatal(upsertErr)
 	}
 	secret, err := settings.Get(ctx, store.PlatformSettingLiteLLMMasterKey)
 	if err != nil {
