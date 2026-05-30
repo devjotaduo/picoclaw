@@ -134,7 +134,11 @@ func (h *Handler) handlePutPlatformLiteLLM(w http.ResponseWriter, r *http.Reques
 	url := strings.TrimSpace(req.URL)
 	if strings.TrimSpace(req.MasterKey) != "" {
 		if len(h.SecretsEncKey) == 0 {
-			writeError(w, http.StatusServiceUnavailable, "PICOCLAW_SAAS_SECRETS_ENCRYPTION_KEY or PICOCLAW_SAAS_MCP_ENCRYPTION_KEY is required to store secrets")
+			writeError(
+				w,
+				http.StatusServiceUnavailable,
+				"PICOCLAW_SAAS_SECRETS_ENCRYPTION_KEY or PICOCLAW_SAAS_MCP_ENCRYPTION_KEY is required to store secrets",
+			)
 			return
 		}
 	}

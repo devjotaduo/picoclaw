@@ -329,7 +329,15 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		return nil, fmt.Errorf("insert tenant: %w", err)
 	}
 
-	if err := p.runProvision(ctx, t, password, ws, in.SkipDashboardPassword, in.UIProfile, in.ModelRouting); err != nil {
+	if err := p.runProvision(
+		ctx,
+		t,
+		password,
+		ws,
+		in.SkipDashboardPassword,
+		in.UIProfile,
+		in.ModelRouting,
+	); err != nil {
 		msg := err.Error()
 		_ = p.Tenants.SetStatus(ctx, id, store.StatusError, &msg)
 		return nil, err
@@ -659,7 +667,13 @@ func (p *Provisioner) applySaaSLiteLLMModelRouting(
 	if err := SubstituteRedactedModelKeys(t.VolumePath, out.Key); err != nil {
 		return true, fmt.Errorf("substitute redacted model keys: %w", err)
 	}
-	if err := ApplySaaSLiteLLMModelRoutingWithFallbacks(t.VolumePath, modelName, fallbacks, apiBase, out.Key); err != nil {
+	if err := ApplySaaSLiteLLMModelRoutingWithFallbacks(
+		t.VolumePath,
+		modelName,
+		fallbacks,
+		apiBase,
+		out.Key,
+	); err != nil {
 		return true, fmt.Errorf("apply saas litellm model routing: %w", err)
 	}
 	return true, nil

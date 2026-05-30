@@ -765,7 +765,11 @@ func ApplySaaSLiteLLMModelRouting(destDir, modelName, litellmURL, litellmKey str
 	return ApplySaaSLiteLLMModelRoutingWithFallbacks(destDir, modelName, nil, litellmURL, litellmKey)
 }
 
-func ApplySaaSLiteLLMModelRoutingWithFallbacks(destDir, modelName string, fallbackModels []string, litellmURL, litellmKey string) error {
+func ApplySaaSLiteLLMModelRoutingWithFallbacks(
+	destDir, modelName string,
+	fallbackModels []string,
+	litellmURL, litellmKey string,
+) error {
 	modelName = strings.TrimSpace(modelName)
 	litellmURL = strings.TrimRight(strings.TrimSpace(litellmURL), "/")
 	litellmKey = strings.TrimSpace(litellmKey)

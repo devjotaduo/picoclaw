@@ -271,7 +271,8 @@ func TestApplySaaSLiteLLMModelRoutingWithFallbacksMaterializesOrder(t *testing.T
 		t.Fatalf("defaults not routed to LiteLLM primary: %#v", defaults)
 	}
 	defaultFallbacks := defaults["model_fallbacks"].([]any)
-	if len(defaultFallbacks) != 2 || defaultFallbacks[0] != "claude-haiku-4-5" || defaultFallbacks[1] != "deepseek-chat" {
+	if len(defaultFallbacks) != 2 || defaultFallbacks[0] != "claude-haiku-4-5" ||
+		defaultFallbacks[1] != "deepseek-chat" {
 		t.Fatalf("defaults model_fallbacks = %#v", defaultFallbacks)
 	}
 
@@ -290,7 +291,8 @@ func TestApplySaaSLiteLLMModelRoutingWithFallbacksMaterializesOrder(t *testing.T
 		}
 	}
 	primaryFallbacks := models[0].(map[string]any)["fallbacks"].([]any)
-	if len(primaryFallbacks) != 2 || primaryFallbacks[0] != "claude-haiku-4-5" || primaryFallbacks[1] != "deepseek-chat" {
+	if len(primaryFallbacks) != 2 || primaryFallbacks[0] != "claude-haiku-4-5" ||
+		primaryFallbacks[1] != "deepseek-chat" {
 		t.Fatalf("primary fallbacks = %#v", primaryFallbacks)
 	}
 }

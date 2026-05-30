@@ -151,7 +151,11 @@ func (h *Handler) handlePutTenantModelRouting(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, tenantModelRoutingResponseFromStore(tenantModelRoutingStoreRow(id, cfg)))
 }
 
-func (h *Handler) persistTenantModelRouting(ctx context.Context, tenantID string, cfg *tenant.ModelRoutingConfig) error {
+func (h *Handler) persistTenantModelRouting(
+	ctx context.Context,
+	tenantID string,
+	cfg *tenant.ModelRoutingConfig,
+) error {
 	if h == nil || h.ModelRouting == nil {
 		return nil
 	}

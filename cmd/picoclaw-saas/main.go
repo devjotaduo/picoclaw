@@ -55,7 +55,12 @@ func run() error {
 	if secretKeyErr != nil {
 		log.Printf("WARN: SaaS secrets encryption key invalid: %v", secretKeyErr)
 	}
-	if effective, err := api.LoadEffectiveLiteLLMConfig(ctx, cfg, &store.PlatformSettingsStore{DB: db}, secretsKey); err != nil {
+	if effective, err := api.LoadEffectiveLiteLLMConfig(
+		ctx,
+		cfg,
+		&store.PlatformSettingsStore{DB: db},
+		secretsKey,
+	); err != nil {
 		log.Printf("WARN: LiteLLM platform settings unavailable: %v (falling back to env)", err)
 	} else {
 		cfg.LiteLLMURL = effective.URL
@@ -93,7 +98,14 @@ func run() error {
 	}
 	go rec.Run(ctx)
 
-	alertCfg := alert.ConfigFromEnv(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.AlertFrom, cfg.AlertTo)
+	alertCfg := alert.ConfigFromEnv(
+		cfg.SMTPHost,
+		cfg.SMTPPort,
+		cfg.SMTPUsername,
+		cfg.SMTPPassword,
+		cfg.AlertFrom,
+		cfg.AlertTo,
+	)
 	notifier := alert.New(alertCfg)
 	alertPoller := &alert.Poller{
 		DB:               db,

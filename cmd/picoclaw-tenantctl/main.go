@@ -102,7 +102,12 @@ func newProvisioner() (*tenant.Provisioner, func(), error) {
 	var llm *litellm.Client
 	secretsKey, secretKeyErr := api.ResolveSaaSSecretsEncryptionKey(cfg)
 	if secretKeyErr == nil {
-		if effective, err := api.LoadEffectiveLiteLLMConfig(ctx, cfg, &store.PlatformSettingsStore{DB: db}, secretsKey); err == nil {
+		if effective, err := api.LoadEffectiveLiteLLMConfig(
+			ctx,
+			cfg,
+			&store.PlatformSettingsStore{DB: db},
+			secretsKey,
+		); err == nil {
 			cfg.LiteLLMURL = effective.URL
 			cfg.LiteLLMMasterKey = effective.MasterKey
 		}
