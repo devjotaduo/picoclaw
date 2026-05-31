@@ -50,6 +50,10 @@ export type TenantModelRoutingInput = {
   };
   cli?: {
     order?: TenantCLIProvider[];
+    claude_model_name?: string;
+    claude_model?: string;
+    codex_model_name?: string;
+    codex_model?: string;
   };
 };
 

@@ -32,6 +32,10 @@ func tenantModelRoutingStoreRow(tenantID string, cfg *tenant.ModelRoutingConfig)
 		LiteLLMFallbacks:     cleanStringList(cfg.LiteLLM.Fallbacks),
 		LiteLLMAllowedModels: cleanStringList(cfg.LiteLLM.AllowedModels),
 		CLIOrder:             cleanStringList(cfg.CLI.Order),
+		CLIClaudeModelName:   strings.TrimSpace(cfg.CLI.ClaudeModelName),
+		CLIClaudeModel:       strings.TrimSpace(cfg.CLI.ClaudeModel),
+		CLICodexModelName:    strings.TrimSpace(cfg.CLI.CodexModelName),
+		CLICodexModel:        strings.TrimSpace(cfg.CLI.CodexModel),
 	}
 }
 
@@ -47,7 +51,13 @@ func tenantModelRoutingConfigFromStore(row *store.TenantModelRouting) *tenant.Mo
 			Fallbacks:     cleanStringList(row.LiteLLMFallbacks),
 			AllowedModels: cleanStringList(row.LiteLLMAllowedModels),
 		},
-		CLI: tenant.CLIModelRoutingConfig{Order: cleanStringList(row.CLIOrder)},
+		CLI: tenant.CLIModelRoutingConfig{
+			Order:           cleanStringList(row.CLIOrder),
+			ClaudeModelName: strings.TrimSpace(row.CLIClaudeModelName),
+			ClaudeModel:     strings.TrimSpace(row.CLIClaudeModel),
+			CodexModelName:  strings.TrimSpace(row.CLICodexModelName),
+			CodexModel:      strings.TrimSpace(row.CLICodexModel),
+		},
 	}
 }
 
@@ -64,7 +74,13 @@ func tenantModelRoutingResponseFromStore(row *store.TenantModelRouting) tenantMo
 			Fallbacks:     cfg.LiteLLM.Fallbacks,
 			AllowedModels: cfg.LiteLLM.AllowedModels,
 		},
-		CLI: createTenantCLIModelRoutingReq{Order: cfg.CLI.Order},
+		CLI: createTenantCLIModelRoutingReq{
+			Order:           cfg.CLI.Order,
+			ClaudeModelName: cfg.CLI.ClaudeModelName,
+			ClaudeModel:     cfg.CLI.ClaudeModel,
+			CodexModelName:  cfg.CLI.CodexModelName,
+			CodexModel:      cfg.CLI.CodexModel,
+		},
 	}
 }
 

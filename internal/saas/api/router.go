@@ -201,6 +201,9 @@ func (h *Handler) Routes() http.Handler {
 				r.Get("/platform/litellm", h.handleGetPlatformLiteLLM)
 				r.Put("/platform/litellm", h.handlePutPlatformLiteLLM)
 				r.Post("/platform/litellm/test", h.handleTestPlatformLiteLLM)
+				r.Get("/platform/litellm/models", h.handleListPlatformLiteLLMModels)
+				r.Post("/platform/litellm/models", h.handleCreatePlatformLiteLLMModel)
+				r.Delete("/platform/litellm/models/{modelID}", h.handleDeletePlatformLiteLLMModel)
 
 				// Shared claude-cli auth: rotate the operator's long-lived
 				// Claude token (from `claude setup-token`) that every

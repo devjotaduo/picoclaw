@@ -437,6 +437,53 @@ func TestApplySaaSCLIModelRoutingFromOrderSupportsCodexFirst(t *testing.T) {
 	}
 }
 
+func TestApplySaaSCLIModelRoutingFromConfigUsesCustomModels(t *testing.T) {
+	dst := t.TempDir()
+	path := writeTenantRoutingConfig(t, dst)
+
+	if err := ApplySaaSCLIModelRoutingFromConfig(dst, CLIModelRoutingConfig{
+		Order:       []string{"codex-cli", "claude-cli"},
+		CodexModel:  "gpt-5.3-codex",
+		ClaudeModel: "haiku",
+	}); err != nil {
+		t.Fatalf("ApplySaaSCLIModelRoutingFromConfig: %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	defaults := cfg["agents"].(map[string]any)["defaults"].(map[string]any)
+	if defaults["provider"] != "codex-cli" || defaults["model_name"] != "codex-cli-gpt-5-3-codex" {
+		t.Fatalf("defaults not routed to custom codex model: %#v", defaults)
+	}
+	defaultFallbacks := defaults["model_fallbacks"].([]any)
+	if len(defaultFallbacks) != 1 || defaultFallbacks[0] != "claude-cli-haiku" {
+		t.Fatalf("defaults model_fallbacks = %#v, want claude-cli-haiku", defaultFallbacks)
+	}
+
+	models := cfg["model_list"].([]any)
+	if len(models) != 2 {
+		t.Fatalf("model_list len = %d, want 2", len(models))
+	}
+	codex := models[0].(map[string]any)
+	if codex["model_name"] != "codex-cli-gpt-5-3-codex" ||
+		codex["provider"] != "codex-cli" ||
+		codex["model"] != "gpt-5.3-codex" {
+		t.Fatalf("custom codex-cli model not materialized: %#v", codex)
+	}
+	claude := models[1].(map[string]any)
+	if claude["model_name"] != "claude-cli-haiku" ||
+		claude["provider"] != "claude-cli" ||
+		claude["model"] != "haiku" {
+		t.Fatalf("custom claude-cli model not materialized: %#v", claude)
+	}
+}
+
 func TestApplySaaSCLIModelRoutingSupportsCodexOnly(t *testing.T) {
 	dst := t.TempDir()
 	path := writeTenantRoutingConfig(t, dst)

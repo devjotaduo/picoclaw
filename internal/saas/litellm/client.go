@@ -65,6 +65,42 @@ type generateKeyResp struct {
 	KeyAlias string `json:"key_alias"`
 }
 
+type ModelInfo struct {
+	ID                string `json:"id"`
+	ModelName         string `json:"model_name"`
+	Model             string `json:"model"`
+	Provider          string `json:"provider"`
+	Mode              string `json:"mode,omitempty"`
+	APIBaseConfigured bool   `json:"api_base_configured"`
+	APIKeyConfigured  bool   `json:"api_key_configured"`
+	DBModel           bool   `json:"db_model"`
+}
+
+type AddModelInput struct {
+	ModelName         string
+	Model             string
+	APIKey            string
+	APIBase           string
+	APIVersion        string
+	CustomLLMProvider string
+	RPM               *int
+	TPM               *int
+}
+
+type modelInfoResp struct {
+	Data []struct {
+		ModelName     string                 `json:"model_name"`
+		LiteLLMParams map[string]interface{} `json:"litellm_params"`
+		ModelInfo     map[string]interface{} `json:"model_info"`
+	} `json:"data"`
+}
+
+type addModelReq struct {
+	ModelName     string                 `json:"model_name"`
+	LiteLLMParams map[string]interface{} `json:"litellm_params"`
+	ModelInfo     map[string]interface{} `json:"model_info,omitempty"`
+}
+
 func (c *Client) GenerateKey(ctx context.Context, in GenerateKeyInput) (*GenerateKeyOutput, error) {
 	body := generateKeyReq{
 		UserID:   in.TenantID,
@@ -90,6 +126,84 @@ func (c *Client) GenerateKey(ctx context.Context, in GenerateKeyInput) (*Generat
 		UserID:   resp.UserID,
 		KeyAlias: resp.KeyAlias,
 	}, nil
+}
+
+func (c *Client) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	var resp modelInfoResp
+	if err := c.do(ctx, http.MethodGet, "/model/info", nil, &resp); err != nil {
+		return nil, err
+	}
+	out := make([]ModelInfo, 0, len(resp.Data))
+	for _, row := range resp.Data {
+		params := row.LiteLLMParams
+		info := row.ModelInfo
+		model := ModelInfo{
+			ModelName: strings.TrimSpace(row.ModelName),
+		}
+		if model.ModelName == "" {
+			model.ModelName = stringFromMap(info, "model_name")
+		}
+		model.ID = stringFromMap(info, "id")
+		model.Model = stringFromMap(params, "model")
+		model.Provider = firstNonEmpty(
+			stringFromMap(params, "custom_llm_provider"),
+			stringFromMap(info, "litellm_provider"),
+		)
+		model.Mode = stringFromMap(info, "mode")
+		model.DBModel = boolFromMap(info, "db_model")
+		model.APIBaseConfigured = strings.TrimSpace(stringFromMap(params, "api_base")) != ""
+		model.APIKeyConfigured = strings.TrimSpace(stringFromMap(params, "api_key")) != ""
+		out = append(out, model)
+	}
+	return out, nil
+}
+
+func (c *Client) AddModel(ctx context.Context, in AddModelInput) error {
+	modelName := strings.TrimSpace(in.ModelName)
+	model := strings.TrimSpace(in.Model)
+	if modelName == "" {
+		return errors.New("litellm: model_name is required")
+	}
+	if model == "" {
+		return errors.New("litellm: model is required")
+	}
+
+	params := map[string]interface{}{"model": model}
+	if value := strings.TrimSpace(in.APIKey); value != "" {
+		params["api_key"] = value
+	}
+	if value := strings.TrimSpace(in.APIBase); value != "" {
+		params["api_base"] = value
+	}
+	if value := strings.TrimSpace(in.APIVersion); value != "" {
+		params["api_version"] = value
+	}
+	if value := strings.TrimSpace(in.CustomLLMProvider); value != "" {
+		params["custom_llm_provider"] = value
+	}
+	if in.RPM != nil {
+		params["rpm"] = *in.RPM
+	}
+	if in.TPM != nil {
+		params["tpm"] = *in.TPM
+	}
+
+	body := addModelReq{
+		ModelName:     modelName,
+		LiteLLMParams: params,
+		ModelInfo: map[string]interface{}{
+			"managed_by": "picoclaw-saas-admin",
+		},
+	}
+	return c.do(ctx, http.MethodPost, "/model/new", body, nil)
+}
+
+func (c *Client) DeleteModel(ctx context.Context, modelID string) error {
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		return errors.New("litellm: model id is required")
+	}
+	return c.do(ctx, http.MethodPost, "/model/delete", map[string]string{"id": modelID}, nil)
 }
 
 // DeleteKey removes the virtual key identified by its key_alias (we always set
@@ -200,4 +314,45 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "...(+" + strconv.Itoa(len(s)-n) + ")"
+}
+
+func stringFromMap(m map[string]interface{}, key string) string {
+	if m == nil {
+		return ""
+	}
+	v, ok := m[key]
+	if !ok || v == nil {
+		return ""
+	}
+	switch typed := v.(type) {
+	case string:
+		return typed
+	default:
+		return fmt.Sprint(typed)
+	}
+}
+
+func boolFromMap(m map[string]interface{}, key string) bool {
+	if m == nil {
+		return false
+	}
+	v, ok := m[key]
+	if !ok || v == nil {
+		return false
+	}
+	switch typed := v.(type) {
+	case bool:
+		return typed
+	default:
+		return strings.EqualFold(fmt.Sprint(typed), "true")
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }

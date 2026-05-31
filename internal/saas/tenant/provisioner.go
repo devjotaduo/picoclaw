@@ -246,7 +246,11 @@ type LiteLLMModelRoutingConfig struct {
 }
 
 type CLIModelRoutingConfig struct {
-	Order []string
+	Order           []string
+	ClaudeModelName string
+	ClaudeModel     string
+	CodexModelName  string
+	CodexModel      string
 }
 
 // normalize applies CreateInput defaults and consistency rules. Currently
@@ -529,7 +533,7 @@ func (p *Provisioner) applySaaSModelRouting(
 	switch mode {
 	case "auto":
 		if order := p.availableSaaSCLIOrder(); len(order) > 0 {
-			if err := p.applySaaSCLIModelRouting(t, order); err != nil {
+			if err := p.applySaaSCLIModelRouting(t, CLIModelRoutingConfig{Order: order}); err != nil {
 				return false, err
 			}
 			return false, nil
@@ -541,21 +545,22 @@ func (p *Provisioner) applySaaSModelRouting(
 			ModelName: defaultSaaSLiteLLMModel,
 		}, false)
 	case "cli":
-		order := []string(nil)
+		cliCfg := CLIModelRoutingConfig{}
 		if routing != nil {
-			order = routing.CLI.Order
+			cliCfg = routing.CLI
 		}
-		if len(compactUniqueStrings(order)) == 0 {
-			order = p.availableSaaSCLIOrder()
+		if len(compactUniqueStrings(cliCfg.Order)) == 0 {
+			cliCfg.Order = p.availableSaaSCLIOrder()
 		}
-		if len(order) == 0 {
+		if len(cliCfg.Order) == 0 {
 			return false, fmt.Errorf("saas cli routing requested, but no shared CLI auth is configured")
 		}
-		availableOrder, err := p.validateSaaSCLIOrderAvailable(order)
+		availableOrder, err := p.validateSaaSCLIOrderAvailable(cliCfg.Order)
 		if err != nil {
 			return false, err
 		}
-		if err := p.applySaaSCLIModelRouting(t, availableOrder); err != nil {
+		cliCfg.Order = availableOrder
+		if err := p.applySaaSCLIModelRouting(t, cliCfg); err != nil {
 			return false, err
 		}
 		return false, nil
@@ -601,8 +606,8 @@ func (p *Provisioner) ApplyModelRouting(ctx context.Context, t *store.Tenant, ro
 	return nil
 }
 
-func (p *Provisioner) applySaaSCLIModelRouting(t *store.Tenant, order []string) error {
-	if needsProvider(order, "codex-cli") {
+func (p *Provisioner) applySaaSCLIModelRouting(t *store.Tenant, cfg CLIModelRoutingConfig) error {
+	if needsProvider(cfg.Order, "codex-cli") {
 		codexDir, err := resolveCodexCLIAuthDir(p.Cfg.TenantCodexCliAuthDir)
 		if err != nil {
 			return fmt.Errorf("resolve codex cli auth dir: %w", err)
@@ -616,7 +621,7 @@ func (p *Provisioner) applySaaSCLIModelRouting(t *store.Tenant, order []string) 
 	}); err != nil {
 		return fmt.Errorf("substitute placeholders: %w", err)
 	}
-	if err := ApplySaaSCLIModelRoutingFromOrder(t.VolumePath, order); err != nil {
+	if err := ApplySaaSCLIModelRoutingFromConfig(t.VolumePath, cfg); err != nil {
 		return fmt.Errorf("apply saas cli model routing: %w", err)
 	}
 	return nil

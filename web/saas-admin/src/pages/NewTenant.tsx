@@ -133,6 +133,8 @@ export function NewTenant() {
   const [litellmFallbacks, setLiteLLMFallbacks] = useState("");
   const [litellmAllowedModels, setLiteLLMAllowedModels] = useState("");
   const [cliOrderPreset, setCLIOrderPreset] = useState<CLIOrderPreset>("claude-codex");
+  const [claudeCLIModel, setClaudeCLIModel] = useState("sonnet");
+  const [codexCLIModel, setCodexCLIModel] = useState("codex-cli");
   const [form, setForm] = useState<CreateTenantInput>({
     display_name: "",
     owner_email: "",
@@ -228,7 +230,11 @@ export function NewTenant() {
         : modelRoutingMode === "cli"
           ? {
               mode: "cli",
-              cli: { order: cliOrderFromPreset(cliOrderPreset) },
+              cli: {
+                order: cliOrderFromPreset(cliOrderPreset),
+                claude_model: claudeCLIModel.trim() || undefined,
+                codex_model: codexCLIModel.trim() || undefined,
+              },
             }
           : { mode: "auto" };
     m.mutate({
@@ -478,24 +484,46 @@ export function NewTenant() {
                       </Field>
 
                       {modelRoutingMode === "cli" ? (
-                        <Field>
-                          <FieldLabel>Ordem dos CLIs</FieldLabel>
-                          <Select
-                            value={cliOrderPreset}
-                            onValueChange={(value) => setCLIOrderPreset(value as CLIOrderPreset)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="claude-codex">Claude CLI → Codex CLI</SelectItem>
-                              <SelectItem value="codex-claude">Codex CLI → Claude CLI</SelectItem>
-                              <SelectItem value="claude">Somente Claude CLI</SelectItem>
-                              <SelectItem value="codex">Somente Codex CLI</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FieldDescription>O backend valida se o auth escolhido existe no host.</FieldDescription>
-                        </Field>
+                        <>
+                          <Field>
+                            <FieldLabel>Ordem dos CLIs</FieldLabel>
+                            <Select
+                              value={cliOrderPreset}
+                              onValueChange={(value) => setCLIOrderPreset(value as CLIOrderPreset)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="claude-codex">Claude CLI → Codex CLI</SelectItem>
+                                <SelectItem value="codex-claude">Codex CLI → Claude CLI</SelectItem>
+                                <SelectItem value="claude">Somente Claude CLI</SelectItem>
+                                <SelectItem value="codex">Somente Codex CLI</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FieldDescription>O backend valida se o auth escolhido existe no host.</FieldDescription>
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="claude-cli-model">Modelo Claude CLI</FieldLabel>
+                            <Input
+                              id="claude-cli-model"
+                              value={claudeCLIModel}
+                              onChange={(e) => setClaudeCLIModel(e.target.value)}
+                              placeholder="sonnet"
+                            />
+                            <FieldDescription>Ex.: sonnet, haiku, opus ou claude-sonnet-4-5.</FieldDescription>
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="codex-cli-model">Modelo Codex CLI</FieldLabel>
+                            <Input
+                              id="codex-cli-model"
+                              value={codexCLIModel}
+                              onChange={(e) => setCodexCLIModel(e.target.value)}
+                              placeholder="codex-cli"
+                            />
+                            <FieldDescription>Use codex-cli para deixar o config.toml escolher; outro valor passa -m.</FieldDescription>
+                          </Field>
+                        </>
                       ) : null}
 
                       {modelRoutingMode === "litellm" ? (

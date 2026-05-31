@@ -59,7 +59,11 @@ type createTenantLiteLLMRoutingReq struct {
 }
 
 type createTenantCLIModelRoutingReq struct {
-	Order []string `json:"order,omitempty"`
+	Order           []string `json:"order,omitempty"`
+	ClaudeModelName string   `json:"claude_model_name,omitempty"`
+	ClaudeModel     string   `json:"claude_model,omitempty"`
+	CodexModelName  string   `json:"codex_model_name,omitempty"`
+	CodexModel      string   `json:"codex_model,omitempty"`
 }
 
 // resolveUIProfile maps the admin-facing tenant type to the runtime
@@ -110,7 +114,11 @@ func (req *createTenantModelRoutingReq) toTenantConfig() (*tenant.ModelRoutingCo
 			AllowedModels: cleanStringList(req.LiteLLM.AllowedModels),
 		},
 		CLI: tenant.CLIModelRoutingConfig{
-			Order: order,
+			Order:           order,
+			ClaudeModelName: strings.TrimSpace(req.CLI.ClaudeModelName),
+			ClaudeModel:     strings.TrimSpace(req.CLI.ClaudeModel),
+			CodexModelName:  strings.TrimSpace(req.CLI.CodexModelName),
+			CodexModel:      strings.TrimSpace(req.CLI.CodexModel),
 		},
 	}, nil
 }
