@@ -396,6 +396,22 @@ def op_mark_discovery_done(state: dict, payload: dict) -> dict:
     return state
 
 
+def op_discovery_close(state: dict, payload: dict) -> dict:
+    """Combina set_owner + mark_discovery_done numa escrita atômica.
+
+    É a operação que o discovery-close determinístico usa: a Sofia (que em
+    tenant publico roda como agente `main`, workspace raiz) grava UM arquivo
+    `state/discovery-close.request.json` com este payload, e tanto o caminho
+    inline (Messages API) quanto o cron `onboarding-discovery-close`
+    (claude-cli) rodam `state.py --payload-file <esse arquivo>`.
+
+    Idempotente: re-rodar com os mesmos dados só atualiza timestamps. Exige
+    email (via op_set_owner); segment/summary são opcionais."""
+    state = op_set_owner(state, payload)
+    state = op_mark_discovery_done(state, payload)
+    return state
+
+
 def op_mark_first_contact(state: dict, payload: dict) -> dict:
     """Catarina marks she sent the FIRST outreach WhatsApp to the lead.
 
@@ -507,6 +523,7 @@ OPERATIONS = {
     "init": op_init,
     "set_owner": op_set_owner,
     "mark_discovery_done": op_mark_discovery_done,
+    "discovery_close": op_discovery_close,
     "mark_bridge_attempt": op_mark_bridge_attempt,
     "mark_bridge_failed": op_mark_bridge_failed,
     "mark_first_contact": op_mark_first_contact,
