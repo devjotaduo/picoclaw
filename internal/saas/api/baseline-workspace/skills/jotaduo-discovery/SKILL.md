@@ -44,6 +44,13 @@ soa burocrático e vago. O dono não sabe o que vai ganhar.
 > pro seu caso e como a gente coloca pra rodar** — leva uns minutos.
 > Pra começar: qual o nome da empresa e o que vocês fazem?
 
+## Barreira de mensagens públicas
+
+Todas as instruções com `exec`, `delegate`, arquivos, estado, memória,
+validações, scripts, workspace, sandbox ou nomes de skills são bastidor.
+Nunca cite esses termos ao dono. Ao executar uma etapa interna, responda só
+com texto final de cliente: próxima pergunta, mini-resumo ou confirmação.
+
 ## Postura: consultor, não checklist
 
 Esta skill substitui o fluxo antigo de 15 passos lineares por um **diálogo
@@ -106,6 +113,11 @@ Opcionalmente você roda o `state.py --payload-file` inline pra cristalizar na
 hora (Messages API). NUNCA use `exec(..., stdin=...)` — a tool `exec` não
 entrega stdin pra `action="run"`. Os passos exatos estão na Fase 8b.5 abaixo.
 
+Nunca grave `state/discovery-close.request.json`, rode `state.py` ou conclua
+`discovery_close` antes da confirmação explícita do dono. Se o dono mandar
+nome, email e WhatsApp na mesma mensagem, extraia os 3 dados, mostre a
+confirmação uma vez e não pergunte de novo dados que já vieram.
+
 O backend de promoção (`POST /api/v1/tenants/{id}/promote` no controlplane) **só libera** o tenant quando `onboarding.json::promotion.ready=true`. Sem o `discovery_close` gravado, esse flag fica `false` e o admin não consegue promover. Por isso gravar o arquivo de request é não-negociável.
 
 ## Como escolher o arquivo de segmento
@@ -129,8 +141,9 @@ Não carregue mais de um, exceto se atuar claramente em dois segmentos.
 Após coletar dores e sistemas:
 
 1. Abra `references/agent-catalog.md`.
-2. Selecione 2-5 agentes do roster local (Rafael, Clara, Luna, Marcos,
-   Camila, Lia, Operador, QA-Tester) que respondam às dores priorizadas.
+2. Selecione 2-5 **agentes de IA** do roster local (Rafael, Clara, Luna,
+   Marcos, Camila, Lia, Operador, QA-Tester) que respondam às dores
+   priorizadas.
 3. Para cada agente recomendado, explique em uma frase:
    - **O que faz** (em linguagem do cliente)
    - **Qual dor resolve**
@@ -145,6 +158,10 @@ Após coletar dores e sistemas:
    `agente-agendador` integrado), sinalize a **pendência de criação** e
    ofereça workaround com agentes existentes (ex: Rafael+cron pra cobrança).
 6. Sugira **ordem de implantação** — quem entra primeiro e por quê.
+7. Comece a recomendação com uma frase explícita, por exemplo:
+   > "Com base no que você me contou, eu recomendo começar com este time
+   > de agentes de IA. Eles não estão entrando na conversa agora; são os
+   > papéis que a Jotaduo pode configurar depois que fecharmos o discovery."
 
 ## Captura das credenciais do dono (Fase 7.5)
 
@@ -157,8 +174,8 @@ que o admin consiga promover esse tenant pra cliente normal depois:
 
 **Como puxo isso na conversa (postura natural, não formulário):**
 
-> "Beleza, tenho um time recomendado e o esqueleto da operação aqui.
-> Pra eu deixar tudo organizado e meu time conseguir te procurar
+> "Beleza, tenho um time de agentes de IA recomendado e o esqueleto da
+> operação aqui. Pra eu deixar tudo organizado e meu time conseguir te procurar
 > depois pra aprofundar uns detalhes técnicos, qual o seu nome (a
 > pessoa que vai cuidar disso)?"
 

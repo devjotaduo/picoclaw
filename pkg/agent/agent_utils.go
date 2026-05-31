@@ -70,6 +70,7 @@ func outboundTurnMetadata(
 
 func outboundMessageForTurn(ts *turnState, content string) bus.OutboundMessage {
 	agentID, sessionKey, scope := outboundTurnMetadata(ts.agent.ID, ts.sessionKey, ts.opts.Dispatch.SessionScope)
+	content = sanitizePublicPicoContent(ts.channel, content)
 	return bus.OutboundMessage{
 		Channel: ts.channel,
 		ChatID:  ts.chatID,

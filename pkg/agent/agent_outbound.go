@@ -44,6 +44,10 @@ func (al *AgentLoop) PublishResponseIfNeeded(ctx context.Context, channel, chatI
 	if response == "" {
 		return
 	}
+	response = sanitizePublicPicoContent(channel, response)
+	if response == "" {
+		return
+	}
 
 	alreadySentToSameChat := false
 	defaultAgent := al.GetRegistry().GetDefaultAgent()
@@ -105,6 +109,9 @@ func (al *AgentLoop) publishPicoReasoning(ctx context.Context, reasoningContent,
 	if reasoningContent == "" || chatID == "" {
 		return
 	}
+	if isPublicPicoTenantRuntime("pico") {
+		return
+	}
 
 	if ctx.Err() != nil {
 		return
@@ -148,6 +155,9 @@ func (al *AgentLoop) publishPicoToolCallInterim(
 	if ts == nil || ts.chatID == "" || al == nil || al.bus == nil {
 		return
 	}
+	if !ts.opts.AllowInterimPicoPublish {
+		return
+	}
 
 	if strings.TrimSpace(reasoningContent) != "" {
 		pubCtx, pubCancel := context.WithTimeout(ctx, 3*time.Second)
@@ -165,10 +175,6 @@ func (al *AgentLoop) publishPicoToolCallInterim(
 				"error":   err.Error(),
 			})
 		}
-	}
-
-	if !ts.opts.AllowInterimPicoPublish {
-		return
 	}
 
 	visibleToolCalls := utils.BuildVisibleToolCalls(
