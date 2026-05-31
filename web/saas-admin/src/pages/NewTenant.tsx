@@ -42,7 +42,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { splitModelList } from "@/lib/model-routing";
+import {
+  CLAUDE_CLI_MODEL_PRESETS,
+  CODEX_CLI_MODEL_PRESETS,
+  CUSTOM_CLI_MODEL_PRESET_ID,
+  cliModelValueFromPreset,
+  cliPresetDescription,
+  splitModelList,
+} from "@/lib/model-routing";
 import { cn } from "@/lib/utils";
 
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -133,8 +140,10 @@ export function NewTenant() {
   const [litellmFallbacks, setLiteLLMFallbacks] = useState("");
   const [litellmAllowedModels, setLiteLLMAllowedModels] = useState("");
   const [cliOrderPreset, setCLIOrderPreset] = useState<CLIOrderPreset>("claude-codex");
-  const [claudeCLIModel, setClaudeCLIModel] = useState("sonnet");
-  const [codexCLIModel, setCodexCLIModel] = useState("codex-cli");
+  const [claudeCLIModelPreset, setClaudeCLIModelPreset] = useState("sonnet");
+  const [claudeCLICustomModel, setClaudeCLICustomModel] = useState("");
+  const [codexCLIModelPreset, setCodexCLIModelPreset] = useState("codex-cli");
+  const [codexCLICustomModel, setCodexCLICustomModel] = useState("");
   const [form, setForm] = useState<CreateTenantInput>({
     display_name: "",
     owner_email: "",
@@ -216,6 +225,16 @@ export function NewTenant() {
       subdomainRef.current?.focus();
       return;
     }
+    const claudeCLIModel = cliModelValueFromPreset(
+      claudeCLIModelPreset,
+      claudeCLICustomModel,
+      CLAUDE_CLI_MODEL_PRESETS,
+    );
+    const codexCLIModel = cliModelValueFromPreset(
+      codexCLIModelPreset,
+      codexCLICustomModel,
+      CODEX_CLI_MODEL_PRESETS,
+    );
     const modelRouting: CreateTenantInput["model_routing"] =
       modelRoutingMode === "litellm"
         ? {
@@ -505,23 +524,63 @@ export function NewTenant() {
                           </Field>
                           <Field>
                             <FieldLabel htmlFor="claude-cli-model">Modelo Claude CLI</FieldLabel>
-                            <Input
-                              id="claude-cli-model"
-                              value={claudeCLIModel}
-                              onChange={(e) => setClaudeCLIModel(e.target.value)}
-                              placeholder="sonnet"
-                            />
-                            <FieldDescription>Ex.: sonnet, haiku, opus ou claude-sonnet-4-5.</FieldDescription>
+                            <Select
+                              value={claudeCLIModelPreset}
+                              onValueChange={setClaudeCLIModelPreset}
+                            >
+                              <SelectTrigger id="claude-cli-model">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {CLAUDE_CLI_MODEL_PRESETS.map((preset) => (
+                                  <SelectItem key={preset.id} value={preset.id}>
+                                    {preset.label} · {preset.model}
+                                  </SelectItem>
+                                ))}
+                                <SelectItem value={CUSTOM_CLI_MODEL_PRESET_ID}>Personalizado</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {claudeCLIModelPreset === CUSTOM_CLI_MODEL_PRESET_ID ? (
+                              <Input
+                                id="claude-cli-custom-model"
+                                value={claudeCLICustomModel}
+                                onChange={(e) => setClaudeCLICustomModel(e.target.value)}
+                                placeholder="claude-sonnet-4-6"
+                              />
+                            ) : null}
+                            <FieldDescription>
+                              {cliPresetDescription(claudeCLIModelPreset, CLAUDE_CLI_MODEL_PRESETS)}
+                            </FieldDescription>
                           </Field>
                           <Field>
                             <FieldLabel htmlFor="codex-cli-model">Modelo Codex CLI</FieldLabel>
-                            <Input
-                              id="codex-cli-model"
-                              value={codexCLIModel}
-                              onChange={(e) => setCodexCLIModel(e.target.value)}
-                              placeholder="codex-cli"
-                            />
-                            <FieldDescription>Use codex-cli para deixar o config.toml escolher; outro valor passa -m.</FieldDescription>
+                            <Select
+                              value={codexCLIModelPreset}
+                              onValueChange={setCodexCLIModelPreset}
+                            >
+                              <SelectTrigger id="codex-cli-model">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {CODEX_CLI_MODEL_PRESETS.map((preset) => (
+                                  <SelectItem key={preset.id} value={preset.id}>
+                                    {preset.label} · {preset.model}
+                                  </SelectItem>
+                                ))}
+                                <SelectItem value={CUSTOM_CLI_MODEL_PRESET_ID}>Personalizado</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {codexCLIModelPreset === CUSTOM_CLI_MODEL_PRESET_ID ? (
+                              <Input
+                                id="codex-cli-custom-model"
+                                value={codexCLICustomModel}
+                                onChange={(e) => setCodexCLICustomModel(e.target.value)}
+                                placeholder="gpt-5.5"
+                              />
+                            ) : null}
+                            <FieldDescription>
+                              {cliPresetDescription(codexCLIModelPreset, CODEX_CLI_MODEL_PRESETS)}
+                            </FieldDescription>
                           </Field>
                         </>
                       ) : null}
