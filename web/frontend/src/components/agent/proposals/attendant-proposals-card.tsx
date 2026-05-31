@@ -14,6 +14,7 @@ import { IconCheck, IconX } from "@tabler/icons-react"
 import { useState } from "react"
 
 import { type AttendantProposal } from "@/api/attendant-proposals"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -21,7 +22,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { useAttendantProposals } from "@/hooks/use-attendant-proposals"
 import { cn } from "@/lib/utils"
 
@@ -63,13 +63,13 @@ export function AttendantProposalsCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           Mudanças propostas pelo assistente
-          <span className="bg-amber-500/15 text-amber-700 dark:text-amber-300 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold">
+          <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500/15 px-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
             {pendingCount}
           </span>
         </CardTitle>
         <CardDescription>
-          O assistente sugeriu ajustes no atendente público. Revise e aprove para
-          aplicar, ou rejeite para descartar.
+          O assistente sugeriu ajustes no atendente público. Revise e aprove
+          para aplicar, ou rejeite para descartar.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-0 p-0">
@@ -118,7 +118,7 @@ function ProposalRow({
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-foreground text-[13px] font-medium leading-snug">
+            <span className="text-foreground text-[13px] leading-snug font-medium">
               {p.summary}
             </span>
             <span className="text-muted-foreground shrink-0 text-[10px] tabular-nums">

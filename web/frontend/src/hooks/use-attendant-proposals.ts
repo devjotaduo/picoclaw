@@ -33,7 +33,10 @@ export function useAttendantProposals(opts: { pendingOnly?: boolean } = {}) {
       try {
         return await listAttendantProposals({ pendingOnly })
       } catch (err) {
-        console.warn("[attendant-proposals] fetch falhou, retornando vazio:", err)
+        console.warn(
+          "[attendant-proposals] fetch falhou, retornando vazio:",
+          err,
+        )
         return EMPTY_RESPONSE
       }
     },

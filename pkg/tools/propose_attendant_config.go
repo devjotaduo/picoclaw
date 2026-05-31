@@ -154,7 +154,10 @@ func (t *ProposeAttendantConfigTool) Execute(ctx context.Context, args map[strin
 	}
 
 	return &ToolResult{
-		ForLLM:  fmt.Sprintf("Proposal staged for owner approval: %s. The owner must approve it in the dashboard before it takes effect.", summary),
+		ForLLM: fmt.Sprintf(
+			"Proposal staged for owner approval: %s. The owner must approve it in the dashboard before it takes effect.",
+			summary,
+		),
 		IsError: false,
 	}
 }
