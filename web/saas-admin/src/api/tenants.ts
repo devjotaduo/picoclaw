@@ -37,6 +37,22 @@ export type Tenant = {
 //   "cliente" → active_profile=tenant  → owner dashboard, no admin tools (default)
 // Maps in internal/saas/api/tenants.go::resolveUIProfile.
 export type TenantType = "publico" | "admin" | "cliente";
+
+// TenantTypeCatalogEntry mirrors the controlplane tenant_types catalog row
+// (internal/saas/api/tenant_types.go::tenantTypeResponse). The v2.0 create
+// wizard fetches selectable entries to offer business verticals (clinica,
+// loja, …) on top of the three system types.
+export type TenantTypeCatalogEntry = {
+  slug: string;
+  display_name: string;
+  description: string;
+  icon: string;
+  category: string;
+  ui_profile: string;
+  is_system: boolean;
+  is_selectable: boolean;
+  sort_order: number;
+};
 export type TenantModelRoutingMode = "auto" | "litellm" | "cli";
 export type TenantCLIProvider = "claude-cli" | "codex-cli";
 
@@ -62,8 +78,10 @@ export type CreateTenantInput = {
   owner_email: string;
   subdomain: string;
   // tenant_type is optional for backwards compat — controlplane defaults to
-  // "cliente" when missing. New tenants from this UI always send it.
-  tenant_type?: TenantType;
+  // "cliente" when missing. New tenants from this UI always send it. Widened
+  // from the 3-union to string so vertical slugs from the tenant_types catalog
+  // (clinica, loja, …) are accepted; the controlplane resolves any catalog slug.
+  tenant_type?: string;
   monthly_budget_usd?: number;
   mem_limit_mb?: number;
   cpu_quota?: number;
@@ -120,6 +138,13 @@ export type UsageResponse = {
 
 export async function listTenants() {
   return api<{ tenants: Tenant[] }>("/api/v1/tenants");
+}
+
+// listTenantTypes fetches the tenant_types catalog. selectableOnly restricts to
+// entries the create wizard should offer (excludes internal/automation types).
+export async function listTenantTypes(selectableOnly = true) {
+  const q = selectableOnly ? "?selectable=true" : "";
+  return api<{ tenant_types: TenantTypeCatalogEntry[] }>(`/api/v1/tenant-types${q}`);
 }
 
 export async function getTenant(id: string) {
