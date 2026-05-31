@@ -6,6 +6,7 @@
     "credentials": "Credenciais",
     "agent_group": "Agentes",
     "agent_dashboard": "Painel dos agentes",
+    "agent_proposals": "Propostas",
     "agent_editor": "Agentes",
     "orchestration": "Orquestração",
     "hub": "Hub",
@@ -80,7 +81,7 @@
       "marketing": "{{name}} ajuda a criar campanhas, conteúdos e materiais visuais.",
       "assistant": "{{name}} ajuda com agenda, relatórios, documentos e coordenação dos agentes."
     },
-    "placeholder": "Pedir alterações adicionais",
+    "placeholder": "Escreva sua mensagem",
     "supportWhatsapp": "Falar com o suporte",
     "testAttendance": "Testar o atendimento",
     "disabledPlaceholder": {

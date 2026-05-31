@@ -293,6 +293,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             translateTitle: true,
           },
           {
+            title: "navigation.agent_proposals",
+            url: "/agent/proposals",
+            icon: IconCircleCheck,
+            feature: "agent_editor",
+            elementId: "sidebar.agent_proposals",
+            translateTitle: true,
+          },
+          {
             title: "navigation.agent_editor",
             url: "/agent/agents",
             icon: IconRobot,

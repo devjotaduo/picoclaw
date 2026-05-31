@@ -179,6 +179,35 @@ type Provisioner struct {
 	// auth_backend='supabase'. Nil when Supabase isn't configured — those calls
 	// degrade to no-op + best-effort logging.
 	Supabase SupabaseManager
+	// BaselineHealer additively fills missing baseline files into a workspace's
+	// home/ subtree (skip-if-exists, never overwrites operator edits). It is
+	// injected by the api layer (which owns the embedded baseline FS) because
+	// package tenant cannot import package api without a cycle. Nil = no-op.
+	//
+	// Why it exists: the boot-time seed (EnsureDefaultWorkspace) only heals the
+	// single default-auto workspace, once, at startup. A tenant created from a
+	// manual (non-default-auto) workspace that predates a newly *required*
+	// baseline file — e.g. agents/sofia/AGENT.public.md after #180 made it the
+	// source of truth and ApplyPublicSofiaAgentMD fail loud — would otherwise
+	// fail provisioning forever. Healing the selected workspace right before the
+	// copy fixes the new tenant AND permanently repairs the template.
+	BaselineHealer func(homeDir string) error
+}
+
+// healWorkspaceBaseline additively repairs the selected workspace's home/
+// subtree before its contents are copied into a tenant volume. Best-effort:
+// any file a later provisioning step actually requires is gated by that step
+// (e.g. ApplyPublicSofiaAgentMD fails loud), so a healer error is logged, not
+// fatal. No-op when the healer is unset, the workspace is nil, or the workspace
+// is raw (raw opts out of every post-copy transformation by contract).
+func (p *Provisioner) healWorkspaceBaseline(ws *store.Workspace) {
+	if p == nil || p.BaselineHealer == nil || ws == nil || ws.IsRaw {
+		return
+	}
+	homeDir := filepath.Join(ws.HostPath, WorkspaceHomeSubdir)
+	if err := p.BaselineHealer(homeDir); err != nil {
+		log.Printf("WARN: provisioner: heal workspace baseline %s: %v", homeDir, err)
+	}
 }
 
 func NewProvisioner(cfg *config.Config, db *store.DB, dk *DockerClient, ll *litellm.Client) *Provisioner {
@@ -230,6 +259,11 @@ type CreateInput struct {
 	// tenant uses LiteLLM virtual-key routing or shared CLI auth routing and in
 	// what fallback order. Nil keeps the legacy auto mode.
 	ModelRouting *ModelRoutingConfig
+	// Roster declares which agents (by role name, e.g. "attendant",
+	// "assistant") the in-tenant orchestrator should materialize at boot. Set
+	// from the tenant type catalog. Empty keeps the workspace's own roster /
+	// legacy 4-agent seed (public tenants pass empty so Sofia stays solo).
+	Roster []string
 }
 
 type ModelRoutingConfig struct {
@@ -341,6 +375,7 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		in.SkipDashboardPassword,
 		in.UIProfile,
 		in.ModelRouting,
+		in.Roster,
 	); err != nil {
 		msg := err.Error()
 		_ = p.Tenants.SetStatus(ctx, id, store.StatusError, &msg)
@@ -368,6 +403,7 @@ func (p *Provisioner) runProvision(
 	skipDashboardPassword bool,
 	uiProfile UIVisibilityProfile,
 	modelRouting *ModelRoutingConfig,
+	roster []string,
 ) (err error) {
 	success := false
 	volumeCreated := false
@@ -394,6 +430,13 @@ func (p *Provisioner) runProvision(
 		return fmt.Errorf("mkdir volume: %w", err)
 	}
 	volumeCreated = true
+
+	// 0b. Heal the selected workspace template additively before copying it.
+	// Manual (non-default-auto) workspaces never get the boot-time seed, so a
+	// template that predates a newly required baseline file (e.g.
+	// agents/sofia/AGENT.public.md, #180) would fail provisioning otherwise.
+	// Best-effort + skip-if-exists: never overwrites operator edits, raw-safe.
+	p.healWorkspaceBaseline(ws)
 
 	// 1. Workspace home → tenant volume. Single authoritative copy step.
 	if err := CopyWorkspaceHome(ws.HostPath, t.VolumePath); err != nil {
@@ -460,6 +503,16 @@ func (p *Provisioner) runProvision(
 	// exact bytes they shipped — typically an existing tenant volume
 	// re-bundled, or a self-hosted LiteLLM-free setup.
 	if !ws.IsRaw {
+		// 1d. Agent roster (v2.0). When the tenant type declares a roster
+		// (e.g. ["attendant","assistant"]), patch agents.roster into config.json
+		// so the in-tenant orchestrator materializes exactly those agents at
+		// boot instead of the legacy 4-agent seed. No-op for an empty roster
+		// (public tenants keep Sofia solo). Runs before placeholder
+		// substitution + ValidateBundle so a malformed patch fails fast.
+		if err = SetAgentsRoster(t.VolumePath, roster); err != nil {
+			return fmt.Errorf("set agents roster: %w", err)
+		}
+
 		// 2. Dashboard password (skipped for Supabase / public tenants).
 		if !skipDashboardPassword {
 			if err := SeedDashboardCredentials(ctx, t.VolumePath, t.OwnerEmail, password); err != nil {

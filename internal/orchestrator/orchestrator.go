@@ -48,6 +48,12 @@ func EnsureSpecialistConfig(cfg *config.Config) bool {
 	if cfg.Agents.SkipSpecialistSeed {
 		return false
 	}
+	// v2.0: a declared roster materializes ONLY the named agents (e.g. a
+	// vertical tenant's ["attendant","assistant"]) instead of the canonical
+	// 4-agent baseline. Empty roster keeps the legacy behavior below intact.
+	if len(cfg.Agents.Roster) > 0 {
+		return ensureRosterConfig(cfg)
+	}
 	changed := false
 	baseWorkspace := cfg.WorkspacePath()
 	if strings.TrimSpace(baseWorkspace) == "" {
@@ -134,20 +140,20 @@ func ensureAgent(cfg *config.Config, def config.AgentConfig) bool {
 		if canonicalAgentID(cfg.Agents.List[i].ID) != def.ID {
 			continue
 		}
-		return mergeAgentDefaults(&cfg.Agents.List[i], def)
+		return mergeAgentDefaults(cfg, &cfg.Agents.List[i], def)
 	}
 	cfg.Agents.List = append(cfg.Agents.List, def)
 	return true
 }
 
-func mergeAgentDefaults(agent *config.AgentConfig, def config.AgentConfig) bool {
+func mergeAgentDefaults(cfg *config.Config, agent *config.AgentConfig, def config.AgentConfig) bool {
 	changed := false
 	normalizedID := canonicalAgentID(agent.ID)
 	if agent.ID != normalizedID {
 		agent.ID = normalizedID
 		changed = true
 	}
-	if shouldUseDefaultAgentName(normalizedID, agent.Name) && def.Name != "" {
+	if shouldUseDefaultAgentName(normalizedID, agent.Name) && def.Name != "" && agent.Name != def.Name {
 		agent.Name = def.Name
 		changed = true
 	}
@@ -168,7 +174,7 @@ func mergeAgentDefaults(agent *config.AgentConfig, def config.AgentConfig) bool 
 		agent.Subagents = &cp
 		changed = true
 	}
-	if enforceAgentSubagents(normalizedID, agent) {
+	if enforceAgentSubagents(cfg, normalizedID, agent) {
 		changed = true
 	}
 	if agent.Access == nil && def.Access != nil {
@@ -293,14 +299,31 @@ func shouldUseDefaultAgentName(agentID, current string) bool {
 	}
 }
 
-func enforceAgentSubagents(agentID string, agent *config.AgentConfig) bool {
-	var desired []string
-	switch canonicalAgentID(agentID) {
-	case AgentMain:
-		desired = []string{AgentSales}
-	case AgentAssistant:
-		desired = []string{AgentMain, AgentSales, AgentMarketing}
-	default:
+func enforceAgentSubagents(cfg *config.Config, agentID string, agent *config.AgentConfig) bool {
+	desired := defaultDesiredSubagents(agentID)
+	if desired == nil {
+		return false
+	}
+	// Filter to agents that actually exist ONLY in roster mode. The default
+	// 4-agent path always materializes every target, and callers may hand-build
+	// configs (e.g. main→[vendas] with no vendas agent yet) whose allow-lists
+	// must be preserved verbatim — so the default path stays byte-identical to
+	// pre-roster behavior. In a v2.0 roster (e.g. attendant+assistant) this
+	// drops references to vendas/marketing that were never materialized, keeping
+	// the result stable across reboots.
+	if cfg != nil && len(cfg.Agents.Roster) > 0 {
+		desired = filterExistingAgents(cfg, desired)
+	}
+	if len(desired) == 0 {
+		// No canonical sub-agent exists in this roster (e.g. main's "vendas"
+		// target isn't materialized in a 2-agent vertical). Strip stale entries
+		// if present, otherwise leave Subagents as-is so repeated runs are a
+		// no-op — creating an empty struct from nil would flip changed=true
+		// every other boot.
+		if agent.Subagents != nil && len(agent.Subagents.AllowAgents) > 0 {
+			agent.Subagents.AllowAgents = nil
+			return true
+		}
 		return false
 	}
 	if agent.Subagents == nil {

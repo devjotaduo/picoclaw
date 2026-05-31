@@ -169,8 +169,12 @@ function NotificationItem({
               {n.cta_url ? (
                 <a
                   href={n.cta_url}
-                  target="_blank"
-                  rel="noreferrer"
+                  // Internal deep-links (e.g. /agent/proposals from an
+                  // approval notification) open in the same tab; only external
+                  // URLs get a new tab.
+                  {...(n.cta_url.startsWith("/")
+                    ? {}
+                    : { target: "_blank", rel: "noreferrer" })}
                   onClick={(e) => {
                     if (isUnread) onClick()
                     e.stopPropagation()

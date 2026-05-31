@@ -31,6 +31,7 @@ type Handler struct {
 	Platform       *store.PlatformSettingsStore
 	ModelRouting   *store.TenantModelRoutingStore
 	Workspaces     *store.WorkspaceStore
+	TenantTypes    *store.TenantTypeStore
 	MagicLinks     *store.MagicLinkStore
 	PasswordResets *store.PasswordResetStore
 	Shortlinks     *store.ShortlinkStore
@@ -74,6 +75,7 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		Platform:       &store.PlatformSettingsStore{DB: db},
 		ModelRouting:   &store.TenantModelRoutingStore{DB: db},
 		Workspaces:     &store.WorkspaceStore{DB: db},
+		TenantTypes:    &store.TenantTypeStore{DB: db},
 		MagicLinks:     &store.MagicLinkStore{DB: db},
 		PasswordResets: &store.PasswordResetStore{DB: db},
 		Shortlinks:     &store.ShortlinkStore{DB: db},
@@ -112,6 +114,18 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		}
 	} else if !errIsNotConfigured(err) {
 		log.Printf("supabase client init failed: %v (falling back to legacy auth)", err)
+	}
+
+	// Inject the embedded-baseline healer so the provisioner can additively
+	// repair the SELECTED workspace template right before copying it into a new
+	// tenant volume. The embed (baselineWorkspaceFS / extractEmbeddedBaseline)
+	// lives in package api; package tenant can't import it without a cycle, so
+	// we pass it as a function. Without this, a tenant created from a manual
+	// workspace that predates a newly required baseline file (e.g.
+	// agents/sofia/AGENT.public.md, #180) fails provisioning forever — the
+	// boot-time seed only heals the default-auto workspace.
+	if prov != nil {
+		prov.BaselineHealer = extractEmbeddedBaseline
 	}
 
 	if cfg.MCPEncryptionKey != "" {
@@ -211,6 +225,14 @@ func (h *Handler) Routes() http.Handler {
 				// to be mounted read-write into the controlplane.
 				r.Get("/platform/cli-auth/claude", h.handleGetClaudeCLIAuth)
 				r.Put("/platform/cli-auth/claude", h.handlePutClaudeCLIAuth)
+
+				// Tenant type catalog (v2.0) — verticals the create wizard
+				// offers; each maps to a ui-visibility profile + seed workspace.
+				r.Get("/tenant-types", h.handleListTenantTypes)
+				r.Post("/tenant-types", h.handleUpsertTenantType)
+				r.Get("/tenant-types/{slug}", h.handleGetTenantType)
+				r.Put("/tenant-types/{slug}", h.handleUpsertTenantType)
+				r.Delete("/tenant-types/{slug}", h.handleDeleteTenantType)
 
 				// Workspaces — single source of truth for tenant content.
 				r.Get("/workspaces", h.handleListWorkspaces)

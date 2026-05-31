@@ -16,7 +16,44 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
+
+// Main LiteLLM providers, with the canonical api_base each one expects. An
+// empty apiBase means "leave api_base blank" — LiteLLM already knows the
+// default endpoint for that provider, so forcing a base only risks drift.
+// Order roughly by how often this product uses them.
+const PROVIDER_OPTIONS: { value: string; label: string; apiBase: string }[] = [
+  { value: "anthropic", label: "Anthropic", apiBase: "" },
+  { value: "openai", label: "OpenAI", apiBase: "" },
+  { value: "openrouter", label: "OpenRouter", apiBase: "https://openrouter.ai/api/v1" },
+  { value: "gemini", label: "Google Gemini", apiBase: "" },
+  { value: "groq", label: "Groq", apiBase: "https://api.groq.com/openai/v1" },
+  { value: "mistral", label: "Mistral", apiBase: "https://api.mistral.ai/v1" },
+  { value: "deepseek", label: "DeepSeek", apiBase: "https://api.deepseek.com" },
+  { value: "xai", label: "xAI (Grok)", apiBase: "https://api.x.ai/v1" },
+  { value: "together_ai", label: "Together AI", apiBase: "https://api.together.xyz/v1" },
+  { value: "azure", label: "Azure OpenAI", apiBase: "" },
+  { value: "ollama", label: "Ollama (local)", apiBase: "http://localhost:11434" },
+];
+
+// Distinct, non-empty api_base values offered as quick picks in the API base
+// select (any base a provider can prefill must appear here so it renders).
+const API_BASE_OPTIONS: string[] = Array.from(
+  new Set(PROVIDER_OPTIONS.map((p) => p.apiBase).filter((b): b is string => b.length > 0)),
+);
+
+// Sentinels for the selects — Radix Select disallows empty-string item values,
+// so "no value" and "custom" need explicit tokens.
+const SELECT_NONE = "__none__";
+const SELECT_CUSTOM = "__custom__";
+const SELECT_DEFAULT_BASE = "__default__";
 
 export function PlatformLiteLLM() {
   const qc = useQueryClient();
@@ -27,7 +64,9 @@ export function PlatformLiteLLM() {
   const [modelName, setModelName] = useState("");
   const [providerModel, setProviderModel] = useState("");
   const [provider, setProvider] = useState("");
+  const [providerCustom, setProviderCustom] = useState(false);
   const [apiBase, setAPIBase] = useState("");
+  const [apiBaseCustom, setApiBaseCustom] = useState(false);
   const [apiVersion, setAPIVersion] = useState("");
   const [apiKey, setAPIKey] = useState("");
 
@@ -75,7 +114,9 @@ export function PlatformLiteLLM() {
       setModelName("");
       setProviderModel("");
       setProvider("");
+      setProviderCustom(false);
       setAPIBase("");
+      setApiBaseCustom(false);
       setAPIVersion("");
       setAPIKey("");
       qc.invalidateQueries({ queryKey: ["platform-litellm-models"] });
@@ -95,6 +136,50 @@ export function PlatformLiteLLM() {
       toast({ type: "error", message: e?.error ?? "Falha ao remover modelo." }),
   });
   const models = modelsQ.data?.models ?? [];
+
+  const providerSelectValue = providerCustom
+    ? SELECT_CUSTOM
+    : provider
+      ? provider
+      : SELECT_NONE;
+
+  function onProviderChange(value: string) {
+    if (value === SELECT_CUSTOM) {
+      setProviderCustom(true);
+      return;
+    }
+    setProviderCustom(false);
+    if (value === SELECT_NONE) {
+      setProvider("");
+      return;
+    }
+    setProvider(value);
+    // Prefill the recommended api_base for the chosen provider (blank for
+    // providers where LiteLLM already knows the endpoint). User can still
+    // override via the API base select below.
+    const preset = PROVIDER_OPTIONS.find((p) => p.value === value);
+    setApiBaseCustom(false);
+    setAPIBase(preset?.apiBase ?? "");
+  }
+
+  const apiBaseSelectValue = apiBaseCustom
+    ? SELECT_CUSTOM
+    : apiBase && API_BASE_OPTIONS.includes(apiBase)
+      ? apiBase
+      : SELECT_DEFAULT_BASE;
+
+  function onApiBaseChange(value: string) {
+    if (value === SELECT_CUSTOM) {
+      setApiBaseCustom(true);
+      return;
+    }
+    setApiBaseCustom(false);
+    if (value === SELECT_DEFAULT_BASE) {
+      setAPIBase("");
+      return;
+    }
+    setAPIBase(value);
+  }
 
   return (
     <div className="mx-auto max-w-4xl p-6">
@@ -242,23 +327,73 @@ export function PlatformLiteLLM() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="litellm-provider">Provider</FieldLabel>
-                <Input
-                  id="litellm-provider"
-                  value={provider}
-                  onChange={(event) => setProvider(event.target.value)}
-                  placeholder="anthropic, openai, openrouter..."
+                <Select
+                  value={providerSelectValue}
+                  onValueChange={onProviderChange}
                   disabled={!configured}
-                />
+                >
+                  <SelectTrigger id="litellm-provider">
+                    <SelectValue placeholder="Selecione o provedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SELECT_NONE}>Não definir (padrão do LiteLLM)</SelectItem>
+                    {PROVIDER_OPTIONS.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={SELECT_CUSTOM}>Outro (personalizado)…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {providerCustom ? (
+                  <Input
+                    className="mt-2"
+                    aria-label="Provider personalizado"
+                    value={provider}
+                    onChange={(event) => setProvider(event.target.value)}
+                    placeholder="ex.: bedrock, vertex_ai, cohere"
+                    disabled={!configured}
+                  />
+                ) : null}
+                <FieldDescription>
+                  Mapeia para litellm_params.custom_llm_provider. Escolher um provedor
+                  pré-preenche a API base recomendada.
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="litellm-model-api-base">API base</FieldLabel>
-                <Input
-                  id="litellm-model-api-base"
-                  value={apiBase}
-                  onChange={(event) => setAPIBase(event.target.value)}
-                  placeholder="Opcional"
+                <Select
+                  value={apiBaseSelectValue}
+                  onValueChange={onApiBaseChange}
                   disabled={!configured}
-                />
+                >
+                  <SelectTrigger id="litellm-model-api-base">
+                    <SelectValue placeholder="Padrão do provedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SELECT_DEFAULT_BASE}>Padrão do provedor (em branco)</SelectItem>
+                    {API_BASE_OPTIONS.map((base) => (
+                      <SelectItem key={base} value={base}>
+                        {base}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={SELECT_CUSTOM}>Personalizado…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {apiBaseCustom ? (
+                  <Input
+                    className="mt-2"
+                    aria-label="API base personalizada"
+                    value={apiBase}
+                    onChange={(event) => setAPIBase(event.target.value)}
+                    placeholder="https://meu-proxy.exemplo.com/v1"
+                    disabled={!configured}
+                  />
+                ) : null}
+                <FieldDescription>
+                  Opcional. Deixe no padrão para provedores nativos; informe a base
+                  só em proxies/endpoints compatíveis.
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="litellm-model-api-version">API version</FieldLabel>

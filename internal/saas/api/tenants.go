@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -82,6 +83,63 @@ func resolveUIProfile(tenantType string) (tenant.UIVisibilityProfile, error) {
 	}
 }
 
+// resolvedTenantType is the catalog-driven resolution of an admin tenant type
+// slug: the runtime ui-visibility profile plus optional provisioning defaults
+// the wizard applies when the admin doesn't override them.
+type resolvedTenantType struct {
+	UIProfile          tenant.UIVisibilityProfile
+	DefaultWorkspaceID string
+	Roster             json.RawMessage
+	Defaults           json.RawMessage
+}
+
+// resolveTenantType resolves an admin tenant type slug against the v2.0
+// tenant_types catalog, falling back to the legacy hardcoded mapping when the
+// catalog row is absent (fresh DB before Migrate, or tests without a catalog)
+// so publico/admin/cliente never stop resolving.
+func (h *Handler) resolveTenantType(ctx context.Context, slug string) (resolvedTenantType, error) {
+	if h.TenantTypes != nil {
+		tt, err := h.TenantTypes.Get(ctx, slug)
+		switch {
+		case err == nil:
+			prof, perr := uiProfileFromCatalog(tt.UIProfile)
+			if perr != nil {
+				return resolvedTenantType{}, perr
+			}
+			return resolvedTenantType{
+				UIProfile:          prof,
+				DefaultWorkspaceID: tt.DefaultWorkspaceID,
+				Roster:             tt.RosterJSON,
+				Defaults:           tt.DefaultsJSON,
+			}, nil
+		case !errors.Is(err, store.ErrTenantTypeNotFound):
+			return resolvedTenantType{}, err
+		}
+		// row absent → fall through to the legacy hardcoded mapping
+	}
+	prof, err := resolveUIProfile(slug)
+	if err != nil {
+		return resolvedTenantType{}, err
+	}
+	return resolvedTenantType{UIProfile: prof}, nil
+}
+
+// uiProfileFromCatalog maps the catalog's ui_profile string to the runtime
+// enum. Unknown values fail fast so a typo in a catalog row can't silently boot
+// the wrong UI.
+func uiProfileFromCatalog(s string) (tenant.UIVisibilityProfile, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "tenant", "cliente":
+		return tenant.UIProfileTenant, nil
+	case "public", "publico":
+		return tenant.UIProfilePublic, nil
+	case "admin":
+		return tenant.UIProfileAdmin, nil
+	default:
+		return "", fmt.Errorf("unknown ui_profile %q in tenant_types catalog", s)
+	}
+}
+
 func (req *createTenantModelRoutingReq) toTenantConfig() (*tenant.ModelRoutingConfig, error) {
 	if req == nil {
 		return nil, nil
@@ -147,10 +205,25 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	req.OwnerEmail = strings.TrimSpace(strings.ToLower(req.OwnerEmail))
 	req.Subdomain = strings.TrimSpace(strings.ToLower(req.Subdomain))
 
-	uiProfile, err := resolveUIProfile(req.TenantType)
+	resolvedType, err := h.resolveTenantType(r.Context(), req.TenantType)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	uiProfile := resolvedType.UIProfile
+	// When the admin didn't pick a workspace, inherit the tenant type's seed
+	// workspace from the catalog so a vertical is born from the right template.
+	if strings.TrimSpace(req.WorkspaceID) == "" && resolvedType.DefaultWorkspaceID != "" {
+		req.WorkspaceID = resolvedType.DefaultWorkspaceID
+	}
+	// Agent roster from the catalog (e.g. ["attendant","assistant"]). Empty for
+	// publico/admin so those tenants keep their solo/legacy roster.
+	var roster []string
+	if len(resolvedType.Roster) > 0 {
+		if err = json.Unmarshal(resolvedType.Roster, &roster); err != nil {
+			writeError(w, http.StatusBadRequest, "roster do tipo de tenant está malformado")
+			return
+		}
 	}
 	modelRouting, err := req.ModelRouting.toTenantConfig()
 	if err != nil {
@@ -242,6 +315,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		IsPublic:              uiProfile == tenant.UIProfilePublic,
 		UIProfile:             uiProfile,
 		ModelRouting:          modelRouting,
+		Roster:                roster,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

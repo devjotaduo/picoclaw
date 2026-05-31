@@ -12,6 +12,7 @@ Internal architecture notes for major runtime mechanisms and subsystem design.
 - [Runtime Events](runtime-events.md): runtime event envelope, centralized event logging, filters, and examples. ([ZH](runtime-events.zh.md))
 - [Agent Self-Evolution](agent-self-evolution.md): learning records, draft generation, application modes, and state layout.
 - [Template Runtime Business Rules](template-runtime-business-rules.md): dashboard template apply contract, runtime artifacts, behavior filters, and gateway readiness.
+- [Attendant Config Proposals](attendant-config-proposals.md): v2.0 configurator — the assistant proposes attendant changes, the owner approves (approval-always); tool, endpoints, shared apply service, and the /agent/proposals card.
 - [Launcher Profiles](launcher-profiles.md): SaaS-managed launcher seeds, tenant apply rules, and role-policy enforcement.
 - [Hook System Guide](hooks/README.md): current hook architecture and protocol details.
 - [Agent Refactor](agent-refactor/README.md): notes and checkpoints for the agent refactor work.

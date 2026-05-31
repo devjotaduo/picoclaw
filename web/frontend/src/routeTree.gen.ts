@@ -33,6 +33,7 @@ import { Route as AgentTemplatesRouteImport } from './routes/agent/templates'
 import { Route as AgentTemplateEditorRouteImport } from './routes/agent/template-editor'
 import { Route as AgentSkillsRouteImport } from './routes/agent/skills'
 import { Route as AgentSkillEditorRouteImport } from './routes/agent/skill-editor'
+import { Route as AgentProposalsRouteImport } from './routes/agent/proposals'
 import { Route as AgentOrchestrationRouteImport } from './routes/agent/orchestration'
 import { Route as AgentHubRouteImport } from './routes/agent/hub'
 import { Route as AgentEditorRouteImport } from './routes/agent/editor'
@@ -163,6 +164,11 @@ const AgentSkillEditorRoute = AgentSkillEditorRouteImport.update({
   path: '/skill-editor',
   getParentRoute: () => AgentRoute,
 } as any)
+const AgentProposalsRoute = AgentProposalsRouteImport.update({
+  id: '/proposals',
+  path: '/proposals',
+  getParentRoute: () => AgentRoute,
+} as any)
 const AgentOrchestrationRoute = AgentOrchestrationRouteImport.update({
   id: '/orchestration',
   path: '/orchestration',
@@ -230,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/agent/editor': typeof AgentEditorRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/orchestration': typeof AgentOrchestrationRoute
+  '/agent/proposals': typeof AgentProposalsRoute
   '/agent/skill-editor': typeof AgentSkillEditorRoute
   '/agent/skills': typeof AgentSkillsRoute
   '/agent/template-editor': typeof AgentTemplateEditorRoute
@@ -265,6 +272,7 @@ export interface FileRoutesByTo {
   '/agent/editor': typeof AgentEditorRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/orchestration': typeof AgentOrchestrationRoute
+  '/agent/proposals': typeof AgentProposalsRoute
   '/agent/skill-editor': typeof AgentSkillEditorRoute
   '/agent/skills': typeof AgentSkillsRoute
   '/agent/template-editor': typeof AgentTemplateEditorRoute
@@ -301,6 +309,7 @@ export interface FileRoutesById {
   '/agent/editor': typeof AgentEditorRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/orchestration': typeof AgentOrchestrationRoute
+  '/agent/proposals': typeof AgentProposalsRoute
   '/agent/skill-editor': typeof AgentSkillEditorRoute
   '/agent/skills': typeof AgentSkillsRoute
   '/agent/template-editor': typeof AgentTemplateEditorRoute
@@ -338,6 +347,7 @@ export interface FileRouteTypes {
     | '/agent/editor'
     | '/agent/hub'
     | '/agent/orchestration'
+    | '/agent/proposals'
     | '/agent/skill-editor'
     | '/agent/skills'
     | '/agent/template-editor'
@@ -373,6 +383,7 @@ export interface FileRouteTypes {
     | '/agent/editor'
     | '/agent/hub'
     | '/agent/orchestration'
+    | '/agent/proposals'
     | '/agent/skill-editor'
     | '/agent/skills'
     | '/agent/template-editor'
@@ -408,6 +419,7 @@ export interface FileRouteTypes {
     | '/agent/editor'
     | '/agent/hub'
     | '/agent/orchestration'
+    | '/agent/proposals'
     | '/agent/skill-editor'
     | '/agent/skills'
     | '/agent/template-editor'
@@ -615,6 +627,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentSkillEditorRouteImport
       parentRoute: typeof AgentRoute
     }
+    '/agent/proposals': {
+      id: '/agent/proposals'
+      path: '/proposals'
+      fullPath: '/agent/proposals'
+      preLoaderRoute: typeof AgentProposalsRouteImport
+      parentRoute: typeof AgentRoute
+    }
     '/agent/orchestration': {
       id: '/agent/orchestration'
       path: '/orchestration'
@@ -699,6 +718,7 @@ interface AgentRouteChildren {
   AgentEditorRoute: typeof AgentEditorRoute
   AgentHubRoute: typeof AgentHubRoute
   AgentOrchestrationRoute: typeof AgentOrchestrationRoute
+  AgentProposalsRoute: typeof AgentProposalsRoute
   AgentSkillEditorRoute: typeof AgentSkillEditorRoute
   AgentSkillsRoute: typeof AgentSkillsRoute
   AgentTemplateEditorRoute: typeof AgentTemplateEditorRoute
@@ -714,6 +734,7 @@ const AgentRouteChildren: AgentRouteChildren = {
   AgentEditorRoute: AgentEditorRoute,
   AgentHubRoute: AgentHubRoute,
   AgentOrchestrationRoute: AgentOrchestrationRoute,
+  AgentProposalsRoute: AgentProposalsRoute,
   AgentSkillEditorRoute: AgentSkillEditorRoute,
   AgentSkillsRoute: AgentSkillsRoute,
   AgentTemplateEditorRoute: AgentTemplateEditorRoute,

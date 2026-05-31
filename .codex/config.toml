@@ -1,11 +1,9 @@
 [mcp_servers.ruflo]
 args = [
-    "-y",
-    "ruflo@latest",
-    "mcp",
-    "start",
+    "scripts/ruflo-mcp-stdio-filter.js",
+    "ruflo@3.10.5",
 ]
-command = "npx"
+command = "node"
 
 [mcp_servers.ruflo.env]
 CLAUDE_FLOW_HOOKS_ENABLED = "true"
