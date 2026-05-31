@@ -216,6 +216,27 @@
       "createdAtMs": 0,
       "updatedAtMs": 0,
       "deleteAfterRun": false
+    },
+    {
+      "id": "onboarding-discovery-close",
+      "name": "Discovery close (crystallize Sofia owner + discovery_done)",
+      "enabled": true,
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/5 * * * *",
+        "tz": "America/Sao_Paulo"
+      },
+      "payload": {
+        "kind": "command",
+        "message": "",
+        "command": "python3 /root/.picoclaw/workspace/skills/discovery-close-flow/scripts/run.py",
+        "channel": "cron",
+        "to": "onboarding-discovery-close"
+      },
+      "state": {},
+      "createdAtMs": 0,
+      "updatedAtMs": 0,
+      "deleteAfterRun": false
     }
   ]
 }
