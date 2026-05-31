@@ -7,6 +7,15 @@ para montar o time, justificando cada escolha pelas dores priorizadas.
 Recomende de **2 a 5 agentes** por cliente (na primeira onda). Identifique
 sempre **qual entra primeiro** (maior ROI percebido) e justifique.
 
+> ⚠️ **Como apresentar o time pro dono (não-negociável):** estes são
+> **agentes de IA**, não pessoas. Na PRIMEIRA menção de cada nome na
+> conversa, use o rótulo do que ele é — "Clara, sua **atendente de IA**
+> do dia a dia", "Camila, a **agente de IA** de pós-atendimento". E pelo
+> menos uma vez deixe explícito que **é IA rodando dentro da conta dele,
+> montada com os dados do negócio — não é gente nova na folha**. Sem
+> isso, o dono acha que você está recomendando contratar funcionários.
+> Modelo de bloco de recomendação no fim deste arquivo.
+
 ## Agentes disponíveis no roster
 
 | ID config | Nome | Workspace | Papel principal |
@@ -110,6 +119,34 @@ Em todos esses casos: **marcar a pendência de integração/criação como "a va
 - Se faltar integração crítica (CRM, sistema clínico, gateway de pagamento), marque como **"a validar"** antes de prometer.
 - Se o cliente não tem WhatsApp Business API, marque como **bloqueante de implantação** — sem isso, Clara/Luna/Camila não atendem.
 - Cobre LGPD/CFM/regulação específica do segmento na recomendação. Saúde: receita/atestado/prontuário NÃO podem ir pelo agente. Educação: dados de menor de idade. Financeiro: limite de promessa de retorno.
+
+## Modelo de bloco de recomendação (Fase 7) — com rótulo de IA aplicado
+
+Use como referência de TOM. Adapte às dores reais do cliente. O essencial
+é: rótulo "de IA" na primeira menção de cada nome + uma frase deixando
+claro que é IA dentro da conta dele.
+
+> Pra te mostrar como ficaria, montei seu **time de atendentes de IA**.
+> Pensa neles como funcionários digitais que trabalham dentro da sua
+> conta, sem você contratar ninguém:
+>
+> • **Clara — sua atendente de IA do dia a dia**: responde o WhatsApp no
+>   horário comercial, tira dúvida e faz triagem.
+> • **Camila — a agente de IA de pós-atendimento**: confirma horário e
+>   corre atrás de quem faltou, pra derrubar o no-show.
+> • **Luna — a atendente de IA da noite e fim de semana**: ninguém fica
+>   sem resposta fora do horário.
+>
+> Começo pela Clara, que é onde você perde mais tempo hoje. **Tudo isso é
+> IA configurada com as informações do SEU negócio — não é gente nova na
+> folha.**
+
+E no fechamento da liberação (Passo 8i), reforce a mesma ideia:
+
+> Seu **time de IA já está de pé**: a Clara atende o WhatsApp, a Camila
+> cuida da confirmação e do pós, a Luna cobre a noite. Tudo isso é IA
+> trabalhando pra você — e o **Rafael, seu assistente de IA**, fica no
+> painel pra te dar relatórios e acionar o resto do time quando precisar.
 
 ## Onde os agentes existem fisicamente
 
