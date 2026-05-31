@@ -7,9 +7,31 @@ import (
 	"testing"
 )
 
+// testSofiaPublicMD is a stand-in for the real agents/sofia/AGENT.public.md
+// seed. It only needs the markers the assertions check (the Sofia persona
+// declaration and the jotaduo-discovery reference); the real prompt lives in
+// the workspace tree and is synced into baseline-workspace.
+const testSofiaPublicMD = "# AGENT — modo público (Sofia)\n\n" +
+	"Você é a **Sofia**, consultora de discovery da Jotaduo. " +
+	"Conduza o discovery seguindo a skill `jotaduo-discovery`.\n"
+
+// seedSofiaPublicPrompt writes the Sofia public prompt into the volume at the
+// path ApplyPublicSofiaAgentMD reads from, mirroring what CopyWorkspaceHome
+// copies in from the workspace seed.
+func seedSofiaPublicPrompt(t *testing.T, vol string) {
+	t.Helper()
+	dir := filepath.Join(vol, "workspace", "agents", "sofia")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir sofia: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "AGENT.public.md"), []byte(testSofiaPublicMD), 0o644); err != nil {
+		t.Fatalf("write AGENT.public.md: %v", err)
+	}
+}
+
 // setupWorkspaceVolume creates a fake tenant volume with a workspace/AGENT.md
-// containing the canonical team prompt, mirroring what CopyWorkspaceHome
-// produces. Returns the volume path.
+// containing the canonical team prompt plus the Sofia public prompt seed,
+// mirroring what CopyWorkspaceHome produces. Returns the volume path.
 func setupWorkspaceVolume(t *testing.T, agentMDContent string) string {
 	t.Helper()
 	vol := t.TempDir()
@@ -20,6 +42,7 @@ func setupWorkspaceVolume(t *testing.T, agentMDContent string) string {
 	if err := os.WriteFile(filepath.Join(wsDir, "AGENT.md"), []byte(agentMDContent), 0o644); err != nil {
 		t.Fatalf("write AGENT.md: %v", err)
 	}
+	seedSofiaPublicPrompt(t, vol)
 	return vol
 }
 
@@ -135,6 +158,7 @@ func TestApplyPublicSofiaAgentMD_MissingOriginalStillWritesSofia(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(vol, "workspace"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
+	seedSofiaPublicPrompt(t, vol)
 
 	if err := ApplyPublicSofiaAgentMD(vol); err != nil {
 		t.Fatalf("ApplyPublicSofiaAgentMD: %v", err)
@@ -151,5 +175,36 @@ func TestApplyPublicSofiaAgentMD_MissingOriginalStillWritesSofia(t *testing.T) {
 	// Backup should NOT exist — there was nothing to back up.
 	if _, err := os.Stat(filepath.Join(vol, "workspace", "AGENT.cliente.md")); !os.IsNotExist(err) {
 		t.Errorf("should not have created backup when original was missing, err=%v", err)
+	}
+}
+
+func TestApplyPublicSofiaAgentMD_MissingSofiaPromptFails(t *testing.T) {
+	// The Sofia prompt is now a workspace file (source of truth) copied into
+	// the volume by CopyWorkspaceHome. If the seed is stale and the file is
+	// absent, the apply must fail loud instead of silently leaving the cliente
+	// team prompt in a public tenant.
+	const canonical = "# AGENT canonical team\n"
+	vol := t.TempDir()
+	wsDir := filepath.Join(vol, "workspace")
+	if err := os.MkdirAll(wsDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(wsDir, "AGENT.md"), []byte(canonical), 0o644); err != nil {
+		t.Fatalf("write AGENT.md: %v", err)
+	}
+	// Note: no seedSofiaPublicPrompt — the source file is missing.
+
+	if err := ApplyPublicSofiaAgentMD(vol); err == nil {
+		t.Fatal("expected error when Sofia prompt seed is missing, got nil")
+	}
+
+	// AGENT.md must be untouched (still the canonical team prompt) and no
+	// backup created — the failure happens before any write.
+	got, _ := os.ReadFile(filepath.Join(wsDir, "AGENT.md"))
+	if string(got) != canonical {
+		t.Errorf("AGENT.md must be untouched on failure:\nwant: %q\ngot:  %q", canonical, got)
+	}
+	if _, err := os.Stat(filepath.Join(wsDir, "AGENT.cliente.md")); !os.IsNotExist(err) {
+		t.Errorf("no backup should be created when the apply fails early, err=%v", err)
 	}
 }
