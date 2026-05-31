@@ -86,14 +86,27 @@ atual.
 
 ## State machine do onboarding
 
-Esta skill **escreve em `workspace/state/onboarding.json`** via a skill
-`onboarding-state` em 3 momentos:
+Esta skill cristaliza o fim do discovery em `workspace/state/onboarding.json`
+num **único passo à prova de falha** (Fase 8b.5):
 
-- **Turno 1** (logo no init): chama `onboarding-state` com `{"action":"init"}` pra criar o arquivo se for tenant publico fresh. Idempotente.
-- **Fase 7.5** (captura credenciais): chama `{"action":"set_owner","name":"...","email":"...","whatsapp":"..."}` depois que o dono confirmar os 3.
-- **Fase 8** (fim do discovery): chama `{"action":"mark_discovery_done","segment":"clinica","summary":"..."}` depois de gravar empresa.md.
+- **Fase 7.5** (captura credenciais): só conversa — coleta + confirma nome,
+  email e WhatsApp. **Não grava nada ainda.**
+- **Fase 8b.5** (cristalização): grava UM arquivo
+  `state/discovery-close.request.json` (payload `discovery_close` = owner +
+  segmento + resumo). Isso aciona `set_owner` + `mark_discovery_done` de uma
+  vez só.
 
-O backend de promoção (`POST /api/v1/tenants/{id}/promote` no controlplane) **só libera** o tenant quando `onboarding.json::promotion.ready=true`. Sem `mark_discovery_done` + `set_owner`, esse flag fica `false` e o admin não consegue promover. Por isso seguir as 3 chamadas é não-negociável.
+⚠️ **Como cristalizar (importante):** em tenant publico você roda como o
+agente `main` (workspace raiz), então grava **direto** com `write_file` em
+`state/discovery-close.request.json` — sem delegate, sem sandbox. O cron
+determinístico `onboarding-discovery-close` (skill `discovery-close-flow`)
+lê esse arquivo e roda `state.py` por você; isso é o que torna o fechamento
+robusto mesmo quando o modelo não consegue emitir o tool call (claude-cli).
+Opcionalmente você roda o `state.py --payload-file` inline pra cristalizar na
+hora (Messages API). NUNCA use `exec(..., stdin=...)` — a tool `exec` não
+entrega stdin pra `action="run"`. Os passos exatos estão na Fase 8b.5 abaixo.
+
+O backend de promoção (`POST /api/v1/tenants/{id}/promote` no controlplane) **só libera** o tenant quando `onboarding.json::promotion.ready=true`. Sem o `discovery_close` gravado, esse flag fica `false` e o admin não consegue promover. Por isso gravar o arquivo de request é não-negociável.
 
 ## Como escolher o arquivo de segmento
 
@@ -163,22 +176,15 @@ Aguarde + valide formato. Aí:
 
 Aguarde + valide (10+ dígitos com DDI ou DDD).
 
-**Confirme antes de gravar:**
+**Confirme (só conversa, sem gravar ainda):**
 
 > "Conferindo: <Nome>, email <email@x.com>, WhatsApp <+55...>. Tá certo?"
 
-**Quando confirmar, grave via `onboarding-state`:**
-
-```
-exec(
-  action="run",
-  command="python skills/onboarding-state/scripts/state.py",
-  cwd="<workspace_root>",
-  stdin='{"action":"set_owner","name":"Eduardo Silva","email":"eduardo@x.com","whatsapp":"+5511999998888","captured_by":"sofia"}'
-)
-```
-
-**Erros tratados:** se o script retornar `email inválido`, repita a pergunta de email só. Não recapture os outros. Se `whatsapp tem menos dígitos`, pede de novo.
+Quando o dono confirmar, **guarde esses 3 dados na cabeça** (nome, email,
+WhatsApp) + o segmento + um resumo de 2-3 linhas. A gravação real acontece
+de uma vez só no **passo de cristalização (Fase 8b.5)** — um único arquivo.
+Não grave nada aqui ainda; valide formato (email com `@`, WhatsApp 10+
+dígitos) e, se inválido, pergunte de novo só aquele campo.
 
 **Por que aqui e não antes:** se o dono não confirmar o time recomendado (Fase 7), o discovery pode pivotar — e aí captura de email seria prematura. Captura DEPOIS de Fase 7 = confirma intenção real.
 
@@ -422,26 +428,54 @@ encerra. Ainda faltam 7 passos: validate, decisão de gate, teste com
 Clara, ajustes, aprovação do dono, **marcar discovery_done na state
 machine**, e (opcionalmente) liberação.
 
-### Passo 8b.5 — Marcar discovery_done
+### Passo 8b.5 — Cristalização (owner + discovery_done) — UM arquivo
 
-**ASSIM QUE** terminar de gravar `memory/empresa.md` (via Rafael), chame:
+Este é o passo **mais importante** do fechamento e o **mais à prova de
+falha**. Cristaliza, de uma vez só, o owner capturado (Fase 7.5) + o
+discovery_done. Faça-o **logo no começo do fechamento** — antes de qualquer
+delegate pesado (save_client/empresa.md) — pra garantir que a promoção
+destrava mesmo se o resto falhar.
+
+⚠️ **Contexto que muda tudo:** em tenant publico você (Sofia) roda como o
+agente `main`, com **workspace raiz**. Você NÃO está num sandbox `agents/sofia/`
+e NÃO precisa delegar pro Rafael (em modo publico o `main` é você). Você
+escreve direto no estado.
+
+**Ação obrigatória — grave UM arquivo de request** (write_file é a ação mais
+confiável que você consegue fazer):
+
+```
+write_file(
+  path="state/discovery-close.request.json",
+  overwrite=true,
+  content='{"action":"discovery_close","name":"<nome>","email":"<email>","whatsapp":"<whatsapp>","segment":"<segmento>","summary":"<resumo 2-3 linhas>","captured_by":"sofia"}'
+)
+```
+
+Isso **é suficiente**: o cron determinístico `onboarding-discovery-close`
+roda a cada poucos minutos, lê esse arquivo e cristaliza o estado
+(set_owner + mark_discovery_done) sem depender de você emitir mais nada.
+Ver skill `discovery-close-flow`.
+
+**Melhor esforço — cristalize na hora (opcional):** logo depois do
+write_file, rode UMA vez:
 
 ```
 exec(
   action="run",
-  command="python skills/onboarding-state/scripts/state.py",
-  cwd="<workspace_root>",
-  stdin='{"action":"mark_discovery_done","segment":"<segment_detectado>","summary":"<resumo executivo de 2-3 linhas do negocio>"}'
+  command="python skills/onboarding-state/scripts/state.py --payload-file state/discovery-close.request.json"
 )
 ```
 
-Isso é o que sinaliza pro backend de promoção que o discovery acabou. Sem
-isso, mesmo que `empresa.md` esteja perfeito, `onboarding.json` continua em
-`discovery_in_progress` e a Catarina/admin não sabem que pode prosseguir.
+Se isso retornar o JSON com `phase=discovery_done`, ótimo — destravou na
+hora. **Se der erro ou você não conseguir emitir o exec, NÃO insista nem
+fique tentando de novo** — o arquivo de request já garante via o cron.
+Apenas siga e encerre com o dono. (`set_owner: email inválido` → corrija o
+email com o dono e regrave o arquivo.)
 
-O script retorna o JSON novo do `onboarding.json`. Confira mentalmente que
-`phase` virou `discovery_done` (ou `deepening_in_progress` se você já tinha
-chamado `set_owner` antes da Fase 7.5 — improvável).
+Isso é o que sinaliza pro backend de promoção que o discovery acabou. Sem
+o request gravado, `onboarding.json` fica em `discovery_in_progress` e a
+Catarina/admin não sabem que pode prosseguir.
 
 ### Passo 8c — Confirmação bloco a bloco com o dono
 

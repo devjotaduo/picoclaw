@@ -294,6 +294,18 @@ export function ChatPage() {
     [messages],
   )
   const activeSuggestionMessageId = useMemo(() => {
+    // Public discovery chat (Sofia): the suggestion-choice-card heuristic
+    // does more harm than good. Sofia presents consultative prose — a team
+    // recommendation (a numbered list of agents) immediately followed by a
+    // question like "...qual é o seu e-mail?" trips parseChatSuggestionCard,
+    // which then replaces her message with clickable chips and invites the
+    // visitor to "pick one agent" (nonsensical — she's recommending a team,
+    // not offering a choice) while swallowing her actual contact-data ask.
+    // Disable it entirely on the public surface; the feature stays on for
+    // the operator dashboard chat where curated suggestions make sense.
+    if (isPublicTenant) {
+      return null
+    }
     for (let index = displayMessages.length - 1; index >= 0; index -= 1) {
       const message = displayMessages[index]
       if (message.role === "user") {
@@ -313,7 +325,7 @@ export function ChatPage() {
     }
 
     return null
-  }, [displayMessages])
+  }, [displayMessages, isPublicTenant])
 
   const publicAttendantAgent = useMemo(
     () => findPublicAttendantAgent(agents),

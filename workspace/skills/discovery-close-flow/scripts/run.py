@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""Deterministic discovery-close poller (Sofia side).
+
+Symmetric to catarina-inbox-flow (the deepening-side poller): a cron-driven
+script that crystallizes onboarding state WITHOUT depending on the LLM
+emitting a tool call. This is the durable fix for the claude-cli regime,
+which can converse reliably (plain text) but does NOT reliably emit
+tool_calls — see [[project_catarina_tool_call_blocker]].
+
+How it works:
+  - At the end of discovery, Sofia (which runs as the `main` agent on the
+    root workspace in a public tenant) drops ONE file:
+        state/discovery-close.request.json
+    a valid onboarding-state `discovery_close` payload
+    ({action, name, email, whatsapp, segment, summary}). Dropping a single
+    file is the most reliable action the model can take; everything else is
+    deterministic.
+  - This poller (cron `onboarding-discovery-close`, every few minutes) reads
+    that file and runs `state.py --payload-file <file>`, which atomically
+    sets the owner + marks discovery_done. Then it archives the request so
+    it never re-runs.
+  - On the Messages API regime the agent also runs the same command inline
+    for instant crystallization; this poller then just finds the state
+    already closed and archives the request as a no-op. Idempotent either way.
+
+Outputs (single line, for the cron log):
+  SILENT_NOOP <reason>          — nothing to do this tick
+  DISCOVERY_ALREADY_DONE        — state already closed (inline path won the race)
+  DISCOVERY_CLOSED email=...    — crystallized successfully this tick
+  CLOSE_ERROR: <reason>         — request was malformed; archived to .error
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+def fail(message: str, code: int = 1) -> int:
+    print(f"CLOSE_ERROR: {message}")
+    return code
+
+
+def run(cmd: list[str], *, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, input=stdin, text=True, capture_output=True, check=False)
+
+
+def run_json(cmd: list[str], *, stdin_obj: dict | None = None) -> dict:
+    stdin = json.dumps(stdin_obj) if stdin_obj is not None else None
+    result = run(cmd, stdin=stdin)
+    if result.returncode != 0:
+        raise RuntimeError((result.stderr or result.stdout or "").strip())
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"invalid JSON from {' '.join(cmd)}: {exc}") from exc
+
+
+def archive(request: Path, suffix: str) -> None:
+    """Move the request out of the way so the poller doesn't re-run it.
+    suffix is 'done' or 'error'. Best-effort — a failed rename is logged but
+    not fatal (next tick the idempotent state.py path handles it)."""
+    target = request.with_name(f"{request.stem}.{suffix}{request.suffix}")
+    try:
+        request.replace(target)
+    except OSError as exc:
+        print(f"WARN: could not archive request to {target.name}: {exc}")
+
+
+def main() -> int:
+    home = Path(os.environ.get("PICOCLAW_HOME", "/root/.picoclaw"))
+    workspace = home / "workspace"
+    state_py = workspace / "skills/onboarding-state/scripts/state.py"
+    request = workspace / "state/discovery-close.request.json"
+
+    if not state_py.is_file():
+        return fail(f"required skill script missing: {state_py}")
+
+    if not request.is_file():
+        print("SILENT_NOOP no_request")
+        return 0
+
+    # Validate the request is parseable JSON before doing anything with state.
+    try:
+        payload = json.loads(request.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        archive(request, "error")
+        return fail(f"unreadable/invalid request json: {exc}")
+    if not isinstance(payload, dict) or not (payload.get("email") or "").strip():
+        archive(request, "error")
+        return fail("request missing required field: email")
+
+    # If the inline path (Messages API) already crystallized, just archive.
+    try:
+        state = run_json(["python3", str(state_py)], stdin_obj={"action": "get"})
+    except RuntimeError as exc:
+        return fail(f"onboarding-state get failed: {exc}")
+    owner = state.get("owner_captured") or {}
+    discovery = state.get("discovery") or {}
+    if (owner.get("email") or "").strip() and discovery.get("completed_at"):
+        archive(request, "done")
+        print("DISCOVERY_ALREADY_DONE")
+        return 0
+
+    # Crystallize: state.py reads the request file directly (action=discovery_close).
+    result = run(["python3", str(state_py), "--payload-file", str(request)])
+    if result.returncode != 0:
+        reason = (result.stderr or result.stdout or "").strip()
+        # Malformed payload (e.g. invalid email) — archive so we don't loop
+        # forever; the visitor can re-trigger by finishing discovery again.
+        archive(request, "error")
+        return fail(reason or "state.py discovery_close failed")
+
+    archive(request, "done")
+    email = (payload.get("email") or "").strip().lower()
+    print(f"DISCOVERY_CLOSED email={email}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
