@@ -56,7 +56,16 @@ import { PromoteTenantCard } from "@/components/tenant/promote-tenant-card";
 import { ResendCredentialsDialog } from "@/components/tenant/resend-credentials-dialog";
 import { RotatedPasswordDialog } from "@/components/tenant/rotated-password-dialog";
 import { formatDate, formatInt, formatUSD, relativeTime } from "@/lib/utils";
-import { joinModelList, splitModelList } from "@/lib/model-routing";
+import {
+  CLAUDE_CLI_MODEL_PRESETS,
+  CODEX_CLI_MODEL_PRESETS,
+  CUSTOM_CLI_MODEL_PRESET_ID,
+  cliModelValueFromPreset,
+  cliPresetDescription,
+  cliPresetIDForModel,
+  joinModelList,
+  splitModelList,
+} from "@/lib/model-routing";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/toast";
 
@@ -1038,8 +1047,10 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
   const [litellmFallbacks, setLiteLLMFallbacks] = useState("");
   const [litellmAllowedModels, setLiteLLMAllowedModels] = useState("");
   const [cliOrderPreset, setCLIOrderPreset] = useState<CLIOrderPreset>("claude-codex");
-  const [claudeCLIModel, setClaudeCLIModel] = useState("sonnet");
-  const [codexCLIModel, setCodexCLIModel] = useState("codex-cli");
+  const [claudeCLIModelPreset, setClaudeCLIModelPreset] = useState("sonnet");
+  const [claudeCLICustomModel, setClaudeCLICustomModel] = useState("");
+  const [codexCLIModelPreset, setCodexCLIModelPreset] = useState("codex-cli");
+  const [codexCLICustomModel, setCodexCLICustomModel] = useState("");
 
   useEffect(() => {
     if (!q.data) return;
@@ -1049,8 +1060,16 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
     setLiteLLMFallbacks(joinModelList(q.data.litellm?.fallbacks));
     setLiteLLMAllowedModels(joinModelList(q.data.litellm?.allowed_models));
     setCLIOrderPreset(presetFromCLIOrder(q.data.cli?.order));
-    setClaudeCLIModel(q.data.cli?.claude_model || "sonnet");
-    setCodexCLIModel(q.data.cli?.codex_model || "codex-cli");
+    const claudeModel = q.data.cli?.claude_model || "sonnet";
+    const claudePresetID = cliPresetIDForModel(claudeModel, CLAUDE_CLI_MODEL_PRESETS, "sonnet");
+    setClaudeCLIModelPreset(claudePresetID);
+    setClaudeCLICustomModel(
+      claudePresetID === CUSTOM_CLI_MODEL_PRESET_ID ? claudeModel : "",
+    );
+    const codexModel = q.data.cli?.codex_model || "codex-cli";
+    const codexPresetID = cliPresetIDForModel(codexModel, CODEX_CLI_MODEL_PRESETS, "codex-cli");
+    setCodexCLIModelPreset(codexPresetID);
+    setCodexCLICustomModel(codexPresetID === CUSTOM_CLI_MODEL_PRESET_ID ? codexModel : "");
   }, [q.data]);
 
   const updateM = useMutation({
@@ -1077,6 +1096,16 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
       };
     }
     if (mode === "cli") {
+      const claudeCLIModel = cliModelValueFromPreset(
+        claudeCLIModelPreset,
+        claudeCLICustomModel,
+        CLAUDE_CLI_MODEL_PRESETS,
+      );
+      const codexCLIModel = cliModelValueFromPreset(
+        codexCLIModelPreset,
+        codexCLICustomModel,
+        CODEX_CLI_MODEL_PRESETS,
+      );
       return {
         mode,
         cli: {
@@ -1142,25 +1171,67 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
               </Field>
               <Field>
                 <FieldLabel htmlFor="tenant-claude-cli-model">Modelo Claude CLI</FieldLabel>
-                <Input
-                  id="tenant-claude-cli-model"
-                  value={claudeCLIModel}
-                  onChange={(event) => setClaudeCLIModel(event.target.value)}
-                  placeholder="sonnet"
+                <Select
+                  value={claudeCLIModelPreset}
+                  onValueChange={setClaudeCLIModelPreset}
                   disabled={q.isLoading}
-                />
-                <FieldDescription>Ex.: sonnet, haiku, opus ou claude-sonnet-4-5.</FieldDescription>
+                >
+                  <SelectTrigger id="tenant-claude-cli-model">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CLAUDE_CLI_MODEL_PRESETS.map((preset) => (
+                      <SelectItem key={preset.id} value={preset.id}>
+                        {preset.label} · {preset.model}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={CUSTOM_CLI_MODEL_PRESET_ID}>Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+                {claudeCLIModelPreset === CUSTOM_CLI_MODEL_PRESET_ID ? (
+                  <Input
+                    id="tenant-claude-cli-custom-model"
+                    value={claudeCLICustomModel}
+                    onChange={(event) => setClaudeCLICustomModel(event.target.value)}
+                    placeholder="claude-sonnet-4-6"
+                    disabled={q.isLoading}
+                  />
+                ) : null}
+                <FieldDescription>
+                  {cliPresetDescription(claudeCLIModelPreset, CLAUDE_CLI_MODEL_PRESETS)}
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="tenant-codex-cli-model">Modelo Codex CLI</FieldLabel>
-                <Input
-                  id="tenant-codex-cli-model"
-                  value={codexCLIModel}
-                  onChange={(event) => setCodexCLIModel(event.target.value)}
-                  placeholder="codex-cli"
+                <Select
+                  value={codexCLIModelPreset}
+                  onValueChange={setCodexCLIModelPreset}
                   disabled={q.isLoading}
-                />
-                <FieldDescription>codex-cli usa o config.toml; outro valor chama codex exec -m.</FieldDescription>
+                >
+                  <SelectTrigger id="tenant-codex-cli-model">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CODEX_CLI_MODEL_PRESETS.map((preset) => (
+                      <SelectItem key={preset.id} value={preset.id}>
+                        {preset.label} · {preset.model}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={CUSTOM_CLI_MODEL_PRESET_ID}>Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+                {codexCLIModelPreset === CUSTOM_CLI_MODEL_PRESET_ID ? (
+                  <Input
+                    id="tenant-codex-cli-custom-model"
+                    value={codexCLICustomModel}
+                    onChange={(event) => setCodexCLICustomModel(event.target.value)}
+                    placeholder="gpt-5.5"
+                    disabled={q.isLoading}
+                  />
+                ) : null}
+                <FieldDescription>
+                  {cliPresetDescription(codexCLIModelPreset, CODEX_CLI_MODEL_PRESETS)}
+                </FieldDescription>
               </Field>
             </>
           ) : null}
