@@ -322,7 +322,10 @@ func normalizeWorkspaceSourceEntry(rel string, data []byte) []byte {
 	case "config.json":
 		return normalizeWorkspaceConfigJSONBytes(data)
 	case ".security.yml":
-		return workspaceSecurityTokenPattern.ReplaceAll(data, []byte("${1}REDACTED  # operator must replace with real key post-deploy"))
+		return workspaceSecurityTokenPattern.ReplaceAll(
+			data,
+			[]byte("${1}REDACTED  # operator must replace with real key post-deploy"),
+		)
 	default:
 		return data
 	}
