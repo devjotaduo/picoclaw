@@ -114,6 +114,18 @@ func NewHandler(cfg *config.Config, db *store.DB, prov *tenant.Provisioner, mlr 
 		log.Printf("supabase client init failed: %v (falling back to legacy auth)", err)
 	}
 
+	// Inject the embedded-baseline healer so the provisioner can additively
+	// repair the SELECTED workspace template right before copying it into a new
+	// tenant volume. The embed (baselineWorkspaceFS / extractEmbeddedBaseline)
+	// lives in package api; package tenant can't import it without a cycle, so
+	// we pass it as a function. Without this, a tenant created from a manual
+	// workspace that predates a newly required baseline file (e.g.
+	// agents/sofia/AGENT.public.md, #180) fails provisioning forever — the
+	// boot-time seed only heals the default-auto workspace.
+	if prov != nil {
+		prov.BaselineHealer = extractEmbeddedBaseline
+	}
+
 	if cfg.MCPEncryptionKey != "" {
 		key, err := mcp.LoadEncryptionKey(cfg.MCPEncryptionKey)
 		if err != nil {
