@@ -72,6 +72,11 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 	if p.Cfg.TenantImage != "" {
 		t.ContainerImage = p.Cfg.TenantImage
 	}
+	if t.IsPublic {
+		if err := ApplyPublicSofiaAgentMD(t.VolumePath); err != nil {
+			return fmt.Errorf("apply public Sofia workspace: %w", err)
+		}
+	}
 	cliReq, err := TenantCLIAuthProvidersFromConfig(t.VolumePath)
 	if err != nil {
 		return fmt.Errorf("inspect tenant cli auth requirements: %w", err)

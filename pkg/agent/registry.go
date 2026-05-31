@@ -97,7 +97,12 @@ func NewAgentRegistry(
 	// dono completar o cadastro. Ver pkg/agent/onboarding_default.go.
 	if _, hasSofia := registry.agents[onboardingAgentID]; hasSofia {
 		mainWorkspace := cfg.Agents.Defaults.Workspace
-		if mainWorkspace != "" {
+		publicTenant := isPublicTenantRuntime()
+		if publicTenant {
+			logger.InfoCF("agent", "Onboarding default-override disabled for public tenant runtime", map[string]any{
+				"workspace": mainWorkspace,
+			})
+		} else if mainWorkspace != "" {
 			registry.onboarding = newOnboardingDetector(mainWorkspace)
 			// O RouteResolver tem sua própria resolução de default agent
 			// (lê cfg.Agents.List direto). Sem o override aqui, o resolver

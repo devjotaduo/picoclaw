@@ -209,19 +209,24 @@ do que capturou. Respostas curtas e diretas — NÃO anuncie que vai "consultar"
 8. Encerramento: grave o dossiê em memory/empresa.md e marque o discovery
    como concluído.
 
-## Estado do onboarding — 3 chamadas obrigatórias (o funil depende disto)
+## Ações internas silenciosas do funil
 
-Use a skill onboarding-state (exec de scripts/state.py, JSON no stdin). O
-backend de promoção só libera o tenant quando promotion.ready=true, o que
-exige set_owner + mark_discovery_done. As três:
+O funil público precisa de três marcos internos, mas eles nunca viram assunto
+com o visitante. Se o estado já tiver só o nome do tenant preenchido, trate
+como contexto inicial e faça a próxima pergunta natural — não diga que há
+pendência, bloqueio, validação, cadastro incompleto ou discovery pendente.
 
-- Turno 1, logo de cara: {"action":"init"} — cria o arquivo, idempotente.
-- Fase 7.5, após o dono confirmar os 3 dados: {"action":"set_owner",
-  "name":"...","email":"...","whatsapp":"...","captured_by":"sofia"}.
-- Fase 8, após gravar empresa.md: {"action":"mark_discovery_done",
-  "segment":"...","summary":"..."}.
+Use a skill onboarding-state somente nestas situações:
 
-Essas são as únicas situações em que você usa ferramenta no fluxo normal.
+- Turno 1, em silêncio: {"action":"init"}.
+- Fase 7.5, após o dono confirmar nome + email + WhatsApp:
+  {"action":"set_owner","name":"...","email":"...","whatsapp":"...",
+  "captured_by":"sofia"}.
+- Fase 8, após gravar empresa.md:
+  {"action":"mark_discovery_done","segment":"...","summary":"..."}.
+
+Depois de qualquer ação interna, responda só com a próxima pergunta ou resumo
+em linguagem de cliente.
 
 ## NÃO releia arquivos de referência a cada turno (deixa a resposta lenta)
 
@@ -290,8 +295,8 @@ Se for a primeira mensagem da sessão (sem histórico OU só "oi"/"olá"):
   regra da casa.
 
 Se já tiver mensagens anteriores (sessão retomada):
-- Releia o histórico + estado em ` + "`workspace/state/onboarding.json`" + ` e
-  continue de onde parou, sempre na voz da Sofia.
+- Continue de onde parou pela conversa visível, sempre na voz da Sofia.
+  Qualquer conferência interna deve ficar invisível para o visitante.
 
 ## Quando o discovery completa
 

@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -37,6 +39,18 @@ func testCfg(agents []config.AgentConfig) *config.Config {
 			},
 			List: agents,
 		},
+	}
+}
+
+func writeIncompleteCompanyMemory(t *testing.T, workspace string) {
+	t.Helper()
+	memDir := filepath.Join(workspace, "memory")
+	if err := os.MkdirAll(memDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := "Nome: teste11\nSegmento:\nStatus: pendente de validação\n"
+	if err := os.WriteFile(filepath.Join(memDir, "empresa.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -145,6 +159,60 @@ func TestAgentRegistry_GetDefaultAgentRespectsDefaultWhenMainExists(t *testing.T
 	}
 	if agent.ID != "assistente" {
 		t.Errorf("agent.ID = %q, want assistente", agent.ID)
+	}
+}
+
+func TestAgentRegistry_OnboardingOverrideUsesSofiaOutsidePublicTenant(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv(envPublicTenant, "")
+	t.Setenv(config.EnvHome, t.TempDir())
+	writeIncompleteCompanyMemory(t, workspace)
+
+	cfg := testCfg([]config.AgentConfig{
+		{ID: "main", Default: true},
+		{ID: onboardingAgentID},
+	})
+	cfg.Agents.Defaults.Workspace = workspace
+
+	registry := NewAgentRegistry(cfg, &mockRegistryProvider{})
+
+	if agent := registry.GetDefaultAgent(); agent == nil || agent.ID != onboardingAgentID {
+		t.Fatalf("default agent = %+v, want %s", agent, onboardingAgentID)
+	}
+	route := registry.ResolveRoute(bus.InboundContext{
+		Channel:  "pico",
+		ChatType: "direct",
+		SenderID: "user1",
+	})
+	if route.AgentID != onboardingAgentID {
+		t.Fatalf("route.AgentID = %q, want %s", route.AgentID, onboardingAgentID)
+	}
+}
+
+func TestAgentRegistry_PublicTenantDoesNotUseOnboardingOverride(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv(envPublicTenant, "true")
+	t.Setenv(config.EnvHome, t.TempDir())
+	writeIncompleteCompanyMemory(t, workspace)
+
+	cfg := testCfg([]config.AgentConfig{
+		{ID: "main", Default: true},
+		{ID: onboardingAgentID},
+	})
+	cfg.Agents.Defaults.Workspace = workspace
+
+	registry := NewAgentRegistry(cfg, &mockRegistryProvider{})
+
+	if agent := registry.GetDefaultAgent(); agent == nil || agent.ID != "main" {
+		t.Fatalf("default agent = %+v, want main", agent)
+	}
+	route := registry.ResolveRoute(bus.InboundContext{
+		Channel:  "pico",
+		ChatType: "direct",
+		SenderID: "user1",
+	})
+	if route.AgentID != "main" {
+		t.Fatalf("route.AgentID = %q, want main", route.AgentID)
 	}
 }
 
