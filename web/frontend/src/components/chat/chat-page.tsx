@@ -581,15 +581,34 @@ export function ChatPage() {
     canInput && (Boolean(input.trim()) || attachments.length > 0)
 
   return (
-    <div className="bg-background/95 flex h-full">
-      <div className="flex min-w-0 flex-1 flex-col">
+    <div className="relative isolate flex h-full overflow-hidden bg-[#1c1c1b] text-[#f4f3ef]">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(28,28,27,0))]"
+        aria-hidden="true"
+      />
+      <div className="relative flex min-w-0 flex-1 flex-col">
         <PageHeader
           title=""
-          className={`transition-shadow ${
-            hasScrolled ? "shadow-xs" : "shadow-none"
+          className={`border-b border-white/[0.06] bg-[#1c1c1b]/92 backdrop-blur-xl transition-shadow ${
+            hasScrolled ? "shadow-[0_3px_14px_rgba(0,0,0,0.16)]" : ""
           }`}
           titleExtra={
-            hasChatHeaderControls ? (
+            isPublicTenant ? (
+              <div className="flex min-w-0 items-center gap-3">
+                <img
+                  src="/logo_with_text_light.png"
+                  alt="Jota Duo"
+                  className="h-7 w-auto object-contain"
+                />
+                <span
+                  className="hidden h-5 w-px bg-white/10 sm:block"
+                  aria-hidden="true"
+                />
+                <span className="hidden truncate text-sm text-[#b8b5ac] sm:block">
+                  Atendimento com Sofia
+                </span>
+              </div>
+            ) : hasChatHeaderControls ? (
               <div className="flex min-w-0 items-center gap-2">
                 <ModelSelector
                   defaultModelName={defaultModelName}
@@ -603,10 +622,8 @@ export function ChatPage() {
           }
         >
           {showAssistantDetailsToggle && canToggleAssistantDetails && (
-            <div className="border-border/60 hidden items-center gap-2 rounded-lg border px-3 py-1.5 sm:flex">
-              <span className="text-muted-foreground text-sm">
-                {t("chat.showAssistantDetails")}
-              </span>
+            <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 text-[#d2d0c8] sm:flex">
+              <span className="text-sm">{t("chat.showAssistantDetails")}</span>
               <Switch
                 checked={showAssistantDetails}
                 onCheckedChange={setShowAssistantDetails}
@@ -621,7 +638,7 @@ export function ChatPage() {
               variant="secondary"
               size="sm"
               onClick={newChat}
-              className="h-9 gap-2"
+              className="h-9 gap-2 rounded-full border border-white/10 bg-white/[0.065] text-[#f3f2ec] hover:bg-white/[0.11]"
             >
               <IconPlus className="size-4" />
               <span className="hidden sm:inline">{t("chat.newChat")}</span>
@@ -652,7 +669,7 @@ export function ChatPage() {
           onScroll={handleScroll}
           className="px-4 py-6 md:px-8 lg:px-24 xl:px-48"
         >
-          <ConversationContent className="max-w-250 pb-8">
+          <ConversationContent className="max-w-[920px] gap-10 pt-4 pb-12 md:pt-8">
             {messages.length === 0 && !isTyping && (
               <ChatEmptyState
                 hasAvailableModels={hasAvailableModels}

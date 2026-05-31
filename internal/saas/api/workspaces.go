@@ -413,6 +413,10 @@ func (h *Handler) handleWriteWorkspaceFile(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, "chmod: "+err.Error())
 		return
 	}
+	if err := h.Workspaces.BumpVersion(r.Context(), ws.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "bump workspace version: "+err.Error())
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

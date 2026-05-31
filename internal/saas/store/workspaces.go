@@ -177,6 +177,26 @@ func (s *WorkspaceStore) SetFrontendBuilt(ctx context.Context, id string, builtA
 	return nil
 }
 
+// BumpVersion records a content edit performed outside metadata updates.
+// Workspace files live on disk, so the DB version is only a human/operator
+// revision counter; hash-based sync diagnostics are the source of truth for
+// git/baseline equality.
+func (s *WorkspaceStore) BumpVersion(ctx context.Context, id string) error {
+	const q = `
+        UPDATE workspaces
+        SET version = version + 1,
+            updated_at = now()
+        WHERE id = $1`
+	ct, err := s.DB.Pool.Exec(ctx, q, id)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrWorkspaceNotFound
+	}
+	return nil
+}
+
 // Delete removes a workspace. Tenants pointing at it are rejected by the FK
 // (ON DELETE RESTRICT) so callers must reassign tenants before calling here.
 // The default-auto workspace is also protected — clearing the flag first is

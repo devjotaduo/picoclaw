@@ -57,6 +57,11 @@ EXCLUDE_NAMES_EXACT = {
     "whatsapp",
     "state",
     "output",
+    "logs",
+    "cache",
+    ".cache",
+    "node_modules",
+    ".pnpm-store",
     "auth.json",
     "heartbeat.log",
     "gerar_pdf_mamiferos.py",
@@ -107,13 +112,13 @@ def empty_memory_files(root: Path) -> int:
             continue
         if p.suffix.lower() == ".md":
             title = p.stem.replace("-", " ").replace("_", " ").title()
-            p.write_text(f"# {title}\n\n", encoding="utf-8")
+            p.write_text(f"# {title}\n\n", encoding="utf-8", newline="\n")
             n += 1
         elif p.suffix.lower() == ".json":
-            p.write_text("{}\n", encoding="utf-8")
+            p.write_text("{}\n", encoding="utf-8", newline="\n")
             n += 1
         else:
-            p.write_text("", encoding="utf-8")
+            p.write_text("", encoding="utf-8", newline="\n")
             n += 1
     return n
 
@@ -150,7 +155,7 @@ def redact_security_yml(path: Path) -> bool:
         return f"{match.group(1)}REDACTED  # operator must replace with real key post-deploy"
     new = pattern.sub(replace, raw)
     if redacted_count[0] > 0:
-        path.write_text(new, encoding="utf-8")
+        path.write_text(new, encoding="utf-8", newline="\n")
         log(f"redacted {redacted_count[0]} api_key value(s) in .security.yml")
         return True
     return False
@@ -207,6 +212,7 @@ def normalize_config_json(path: Path) -> bool:
         path.write_text(
             json.dumps(raw, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
+            newline="\n",
         )
     return changed
 
@@ -215,11 +221,11 @@ def baseline_content_hash(root: Path) -> str:
     """Return a stable SHA256 over baseline files, excluding SYNCED_FROM."""
     h = hashlib.sha256()
     files = sorted(
-        p for p in root.rglob("*")
+        (p.relative_to(root).as_posix(), p)
+        for p in root.rglob("*")
         if p.is_file() and p.name != "SYNCED_FROM"
     )
-    for path in files:
-        rel = path.relative_to(root).as_posix()
+    for rel, path in files:
         data = path.read_bytes()
         h.update(rel.encode("utf-8"))
         h.update(b"\0")
@@ -241,7 +247,7 @@ def write_manifest(content_hash: str, file_count: int) -> None:
         f"content_hash_sha256: {content_hash}\n"
         f"file_count: {file_count}\n"
     )
-    manifest.write_text(body, encoding="utf-8")
+    manifest.write_text(body, encoding="utf-8", newline="\n")
 
 
 def main() -> int:

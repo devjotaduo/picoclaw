@@ -437,7 +437,7 @@ export function AssistantMessage({
   return (
     <Message from="assistant" className="max-w-full gap-1.5">
       {!isCollapsedBlock && messageMeta.length > 0 && (
-        <div className="text-muted-foreground/60 flex items-center justify-between gap-2 px-1 text-xs opacity-70">
+        <div className="flex items-center justify-between gap-2 px-1 text-xs text-[#9b998f] opacity-80">
           <div className="flex items-center gap-2">
             <span>{messageMeta.join(" • ")}</span>
           </div>
@@ -447,10 +447,10 @@ export function AssistantMessage({
       {(hasText || isCollapsedBlock || hasToolCalls) && (
         <MessageContent
           className={cn(
-            "relative overflow-hidden rounded-xl border",
+            "relative overflow-hidden",
             isCollapsedBlock
               ? "border-transparent bg-transparent group-[.is-assistant]:border-transparent group-[.is-assistant]:bg-transparent"
-              : "bg-card text-card-foreground border-border/60",
+              : "border-0 bg-transparent text-[#f2f1ea] group-[.is-assistant]:bg-transparent",
             isCompactToolCall && "w-fit max-w-[min(42rem,100%)] rounded-full",
           )}
         >
@@ -478,10 +478,10 @@ export function AssistantMessage({
               ) : (
                 <div
                   className={cn(
-                    "prose dark:prose-invert prose-pre:my-2 prose-pre:overflow-x-auto prose-pre:rounded-lg prose-pre:border prose-pre:bg-zinc-100 prose-pre:p-0 prose-pre:text-zinc-900 dark:prose-pre:bg-zinc-950 dark:prose-pre:text-zinc-100 max-w-none [overflow-wrap:anywhere] break-words",
+                    "prose prose-invert prose-headings:text-[#f4f3ef] prose-strong:text-[#f7f5ee] prose-p:text-[#e8e6dd] prose-li:text-[#e8e6dd] prose-pre:my-3 prose-pre:overflow-x-auto prose-pre:rounded-xl prose-pre:border prose-pre:border-white/10 prose-pre:bg-[#111110] prose-pre:p-0 prose-pre:text-[#f3f2ec] max-w-none [overflow-wrap:anywhere] break-words",
                     isThought
                       ? "prose-p:my-1.5 prose-p:whitespace-pre-wrap px-3 pt-0 pb-3 text-[13px] leading-relaxed opacity-70"
-                      : "prose-p:my-2 prose-p:whitespace-pre-wrap p-4 text-[15px] leading-relaxed",
+                      : "prose-p:my-3 prose-p:whitespace-pre-wrap px-1 py-1 text-[16px] leading-7",
                   )}
                 >
                   <MessageResponse>{displayContent}</MessageResponse>
@@ -495,7 +495,7 @@ export function AssistantMessage({
               variant="ghost"
               size="icon"
               className={cn(
-                "bg-background/50 hover:bg-background/80 absolute top-2 right-2 h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100",
+                "absolute top-1 right-1 h-7 w-7 bg-[#252523]/80 text-[#c7c5bc] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#302f2c] hover:text-[#f3f2ec]",
               )}
               onClick={handleCopy}
             >

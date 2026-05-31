@@ -298,6 +298,8 @@ export function WorkspaceFiles() {
       setOriginalContent(draft);
       // Refresh tree (size may have changed) but keep editor state intact.
       qc.invalidateQueries({ queryKey: ["workspace-files-tree", workspaceId] });
+      qc.invalidateQueries({ queryKey: ["workspaces"] });
+      qc.invalidateQueries({ queryKey: ["workspace-sync-status", workspaceId] });
     },
   });
 

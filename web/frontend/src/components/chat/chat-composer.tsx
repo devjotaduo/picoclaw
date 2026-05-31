@@ -243,15 +243,15 @@ export function ChatComposer({
   }
 
   return (
-    <div className="before:bg-background pointer-events-none relative z-10 -mt-[24px] shrink-0 [scrollbar-gutter:stable] overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] before:pointer-events-none before:absolute before:inset-x-0 before:top-[24px] before:bottom-0 before:content-[''] md:px-8 md:pb-8 lg:px-24 xl:px-48">
-      <div className="bg-card/95 border-border/55 pointer-events-auto relative mx-auto flex max-w-[1000px] flex-col rounded-[28px] border p-3 shadow-[0_8px_24px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-white/[0.025] backdrop-blur-xl transition-shadow duration-200 focus-within:shadow-[0_10px_30px_rgba(0,0,0,0.15),inset_0_1px_0_rgba(255,255,255,0.07)] md:p-4">
+    <div className="pointer-events-none relative z-10 -mt-8 shrink-0 [scrollbar-gutter:stable] overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:px-8 md:pb-6 lg:px-24 xl:px-48">
+      <div className="pointer-events-auto relative mx-auto flex max-w-[920px] flex-col rounded-[28px] border border-white/[0.065] bg-[#292927]/95 p-3 text-[#f2f1ea] shadow-[0_8px_28px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-black/20 backdrop-blur-xl transition-shadow duration-200 focus-within:border-white/[0.12] focus-within:shadow-[0_10px_34px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.06)] md:p-4">
         {attachments.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-2 px-2">
             {attachments.map((attachment, index) =>
               attachment.type === "image" ? (
                 <div
                   key={`${attachment.url}-${index}`}
-                  className="bg-background relative h-20 w-20 overflow-hidden rounded-xl border"
+                  className="relative h-20 w-20 overflow-hidden rounded-xl border border-white/10 bg-[#1b1b19]"
                 >
                   <img
                     src={attachment.url}
@@ -261,7 +261,7 @@ export function ChatComposer({
                   <button
                     type="button"
                     onClick={() => onRemoveAttachment(index)}
-                    className="bg-background/85 text-foreground absolute top-1 right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border shadow-sm transition hover:bg-white"
+                    className="absolute top-1 right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-[#1b1b19]/85 text-[#f2f1ea] transition hover:bg-[#333330]"
                     aria-label={t("chat.removeImage")}
                     title={t("chat.removeImage")}
                   >
@@ -271,13 +271,13 @@ export function ChatComposer({
               ) : attachment.type === "audio" ? (
                 <div
                   key={`${attachment.url}-${index}`}
-                  className="bg-background relative flex items-center gap-2 rounded-xl border px-3 py-2"
+                  className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-[#1b1b19] px-3 py-2"
                 >
                   <audio controls src={attachment.url} className="h-8" />
                   <button
                     type="button"
                     onClick={() => onRemoveAttachment(index)}
-                    className="bg-background/85 text-foreground inline-flex h-6 w-6 items-center justify-center rounded-full border shadow-sm transition hover:bg-white"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-[#1b1b19]/85 text-[#f2f1ea] transition hover:bg-[#333330]"
                     aria-label={t("chat.removeAudio")}
                     title={t("chat.removeAudio")}
                   >
@@ -287,23 +287,23 @@ export function ChatComposer({
               ) : (
                 <div
                   key={`${attachment.url}-${index}`}
-                  className="bg-background relative flex max-w-64 items-center gap-3 rounded-xl border px-3 py-2 pr-9"
+                  className="relative flex max-w-64 items-center gap-3 rounded-xl border border-white/10 bg-[#1b1b19] px-3 py-2 pr-9"
                 >
-                  <div className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-[#b7b4aa]">
                     <IconFileText className="size-5" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-foreground truncate text-sm font-medium">
+                    <div className="truncate text-sm font-medium text-[#f2f1ea]">
                       {attachment.filename || t("chat.uploadedFile")}
                     </div>
-                    <div className="text-muted-foreground truncate text-xs">
+                    <div className="truncate text-xs text-[#aaa79e]">
                       {formatAttachmentType(attachment)}
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => onRemoveAttachment(index)}
-                    className="bg-background/85 text-foreground absolute top-1 right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border shadow-sm transition hover:bg-white"
+                    className="absolute top-1 right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-[#1b1b19]/85 text-[#f2f1ea] transition hover:bg-[#333330]"
                     aria-label={t("chat.removeFile")}
                     title={t("chat.removeFile")}
                   >
@@ -341,9 +341,8 @@ export function ChatComposer({
             disabled={!canInput}
             title={disabledMessage || undefined}
             className={cn(
-              "placeholder:text-muted-foreground/55 max-h-[200px] min-h-[58px] resize-none border-0 bg-transparent px-2 py-1 text-[15px] leading-6 shadow-none transition-colors focus-visible:ring-0 focus-visible:outline-none dark:bg-transparent",
-              !canInput &&
-                "placeholder:text-muted-foreground cursor-not-allowed",
+              "max-h-[200px] min-h-[58px] resize-none border-0 bg-transparent px-2 py-1 text-[16px] leading-6 text-[#f2f1ea] shadow-none transition-colors placeholder:text-[#9d9a91] focus-visible:ring-0 focus-visible:outline-none dark:bg-transparent",
+              !canInput && "cursor-not-allowed placeholder:text-[#7e7a72]",
             )}
             minRows={1}
             maxRows={8}
@@ -356,7 +355,7 @@ export function ChatComposer({
               type="button"
               variant="ghost"
               size="icon"
-              className="text-muted-foreground hover:text-foreground hover:bg-muted/55 h-8 w-8 rounded-full"
+              className="h-8 w-8 rounded-full text-[#c7c4bb] hover:bg-white/[0.065] hover:text-[#f3f2ec]"
               onClick={onAddAttachments}
               disabled={!canInput || isRecording}
               aria-label={t("chat.attachFile")}
@@ -370,7 +369,7 @@ export function ChatComposer({
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  "h-8 rounded-full px-2.5 text-xs font-medium whitespace-nowrap text-orange-500 hover:bg-orange-500/10 hover:text-orange-400 dark:text-orange-300 dark:hover:text-orange-200",
+                  "h-8 rounded-full px-2.5 text-xs font-medium whitespace-nowrap text-[#e0b15f] hover:bg-[#e0b15f]/10 hover:text-[#f1c66f]",
                   attendantTestActive &&
                     "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/20 hover:text-emerald-200",
                 )}
@@ -399,8 +398,8 @@ export function ChatComposer({
                     className={cn(
                       "h-8 w-8 rounded-full",
                       assistantDetailsEnabled
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground hover:bg-muted/55 hover:text-foreground",
+                        ? "bg-white/[0.085] text-[#f3f2ec]"
+                        : "text-[#c7c4bb] hover:bg-white/[0.065] hover:text-[#f3f2ec]",
                     )}
                     onClick={() =>
                       onAssistantDetailsChange(!assistantDetailsEnabled)
@@ -423,8 +422,8 @@ export function ChatComposer({
               className={cn(
                 "h-8 w-8 rounded-full",
                 isRecording
-                  ? "bg-red-600 text-white shadow-[0_0_0_4px_rgba(220,38,38,0.16)] hover:bg-red-700"
-                  : "text-muted-foreground hover:bg-muted/55 hover:text-foreground",
+                  ? "bg-red-600 text-white shadow-[0_0_0_2px_rgba(220,38,38,0.12)] hover:bg-red-700"
+                  : "text-[#c7c4bb] hover:bg-white/[0.065] hover:text-[#f3f2ec]",
               )}
               onClick={isRecording ? stopRecording : startRecording}
               disabled={!canInput}
@@ -454,7 +453,7 @@ export function ChatComposer({
                     <Button
                       type="button"
                       size="icon"
-                      className="focus-visible:ring-foreground/20 size-9 rounded-full bg-[#bfc0c2] text-[#303030] shadow-[0_7px_18px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.45)] transition-transform hover:bg-[#d8d8d8] active:scale-95 disabled:bg-[#a9aaad] disabled:text-[#4b4b4b] disabled:opacity-70"
+                      className="focus-visible:ring-foreground/20 size-9 rounded-full bg-[#bfc0c2] text-[#303030] shadow-[0_3px_9px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.38)] transition-transform hover:bg-[#d8d8d8] active:scale-95 disabled:bg-[#a9aaad] disabled:text-[#4b4b4b] disabled:opacity-70"
                       onClick={onSend}
                       disabled={!canSend}
                       aria-label={t("chat.sendMessage")}

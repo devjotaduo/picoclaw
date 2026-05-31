@@ -217,6 +217,7 @@ func (h *Handler) Routes() http.Handler {
 				r.Post("/workspaces", h.handleCreateWorkspace)
 				r.Post("/workspaces/upload", h.handleUploadWorkspace)
 				r.Post("/workspaces/import-from-home", h.handleImportWorkspaceFromHome)
+				r.Get("/workspaces/{id}/sync-status", h.handleGetWorkspaceSyncStatus)
 				r.Get("/workspaces/{id}", h.handleGetWorkspace)
 				r.Put("/workspaces/{id}", h.handleUpdateWorkspace)
 				r.Delete("/workspaces/{id}", h.handleDeleteWorkspace)

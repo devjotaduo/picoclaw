@@ -225,9 +225,9 @@ export function ChatEmptyState({
   )
 
   return (
-    <div className="flex flex-col items-center justify-center py-16">
+    <div className="flex flex-col items-center justify-center py-16 text-[#f4f3ef]">
       <div
-        className="ring-border/40 mb-7 size-28 overflow-hidden rounded-full shadow-sm ring-1"
+        className="mb-7 size-28 overflow-hidden rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.18)] ring-1 ring-white/10"
         aria-hidden="true"
       >
         {agent?.avatar?.image_url ? (
@@ -243,8 +243,10 @@ export function ChatEmptyState({
           />
         )}
       </div>
-      <h3 className="mb-2 text-center text-xl font-medium">{heading}</h3>
-      <p className="text-muted-foreground mb-6 max-w-xl text-center text-sm">
+      <h3 className="mb-2 text-center text-2xl font-medium tracking-tight">
+        {heading}
+      </h3>
+      <p className="mb-7 max-w-xl text-center text-sm leading-6 text-[#b8b5ac]">
         {description}
       </p>
 
@@ -258,9 +260,9 @@ export function ChatEmptyState({
               size="sm"
               disabled={disabled}
               onClick={() => onQuickTask?.(task.prompt)}
-              className="h-auto justify-start gap-2 px-3 py-2 text-left text-sm whitespace-normal"
+              className="h-auto justify-start gap-2 rounded-2xl border-white/10 bg-white/[0.035] px-3 py-2.5 text-left text-sm whitespace-normal text-[#eeeae0] hover:bg-white/[0.07]"
             >
-              <IconSparkles className="text-primary mt-0.5 size-4 shrink-0" />
+              <IconSparkles className="mt-0.5 size-4 shrink-0 text-[#d6b48a]" />
               <span className="flex-1 leading-snug">{task.label}</span>
             </Button>
           ))}
