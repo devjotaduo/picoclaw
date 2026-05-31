@@ -1038,6 +1038,8 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
   const [litellmFallbacks, setLiteLLMFallbacks] = useState("");
   const [litellmAllowedModels, setLiteLLMAllowedModels] = useState("");
   const [cliOrderPreset, setCLIOrderPreset] = useState<CLIOrderPreset>("claude-codex");
+  const [claudeCLIModel, setClaudeCLIModel] = useState("sonnet");
+  const [codexCLIModel, setCodexCLIModel] = useState("codex-cli");
 
   useEffect(() => {
     if (!q.data) return;
@@ -1047,6 +1049,8 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
     setLiteLLMFallbacks(joinModelList(q.data.litellm?.fallbacks));
     setLiteLLMAllowedModels(joinModelList(q.data.litellm?.allowed_models));
     setCLIOrderPreset(presetFromCLIOrder(q.data.cli?.order));
+    setClaudeCLIModel(q.data.cli?.claude_model || "sonnet");
+    setCodexCLIModel(q.data.cli?.codex_model || "codex-cli");
   }, [q.data]);
 
   const updateM = useMutation({
@@ -1073,7 +1077,14 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
       };
     }
     if (mode === "cli") {
-      return { mode, cli: { order: cliOrderFromPreset(cliOrderPreset) } };
+      return {
+        mode,
+        cli: {
+          order: cliOrderFromPreset(cliOrderPreset),
+          claude_model: claudeCLIModel.trim() || undefined,
+          codex_model: codexCLIModel.trim() || undefined,
+        },
+      };
     }
     return { mode: "auto" };
   }
@@ -1110,24 +1121,48 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
           </Field>
 
           {mode === "cli" ? (
-            <Field>
-              <FieldLabel>Ordem dos CLIs</FieldLabel>
-              <Select
-                value={cliOrderPreset}
-                onValueChange={(value) => setCLIOrderPreset(value as CLIOrderPreset)}
-                disabled={q.isLoading}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="claude-codex">Claude CLI → Codex CLI</SelectItem>
-                  <SelectItem value="codex-claude">Codex CLI → Claude CLI</SelectItem>
-                  <SelectItem value="claude">Somente Claude CLI</SelectItem>
-                  <SelectItem value="codex">Somente Codex CLI</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
+            <>
+              <Field>
+                <FieldLabel>Ordem dos CLIs</FieldLabel>
+                <Select
+                  value={cliOrderPreset}
+                  onValueChange={(value) => setCLIOrderPreset(value as CLIOrderPreset)}
+                  disabled={q.isLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="claude-codex">Claude CLI → Codex CLI</SelectItem>
+                    <SelectItem value="codex-claude">Codex CLI → Claude CLI</SelectItem>
+                    <SelectItem value="claude">Somente Claude CLI</SelectItem>
+                    <SelectItem value="codex">Somente Codex CLI</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="tenant-claude-cli-model">Modelo Claude CLI</FieldLabel>
+                <Input
+                  id="tenant-claude-cli-model"
+                  value={claudeCLIModel}
+                  onChange={(event) => setClaudeCLIModel(event.target.value)}
+                  placeholder="sonnet"
+                  disabled={q.isLoading}
+                />
+                <FieldDescription>Ex.: sonnet, haiku, opus ou claude-sonnet-4-5.</FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="tenant-codex-cli-model">Modelo Codex CLI</FieldLabel>
+                <Input
+                  id="tenant-codex-cli-model"
+                  value={codexCLIModel}
+                  onChange={(event) => setCodexCLIModel(event.target.value)}
+                  placeholder="codex-cli"
+                  disabled={q.isLoading}
+                />
+                <FieldDescription>codex-cli usa o config.toml; outro valor chama codex exec -m.</FieldDescription>
+              </Field>
+            </>
           ) : null}
 
           {mode === "litellm" ? (

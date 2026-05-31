@@ -611,10 +611,84 @@ func saasCLIModelSpecFor(provider string) (saasCLIModelSpec, bool) {
 	}
 }
 
+func applyCLIModelOverrides(spec saasCLIModelSpec, cfg CLIModelRoutingConfig) saasCLIModelSpec {
+	switch spec.Provider {
+	case "claude-cli":
+		if model := strings.TrimSpace(cfg.ClaudeModel); model != "" {
+			spec.Model = model
+		}
+		if modelName := strings.TrimSpace(cfg.ClaudeModelName); modelName != "" {
+			spec.ModelName = modelName
+		} else if strings.TrimSpace(cfg.ClaudeModel) != "" {
+			spec.ModelName = saasCLIModelNameFor(spec.Provider, spec.Model)
+		}
+	case "codex-cli":
+		if model := strings.TrimSpace(cfg.CodexModel); model != "" {
+			spec.Model = model
+		}
+		if modelName := strings.TrimSpace(cfg.CodexModelName); modelName != "" {
+			spec.ModelName = modelName
+		} else if strings.TrimSpace(cfg.CodexModel) != "" {
+			spec.ModelName = saasCLIModelNameFor(spec.Provider, spec.Model)
+		}
+	}
+	return spec
+}
+
+func saasCLIModelNameFor(provider, model string) string {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	model = strings.TrimSpace(model)
+	switch provider {
+	case "claude-cli":
+		if model == "" || model == defaultSaaSClaudeCLIModel {
+			return defaultSaaSClaudeCLIModelName
+		}
+	case "codex-cli":
+		if model == "" || model == defaultSaaSCodexCLIModel {
+			return defaultSaaSCodexCLIModelName
+		}
+	}
+	slug := saasModelSlug(model)
+	if slug == "" {
+		switch provider {
+		case "claude-cli":
+			return defaultSaaSClaudeCLIModelName
+		case "codex-cli":
+			return defaultSaaSCodexCLIModelName
+		default:
+			return "cli-model"
+		}
+	}
+	return provider + "-" + slug
+}
+
+func saasModelSlug(model string) string {
+	model = strings.ToLower(strings.TrimSpace(model))
+	var b strings.Builder
+	prevDash := false
+	for _, r := range model {
+		isAlnum := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		if isAlnum {
+			b.WriteRune(r)
+			prevDash = false
+			continue
+		}
+		if !prevDash && b.Len() > 0 {
+			b.WriteByte('-')
+			prevDash = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
 func normalizeSaaSCLIOrder(order []string) ([]saasCLIModelSpec, error) {
-	specs := make([]saasCLIModelSpec, 0, len(order))
+	return normalizeSaaSCLIRouting(CLIModelRoutingConfig{Order: order})
+}
+
+func normalizeSaaSCLIRouting(cfg CLIModelRoutingConfig) ([]saasCLIModelSpec, error) {
+	specs := make([]saasCLIModelSpec, 0, len(cfg.Order))
 	seen := map[string]bool{}
-	for _, raw := range order {
+	for _, raw := range cfg.Order {
 		spec, ok := saasCLIModelSpecFor(raw)
 		if !ok {
 			return nil, fmt.Errorf("unsupported saas cli provider %q (expected claude-cli or codex-cli)", raw)
@@ -623,6 +697,7 @@ func normalizeSaaSCLIOrder(order []string) ([]saasCLIModelSpec, error) {
 			continue
 		}
 		seen[spec.Provider] = true
+		spec = applyCLIModelOverrides(spec, cfg)
 		specs = append(specs, spec)
 	}
 	if len(specs) == 0 {
@@ -650,7 +725,11 @@ func ApplySaaSCLIModelRouting(destDir string, enableClaude, enableCodex bool) er
 }
 
 func ApplySaaSCLIModelRoutingFromOrder(destDir string, order []string) error {
-	specs, err := normalizeSaaSCLIOrder(order)
+	return ApplySaaSCLIModelRoutingFromConfig(destDir, CLIModelRoutingConfig{Order: order})
+}
+
+func ApplySaaSCLIModelRoutingFromConfig(destDir string, routing CLIModelRoutingConfig) error {
+	specs, err := normalizeSaaSCLIRouting(routing)
 	if err != nil {
 		return err
 	}

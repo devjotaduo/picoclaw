@@ -20,6 +20,10 @@ type TenantModelRouting struct {
 	LiteLLMFallbacks     []string
 	LiteLLMAllowedModels []string
 	CLIOrder             []string
+	CLIClaudeModelName   string
+	CLIClaudeModel       string
+	CLICodexModelName    string
+	CLICodexModel        string
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 }
@@ -46,9 +50,11 @@ func (s *TenantModelRoutingStore) Upsert(ctx context.Context, routing *TenantMod
         INSERT INTO tenant_model_routing (
             tenant_id, mode, litellm_model_name, litellm_api_base,
             litellm_fallbacks, litellm_allowed_models, cli_order,
+            cli_claude_model_name, cli_claude_model,
+            cli_codex_model_name, cli_codex_model,
             created_at, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, now(), now())
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, $11, now(), now())
         ON CONFLICT (tenant_id) DO UPDATE
         SET mode = EXCLUDED.mode,
             litellm_model_name = EXCLUDED.litellm_model_name,
@@ -56,6 +62,10 @@ func (s *TenantModelRoutingStore) Upsert(ctx context.Context, routing *TenantMod
             litellm_fallbacks = EXCLUDED.litellm_fallbacks,
             litellm_allowed_models = EXCLUDED.litellm_allowed_models,
             cli_order = EXCLUDED.cli_order,
+            cli_claude_model_name = EXCLUDED.cli_claude_model_name,
+            cli_claude_model = EXCLUDED.cli_claude_model,
+            cli_codex_model_name = EXCLUDED.cli_codex_model_name,
+            cli_codex_model = EXCLUDED.cli_codex_model,
             updated_at = now()`
 	_, err = s.DB.Pool.Exec(ctx, q,
 		routing.TenantID,
@@ -65,6 +75,10 @@ func (s *TenantModelRoutingStore) Upsert(ctx context.Context, routing *TenantMod
 		string(fallbacks),
 		string(allowed),
 		string(order),
+		routing.CLIClaudeModelName,
+		routing.CLIClaudeModel,
+		routing.CLICodexModelName,
+		routing.CLICodexModel,
 	)
 	return err
 }
@@ -73,6 +87,8 @@ func (s *TenantModelRoutingStore) Get(ctx context.Context, tenantID string) (*Te
 	const q = `
         SELECT tenant_id, mode, litellm_model_name, litellm_api_base,
                litellm_fallbacks::text, litellm_allowed_models::text, cli_order::text,
+               cli_claude_model_name, cli_claude_model,
+               cli_codex_model_name, cli_codex_model,
                created_at, updated_at
         FROM tenant_model_routing
         WHERE tenant_id = $1`
@@ -80,7 +96,10 @@ func (s *TenantModelRoutingStore) Get(ctx context.Context, tenantID string) (*Te
 	var fallbacks, allowed, order string
 	if err := s.DB.Pool.QueryRow(ctx, q, tenantID).Scan(
 		&out.TenantID, &out.Mode, &out.LiteLLMModelName, &out.LiteLLMAPIBase,
-		&fallbacks, &allowed, &order, &out.CreatedAt, &out.UpdatedAt,
+		&fallbacks, &allowed, &order,
+		&out.CLIClaudeModelName, &out.CLIClaudeModel,
+		&out.CLICodexModelName, &out.CLICodexModel,
+		&out.CreatedAt, &out.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTenantModelRoutingNotFound

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/sipeed/picoclaw/internal/saas/config"
 	"github.com/sipeed/picoclaw/internal/saas/litellm"
 	"github.com/sipeed/picoclaw/internal/saas/mcp"
@@ -28,6 +30,21 @@ type platformLiteLLMOut struct {
 type platformLiteLLMReq struct {
 	URL       string `json:"url"`
 	MasterKey string `json:"master_key"`
+}
+
+type platformLiteLLMModelsOut struct {
+	Models []litellm.ModelInfo `json:"models"`
+}
+
+type platformLiteLLMModelReq struct {
+	ModelName         string `json:"model_name"`
+	Model             string `json:"model"`
+	APIKey            string `json:"api_key,omitempty"`
+	APIBase           string `json:"api_base,omitempty"`
+	APIVersion        string `json:"api_version,omitempty"`
+	CustomLLMProvider string `json:"custom_llm_provider,omitempty"`
+	RPM               *int   `json:"rpm,omitempty"`
+	TPM               *int   `json:"tpm,omitempty"`
 }
 
 type effectiveLiteLLMConfig struct {
@@ -194,6 +211,78 @@ func (h *Handler) handleTestPlatformLiteLLM(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (h *Handler) handleListPlatformLiteLLMModels(w http.ResponseWriter, r *http.Request) {
+	client, ok := h.platformLiteLLMClient(w, r)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	models, err := client.ListModels(ctx)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, platformLiteLLMModelsOut{Models: models})
+}
+
+func (h *Handler) handleCreatePlatformLiteLLMModel(w http.ResponseWriter, r *http.Request) {
+	client, ok := h.platformLiteLLMClient(w, r)
+	if !ok {
+		return
+	}
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	dec.DisallowUnknownFields()
+	var req platformLiteLLMModelReq
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if strings.TrimSpace(req.ModelName) == "" {
+		writeError(w, http.StatusBadRequest, "model_name is required")
+		return
+	}
+	if strings.TrimSpace(req.Model) == "" {
+		writeError(w, http.StatusBadRequest, "model is required")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	if err := client.AddModel(ctx, litellm.AddModelInput{
+		ModelName:         req.ModelName,
+		Model:             req.Model,
+		APIKey:            req.APIKey,
+		APIBase:           req.APIBase,
+		APIVersion:        req.APIVersion,
+		CustomLLMProvider: req.CustomLLMProvider,
+		RPM:               req.RPM,
+		TPM:               req.TPM,
+	}); err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"ok": true})
+}
+
+func (h *Handler) handleDeletePlatformLiteLLMModel(w http.ResponseWriter, r *http.Request) {
+	client, ok := h.platformLiteLLMClient(w, r)
+	if !ok {
+		return
+	}
+	modelID := chi.URLParam(r, "modelID")
+	if strings.TrimSpace(modelID) == "" {
+		writeError(w, http.StatusBadRequest, "model id is required")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	if err := client.DeleteModel(ctx, modelID); err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handler) platformLiteLLMStatus(ctx context.Context) (platformLiteLLMOut, error) {
 	out := platformLiteLLMOut{EncryptionConfigured: len(h.SecretsEncKey) > 0}
 	if h.Cfg != nil {
@@ -232,6 +321,19 @@ func (h *Handler) platformLiteLLMStatus(ctx context.Context) (platformLiteLLMOut
 	}
 	out.Configured = strings.TrimSpace(out.URL) != "" && out.MasterKeyConfigured
 	return out, nil
+}
+
+func (h *Handler) platformLiteLLMClient(w http.ResponseWriter, r *http.Request) (*litellm.Client, bool) {
+	effective, err := LoadEffectiveLiteLLMConfig(r.Context(), h.Cfg, h.Platform, h.SecretsEncKey)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return nil, false
+	}
+	if strings.TrimSpace(effective.URL) == "" || strings.TrimSpace(effective.MasterKey) == "" {
+		writeError(w, http.StatusServiceUnavailable, "LiteLLM is not configured")
+		return nil, false
+	}
+	return litellm.NewClient(effective.URL, effective.MasterKey), true
 }
 
 func (h *Handler) applyRuntimeLiteLLMConfig(cfg effectiveLiteLLMConfig) {

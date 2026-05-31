@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle, KeyRound, PlugZap, Save, XCircle } from "lucide-react";
+import { CheckCircle, KeyRound, Plus, PlugZap, RefreshCw, Save, Trash2, XCircle } from "lucide-react";
 
 import {
+  createPlatformLiteLLMModel,
+  deletePlatformLiteLLMModel,
   getPlatformLiteLLM,
+  listPlatformLiteLLMModels,
   testPlatformLiteLLM,
   updatePlatformLiteLLM,
 } from "@/api/platform-litellm";
@@ -21,6 +24,12 @@ export function PlatformLiteLLM() {
   const q = useQuery({ queryKey: ["platform-litellm"], queryFn: getPlatformLiteLLM });
   const [url, setURL] = useState("");
   const [masterKey, setMasterKey] = useState("");
+  const [modelName, setModelName] = useState("");
+  const [providerModel, setProviderModel] = useState("");
+  const [provider, setProvider] = useState("");
+  const [apiBase, setAPIBase] = useState("");
+  const [apiVersion, setAPIVersion] = useState("");
+  const [apiKey, setAPIKey] = useState("");
 
   useEffect(() => {
     if (q.data) setURL(q.data.url ?? "");
@@ -46,6 +55,46 @@ export function PlatformLiteLLM() {
 
   const data = q.data;
   const configured = Boolean(data?.configured);
+  const modelsQ = useQuery({
+    queryKey: ["platform-litellm-models"],
+    queryFn: listPlatformLiteLLMModels,
+    enabled: configured,
+  });
+
+  const createModelM = useMutation({
+    mutationFn: () =>
+      createPlatformLiteLLMModel({
+        model_name: modelName.trim(),
+        model: providerModel.trim(),
+        custom_llm_provider: provider.trim() || undefined,
+        api_base: apiBase.trim() || undefined,
+        api_version: apiVersion.trim() || undefined,
+        api_key: apiKey.trim() || undefined,
+      }),
+    onSuccess: () => {
+      setModelName("");
+      setProviderModel("");
+      setProvider("");
+      setAPIBase("");
+      setAPIVersion("");
+      setAPIKey("");
+      qc.invalidateQueries({ queryKey: ["platform-litellm-models"] });
+      toast({ type: "success", message: "Modelo LiteLLM adicionado." });
+    },
+    onError: (e: { error?: string }) =>
+      toast({ type: "error", message: e?.error ?? "Falha ao adicionar modelo." }),
+  });
+
+  const deleteModelM = useMutation({
+    mutationFn: (id: string) => deletePlatformLiteLLMModel(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["platform-litellm-models"] });
+      toast({ type: "success", message: "Modelo LiteLLM removido." });
+    },
+    onError: (e: { error?: string }) =>
+      toast({ type: "error", message: e?.error ?? "Falha ao remover modelo." }),
+  });
+  const models = modelsQ.data?.models ?? [];
 
   return (
     <div className="mx-auto max-w-4xl p-6">
@@ -138,6 +187,173 @@ export function PlatformLiteLLM() {
                 <Save className="h-4 w-4" />
                 {saveM.isPending ? "Salvando..." : "Salvar"}
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <KeyRound className="h-4 w-4 text-zinc-400" />
+              Modelos e chaves upstream
+            </CardTitle>
+            <CardDescription>
+              Adiciona entradas no LiteLLM usando /model/new. Chaves de provedores ficam no proxy, não no tenant.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!configured ? (
+              <Alert className="border-zinc-800 bg-zinc-950/40">
+                <AlertTitle>Configure a conexão primeiro</AlertTitle>
+                <AlertDescription>Depois de salvar URL e master key, o painel carrega e altera o catálogo do LiteLLM.</AlertDescription>
+              </Alert>
+            ) : null}
+
+            {modelsQ.isError ? (
+              <Alert className="border-red-900/50 bg-red-950/30 text-red-300">
+                <XCircle className="h-4 w-4" />
+                <AlertTitle>Falha ao carregar modelos</AlertTitle>
+                <AlertDescription>{(modelsQ.error as { error?: string })?.error ?? "erro desconhecido"}</AlertDescription>
+              </Alert>
+            ) : null}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="litellm-model-name">Nome exposto no LiteLLM</FieldLabel>
+                <Input
+                  id="litellm-model-name"
+                  value={modelName}
+                  onChange={(event) => setModelName(event.target.value)}
+                  placeholder="claude-sonnet-4-5"
+                  disabled={!configured}
+                />
+                <FieldDescription>Este é o nome que tenants usam como modelo principal ou fallback.</FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="litellm-provider-model">Modelo upstream</FieldLabel>
+                <Input
+                  id="litellm-provider-model"
+                  value={providerModel}
+                  onChange={(event) => setProviderModel(event.target.value)}
+                  placeholder="anthropic/claude-sonnet-4-5"
+                  disabled={!configured}
+                />
+                <FieldDescription>Valor enviado em litellm_params.model.</FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="litellm-provider">Provider</FieldLabel>
+                <Input
+                  id="litellm-provider"
+                  value={provider}
+                  onChange={(event) => setProvider(event.target.value)}
+                  placeholder="anthropic, openai, openrouter..."
+                  disabled={!configured}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="litellm-model-api-base">API base</FieldLabel>
+                <Input
+                  id="litellm-model-api-base"
+                  value={apiBase}
+                  onChange={(event) => setAPIBase(event.target.value)}
+                  placeholder="Opcional"
+                  disabled={!configured}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="litellm-model-api-version">API version</FieldLabel>
+                <Input
+                  id="litellm-model-api-version"
+                  value={apiVersion}
+                  onChange={(event) => setAPIVersion(event.target.value)}
+                  placeholder="Opcional, comum em Azure"
+                  disabled={!configured}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="litellm-model-api-key">API key do provider</FieldLabel>
+                <Input
+                  id="litellm-model-api-key"
+                  type="password"
+                  value={apiKey}
+                  onChange={(event) => setAPIKey(event.target.value)}
+                  placeholder="sk-... ou os.environ/NOME_DA_KEY"
+                  disabled={!configured}
+                />
+                <FieldDescription>O LiteLLM não devolve o segredo na listagem.</FieldDescription>
+              </Field>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => modelsQ.refetch()}
+                disabled={!configured || modelsQ.isFetching}
+              >
+                <RefreshCw className="h-4 w-4" />
+                {modelsQ.isFetching ? "Atualizando..." : "Atualizar lista"}
+              </Button>
+              <Button
+                onClick={() => createModelM.mutate()}
+                disabled={!configured || createModelM.isPending || !modelName.trim() || !providerModel.trim()}
+              >
+                <Plus className="h-4 w-4" />
+                {createModelM.isPending ? "Adicionando..." : "Adicionar modelo"}
+              </Button>
+            </div>
+
+            <div className="overflow-hidden rounded-lg border border-zinc-800">
+              <table className="w-full text-xs">
+                <thead className="bg-zinc-900/80 text-left text-[10px] uppercase tracking-wide text-zinc-500">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Nome</th>
+                    <th className="px-3 py-2 font-medium">Upstream</th>
+                    <th className="px-3 py-2 font-medium">Provider</th>
+                    <th className="px-3 py-2 font-medium">Origem</th>
+                    <th className="px-3 py-2 text-right font-medium">Acoes</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/60">
+                  {modelsQ.isLoading ? (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-4 text-center text-zinc-500">Carregando modelos...</td>
+                    </tr>
+                  ) : null}
+                  {!modelsQ.isLoading && models.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-4 text-center text-zinc-500">Nenhum modelo retornado pelo LiteLLM.</td>
+                    </tr>
+                  ) : null}
+                  {models.map((model) => (
+                    <tr key={model.id || `${model.model_name}:${model.model}`} className="hover:bg-zinc-900/40">
+                      <td className="px-3 py-2 font-medium text-zinc-200">{model.model_name || "-"}</td>
+                      <td className="px-3 py-2 text-zinc-400">{model.model || "-"}</td>
+                      <td className="px-3 py-2 text-zinc-400">{model.provider || "-"}</td>
+                      <td className="px-3 py-2">
+                        <Badge className="border-zinc-700 bg-zinc-900 text-zinc-300">
+                          {model.db_model ? "DB" : "config"}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={!model.id || deleteModelM.isPending}
+                          title={model.id ? "Remover modelo do LiteLLM" : "LiteLLM não retornou ID para remover"}
+                          onClick={() => {
+                            if (!model.id) return;
+                            if (confirm(`Remover o modelo ${model.model_name || model.id} do LiteLLM?`)) {
+                              deleteModelM.mutate(model.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </CardContent>
         </Card>

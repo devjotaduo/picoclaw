@@ -107,6 +107,104 @@ func TestDeleteKey(t *testing.T) {
 	}
 }
 
+func TestListModels(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/model/info" {
+			t.Errorf("path: %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{
+					"model_name": "gpt-4o-mini",
+					"litellm_params": map[string]any{
+						"model":               "openai/gpt-4o-mini",
+						"custom_llm_provider": "openai",
+					},
+					"model_info": map[string]any{
+						"id":       "model-id-1",
+						"mode":     "chat",
+						"db_model": true,
+					},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "k")
+	models, err := c.ListModels(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("want 1 model, got %d", len(models))
+	}
+	got := models[0]
+	if got.ID != "model-id-1" || got.ModelName != "gpt-4o-mini" ||
+		got.Model != "openai/gpt-4o-mini" || got.Provider != "openai" ||
+		got.Mode != "chat" || !got.DBModel {
+		t.Fatalf("unexpected model info: %+v", got)
+	}
+}
+
+func TestAddModel(t *testing.T) {
+	var capturedBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/model/new" {
+			t.Errorf("path: %s", r.URL.Path)
+		}
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &capturedBody)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "k")
+	rpm := 30
+	if err := c.AddModel(context.Background(), AddModelInput{
+		ModelName:         "sonnet",
+		Model:             "anthropic/claude-sonnet-4-5",
+		APIKey:            "os.environ/ANTHROPIC_API_KEY",
+		APIBase:           "https://api.anthropic.com",
+		CustomLLMProvider: "anthropic",
+		RPM:               &rpm,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if capturedBody["model_name"] != "sonnet" {
+		t.Fatalf("model_name wrong: %#v", capturedBody)
+	}
+	params := capturedBody["litellm_params"].(map[string]any)
+	if params["model"] != "anthropic/claude-sonnet-4-5" ||
+		params["api_key"] != "os.environ/ANTHROPIC_API_KEY" ||
+		params["api_base"] != "https://api.anthropic.com" ||
+		params["custom_llm_provider"] != "anthropic" ||
+		params["rpm"].(float64) != 30 {
+		t.Fatalf("litellm_params wrong: %#v", params)
+	}
+}
+
+func TestDeleteModel(t *testing.T) {
+	var capturedBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/model/delete" {
+			t.Errorf("path: %s", r.URL.Path)
+		}
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &capturedBody)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "k")
+	if err := c.DeleteModel(context.Background(), "model-id-1"); err != nil {
+		t.Fatal(err)
+	}
+	if capturedBody["id"] != "model-id-1" {
+		t.Fatalf("delete body wrong: %#v", capturedBody)
+	}
+}
+
 func TestTestConnectionHitsModelsEndpoint(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/models" {
