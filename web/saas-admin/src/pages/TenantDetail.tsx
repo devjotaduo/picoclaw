@@ -644,7 +644,8 @@ export function TenantDetail() {
             <Row label="Modelo" value={tenant.workspace_id} />
             <Row label="Versão aplicada" value={tenant.workspace_version_applied ?? "—"} />
             <p className="mt-2 text-[11px] text-zinc-500">
-              Edite os arquivos do modelo em{" "}
+              A versão aplicada é a revisão DB gravada na criação. A sincronização
+              real do modelo com o git deployado aparece por hash em{" "}
               <Link to="/workspaces" className="underline">
                 /workspaces
               </Link>

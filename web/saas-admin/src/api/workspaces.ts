@@ -58,6 +58,20 @@ export type WorkspaceBuildResult = {
   error?: string;
 };
 
+export type WorkspaceSyncStatusValue = "synced" | "diverged" | "unknown";
+
+export type WorkspaceSyncStatus = {
+  workspace_id: string;
+  workspace_slug: string;
+  admin_hash_sha256: string;
+  admin_file_count: number;
+  deployed_git_hash_sha256: string;
+  deployed_file_count: number;
+  deployed_git_commit: string;
+  status: WorkspaceSyncStatusValue;
+  checked_at: string;
+};
+
 export type WorkspaceImportFromHomeInput = {
   name: string;
   slug?: string;
@@ -72,6 +86,12 @@ export async function listWorkspaces(opts?: { manualOnly?: boolean }) {
 
 export async function getWorkspace(id: string) {
   return api<Workspace>(`/api/v1/workspaces/${encodeURIComponent(id)}`);
+}
+
+export async function getWorkspaceSyncStatus(id: string) {
+  return api<WorkspaceSyncStatus>(
+    `/api/v1/workspaces/${encodeURIComponent(id)}/sync-status`,
+  );
 }
 
 export async function createWorkspace(input: WorkspaceInput) {

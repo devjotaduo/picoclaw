@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Plus, Copy, Download, Hammer, Save, Trash2, FileText, FolderTree, CheckCircle2, XCircle, ShieldCheck, Upload } from "lucide-react";
 
@@ -7,6 +7,7 @@ import {
   buildWorkspaceFrontend,
   createWorkspace,
   deleteWorkspace,
+  getWorkspaceSyncStatus,
   importWorkspaceFromHome,
   listWorkspaces,
   readWorkspaceFile,
@@ -15,6 +16,7 @@ import {
   validateWorkspace,
   writeWorkspaceFile,
   type Workspace,
+  type WorkspaceSyncStatus,
   type WorkspaceValidationRow,
 } from "@/api/workspaces";
 import { Button } from "@/components/ui/button";
@@ -23,6 +25,11 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/page-header";
+import {
+  shortWorkspaceHash,
+  workspaceSyncBadgeClass,
+  workspaceSyncLabel,
+} from "@/lib/workspace-sync";
 
 // Workspaces page — the new admin surface that replaces LauncherProfiles.
 //
@@ -53,6 +60,17 @@ export function Workspaces() {
   const [selectedId, setSelectedId] = useState<string>("");
   const selected =
     workspaces.find((ws) => ws.id === selectedId) ?? workspaces[0] ?? null;
+  const syncQueries = useQueries({
+    queries: workspaces.map((ws) => ({
+      queryKey: ["workspace-sync-status", ws.id],
+      queryFn: () => getWorkspaceSyncStatus(ws.id),
+      staleTime: 30_000,
+      retry: false,
+    })),
+  });
+  const syncByWorkspaceId = new Map(
+    workspaces.map((ws, index) => [ws.id, syncQueries[index]]),
+  );
 
   useEffect(() => {
     if (!selectedId && workspaces[0]) setSelectedId(workspaces[0].id);
@@ -241,34 +259,46 @@ export function Workspaces() {
                 <CardTitle>Modelos</CardTitle>
               </CardHeader>
               <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-2">
-                {workspaces.map((ws) => (
-                  <button
-                    key={ws.id}
-                    onClick={() => setSelectedId(ws.id)}
-                    className={`w-full rounded-md px-3 py-2 text-left text-sm ${
-                      selected?.id === ws.id
-                        ? "bg-zinc-800 text-zinc-100"
-                        : "text-zinc-400 hover:bg-zinc-900"
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-medium">{ws.name}</span>
-                      {ws.is_raw && (
+                {workspaces.map((ws) => {
+                  const syncQ = syncByWorkspaceId.get(ws.id);
+                  const syncStatus = syncQ?.data?.status ?? (syncQ?.isError ? "unknown" : undefined);
+                  return (
+                    <button
+                      key={ws.id}
+                      onClick={() => setSelectedId(ws.id)}
+                      className={`w-full rounded-md px-3 py-2 text-left text-sm ${
+                        selected?.id === ws.id
+                          ? "bg-zinc-800 text-zinc-100"
+                          : "text-zinc-400 hover:bg-zinc-900"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="min-w-0 flex-1 truncate font-medium">{ws.name}</span>
                         <span
-                          title="Raw: provisioner copia arquivos verbatim (sem seed de senha, sem LiteLLM, sem launcher_policy)"
-                          className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
+                          className={[
+                            "shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                            workspaceSyncBadgeClass(syncStatus),
+                          ].join(" ")}
                         >
-                          raw
+                          {syncQ?.isLoading ? "..." : workspaceSyncLabel(syncStatus)}
                         </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-zinc-500">
-                      v{ws.version}
-                      {ws.is_default_auto ? " · auto" : ""}
-                      {!ws.is_available_manual ? " · oculto" : ""}
-                    </div>
-                  </button>
-                ))}
+                        {ws.is_raw && (
+                          <span
+                            title="Raw: provisioner copia arquivos verbatim (sem seed de senha, sem LiteLLM, sem launcher_policy)"
+                            className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
+                          >
+                            raw
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-zinc-500">
+                        v{ws.version}
+                        {ws.is_default_auto ? " · auto" : ""}
+                        {!ws.is_available_manual ? " · oculto" : ""}
+                      </div>
+                    </button>
+                  );
+                })}
                 {workspaces.length === 0 && (
                   <div className="rounded bg-zinc-950 px-3 py-6 text-center text-xs text-zinc-500">
                     Nenhum modelo.
@@ -279,7 +309,13 @@ export function Workspaces() {
           </aside>
           <div className="min-h-0 space-y-4 overflow-y-auto pr-1 pb-4 [scrollbar-gutter:stable]">
             {selected ? (
-              <WorkspaceEditor key={selected.id} workspace={selected} />
+              <WorkspaceEditor
+                key={selected.id}
+                workspace={selected}
+                syncStatus={syncByWorkspaceId.get(selected.id)?.data}
+                syncLoading={syncByWorkspaceId.get(selected.id)?.isLoading ?? false}
+                syncError={syncByWorkspaceId.get(selected.id)?.isError ?? false}
+              />
             ) : (
               <div className="rounded-md border border-zinc-800 bg-zinc-900/40 p-6 text-sm text-zinc-500">
                 Crie ou importe um modelo para começar.
@@ -292,7 +328,17 @@ export function Workspaces() {
   );
 }
 
-function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
+function WorkspaceEditor({
+  workspace,
+  syncStatus,
+  syncLoading,
+  syncError,
+}: {
+  workspace: Workspace;
+  syncStatus?: WorkspaceSyncStatus;
+  syncLoading: boolean;
+  syncError: boolean;
+}) {
   const qc = useQueryClient();
   const [name, setName] = useState(workspace.name);
   const [slug, setSlug] = useState(workspace.slug);
@@ -444,6 +490,13 @@ function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
         </CardContent>
       </Card>
 
+      <WorkspaceSyncPanel
+        workspace={workspace}
+        syncStatus={syncStatus}
+        isLoading={syncLoading}
+        isError={syncError}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle>Frontend</CardTitle>
@@ -513,7 +566,86 @@ function WorkspaceEditor({ workspace }: { workspace: Workspace }) {
   );
 }
 
+function WorkspaceSyncPanel({
+  workspace,
+  syncStatus,
+  isLoading,
+  isError,
+}: {
+  workspace: Workspace;
+  syncStatus?: WorkspaceSyncStatus;
+  isLoading: boolean;
+  isError: boolean;
+}) {
+  const status = syncStatus?.status ?? "unknown";
+  const checkedAt = syncStatus?.checked_at
+    ? new Date(syncStatus.checked_at).toLocaleString()
+    : "indisponivel";
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between gap-3">
+          <span>Sincronização Git</span>
+          <span
+            className={[
+              "rounded border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider",
+              workspaceSyncBadgeClass(status),
+            ].join(" ")}
+          >
+            {isLoading ? "..." : workspaceSyncLabel(status)}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2">
+            <div className="text-zinc-500">Hash do modelo</div>
+            <code className="font-mono text-zinc-200" title={syncStatus?.admin_hash_sha256 || ""}>
+              {shortWorkspaceHash(syncStatus?.admin_hash_sha256)}
+            </code>
+            <div className="mt-1 text-[11px] text-zinc-500">
+              {syncStatus?.admin_file_count ?? 0} arquivos
+            </div>
+          </div>
+          <div className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2">
+            <div className="text-zinc-500">Hash do git deployado</div>
+            <code className="font-mono text-zinc-200" title={syncStatus?.deployed_git_hash_sha256 || ""}>
+              {shortWorkspaceHash(syncStatus?.deployed_git_hash_sha256)}
+            </code>
+            <div className="mt-1 text-[11px] text-zinc-500">
+              {syncStatus?.deployed_file_count ?? 0} arquivos
+            </div>
+          </div>
+          <div className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2">
+            <div className="text-zinc-500">Última checagem</div>
+            <div className="text-zinc-200">{checkedAt}</div>
+            {syncStatus?.deployed_git_commit ? (
+              <code className="mt-1 block font-mono text-[11px] text-zinc-500">
+                commit {syncStatus.deployed_git_commit}
+              </code>
+            ) : null}
+          </div>
+          <div className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2">
+            <div className="text-zinc-500">Versão DB</div>
+            <div className="text-zinc-200">v{workspace.version}</div>
+            <div className="mt-1 text-[11px] text-zinc-500">
+              Revisão administrativa; igualdade real é pelo hash.
+            </div>
+          </div>
+        </div>
+        {isError ? (
+          <div className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-400">
+            Endpoint indisponível; status tratado como Desconhecido.
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 function FileEditor({ workspaceId }: { workspaceId: string }) {
+  const qc = useQueryClient();
   const [path, setPath] = useState(COMMON_FILES[0]);
   const [content, setContent] = useState("");
   const [loaded, setLoaded] = useState<string | null>(null);
@@ -536,6 +668,8 @@ function FileEditor({ workspaceId }: { workspaceId: string }) {
     onSuccess: () => {
       setLoaded(path);
       setError("");
+      void qc.invalidateQueries({ queryKey: ["workspaces"] });
+      void qc.invalidateQueries({ queryKey: ["workspace-sync-status", workspaceId] });
     },
     onError: (e: Error) => {
       setError(String(e.message ?? e));
