@@ -63,7 +63,7 @@ export function UserMessage({ content, attachments = [] }: UserMessageProps) {
           {fileAttachments.map((attachment, index) => (
             <div
               key={`${attachment.url}-${index}`}
-              className="bg-card text-card-foreground border-border/70 flex max-w-full items-center gap-3 rounded-xl border px-3 py-2 shadow-sm"
+              className="flex max-w-full items-center gap-3 rounded-xl border border-white/10 bg-[#111110] px-3 py-2 text-[#f3f2ec] shadow-sm"
             >
               <div className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg">
                 <IconFileText className="size-4" />
@@ -86,15 +86,13 @@ export function UserMessage({ content, attachments = [] }: UserMessageProps) {
           className={cn(
             "max-w-[70%] wrap-break-word whitespace-pre-wrap",
             isCommand
-              ? "rounded-xl border border-zinc-200 bg-transparent px-4 py-3 font-mono text-[14px] text-zinc-800 dark:border-zinc-800/60 dark:bg-[#121212] dark:text-zinc-200 dark:shadow-sm"
-              : "rounded-2xl rounded-tr-sm bg-violet-500 px-5 py-3 text-[15px] leading-relaxed text-white shadow-sm",
+              ? "rounded-xl border border-white/10 bg-[#111110] px-4 py-3 font-mono text-[14px] text-[#e7e4db]"
+              : "rounded-[18px] bg-[#10100f] px-5 py-3 text-[15px] leading-relaxed text-[#f4f3ef] shadow-[0_3px_10px_rgba(0,0,0,0.16)] ring-1 ring-white/[0.045]",
           )}
         >
           {isCommand ? (
             <div className="flex items-start gap-2.5">
-              <span className="font-bold text-emerald-700 select-none dark:text-emerald-300">
-                ❯
-              </span>
+              <span className="font-bold text-[#d6b48a] select-none">❯</span>
               <span className="mt-[1px]">{content}</span>
             </div>
           ) : (
