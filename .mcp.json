@@ -1,14 +1,10 @@
 {
   "mcpServers": {
     "ruflo": {
-      "command": "npx",
+      "command": "node",
       "args": [
-        "--yes",
-        "--package",
-        "ruflo@3.10.5",
-        "ruflo",
-        "mcp",
-        "start"
+        "scripts/ruflo-mcp-stdio-filter.js",
+        "ruflo@3.10.5"
       ],
       "env": {
         "npm_config_update_notifier": "false",
