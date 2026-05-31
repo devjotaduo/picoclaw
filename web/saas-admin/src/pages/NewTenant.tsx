@@ -14,6 +14,7 @@ import {
 import {
   createTenant,
   getTenant,
+  listTenantTypes,
   markPasswordDelivered,
   type CreateTenantInput,
   type CreateTenantResponse,
@@ -62,7 +63,9 @@ function validateSubdomain(value: string): string | null {
 }
 
 interface TypeCard {
-  id: TenantType;
+  // id is the tenant_type slug sent to the controlplane: a system type
+  // (publico/admin/cliente) or a catalog vertical slug (clinica, loja, …).
+  id: string;
   title: string;
   tagline: string;
   bullets: string[];
@@ -101,10 +104,6 @@ const TYPE_CARDS: TypeCard[] = [
   },
 ];
 
-function selectedTypeMeta(type: TenantType) {
-  return TYPE_CARDS.find((card) => card.id === type) ?? TYPE_CARDS[0];
-}
-
 function parseTenantTypeParam(value: string | null): TenantType | null {
   return value === "publico" || value === "admin" || value === "cliente" ? value : null;
 }
@@ -132,7 +131,7 @@ export function NewTenant() {
     parseTenantTypeParam(searchParams.get("type")) ??
     parseTenantTypeParam(searchParams.get("tenant_type")) ??
     "cliente";
-  const [tenantType, setTenantType] = useState<TenantType>(initialTenantType);
+  const [tenantType, setTenantType] = useState<string>(initialTenantType);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [modelRoutingMode, setModelRoutingMode] = useState<TenantModelRoutingMode>("auto");
   const [litellmModelName, setLiteLLMModelName] = useState("gpt-4o-mini");
@@ -164,6 +163,26 @@ export function NewTenant() {
   const workspaces = workspacesQ.data?.workspaces ?? [];
   const defaultWorkspace = workspaces.find((ws) => ws.is_default_auto);
 
+  // v2.0: fetch the tenant_types catalog and append business verticals
+  // (clinica, loja, …) to the three curated system cards. Additive — if the
+  // fetch fails the wizard still shows the system types.
+  const tenantTypesQ = useQuery({
+    queryKey: ["tenant-types", "selectable"],
+    queryFn: () => listTenantTypes(true),
+  });
+  const verticalCards: TypeCard[] = (tenantTypesQ.data?.tenant_types ?? [])
+    .filter((t) => !t.is_system)
+    .map((t) => ({
+      id: t.slug,
+      title: t.display_name,
+      tagline: t.description,
+      bullets: [],
+      subdomainHint: t.slug,
+      displayNameHint: t.display_name,
+      icon: IconSparkles,
+    }));
+  const cards: TypeCard[] = [...TYPE_CARDS, ...verticalCards];
+
   useEffect(() => {
     if (!form.workspace_id && defaultWorkspace) {
       setForm((prev) => ({ ...prev, workspace_id: defaultWorkspace.id }));
@@ -188,7 +207,7 @@ export function NewTenant() {
     },
   });
 
-  const card = selectedTypeMeta(tenantType);
+  const card = cards.find((c) => c.id === tenantType) ?? cards[0];
   const needsOwnerEmail = tenantType !== "publico";
   const tenantStatus = statusQuery.data?.status;
   const isProvisioning = !tenantStatus || tenantStatus === "provisioning";
@@ -285,7 +304,7 @@ export function NewTenant() {
 
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 p-4 lg:p-6">
         <div className="grid gap-3 lg:grid-cols-3">
-          {TYPE_CARDS.map((type) => {
+          {cards.map((type) => {
             const Icon = type.icon;
             const selected = tenantType === type.id;
             return (

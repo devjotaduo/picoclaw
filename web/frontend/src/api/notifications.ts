@@ -11,7 +11,15 @@
  * Padrão de polling no use-notifications.ts; SSE virá em iteração futura.
  */
 
-export type NotificationKind = "data" | "warning" | "billing"
+// "approval" + "handoff" are emitted by the backend (attendant proposal
+// approvals and agent handoffs) and carry a cta_url deep-link; they were
+// missing from this union, so code that switches on kind was unsafe.
+export type NotificationKind =
+  | "data"
+  | "warning"
+  | "billing"
+  | "approval"
+  | "handoff"
 
 export interface Notification {
   id: string

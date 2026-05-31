@@ -51,13 +51,35 @@ export interface Tenant {
  */
 export type TenantType = "publico" | "admin" | "cliente"
 
+/**
+ * TenantTypeCatalogEntry mirrors the controlplane tenant_types catalog row
+ * (internal/saas/api/tenant_types.go::tenantTypeResponse). The v2.0 create
+ * wizard fetches selectable entries to offer business verticals (clinica,
+ * loja, …) beyond the three system types.
+ */
+export interface TenantTypeCatalogEntry {
+  slug: string
+  display_name: string
+  description: string
+  icon: string
+  category: string
+  ui_profile: string
+  is_system: boolean
+  is_selectable: boolean
+  sort_order: number
+}
+
 export interface CreateTenantInput {
   display_name: string
   owner_email: string
   subdomain: string
   workspace_id?: string
-  /** Defaults to "cliente" on the server when omitted. */
-  tenant_type?: TenantType
+  /**
+   * Defaults to "cliente" on the server when omitted. Widened from the
+   * 3-union to string so vertical catalog slugs (clinica, loja, …) are
+   * accepted; the controlplane resolves any catalog slug.
+   */
+  tenant_type?: string
   monthly_budget_usd?: number
   mem_limit_mb?: number
   cpu_quota?: number
@@ -167,6 +189,19 @@ export async function createTenant(
     method: "POST",
     body: JSON.stringify(input),
   })
+}
+
+// listTenantTypes fetches the tenant_types catalog through the launcher saas
+// proxy (/api/admin/saas → controlplane /api/v1). selectableOnly restricts to
+// entries the create wizard should offer.
+export async function listTenantTypes(
+  selectableOnly = true,
+): Promise<TenantTypeCatalogEntry[]> {
+  const q = selectableOnly ? "?selectable=true" : ""
+  const res = await call<{ tenant_types: TenantTypeCatalogEntry[] }>(
+    `/tenant-types${q}`,
+  )
+  return res.tenant_types ?? []
 }
 
 export async function cloneTenant(

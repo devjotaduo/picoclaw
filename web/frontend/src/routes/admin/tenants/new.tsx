@@ -4,9 +4,9 @@ import * as React from "react"
 
 import {
   ControlplaneError,
-  type TenantType,
   createTenant,
   listLauncherProfiles,
+  listTenantTypes,
 } from "@/api/controlplane"
 import { AdminGuard } from "@/components/admin/AdminGuard"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 interface TypeCard {
-  id: TenantType
+  // id is the tenant_type slug: a system type (publico/admin/cliente) or a
+  // catalog vertical slug (clinica, loja, …).
+  id: string
   title: string
   tagline: string
   bullets: string[]
@@ -58,7 +60,7 @@ const TYPE_CARDS: TypeCard[] = [
 
 function NewTenantForm() {
   const navigate = useNavigate()
-  const [type, setType] = React.useState<TenantType | null>(null)
+  const [type, setType] = React.useState<string | null>(null)
   const [displayName, setDisplayName] = React.useState("")
   const [ownerEmail, setOwnerEmail] = React.useState("")
   const [subdomain, setSubdomain] = React.useState("")
@@ -80,6 +82,26 @@ function NewTenantForm() {
     enabled: Boolean(type),
     retry: false,
   })
+
+  // v2.0: fetch the tenant_types catalog and append business verticals to the
+  // three curated system cards. Additive — if the fetch fails the wizard still
+  // shows the system types.
+  const tenantTypes = useQuery({
+    queryKey: ["tenant-types", "selectable"],
+    queryFn: () => listTenantTypes(true),
+    retry: false,
+  })
+  const cards: TypeCard[] = React.useMemo(() => {
+    const verticals: TypeCard[] = (tenantTypes.data ?? [])
+      .filter((t) => !t.is_system)
+      .map((t) => ({
+        id: t.slug,
+        title: t.display_name,
+        tagline: t.description,
+        bullets: [],
+      }))
+    return [...TYPE_CARDS, ...verticals]
+  }, [tenantTypes.data])
 
   // Públicos não têm owner — email é hidden e não obrigatório.
   const needsOwnerEmail = type !== "publico"
@@ -133,7 +155,7 @@ function NewTenantForm() {
             </p>
           </header>
           <div className="grid gap-4 sm:grid-cols-3">
-            {TYPE_CARDS.map((card) => (
+            {cards.map((card) => (
               <button
                 key={card.id}
                 type="button"
@@ -174,7 +196,7 @@ function NewTenantForm() {
   }
 
   // Step 2: form for the chosen type.
-  const card = TYPE_CARDS.find((c) => c.id === type)!
+  const card = cards.find((c) => c.id === type) ?? cards[0]
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="mx-auto flex w-full max-w-xl flex-col gap-4 p-4 sm:p-6">
