@@ -101,6 +101,14 @@ Com CLI no controlplane:
 ssh pico 'docker exec controlplane picoclaw-tenantctl recreate <tenant-id>'
 ```
 
+Se o problema for roteamento/modelo, aplique a rota e recrie em uma única
+operação. Para tenant público, prefira LiteLLM para manter orçamento e chave
+virtual por tenant:
+
+```bash
+ssh pico 'docker exec controlplane picoclaw-tenantctl model-routing --mode litellm <tenant-id>'
+```
+
 Com API:
 
 ```bash
