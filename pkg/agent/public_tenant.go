@@ -9,7 +9,10 @@ import (
 	"github.com/sipeed/picoclaw/pkg/config"
 )
 
-const envPublicTenant = "PICOCLAW_PUBLIC_TENANT"
+const (
+	envPublicTenant                  = "PICOCLAW_PUBLIC_TENANT"
+	publicTenantTechnicalErrorNotice = "Tive uma instabilidade técnica agora. Me chama de novo em alguns instantes que eu retomo daqui."
+)
 
 var publicTenantInternalMarkers = []string{
 	"`rg`",
@@ -27,6 +30,9 @@ var publicTenantInternalMarkers = []string{
 	"skill.md",
 	"picoclaw_",
 	"jotaduo_wa_",
+	"codex cli",
+	"llm call failed",
+	"exit status",
 	"tool call",
 	"tool_calls",
 	"sandbox",
@@ -91,6 +97,13 @@ func sanitizePublicPicoContent(channel, content string) string {
 		return content
 	}
 	return sanitizePublicTenantContent(content)
+}
+
+func publicTenantTechnicalErrorResponse(channel string) (string, bool) {
+	if !isPublicPicoTenantRuntime(channel) {
+		return "", false
+	}
+	return publicTenantTechnicalErrorNotice, true
 }
 
 func sanitizePublicTenantContent(content string) string {

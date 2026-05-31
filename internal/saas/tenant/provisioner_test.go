@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/sipeed/picoclaw/internal/saas/config"
+	"github.com/sipeed/picoclaw/internal/saas/litellm"
 	"github.com/sipeed/picoclaw/internal/saas/store"
 )
 
@@ -149,6 +150,32 @@ func TestBuildSpec_PublicTenantInjectsJotaduoWAEnv(t *testing.T) {
 			t.Errorf("cliente tenant got JOTADUO_WA_HMAC_SECRET — promotion strip is broken")
 		}
 	})
+}
+
+func TestPreferLiteLLMForPublicAutoRouting(t *testing.T) {
+	var nilProvisioner *Provisioner
+	publicTenant := &store.Tenant{ID: "pub1", IsPublic: true}
+	privateTenant := &store.Tenant{ID: "cli1", IsPublic: false}
+	withLiteLLM := &Provisioner{
+		LiteLLM: litellm.NewClient("http://litellm.local", "master"),
+	}
+	withoutLiteLLM := &Provisioner{}
+
+	if !withLiteLLM.preferLiteLLMForPublicAutoRouting(publicTenant) {
+		t.Fatal("expected public tenant with LiteLLM configured to prefer LiteLLM in auto mode")
+	}
+	if withLiteLLM.preferLiteLLMForPublicAutoRouting(privateTenant) {
+		t.Fatal("private tenant should keep legacy auto ordering")
+	}
+	if withoutLiteLLM.preferLiteLLMForPublicAutoRouting(publicTenant) {
+		t.Fatal("public tenant cannot prefer LiteLLM when LiteLLM is not configured")
+	}
+	if nilProvisioner.preferLiteLLMForPublicAutoRouting(publicTenant) {
+		t.Fatal("nil provisioner should not prefer LiteLLM")
+	}
+	if withLiteLLM.preferLiteLLMForPublicAutoRouting(nil) {
+		t.Fatal("nil tenant should not prefer LiteLLM")
+	}
 }
 
 // TestBuildSpec_WorkspaceMountAttached verifies the second bind-mount that

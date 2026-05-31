@@ -81,3 +81,22 @@ func TestSanitizePublicPicoContentOnlyPublicPico(t *testing.T) {
 		t.Fatalf("expected public Pico content to be sanitized, got %q", got)
 	}
 }
+
+func TestPublicTenantTechnicalErrorResponseOnlyPublicPico(t *testing.T) {
+	t.Setenv(envPublicTenant, "true")
+	t.Setenv(config.EnvHome, t.TempDir())
+
+	got, ok := publicTenantTechnicalErrorResponse("pico")
+	if !ok {
+		t.Fatal("expected public Pico error response")
+	}
+	if got == "" || publicTenantTextContainsInternalMarker(got) {
+		t.Fatalf("expected public-safe error response, got %q", got)
+	}
+	if strings.Contains(strings.ToLower(got), "codex") || strings.Contains(strings.ToLower(got), "llm") {
+		t.Fatalf("error response should not expose provider internals, got %q", got)
+	}
+	if _, ok := publicTenantTechnicalErrorResponse("telegram"); ok {
+		t.Fatal("non-Pico channels should keep the raw error path")
+	}
+}

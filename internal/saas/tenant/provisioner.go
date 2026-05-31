@@ -532,6 +532,11 @@ func (p *Provisioner) applySaaSModelRouting(
 
 	switch mode {
 	case "auto":
+		if p.preferLiteLLMForPublicAutoRouting(t) {
+			return p.applySaaSLiteLLMModelRouting(ctx, t, LiteLLMModelRoutingConfig{
+				ModelName: defaultSaaSLiteLLMModel,
+			}, false)
+		}
 		if order := p.availableSaaSCLIOrder(); len(order) > 0 {
 			if err := p.applySaaSCLIModelRouting(t, CLIModelRoutingConfig{Order: order}); err != nil {
 				return false, err
@@ -572,6 +577,10 @@ func (p *Provisioner) applySaaSModelRouting(
 	default:
 		return false, fmt.Errorf("unknown model_routing.mode %q (expected auto, litellm, or cli)", mode)
 	}
+}
+
+func (p *Provisioner) preferLiteLLMForPublicAutoRouting(t *store.Tenant) bool {
+	return p != nil && p.LiteLLM != nil && t != nil && t.IsPublic
 }
 
 func (p *Provisioner) ApplyModelRouting(ctx context.Context, t *store.Tenant, routing *ModelRoutingConfig) error {

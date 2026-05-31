@@ -44,20 +44,29 @@ volumes públicos já materializados.
   juntos, confirmar uma vez, e só então chamar `set_owner`/`mark_discovery_done`.
 - Testes cobrem detecção de runtime público e sanitização de texto com marcas de
   bastidor.
+- Pós-deploy, o smoke de produção também encontrou `Error processing message:
+  LLM call failed after retries: codex cli error: exit status 1`. O modo
+  `auto` agora prefere LiteLLM em tenants públicos quando LiteLLM está
+  configurado, para não prender o fluxo público a credencial CLI compartilhada
+  vencida ou inválida. Falhas técnicas de provider também viram uma mensagem
+  pública genérica no canal Pico.
 
 ## Recuperação em produção
 
 1. Deployar pelo fluxo oficial de GitHub Actions (`release-controlplane.yml`).
 2. Confirmar que tenants públicos rodam com `PICOCLAW_PUBLIC_TENANT=true` ou
    `ui-visibility.json` com `active_profile=public`.
-3. Recriar ou reprovisionar volumes públicos afetados para receber o
+3. No tenant público afetado, aplicar `model_routing.mode=litellm` ou
+   reaplicar `auto` após esta correção, e recriar o container. O deploy central
+   não recria tenants já existentes automaticamente.
+4. Recriar ou reprovisionar volumes públicos afetados para receber o
    `publicSofiaAgentMD` e as skills atualizadas.
-4. Testar `https://<tenant-publico>/` com:
+5. Testar `https://<tenant-publico>/` com:
    - mensagem curta de abertura;
    - segmento com arquivo de referência;
    - recomendação de time;
    - envio de nome, email e WhatsApp juntos;
    - confirmação final antes de concluir.
-5. Validar que nenhuma resposta pública contém termos como `rg`, `exec`,
+6. Validar que nenhuma resposta pública contém termos como `rg`, `exec`,
    `delegate`, `workspace/`, `memory/`, `AGENT.md`, `SKILL.md`,
-   `ui-visibility` ou `onboarding-state`.
+   `ui-visibility`, `onboarding-state`, `codex cli` ou `LLM call failed`.

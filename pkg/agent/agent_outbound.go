@@ -21,6 +21,10 @@ func (al *AgentLoop) maybePublishError(ctx context.Context, channel, chatID, ses
 	if errors.Is(err, context.Canceled) {
 		return false
 	}
+	if response, ok := publicTenantTechnicalErrorResponse(channel); ok {
+		al.PublishResponseIfNeeded(ctx, channel, chatID, sessionKey, response)
+		return true
+	}
 	al.PublishResponseIfNeeded(ctx, channel, chatID, sessionKey, fmt.Sprintf("Error processing message: %v", err))
 	return true
 }
