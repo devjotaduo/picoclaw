@@ -29,13 +29,13 @@ func SetAgentsRoster(volumeDir string, roster []string) error {
 	}
 
 	var top map[string]json.RawMessage
-	if err := json.Unmarshal(data, &top); err != nil {
+	if err = json.Unmarshal(data, &top); err != nil {
 		return fmt.Errorf("parse config.json: %w", err)
 	}
 
 	agents := map[string]json.RawMessage{}
 	if raw, ok := top["agents"]; ok && len(raw) > 0 {
-		if err := json.Unmarshal(raw, &agents); err != nil {
+		if err = json.Unmarshal(raw, &agents); err != nil {
 			return fmt.Errorf("parse config.json agents: %w", err)
 		}
 	}

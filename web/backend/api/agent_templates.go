@@ -1299,7 +1299,7 @@ func (h *Handler) applyAgentDefinition(req *agentTemplateApplyRequest) (*applyAg
 		return nil, http.StatusInternalServerError, fmt.Errorf("failed to load config: %w", err)
 	}
 	configChanged := ensureAgentTemplateRuntimeDefaults(&cfg.Agents.Defaults)
-	if err := normalizeTemplateRequestSkills(req, availableTemplateSkillNames(cfg)); err != nil {
+	if err = normalizeTemplateRequestSkills(req, availableTemplateSkillNames(cfg)); err != nil {
 		return nil, http.StatusBadRequest, err
 	}
 

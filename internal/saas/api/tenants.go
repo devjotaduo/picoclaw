@@ -220,7 +220,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	// publico/admin so those tenants keep their solo/legacy roster.
 	var roster []string
 	if len(resolvedType.Roster) > 0 {
-		if err := json.Unmarshal(resolvedType.Roster, &roster); err != nil {
+		if err = json.Unmarshal(resolvedType.Roster, &roster); err != nil {
 			writeError(w, http.StatusBadRequest, "roster do tipo de tenant está malformado")
 			return
 		}

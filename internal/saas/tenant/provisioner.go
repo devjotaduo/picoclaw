@@ -509,7 +509,7 @@ func (p *Provisioner) runProvision(
 		// boot instead of the legacy 4-agent seed. No-op for an empty roster
 		// (public tenants keep Sofia solo). Runs before placeholder
 		// substitution + ValidateBundle so a malformed patch fails fast.
-		if err := SetAgentsRoster(t.VolumePath, roster); err != nil {
+		if err = SetAgentsRoster(t.VolumePath, roster); err != nil {
 			return fmt.Errorf("set agents roster: %w", err)
 		}
 
