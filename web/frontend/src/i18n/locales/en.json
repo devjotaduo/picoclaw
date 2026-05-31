@@ -80,7 +80,7 @@
       "marketing": "{{name}} helps create campaigns, content, and visual materials.",
       "assistant": "{{name}} helps with schedules, reports, documents, and agent coordination."
     },
-    "placeholder": "Request additional changes",
+    "placeholder": "Type your message",
     "supportWhatsapp": "Talk to support",
     "testAttendance": "Test attendance",
     "disabledPlaceholder": {

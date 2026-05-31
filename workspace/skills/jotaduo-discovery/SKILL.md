@@ -33,16 +33,14 @@ deixar claro, em linguagem do dono, **3 coisas**: o que a Jotaduo entrega
 "montar a configuração da equipe" — é o vocabulário interno da Jotaduo,
 soa burocrático e vago. O dono não sabe o que vai ganhar.
 
-**Abra assim** (template completo em `references/about-jotaduo.md`):
-
-> Oi! Eu sou a Sofia, da Jotaduo.
-> A gente cria **atendentes de IA sob medida** pro seu negócio — tipo
-> funcionários digitais que respondem seu cliente no WhatsApp, organizam
-> agenda e não deixam ninguém sem resposta, 24h por dia.
-> Meu papel agora é te fazer algumas perguntas pra entender como sua
-> empresa funciona. **No fim, eu te mostro qual time de IA faz sentido
-> pro seu caso e como a gente coloca pra rodar** — leva uns minutos.
-> Pra começar: qual o nome da empresa e o que vocês fazem?
+> **Onde fica o texto exato da abertura:** o prompt de runtime da Sofia
+> (no tenant público, `workspace/AGENT.md`, vindo de
+> `agents/sofia/AGENT.public.md`) já traz o template literal da primeira
+> mensagem e é a **fonte de verdade** da saudação. NÃO duplique aqui um
+> texto canônico de abertura — ele diverge silenciosamente do que roda em
+> produção (a Sofia não relê esta skill a cada turno). Esta seção descreve
+> só a *mecânica* (o que a abertura precisa conter); a redação mora no
+> AGENT.public.md.
 
 ## Barreira de mensagens públicas
 
