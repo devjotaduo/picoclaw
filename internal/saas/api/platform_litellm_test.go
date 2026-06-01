@@ -51,3 +51,54 @@ func TestPlatformSecretEncryptionRoundTripDoesNotLeakPlaintext(t *testing.T) {
 		t.Fatalf("roundtrip = %q", plaintext)
 	}
 }
+
+func TestNormalizePlatformLiteLLMModelReqGeminiShortName(t *testing.T) {
+	req := normalizePlatformLiteLLMModelReq(platformLiteLLMModelReq{
+		ModelName:         " gemini-3.1-pro-preview ",
+		Model:             " gemini-3.1-pro-preview ",
+		CustomLLMProvider: "google",
+		APIKey:            " os.environ/GEMINI_API_KEY ",
+	})
+
+	if req.ModelName != "gemini-3.1-pro-preview" {
+		t.Fatalf("model name = %q", req.ModelName)
+	}
+	if req.Model != "gemini/gemini-3.1-pro-preview" {
+		t.Fatalf("model = %q", req.Model)
+	}
+	if req.CustomLLMProvider != "gemini" {
+		t.Fatalf("provider = %q", req.CustomLLMProvider)
+	}
+	if req.APIKey != "os.environ/GEMINI_API_KEY" {
+		t.Fatalf("api key = %q", req.APIKey)
+	}
+}
+
+func TestNormalizePlatformLiteLLMModelReqInfersGeminiProvider(t *testing.T) {
+	req := normalizePlatformLiteLLMModelReq(platformLiteLLMModelReq{
+		ModelName: "gemini-preview",
+		Model:     "gemini/gemini-3.1-pro-preview",
+	})
+
+	if req.Model != "gemini/gemini-3.1-pro-preview" {
+		t.Fatalf("model = %q", req.Model)
+	}
+	if req.CustomLLMProvider != "gemini" {
+		t.Fatalf("provider = %q", req.CustomLLMProvider)
+	}
+}
+
+func TestNormalizePlatformLiteLLMModelReqKeepsOpenRouterModel(t *testing.T) {
+	req := normalizePlatformLiteLLMModelReq(platformLiteLLMModelReq{
+		ModelName:         "openrouter-gemini",
+		Model:             "openrouter/google/gemini-2.5-pro",
+		CustomLLMProvider: "openrouter",
+	})
+
+	if req.Model != "openrouter/google/gemini-2.5-pro" {
+		t.Fatalf("model = %q", req.Model)
+	}
+	if req.CustomLLMProvider != "openrouter" {
+		t.Fatalf("provider = %q", req.CustomLLMProvider)
+	}
+}

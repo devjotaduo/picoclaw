@@ -1,3 +1,5 @@
+import type { PlatformLiteLLMModelInput } from "@/api/platform-litellm";
+
 export type LiteLLMProviderPreset = {
   value: string;
   label: string;
@@ -30,7 +32,14 @@ export const LITELLM_PROVIDER_PRESETS: LiteLLMProviderPreset[] = [
     defaultModel: "qwen-plus",
   },
   { value: "openrouter", label: "OpenRouter", llmProvider: "openrouter", apiBase: "https://openrouter.ai/api/v1" },
-  { value: "gemini", label: "Google Gemini", llmProvider: "gemini", apiBase: "" },
+  {
+    value: "gemini",
+    label: "Google Gemini",
+    llmProvider: "gemini",
+    apiBase: "",
+    modelPrefix: "gemini/",
+    defaultModel: "gemini-3.1-pro-preview",
+  },
   { value: "groq", label: "Groq", llmProvider: "groq", apiBase: "https://api.groq.com/openai/v1" },
   { value: "mistral", label: "Mistral", llmProvider: "mistral", apiBase: "https://api.mistral.ai/v1" },
   { value: "deepseek", label: "DeepSeek", llmProvider: "deepseek", apiBase: "https://api.deepseek.com" },
@@ -53,6 +62,15 @@ export type LiteLLMEnvModelDraft = {
   providerModel?: string;
   provider: string;
   providerPreset: string;
+};
+
+export type LiteLLMModelDraft = {
+  modelName: string;
+  providerModel: string;
+  provider: string;
+  apiBase: string;
+  apiVersion: string;
+  apiKey: string;
 };
 
 export function parseLLMEnvBlock(raw: string): ParsedLLMEnv {
@@ -105,6 +123,58 @@ export function detectPresetFromAPIBase(apiBase?: string): string {
   return "openai";
 }
 
+export function buildPlatformLiteLLMModelInput(draft: LiteLLMModelDraft): PlatformLiteLLMModelInput {
+  const provider = normalizeLiteLLMProvider(draft.provider, draft.providerModel);
+  const model = normalizeLiteLLMModel(draft.providerModel, provider);
+
+  return {
+    model_name: normalizeLiteLLMModelName(draft.modelName, model),
+    model,
+    custom_llm_provider: provider || undefined,
+    api_base: trimOptional(draft.apiBase),
+    api_version: trimOptional(draft.apiVersion),
+    api_key: trimOptional(draft.apiKey),
+  };
+}
+
+export function normalizeLiteLLMProvider(provider: string, model: string): string {
+  const clean = provider.trim().toLowerCase();
+  if (clean === "google" || clean === "google-ai" || clean === "google-ai-studio" || clean === "ai-studio") {
+    return "gemini";
+  }
+  if (clean === "vertex" || clean === "vertexai") {
+    return "vertex_ai";
+  }
+  if (clean) return clean;
+
+  const cleanModel = model.trim().toLowerCase();
+  if (cleanModel.startsWith("gemini/") || cleanModel.startsWith("gemini-")) return "gemini";
+  if (cleanModel.startsWith("openrouter/")) return "openrouter";
+  if (cleanModel.startsWith("openai/")) return "openai";
+  if (cleanModel.startsWith("anthropic/")) return "anthropic";
+  return "";
+}
+
+export function normalizeLiteLLMModel(model: string, provider: string): string {
+  const clean = model.trim();
+  if (!clean) return "";
+  if (provider === "gemini" && !clean.includes("/")) return `gemini/${clean}`;
+  return clean;
+}
+
+export function normalizeLiteLLMModelName(modelName: string, model: string): string {
+  const clean = modelName.trim();
+  if (clean) return clean;
+  return stripKnownProviderPrefix(model.trim());
+}
+
+export function stripKnownProviderPrefix(model: string): string {
+  for (const prefix of ["gemini/", "openai/", "anthropic/", "openrouter/"]) {
+    if (model.startsWith(prefix)) return model.slice(prefix.length);
+  }
+  return model;
+}
+
 export function normalizeOpenAICompatibleModel(model: string): string {
   const trimmed = model.trim();
   if (!trimmed) return "";
@@ -148,4 +218,9 @@ function stripInlineComment(value: string): string {
     }
   }
   return value;
+}
+
+function trimOptional(value: string): string | undefined {
+  const clean = value.trim();
+  return clean || undefined;
 }
