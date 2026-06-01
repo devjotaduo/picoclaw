@@ -256,6 +256,7 @@ func (h *Handler) Routes() http.Handler {
 				r.Post("/tenants/{id}/promote", h.handlePromoteTenant)
 				r.Get("/tenants/{id}/promote/recent-password", h.handleRecentPromotedPassword)
 				r.Get("/tenants/{id}/onboarding-state", h.handleGetTenantOnboardingState)
+				r.Get("/tenants/{id}/readiness", h.handleTenantReadiness)
 				r.Get("/tenants/{id}/sanity", h.handleTenantSanity)
 				// Discovery-mode liberation: per-tenant checklist + flip.
 				// GET returns the validate_workspace.py checklist (or a stub
