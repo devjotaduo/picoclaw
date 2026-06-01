@@ -101,6 +101,25 @@ func isQwenASRTranscriptionModel(modelCfg *config.ModelConfig) bool {
 	return strings.Contains(strings.ToLower(modelID), "qwen3-asr")
 }
 
+func isOpenRouterTranscriptionModel(modelCfg *config.ModelConfig) bool {
+	if modelCfg == nil || modelCfg.APIKey() == "" {
+		return false
+	}
+
+	protocol, modelID := providers.ExtractProtocol(modelCfg)
+	if protocol != "openrouter" {
+		return false
+	}
+
+	modelID = strings.ToLower(modelID)
+	for _, marker := range []string{"whisper", "transcribe", "transcription", "asr", "parakeet", "chirp"} {
+		if strings.Contains(modelID, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func transcriberFromModelConfig(modelCfg *config.ModelConfig) Transcriber {
 	if modelCfg == nil {
 		return nil
@@ -112,6 +131,9 @@ func transcriberFromModelConfig(modelCfg *config.ModelConfig) Transcriber {
 	}
 	if isQwenASRTranscriptionModel(modelCfg) {
 		return NewQwenASRTranscriber(modelCfg)
+	}
+	if isOpenRouterTranscriptionModel(modelCfg) {
+		return NewWhisperTranscriber(modelCfg)
 	}
 	if modelID := whisperModelID(modelCfg); modelID != "" {
 		return NewWhisperTranscriber(modelCfg)
@@ -133,6 +155,9 @@ func fallbackTranscriberFromModelConfig(modelCfg *config.ModelConfig) Transcribe
 	}
 	if isQwenASRTranscriptionModel(modelCfg) {
 		return NewQwenASRTranscriber(modelCfg)
+	}
+	if isOpenRouterTranscriptionModel(modelCfg) {
+		return NewWhisperTranscriber(modelCfg)
 	}
 	if modelID := whisperModelID(modelCfg); modelID != "" {
 		return NewWhisperTranscriber(modelCfg)

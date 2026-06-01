@@ -154,6 +154,24 @@ func DefaultConfig() *Config {
 				Model:     "openai/gpt-5.4",
 				APIBase:   "https://openrouter.ai/api/v1",
 			},
+			{
+				ModelName: "openrouter-image-flash",
+				Provider:  "openrouter",
+				Model:     "google/gemini-2.5-flash-image",
+				APIBase:   "https://openrouter.ai/api/v1",
+			},
+			{
+				ModelName: "openrouter-asr-qwen-flash",
+				Provider:  "openrouter",
+				Model:     "qwen/qwen3-asr-flash-2026-02-10",
+				APIBase:   "https://openrouter.ai/api/v1",
+			},
+			{
+				ModelName: "openrouter-tts-mini",
+				Provider:  "openrouter",
+				Model:     "openai/gpt-4o-mini-tts-2025-12-15",
+				APIBase:   "https://openrouter.ai/api/v1",
+			},
 
 			// NVIDIA - https://build.nvidia.com/
 			{

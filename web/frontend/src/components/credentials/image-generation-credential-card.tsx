@@ -139,7 +139,7 @@ export function ImageGenerationCredentialCard() {
       }
       description={t(
         "credentials.providers.imageGeneration.description",
-        "Usa OpenRouter para gerar imagens reais pelos agentes.",
+        "Usa o provedor configurado para gerar imagens reais pelos agentes.",
       )}
       status={status}
       authMethod={form?.recommended_provider ?? "OpenRouter"}

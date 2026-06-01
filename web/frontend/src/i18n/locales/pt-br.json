@@ -252,7 +252,7 @@
       },
       "imageGeneration": {
         "title": "Geração de imagem",
-        "description": "Usa OpenRouter para gerar imagens reais pelos agentes.",
+        "description": "Usa o provedor configurado para gerar imagens reais pelos agentes.",
         "enabled": "Ativar",
         "apiBase": "API base",
         "model": "Modelo",

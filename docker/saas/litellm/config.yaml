@@ -45,6 +45,25 @@ model_list:
       api_key: os.environ/OPENROUTER_API_KEY
       api_base: https://openrouter.ai/api/v1
 
+  # ----- Media via OpenRouter (cost-effective tenant defaults) -----
+  - model_name: image-flash
+    litellm_params:
+      model: openrouter/google/gemini-2.5-flash-image
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+  - model_name: asr-qwen-flash
+    litellm_params:
+      model: openrouter/qwen/qwen3-asr-flash-2026-02-10
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+  - model_name: tts-mini
+    litellm_params:
+      model: openrouter/openai/gpt-4o-mini-tts-2025-12-15
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
   # ----- Free/cheap options -----
   - model_name: llama-3.3-70b
     litellm_params:

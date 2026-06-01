@@ -37,6 +37,27 @@
       "api_base": "https://api.openai.com/v1"
     },
     {
+      "model_name": "openrouter-image-flash",
+      "provider": "openrouter",
+      "model": "google/gemini-2.5-flash-image",
+      "api_key": "sk-or-v1-your-openrouter-key",
+      "api_base": "https://openrouter.ai/api/v1"
+    },
+    {
+      "model_name": "openrouter-asr-qwen-flash",
+      "provider": "openrouter",
+      "model": "qwen/qwen3-asr-flash-2026-02-10",
+      "api_key": "sk-or-v1-your-openrouter-key",
+      "api_base": "https://openrouter.ai/api/v1"
+    },
+    {
+      "model_name": "openrouter-tts-mini",
+      "provider": "openrouter",
+      "model": "openai/gpt-4o-mini-tts-2025-12-15",
+      "api_key": "sk-or-v1-your-openrouter-key",
+      "api_base": "https://openrouter.ai/api/v1"
+    },
+    {
       "model_name": "claude-sonnet-4.6",
       "model": "anthropic/claude-sonnet-4.6",
       "api_key": "sk-ant-your-key",
@@ -430,6 +451,13 @@
       "max_age_minutes": 30,
       "interval_minutes": 5
     },
+    "image_generation": {
+      "enabled": false,
+      "api_base": "https://openrouter.ai/api/v1",
+      "model": "google/gemini-2.5-flash-image",
+      "size": "1024x1024",
+      "output_dir": "public/marketing"
+    },
     "append_file": {
       "enabled": true
     },
@@ -486,7 +514,8 @@
     "monitor_usb": true
   },
   "voice": {
-    "model_name": "",
+    "model_name": "openrouter-asr-qwen-flash",
+    "tts_model_name": "openrouter-tts-mini",
     "echo_transcription": false
   },
   "hooks": {

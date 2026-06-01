@@ -91,6 +91,22 @@ func TestDetectTranscriber(t *testing.T) {
 			wantName: "qwen-asr",
 		},
 		{
+			name: "openrouter qwen ASR alias selects transcription endpoint",
+			cfg: &config.Config{
+				Voice: config.VoiceConfig{ModelName: "openrouter-asr-qwen-flash"},
+				ModelList: []*config.ModelConfig{
+					{
+						ModelName: "openrouter-asr-qwen-flash",
+						Provider:  "openrouter",
+						Model:     "qwen/qwen3-asr-flash-2026-02-10",
+						APIBase:   "https://openrouter.ai/api/v1",
+						APIKeys:   config.SimpleSecureStrings("sk-openrouter"),
+					},
+				},
+			},
+			wantName: "whisper",
+		},
+		{
 			name: "openai whisper alias selects whisper transcriber",
 			cfg: &config.Config{
 				Voice: config.VoiceConfig{ModelName: "my-asr-model"},
@@ -113,6 +129,21 @@ func TestDetectTranscriber(t *testing.T) {
 						ModelName: "groq",
 						Model:     "groq/whisper-large-v3-turbo",
 						APIKeys:   config.SimpleSecureStrings("sk-groq-model"),
+					},
+				},
+			},
+			wantName: "whisper",
+		},
+		{
+			name: "openrouter ASR model list fallback selects transcription endpoint",
+			cfg: &config.Config{
+				ModelList: []*config.ModelConfig{
+					{
+						ModelName: "openrouter-asr-qwen-flash",
+						Provider:  "openrouter",
+						Model:     "qwen/qwen3-asr-flash-2026-02-10",
+						APIBase:   "https://openrouter.ai/api/v1",
+						APIKeys:   config.SimpleSecureStrings("sk-openrouter"),
 					},
 				},
 			},
