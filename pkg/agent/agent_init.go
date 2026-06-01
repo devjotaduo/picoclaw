@@ -319,6 +319,9 @@ func registerSharedTools(
 		if cfg.Tools.IsToolEnabled("set_ui_profile") {
 			agent.Tools.Register(tools.NewSetUIProfileTool(agent.Workspace))
 		}
+		// onboarding-state: first-class tool used by Sofia/Catarina onboarding
+		// flows. Keeps state transitions out of ad-hoc exec prompt logic.
+		agent.Tools.Register(tools.NewOnboardingStateTool(agent.Workspace))
 
 		if ttsProvider != nil {
 			agent.Tools.Register(tools.NewSendTTSTool(ttsProvider, nil))
