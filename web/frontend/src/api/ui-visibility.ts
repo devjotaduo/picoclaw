@@ -72,7 +72,7 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "sidebar.config": false,
         "sidebar.cron": false,
         "sidebar.integrations": false,
-        "sidebar.memory": false,
+        "sidebar.memory": true,
         "sidebar.template_editor": false,
         "sidebar.skills": false,
         "sidebar.skill_editor": false,

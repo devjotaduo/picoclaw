@@ -160,4 +160,14 @@ describe("ui visibility policy", () => {
       ).toBe(false)
     }
   })
+
+  it("keeps memory visible for tenant owners", () => {
+    expect(
+      isUIElementVisible(
+        DEFAULT_UI_VISIBILITY_POLICY,
+        "tenant",
+        "sidebar.memory",
+      ),
+    ).toBe(true)
+  })
 })

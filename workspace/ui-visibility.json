@@ -49,7 +49,7 @@
         "sidebar.skills": false,
         "sidebar.skill_editor": false,
         "sidebar.readiness": true,
-        "sidebar.memory": false,
+        "sidebar.memory": true,
         "sidebar.pendencias": true,
         "sidebar.cron": false,
         "sidebar.integrations": false,

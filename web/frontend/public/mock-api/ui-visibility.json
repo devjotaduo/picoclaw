@@ -114,7 +114,7 @@
         "sidebar.cron": false,
         "sidebar.integrations": false,
         "sidebar.logs": false,
-        "sidebar.memory": false,
+        "sidebar.memory": true,
         "sidebar.models": false,
         "sidebar.navigation": true,
         "sidebar.notifications": true,
