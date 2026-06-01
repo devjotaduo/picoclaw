@@ -87,10 +87,12 @@ func TestProvisionerRosterActivation_BornConfigured(t *testing.T) {
 }
 
 func TestProvisionerRosterActivation_EmptyActiveAgentsIsNoOp(t *testing.T) {
-	// Public / admin tenants pass empty ActiveAgentIDs. The provisioner guards
-	// with `if len(activeAgentIDs) > 0` so ActivateRosterAgents is never
+	// Admin tenants (roster '[]') pass empty ActiveAgentIDs. The provisioner
+	// guards with `if len(activeAgentIDs) > 0` so ActivateRosterAgents is never
 	// called — but we also verify that ActivateRosterAgents itself is
 	// fail-open when called with nil, so both layers of protection work.
+	// (Public tenants are NOT empty: their roster is [sofia] — see
+	// TestProvisionerRosterActivation_PublicActivatesSofiaOnly.)
 	vol := writeRecommendedAgentFixture(t, nil)
 	before, err := os.ReadFile(filepath.Join(vol, "config.json"))
 	if err != nil {
@@ -111,5 +113,31 @@ func TestProvisionerRosterActivation_EmptyActiveAgentsIsNoOp(t *testing.T) {
 	}
 	if string(after) != string(before) {
 		t.Fatalf("config.json must be unchanged when activeAgentIDs is empty\nbefore=%s\nafter=%s", before, after)
+	}
+}
+
+// TestProvisionerRosterActivation_PublicActivatesSofiaOnly pins the public
+// tenant path: migration 0022 gives `publico` a [sofia] roster, so provisioning
+// activates sofia and hides the rest. This must stay true so the public funnel
+// boots with Sofia as the only panel agent.
+func TestProvisionerRosterActivation_PublicActivatesSofiaOnly(t *testing.T) {
+	vol := writeRecommendedAgentFixture(t, nil)
+
+	result, err := ActivateRosterAgents(vol, []string{"sofia"})
+	if err != nil {
+		t.Fatalf("ActivateRosterAgents([sofia]): %v", err)
+	}
+	if !result.Applied {
+		t.Fatalf("expected Applied=true for public sofia roster, got %+v", result)
+	}
+
+	cfg := readConfigMap(t, filepath.Join(vol, "config.json"))
+	if got, _ := panelEnabledFor(t, cfg, "sofia"); !got {
+		t.Fatal("sofia should be enabled for a public tenant")
+	}
+	for _, hidden := range []string{"clara", "marcos", "camila", "lia"} {
+		if got, _ := panelEnabledFor(t, cfg, hidden); got {
+			t.Fatalf("%s should be disabled when only sofia is in the roster", hidden)
+		}
 	}
 }
