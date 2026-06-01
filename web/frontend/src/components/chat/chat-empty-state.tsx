@@ -46,6 +46,8 @@ const AGENT_INTRO_BY_KEY: Record<string, string> = {
 // consistent with the actual LLM persona that responds.
 const PUBLIC_TENANT_FORCED_NAME = "Sofia"
 const PUBLIC_TENANT_FORCED_INTRO = AGENT_INTRO_BY_KEY.sofia
+const PUBLIC_TENANT_START_PROMPT =
+  "Quero começar. Pode conduzir o discovery do meu negócio do jeito mais simples, com uma pergunta por vez."
 
 interface ChatEmptyStateProps {
   hasAvailableModels: boolean
@@ -249,6 +251,18 @@ export function ChatEmptyState({
       <p className="mb-7 max-w-xl text-center text-sm leading-6 text-[#b8b5ac]">
         {description}
       </p>
+
+      {isPublicTenant && onQuickTask ? (
+        <Button
+          type="button"
+          disabled={disabled}
+          onClick={() => onQuickTask(PUBLIC_TENANT_START_PROMPT)}
+          className="mb-7 h-10 rounded-full bg-[#f4f3ef] px-5 text-sm font-medium text-[#242421] shadow-[0_8px_24px_rgba(0,0,0,0.2)] hover:bg-white disabled:opacity-60"
+        >
+          <IconSparkles className="size-4" />
+          {t("chat.empty.startPublicDiscovery")}
+        </Button>
+      ) : null}
 
       {tasks.length > 0 && (
         <div className="grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2">

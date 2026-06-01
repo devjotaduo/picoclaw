@@ -243,8 +243,8 @@ export function ChatComposer({
   }
 
   return (
-    <div className="pointer-events-none relative z-10 -mt-8 shrink-0 [scrollbar-gutter:stable] overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:px-8 md:pb-6 lg:px-24 xl:px-48">
-      <div className="pointer-events-auto relative mx-auto flex max-w-[920px] flex-col rounded-[28px] border border-white/[0.065] bg-[#292927]/95 p-3 text-[#f2f1ea] shadow-[0_8px_28px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-black/20 backdrop-blur-xl transition-shadow duration-200 focus-within:border-white/[0.12] focus-within:shadow-[0_10px_34px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.06)] md:p-4">
+    <div className="pointer-events-none relative z-10 -mt-8 shrink-0 [scrollbar-gutter:stable] overflow-y-auto px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-8 md:pb-4 lg:px-24 xl:px-48">
+      <div className="pointer-events-auto relative mx-auto flex max-w-[840px] flex-col rounded-3xl border border-white/[0.065] bg-[#292927]/95 p-2.5 text-[#f2f1ea] shadow-[0_8px_24px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-black/20 backdrop-blur-xl transition-shadow duration-200 focus-within:border-white/[0.12] focus-within:shadow-[0_10px_28px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.06)] md:p-3">
         {attachments.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-2 px-2">
             {attachments.map((attachment, index) =>
@@ -316,7 +316,7 @@ export function ChatComposer({
         )}
 
         {isRecording ? (
-          <div className="flex min-h-[64px] items-center gap-3 px-2 py-1">
+          <div className="flex min-h-11 items-center gap-2 px-2 py-1">
             <span className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-red-700 uppercase dark:text-red-300">
               <span className="relative inline-flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
@@ -341,7 +341,7 @@ export function ChatComposer({
             disabled={!canInput}
             title={disabledMessage || undefined}
             className={cn(
-              "max-h-[200px] min-h-[58px] resize-none border-0 bg-transparent px-2 py-1 text-[16px] leading-6 text-[#f2f1ea] shadow-none transition-colors placeholder:text-[#9d9a91] focus-visible:ring-0 focus-visible:outline-none dark:bg-transparent",
+              "max-h-[160px] min-h-10 resize-none border-0 bg-transparent px-2 py-0.5 text-[15px] leading-5 text-[#f2f1ea] shadow-none transition-colors placeholder:text-[#9d9a91] focus-visible:ring-0 focus-visible:outline-none dark:bg-transparent",
               !canInput && "cursor-not-allowed placeholder:text-[#7e7a72]",
             )}
             minRows={1}
@@ -349,19 +349,19 @@ export function ChatComposer({
           />
         )}
 
-        <div className="mt-3 flex items-center justify-between gap-3 px-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <div className="mt-1.5 flex items-center justify-between gap-2 px-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-1">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full text-[#c7c4bb] hover:bg-white/[0.065] hover:text-[#f3f2ec]"
+              className="h-7 w-7 rounded-full text-[#c7c4bb] hover:bg-white/[0.065] hover:text-[#f3f2ec]"
               onClick={onAddAttachments}
               disabled={!canInput || isRecording}
               aria-label={t("chat.attachFile")}
               title={t("chat.attachFile")}
             >
-              <IconPlus className="size-5 stroke-[1.8]" />
+              <IconPlus className="size-4.5 stroke-[1.8]" />
             </Button>
             {onToggleAttendantTest ? (
               <Button
@@ -369,7 +369,7 @@ export function ChatComposer({
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  "h-8 rounded-full px-2.5 text-xs font-medium whitespace-nowrap text-[#e0b15f] hover:bg-[#e0b15f]/10 hover:text-[#f1c66f]",
+                  "h-7 rounded-full px-2 text-xs font-medium whitespace-nowrap text-[#e0b15f] hover:bg-[#e0b15f]/10 hover:text-[#f1c66f]",
                   attendantTestActive &&
                     "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/20 hover:text-emerald-200",
                 )}
@@ -384,7 +384,7 @@ export function ChatComposer({
             ) : null}
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1">
             {modelSelector ? (
               <div className="max-w-[190px] min-w-0">{modelSelector}</div>
             ) : null}
@@ -396,7 +396,7 @@ export function ChatComposer({
                     variant={assistantDetailsEnabled ? "secondary" : "ghost"}
                     size="icon"
                     className={cn(
-                      "h-8 w-8 rounded-full",
+                      "h-7 w-7 rounded-full",
                       assistantDetailsEnabled
                         ? "bg-white/[0.085] text-[#f3f2ec]"
                         : "text-[#c7c4bb] hover:bg-white/[0.065] hover:text-[#f3f2ec]",
@@ -420,7 +420,7 @@ export function ChatComposer({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 rounded-full",
+                "h-7 w-7 rounded-full",
                 isRecording
                   ? "bg-red-600 text-white shadow-[0_0_0_2px_rgba(220,38,38,0.12)] hover:bg-red-700"
                   : "text-[#c7c4bb] hover:bg-white/[0.065] hover:text-[#f3f2ec]",
@@ -453,7 +453,7 @@ export function ChatComposer({
                     <Button
                       type="button"
                       size="icon"
-                      className="focus-visible:ring-foreground/20 size-9 rounded-full bg-[#bfc0c2] text-[#303030] shadow-[0_3px_9px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.38)] transition-transform hover:bg-[#d8d8d8] active:scale-95 disabled:bg-[#a9aaad] disabled:text-[#4b4b4b] disabled:opacity-70"
+                      className="focus-visible:ring-foreground/20 size-8 rounded-full bg-[#bfc0c2] text-[#303030] shadow-[0_3px_9px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.38)] transition-transform hover:bg-[#d8d8d8] active:scale-95 disabled:bg-[#a9aaad] disabled:text-[#4b4b4b] disabled:opacity-70"
                       onClick={onSend}
                       disabled={!canSend}
                       aria-label={t("chat.sendMessage")}

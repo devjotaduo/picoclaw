@@ -165,7 +165,8 @@
       "noSelectedModel": "Nenhum Modelo Selecionado",
       "noSelectedModelDescription": "Você tem modelos configurados, mas nenhum está definido como padrão. Selecione um modelo antes de iniciar o chat.",
       "notRunning": "Gateway Não Está Rodando",
-      "notRunningDescription": "Inicie o serviço de gateway para começar a conversar. Use o botão Iniciar Gateway na barra superior."
+      "notRunningDescription": "Inicie o serviço de gateway para começar a conversar. Use o botão Iniciar Gateway na barra superior.",
+      "startPublicDiscovery": "Começar agora"
     },
     "modelGroup": {
       "apikey": "API Key",
