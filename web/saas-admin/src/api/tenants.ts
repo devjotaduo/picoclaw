@@ -399,7 +399,7 @@ export async function listTenantMagicLinks(id: string) {
 }
 
 export async function deleteTenant(id: string) {
-  return api<void>(`/api/v1/tenants/${id}`, { method: "DELETE" });
+  return api<void>(`/api/v1/tenants/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export async function rotatePassword(id: string) {
