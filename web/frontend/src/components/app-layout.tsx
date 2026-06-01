@@ -4,6 +4,7 @@ import { Toaster } from "sonner"
 import { AppHeader } from "@/components/app-header"
 import { AppSidebar } from "@/components/app-sidebar"
 import { OnboardingBanner } from "@/components/onboarding-banner"
+import { RightRail } from "@/components/right-rail/right-rail"
 import { TourGuide } from "@/components/tour/tour-guide"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -24,7 +25,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <div className="flex flex-1 overflow-hidden">
           <AppSidebar />
-          <div className="flex w-full flex-col overflow-hidden">
+          <div className="flex w-full min-w-0 flex-col overflow-hidden">
             {/* Banner de onboarding: visível enquanto memory/empresa.md está
                 em template (Nome/Segmento vazios). Self-hide quando completar.
                 Mesmo sinal que faz Sofia virar default agent no backend. */}
@@ -33,6 +34,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
               {children}
             </main>
           </div>
+          {/* Terceira coluna persistente: notificações, handoffs, leads e
+              pendências que os agentes já produzem. Gated por
+              layout.right_rail (oculto em public/waiting). */}
+          <RightRail />
         </div>
         <Toaster position="bottom-center" />
         <TourGuide />
