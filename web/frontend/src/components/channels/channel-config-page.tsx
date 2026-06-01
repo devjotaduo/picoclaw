@@ -91,8 +91,7 @@ function splitWhatsAppAllowFrom(value: unknown): {
     phones: list.filter((item) => item.endsWith("@s.whatsapp.net")),
     groups: list.filter((item) => item.endsWith("@g.us")),
     rest: list.filter(
-      (item) =>
-        !item.endsWith("@s.whatsapp.net") && !item.endsWith("@g.us"),
+      (item) => !item.endsWith("@s.whatsapp.net") && !item.endsWith("@g.us"),
     ),
   }
 }

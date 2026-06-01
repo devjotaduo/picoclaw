@@ -7,7 +7,10 @@ import { Link } from "@tanstack/react-router"
 
 import type { AgentDashboardItem } from "@/api/agent-dashboard"
 import { RailCard, RailEmpty } from "@/components/right-rail/rail-card"
-import { agentInitials, formatRailTime } from "@/components/right-rail/rail-utils"
+import {
+  agentInitials,
+  formatRailTime,
+} from "@/components/right-rail/rail-utils"
 import { useAgentDashboard } from "@/hooks/use-agent-dashboard"
 import {
   actionableDashboardItems,
