@@ -61,6 +61,12 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipel
 				ToolExecutions:        ts.toolExecutionsSnapshot(),
 			},
 		)
+		writeInteractionAudit(ts, "interaction.end", map[string]any{
+			"status":            string(turnStatus),
+			"iterations":        ts.currentIteration(),
+			"duration_ms":       time.Since(ts.startedAt).Milliseconds(),
+			"final_content_len": ts.finalContentLen(),
+		})
 	}()
 
 	if ts.hardAbortRequested() {
@@ -76,6 +82,10 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipel
 			MediaCount:  len(ts.media),
 		},
 	)
+	writeInteractionAudit(ts, "interaction.start", map[string]any{
+		"user_message": ts.userMessage,
+		"media_count":  len(ts.media),
+	})
 
 	// SetupTurn extracts the one-time initialization phase.
 	exec, err := pipeline.SetupTurn(turnCtx, ts)

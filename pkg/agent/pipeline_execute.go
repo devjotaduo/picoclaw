@@ -166,6 +166,13 @@ toolLoop:
 							Arguments: cloneEventArguments(toolArgs),
 						},
 					)
+					writeInteractionAudit(ts, "tool.start", map[string]any{
+						"tool":         toolName,
+						"iteration":    iteration,
+						"tool_call":    "hook_respond",
+						"arguments":    cloneEventArguments(toolArgs),
+						"tool_call_id": tc.ID,
+					})
 
 					if shouldPublishToolFeedback(al.cfg, ts) && ts.channel != "pico" {
 						toolFeedbackMaxLen := al.cfg.Agents.Defaults.GetToolFeedbackMaxArgsLength()
@@ -289,6 +296,17 @@ toolLoop:
 							Async:      hookResult.Async,
 						},
 					)
+					writeInteractionAudit(ts, "tool.end", map[string]any{
+						"tool":         toolName,
+						"iteration":    iteration,
+						"tool_call":    "hook_respond",
+						"tool_call_id": tc.ID,
+						"duration_ms":  toolDuration.Milliseconds(),
+						"is_error":     hookResult.IsError,
+						"error":        toolErrorSummary(hookResult),
+						"for_llm_len":  len(contentForLLM),
+						"for_user_len": len(hookResult.ForUser),
+					})
 					ts.recordToolExecution(
 						toolName,
 						!hookResult.IsError,
@@ -453,6 +471,12 @@ toolLoop:
 				Arguments: cloneEventArguments(toolArgs),
 			},
 		)
+		writeInteractionAudit(ts, "tool.start", map[string]any{
+			"tool":         toolName,
+			"iteration":    iteration,
+			"tool_call_id": tc.ID,
+			"arguments":    cloneEventArguments(toolArgs),
+		})
 
 		if shouldPublishToolFeedback(al.cfg, ts) && ts.channel != "pico" {
 			toolFeedbackMaxLen := al.cfg.Agents.Defaults.GetToolFeedbackMaxArgsLength()
@@ -678,6 +702,17 @@ toolLoop:
 				Async:      toolResult.Async,
 			},
 		)
+		writeInteractionAudit(ts, "tool.end", map[string]any{
+			"tool":         toolName,
+			"iteration":    iteration,
+			"tool_call_id": toolCallID,
+			"duration_ms":  toolDuration.Milliseconds(),
+			"is_error":     toolResult.IsError,
+			"error":        toolErrorSummary(toolResult),
+			"for_llm_len":  len(contentForLLM),
+			"for_user_len": len(toolResult.ForUser),
+			"async":        toolResult.Async,
+		})
 		ts.recordToolExecution(
 			toolName,
 			!toolResult.IsError,
