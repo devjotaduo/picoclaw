@@ -178,6 +178,22 @@ func TestPreferLiteLLMForPublicAutoRouting(t *testing.T) {
 	}
 }
 
+func TestDefaultSaaSLiteLLMModelRoutingIncludesOpenRouterFallback(t *testing.T) {
+	cfg := defaultSaaSLiteLLMModelRoutingConfig()
+	if cfg.ModelName != "gpt-4o-mini" {
+		t.Fatalf("default model = %q, want gpt-4o-mini", cfg.ModelName)
+	}
+	if len(cfg.Fallbacks) != 1 || cfg.Fallbacks[0] != "deepseek-chat" {
+		t.Fatalf("default fallbacks = %#v, want deepseek-chat", cfg.Fallbacks)
+	}
+
+	cfg.Fallbacks[0] = "mutated"
+	fresh := defaultSaaSLiteLLMModelRoutingConfig()
+	if fresh.Fallbacks[0] != "deepseek-chat" {
+		t.Fatalf("default fallbacks leaked mutation: %#v", fresh.Fallbacks)
+	}
+}
+
 // TestBuildSpec_WorkspaceMountAttached verifies the second bind-mount that
 // the new Workspace flow adds when the workspace has a compiled frontend.
 // We exercise the on-disk HasBuiltFrontend gate (an index.html with size>0

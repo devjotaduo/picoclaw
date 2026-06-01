@@ -62,6 +62,8 @@ import {
   CLAUDE_CLI_MODEL_PRESETS,
   CODEX_CLI_MODEL_PRESETS,
   CUSTOM_CLI_MODEL_PRESET_ID,
+  DEFAULT_LITELLM_FALLBACKS,
+  DEFAULT_LITELLM_MODEL_NAME,
   cliModelValueFromPreset,
   cliPresetDescription,
   cliPresetIDForModel,
@@ -1045,9 +1047,11 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
     queryFn: () => getTenantModelRouting(tenantId),
   });
   const [mode, setMode] = useState<TenantModelRoutingMode>("auto");
-  const [litellmModelName, setLiteLLMModelName] = useState("gpt-4o-mini");
+  const [litellmModelName, setLiteLLMModelName] = useState(DEFAULT_LITELLM_MODEL_NAME);
   const [litellmAPIBase, setLiteLLMAPIBase] = useState("");
-  const [litellmFallbacks, setLiteLLMFallbacks] = useState<string[]>([]);
+  const [litellmFallbacks, setLiteLLMFallbacks] = useState<string[]>(() => [
+    ...DEFAULT_LITELLM_FALLBACKS,
+  ]);
   const [litellmAllowedModels, setLiteLLMAllowedModels] = useState<string[]>([]);
   const [cliOrderPreset, setCLIOrderPreset] = useState<CLIOrderPreset>("claude-codex");
   const [claudeCLIModelPreset, setClaudeCLIModelPreset] = useState("sonnet");
@@ -1058,9 +1062,14 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
   useEffect(() => {
     if (!q.data) return;
     setMode(q.data.mode);
-    setLiteLLMModelName(q.data.litellm?.model_name || "gpt-4o-mini");
+    setLiteLLMModelName(q.data.litellm?.model_name || DEFAULT_LITELLM_MODEL_NAME);
     setLiteLLMAPIBase(q.data.litellm?.api_base || "");
-    setLiteLLMFallbacks(normalizeModelList(q.data.litellm?.fallbacks));
+    {
+      const storedFallbacks = normalizeModelList(q.data.litellm?.fallbacks);
+      setLiteLLMFallbacks(
+        storedFallbacks.length > 0 ? storedFallbacks : [...DEFAULT_LITELLM_FALLBACKS],
+      );
+    }
     setLiteLLMAllowedModels(normalizeModelList(q.data.litellm?.allowed_models));
     setCLIOrderPreset(presetFromCLIOrder(q.data.cli?.order));
     const claudeModel = q.data.cli?.claude_model || "sonnet";
@@ -1266,7 +1275,7 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
                     setLiteLLMFallbacks((current) => removeModelName(current, next));
                   }}
                   models={litellmModels}
-                  placeholder="gpt-4o-mini"
+                  placeholder={DEFAULT_LITELLM_MODEL_NAME}
                   disabled={q.isLoading}
                   loading={litellmModelsQ.isLoading}
                 />

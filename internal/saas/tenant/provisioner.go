@@ -36,6 +36,15 @@ const (
 	tenantCodexCLIHomeContainer = "/root/.picoclaw/.codex"
 )
 
+var defaultSaaSLiteLLMFallbacks = []string{"deepseek-chat"}
+
+func defaultSaaSLiteLLMModelRoutingConfig() LiteLLMModelRoutingConfig {
+	return LiteLLMModelRoutingConfig{
+		ModelName: defaultSaaSLiteLLMModel,
+		Fallbacks: append([]string(nil), defaultSaaSLiteLLMFallbacks...),
+	}
+}
+
 func (p *Provisioner) sharedCLIModelRouting() (useClaude, useCodex bool) {
 	if p == nil || p.Cfg == nil {
 		return false, false
@@ -586,9 +595,7 @@ func (p *Provisioner) applySaaSModelRouting(
 	switch mode {
 	case "auto":
 		if p.preferLiteLLMForPublicAutoRouting(t) {
-			return p.applySaaSLiteLLMModelRouting(ctx, t, LiteLLMModelRoutingConfig{
-				ModelName: defaultSaaSLiteLLMModel,
-			}, false)
+			return p.applySaaSLiteLLMModelRouting(ctx, t, defaultSaaSLiteLLMModelRoutingConfig(), false)
 		}
 		if order := p.availableSaaSCLIOrder(); len(order) > 0 {
 			if err := p.applySaaSCLIModelRouting(t, CLIModelRoutingConfig{Order: order}); err != nil {
@@ -599,9 +606,7 @@ func (p *Provisioner) applySaaSModelRouting(
 		if p.LiteLLM == nil {
 			return false, nil
 		}
-		return p.applySaaSLiteLLMModelRouting(ctx, t, LiteLLMModelRoutingConfig{
-			ModelName: defaultSaaSLiteLLMModel,
-		}, false)
+		return p.applySaaSLiteLLMModelRouting(ctx, t, defaultSaaSLiteLLMModelRoutingConfig(), false)
 	case "cli":
 		cliCfg := CLIModelRoutingConfig{}
 		if routing != nil {

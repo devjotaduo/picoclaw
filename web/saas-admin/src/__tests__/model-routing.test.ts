@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   addModelName,
+  DEFAULT_LITELLM_FALLBACKS,
+  DEFAULT_LITELLM_MODEL_NAME,
   joinModelList,
   modelNameChoices,
   normalizeModelList,
@@ -10,6 +12,11 @@ import {
 } from "@/lib/model-routing";
 
 describe("model routing helpers", () => {
+  it("keeps the global LiteLLM defaults for new tenants", () => {
+    expect(DEFAULT_LITELLM_MODEL_NAME).toBe("gpt-4o-mini");
+    expect(DEFAULT_LITELLM_FALLBACKS).toEqual(["deepseek-chat"]);
+  });
+
   it("splits model lists by line or comma and removes duplicates", () => {
     expect(splitModelList("gpt-4o-mini\nclaude-haiku-4-5, deepseek-chat\ngpt-4o-mini")).toEqual([
       "gpt-4o-mini",

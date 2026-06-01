@@ -48,6 +48,8 @@ import {
   CLAUDE_CLI_MODEL_PRESETS,
   CODEX_CLI_MODEL_PRESETS,
   CUSTOM_CLI_MODEL_PRESET_ID,
+  DEFAULT_LITELLM_FALLBACKS,
+  DEFAULT_LITELLM_MODEL_NAME,
   cliModelValueFromPreset,
   cliPresetDescription,
   normalizeModelList,
@@ -136,9 +138,11 @@ export function NewTenant() {
   const [tenantType, setTenantType] = useState<string>(initialTenantType);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [modelRoutingMode, setModelRoutingMode] = useState<TenantModelRoutingMode>("auto");
-  const [litellmModelName, setLiteLLMModelName] = useState("gpt-4o-mini");
+  const [litellmModelName, setLiteLLMModelName] = useState(DEFAULT_LITELLM_MODEL_NAME);
   const [litellmAPIBase, setLiteLLMAPIBase] = useState("");
-  const [litellmFallbacks, setLiteLLMFallbacks] = useState<string[]>([]);
+  const [litellmFallbacks, setLiteLLMFallbacks] = useState<string[]>(() => [
+    ...DEFAULT_LITELLM_FALLBACKS,
+  ]);
   const [litellmAllowedModels, setLiteLLMAllowedModels] = useState<string[]>([]);
   const [cliOrderPreset, setCLIOrderPreset] = useState<CLIOrderPreset>("claude-codex");
   const [claudeCLIModelPreset, setClaudeCLIModelPreset] = useState("sonnet");
@@ -632,7 +636,7 @@ export function NewTenant() {
                                 setLiteLLMFallbacks((current) => removeModelName(current, next));
                               }}
                               models={litellmModels}
-                              placeholder="gpt-4o-mini"
+                              placeholder={DEFAULT_LITELLM_MODEL_NAME}
                               loading={litellmModelsQ.isLoading}
                             />
                           </Field>
