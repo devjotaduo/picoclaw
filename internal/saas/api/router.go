@@ -351,20 +351,31 @@ func (h *Handler) Routes() http.Handler {
 	return h.withTenantGateway(r)
 }
 
-// apexDomainsFromEnv reads SAAS_BASE_DOMAIN (e.g. "jotaduo.com") and
-// PICOCLAW_LANDING_APEX_DOMAINS (comma-separated override for staging or
-// alternative hosts). Returns the union, lowercased and trimmed.
+// apexDomainsFromEnv reads the base-domain env vars and returns the apex
+// hosts the landing should serve at, lowercased, trimmed, and de-duplicated.
+//
+// It accepts both SAAS_BASE_DOMAIN (the name the controlplane process uses
+// conceptually) and TENANT_BASE_DOMAIN (the name the compose files actually
+// inject into the container — see docker/saas/docker-compose.prod.yml, which
+// maps `TENANT_BASE_DOMAIN: ${SAAS_BASE_DOMAIN}`). Reading only SAAS_BASE_DOMAIN
+// silently disabled LandingMux in prod, so the apex fell through to the admin
+// SPA even though the landing dist was correctly baked into the image.
+// PICOCLAW_LANDING_APEX_DOMAINS is a comma-separated override for staging or
+// alternative hosts.
 func apexDomainsFromEnv() []string {
 	out := make([]string, 0, 2)
-	if base := strings.TrimSpace(os.Getenv("SAAS_BASE_DOMAIN")); base != "" {
-		out = append(out, strings.ToLower(base))
+	seen := make(map[string]bool, 2)
+	addBase := func(v string) {
+		if d := strings.ToLower(strings.TrimSpace(v)); d != "" && !seen[d] {
+			seen[d] = true
+			out = append(out, d)
+		}
 	}
+	addBase(os.Getenv("SAAS_BASE_DOMAIN"))
+	addBase(os.Getenv("TENANT_BASE_DOMAIN"))
 	if extra := strings.TrimSpace(os.Getenv("PICOCLAW_LANDING_APEX_DOMAINS")); extra != "" {
 		for _, d := range strings.Split(extra, ",") {
-			d = strings.ToLower(strings.TrimSpace(d))
-			if d != "" {
-				out = append(out, d)
-			}
+			addBase(d)
 		}
 	}
 	return out
