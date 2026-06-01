@@ -224,6 +224,19 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(req.WorkspaceID) == "" && resolvedType.DefaultWorkspaceID != "" {
 		req.WorkspaceID = resolvedType.DefaultWorkspaceID
 	}
+	// If still empty (no catalog row or catalog row has no default workspace),
+	// fall back to the workspace marked is_default_auto. This keeps tenant
+	// creation working when the wizard omits workspace_id entirely — the
+	// provisioner's "workspace_id is required" error is the final backstop when
+	// no default-auto workspace exists.
+	if strings.TrimSpace(req.WorkspaceID) == "" && h.Workspaces != nil {
+		if defaultWS, werr := h.Workspaces.GetDefaultAuto(r.Context()); werr == nil {
+			req.WorkspaceID = defaultWS.ID
+		} else if !errors.Is(werr, store.ErrWorkspaceNotFound) {
+			writeError(w, http.StatusInternalServerError, "db error")
+			return
+		}
+	}
 	// Agent roster from the catalog (e.g. ["attendant","assistant"]). Empty for
 	// publico/admin so those tenants keep their solo/legacy roster.
 	var roster []string
