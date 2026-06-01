@@ -1,7 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Plus, Copy, Download, Hammer, Save, Trash2, FileText, FolderTree, CheckCircle2, XCircle, ShieldCheck, Upload } from "lucide-react";
+import {
+  CheckCircle2,
+  ClipboardCheck,
+  Code2,
+  Copy,
+  Download,
+  FileText,
+  FolderTree,
+  GitBranch,
+  Hammer,
+  Layers3,
+  PanelRight,
+  Plus,
+  Save,
+  Search,
+  ShieldCheck,
+  Trash2,
+  Upload,
+  XCircle,
+} from "lucide-react";
 
 import {
   buildWorkspaceFrontend,
@@ -30,6 +49,7 @@ import {
   workspaceSyncBadgeClass,
   workspaceSyncLabel,
 } from "@/lib/workspace-sync";
+import { cn } from "@/lib/utils";
 
 // Workspaces page — the new admin surface that replaces LauncherProfiles.
 //
@@ -48,6 +68,18 @@ const COMMON_FILES = [
   "home/workspace/AGENT.md",
   "home/workspace/SOUL.md",
   "home/workspace/behavior.json",
+];
+
+type WorkspaceView = "summary" | "files" | "checks";
+
+const WORKSPACE_VIEWS: Array<{
+  id: WorkspaceView;
+  label: string;
+  icon: typeof PanelRight;
+}> = [
+  { id: "summary", label: "Resumo", icon: PanelRight },
+  { id: "files", label: "Arquivos", icon: FolderTree },
+  { id: "checks", label: "Validação", icon: ClipboardCheck },
 ];
 
 export function Workspaces() {
@@ -71,6 +103,22 @@ export function Workspaces() {
   const syncByWorkspaceId = new Map(
     workspaces.map((ws, index) => [ws.id, syncQueries[index]]),
   );
+  const [workspaceSearch, setWorkspaceSearch] = useState("");
+  const visibleWorkspaces = useMemo(() => {
+    const term = workspaceSearch.trim().toLowerCase();
+    if (!term) return workspaces;
+    return workspaces.filter((ws) =>
+      [ws.name, ws.slug, ws.description, ws.host_path]
+        .join(" ")
+        .toLowerCase()
+        .includes(term),
+    );
+  }, [workspaceSearch, workspaces]);
+  const defaultWorkspace = workspaces.find((ws) => ws.is_default_auto);
+  const manualCount = workspaces.filter((ws) => ws.is_available_manual).length;
+  const divergedCount = workspaces.filter(
+    (ws) => syncByWorkspaceId.get(ws.id)?.data?.status === "diverged",
+  ).length;
 
   useEffect(() => {
     if (!selectedId && workspaces[0]) setSelectedId(workspaces[0].id);
@@ -192,8 +240,8 @@ export function Workspaces() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
-        title="Modelos"
-        description="Modelos completos que cada cliente recebe na criação: configurações, agentes, habilidades e telas prontas."
+        title="Modelos de workspace"
+        description="Fonte que materializa cada cliente: home/, agentes, skills e frontend."
       >
         <Button
           variant="secondary"
@@ -251,63 +299,84 @@ export function Workspaces() {
           }}
         />
       )}
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <div className="mx-auto grid h-full min-h-0 max-w-[1280px] grid-cols-[260px_minmax(0,1fr)] gap-4 p-4">
-          <aside className="min-h-0 overflow-hidden">
-            <Card className="flex max-h-full min-h-0 flex-col">
-              <CardHeader>
-                <CardTitle>Modelos</CardTitle>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <div className="mx-auto grid min-h-full w-full max-w-[1440px] grid-cols-1 gap-4 p-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="min-h-0 lg:sticky lg:top-4 lg:h-[calc(100dvh-8.5rem)]">
+            <Card className="flex h-full min-h-[420px] flex-col">
+              <CardHeader className="gap-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle>Biblioteca</CardTitle>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {workspaces.length} modelos · {manualCount} no cadastro manual
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "rounded-md border px-2 py-1 text-xs font-medium",
+                      divergedCount > 0
+                        ? "border-amber-700 bg-amber-950/30 text-amber-300"
+                        : "border-zinc-800 bg-zinc-950 text-zinc-400",
+                    )}
+                  >
+                    {divergedCount} divergentes
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <WorkspaceStat label="Padrão" value={defaultWorkspace?.slug ?? "nenhum"} />
+                  <WorkspaceStat label="Raw" value={workspaces.filter((ws) => ws.is_raw).length} />
+                </div>
+
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-zinc-500" />
+                  <Input
+                    value={workspaceSearch}
+                    onChange={(e) => setWorkspaceSearch(e.target.value)}
+                    placeholder="Buscar nome, slug ou caminho"
+                    className="pl-8"
+                  />
+                </div>
               </CardHeader>
               <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-2">
-                {workspaces.map((ws) => {
+                {workspacesQ.isLoading ? (
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-6 text-center text-xs text-zinc-500">
+                    Carregando modelos...
+                  </div>
+                ) : workspacesQ.isError ? (
+                  <div className="rounded-lg border border-red-800 bg-red-950/30 px-3 py-6 text-center text-xs text-red-300">
+                    Falha ao carregar modelos.
+                  </div>
+                ) : null}
+
+                {visibleWorkspaces.map((ws) => {
                   const syncQ = syncByWorkspaceId.get(ws.id);
                   const syncStatus = syncQ?.data?.status ?? (syncQ?.isError ? "unknown" : undefined);
                   return (
-                    <button
+                    <WorkspaceListButton
                       key={ws.id}
+                      workspace={ws}
+                      selected={selected?.id === ws.id}
+                      syncStatus={syncStatus}
+                      syncLoading={Boolean(syncQ?.isLoading)}
                       onClick={() => setSelectedId(ws.id)}
-                      className={`w-full rounded-md px-3 py-2 text-left text-sm ${
-                        selected?.id === ws.id
-                          ? "bg-zinc-800 text-zinc-100"
-                          : "text-zinc-400 hover:bg-zinc-900"
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="min-w-0 flex-1 truncate font-medium">{ws.name}</span>
-                        <span
-                          className={[
-                            "shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
-                            workspaceSyncBadgeClass(syncStatus),
-                          ].join(" ")}
-                        >
-                          {syncQ?.isLoading ? "..." : workspaceSyncLabel(syncStatus)}
-                        </span>
-                        {ws.is_raw && (
-                          <span
-                            title="Raw: provisioner copia arquivos verbatim (sem seed de senha, sem LiteLLM, sem launcher_policy)"
-                            className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
-                          >
-                            raw
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-zinc-500">
-                        v{ws.version}
-                        {ws.is_default_auto ? " · auto" : ""}
-                        {!ws.is_available_manual ? " · oculto" : ""}
-                      </div>
-                    </button>
+                    />
                   );
                 })}
-                {workspaces.length === 0 && (
-                  <div className="rounded bg-zinc-950 px-3 py-6 text-center text-xs text-zinc-500">
+                {!workspacesQ.isLoading && workspaces.length === 0 && (
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-6 text-center text-xs text-zinc-500">
                     Nenhum modelo.
+                  </div>
+                )}
+                {!workspacesQ.isLoading && workspaces.length > 0 && visibleWorkspaces.length === 0 && (
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-6 text-center text-xs text-zinc-500">
+                    Nenhum resultado para essa busca.
                   </div>
                 )}
               </CardContent>
             </Card>
           </aside>
-          <div className="min-h-0 space-y-4 overflow-y-auto pr-1 pb-4 [scrollbar-gutter:stable]">
+          <div className="min-h-0 pb-4">
             {selected ? (
               <WorkspaceEditor
                 key={selected.id}
@@ -325,6 +394,284 @@ export function Workspaces() {
         </div>
       </div>
     </div>
+  );
+}
+
+function WorkspaceStat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2">
+      <div className="text-[11px] text-zinc-500">{label}</div>
+      <div className="truncate text-sm font-medium text-zinc-200">{value}</div>
+    </div>
+  );
+}
+
+function WorkspaceListButton({
+  workspace,
+  selected,
+  syncStatus,
+  syncLoading,
+  onClick,
+}: {
+  workspace: Workspace;
+  selected: boolean;
+  syncStatus?: WorkspaceSyncStatus["status"];
+  syncLoading: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "w-full rounded-lg border px-3 py-3 text-left text-sm transition-colors",
+        selected
+          ? "border-brand-500/40 bg-brand-500/10 text-zinc-100"
+          : "border-transparent text-zinc-400 hover:border-zinc-800 hover:bg-zinc-950",
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="min-w-0 flex-1 truncate font-medium">{workspace.name}</span>
+            {workspace.is_default_auto ? (
+              <WorkspacePill tone="brand">auto</WorkspacePill>
+            ) : null}
+            {workspace.is_raw ? (
+              <WorkspacePill tone="amber">raw</WorkspacePill>
+            ) : null}
+          </div>
+          <div className="mt-1 truncate font-mono text-[11px] text-zinc-500">
+            {workspace.slug}
+          </div>
+        </div>
+        <span
+          className={cn(
+            "shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
+            workspaceSyncBadgeClass(syncStatus),
+          )}
+        >
+          {syncLoading ? "..." : workspaceSyncLabel(syncStatus)}
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-zinc-500">
+        <span>v{workspace.version}</span>
+        <span>{workspace.is_available_manual ? "manual" : "oculto"}</span>
+        <span>{workspace.frontend_built_at ? "frontend OK" : "sem build"}</span>
+      </div>
+    </button>
+  );
+}
+
+function WorkspacePill({
+  children,
+  tone = "zinc",
+}: {
+  children: ReactNode;
+  tone?: "zinc" | "brand" | "amber" | "emerald";
+}) {
+  const tones = {
+    zinc: "border-zinc-700 bg-zinc-900 text-zinc-300",
+    brand: "border-brand-500/40 bg-brand-500/10 text-brand-200",
+    amber: "border-amber-700 bg-amber-950/30 text-amber-300",
+    emerald: "border-emerald-700 bg-emerald-950/30 text-emerald-300",
+  };
+  return (
+    <span className={cn("shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium", tones[tone])}>
+      {children}
+    </span>
+  );
+}
+
+function WorkspaceHero({
+  workspace,
+  syncStatus,
+  syncLoading,
+  syncError,
+  dirty,
+}: {
+  workspace: Workspace;
+  syncStatus?: WorkspaceSyncStatus;
+  syncLoading: boolean;
+  syncError: boolean;
+  dirty: boolean;
+}) {
+  const status = syncStatus?.status ?? (syncError ? "unknown" : undefined);
+  return (
+    <section className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0">
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            <WorkspacePill tone={workspace.is_default_auto ? "brand" : "zinc"}>
+              {workspace.is_default_auto ? "padrão automático" : "não padrão"}
+            </WorkspacePill>
+            <WorkspacePill tone={workspace.is_available_manual ? "emerald" : "zinc"}>
+              {workspace.is_available_manual ? "manual visível" : "manual oculto"}
+            </WorkspacePill>
+            {workspace.is_raw ? <WorkspacePill tone="amber">raw</WorkspacePill> : null}
+            {dirty ? <WorkspacePill tone="amber">alterações pendentes</WorkspacePill> : null}
+          </div>
+          <h2 className="truncate text-xl font-semibold text-zinc-100">{workspace.name}</h2>
+          <p className="mt-1 max-w-3xl text-sm text-zinc-400">
+            {workspace.description || "Sem descrição definida."}
+          </p>
+          <div className="mt-3 flex min-w-0 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-500">
+            <Layers3 className="size-4 shrink-0 text-zinc-500" />
+            <span className="shrink-0">host_path</span>
+            <code className="min-w-0 truncate font-mono text-zinc-300">{workspace.host_path}</code>
+          </div>
+        </div>
+
+        <div className="grid min-w-[280px] grid-cols-2 gap-2 text-xs">
+          <InfoTile label="Slug" value={workspace.slug} mono />
+          <InfoTile label="Versão" value={`v${workspace.version}`} />
+          <InfoTile
+            label="Sincronização"
+            value={syncLoading ? "checando" : workspaceSyncLabel(status)}
+            tone={status === "synced" ? "emerald" : status === "diverged" ? "amber" : "zinc"}
+          />
+          <InfoTile
+            label="Frontend"
+            value={workspace.frontend_built_at ? "compilado" : "pendente"}
+            tone={workspace.frontend_built_at ? "emerald" : "zinc"}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function InfoTile({
+  label,
+  value,
+  mono,
+  tone = "zinc",
+}: {
+  label: string;
+  value: ReactNode;
+  mono?: boolean;
+  tone?: "zinc" | "amber" | "emerald";
+}) {
+  const toneClass = {
+    zinc: "text-zinc-200",
+    amber: "text-amber-300",
+    emerald: "text-emerald-300",
+  };
+  return (
+    <div className="min-w-0 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+      <div className="text-[11px] text-zinc-500">{label}</div>
+      <div className={cn("truncate text-sm font-medium", toneClass[tone], mono && "font-mono text-xs")}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function WorkspaceViewTabs({
+  activeView,
+  onChange,
+}: {
+  activeView: WorkspaceView;
+  onChange: (view: WorkspaceView) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2 rounded-lg border border-zinc-800 bg-zinc-950/60 p-1">
+      {WORKSPACE_VIEWS.map((view) => {
+        const Icon = view.icon;
+        return (
+          <button
+            key={view.id}
+            type="button"
+            onClick={() => onChange(view.id)}
+            className={cn(
+              "inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors",
+              activeView === view.id
+                ? "bg-zinc-100 text-zinc-950"
+                : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100",
+            )}
+          >
+            <Icon className="size-4" />
+            {view.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SwitchLine({
+  title,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3">
+      <div className="min-w-0">
+        <div className="font-medium text-zinc-100">{title}</div>
+        <div className="text-[11px] text-zinc-500">{description}</div>
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+    </label>
+  );
+}
+
+function FrontendBuildCard({
+  lastBuildLabel,
+  isPending,
+  result,
+  error,
+  onBuild,
+}: {
+  lastBuildLabel: string;
+  isPending: boolean;
+  result?: { ok: boolean; log_tail: string; error?: string };
+  error: unknown;
+  onBuild: () => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Frontend</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs text-zinc-500">{lastBuildLabel}</div>
+          <Button onClick={onBuild} disabled={isPending}>
+            <Hammer className="size-4" />
+            {isPending ? "Compilando..." : "Compilar frontend"}
+          </Button>
+        </div>
+        {result ? (
+          <div
+            className={cn(
+              "rounded-lg border p-3 text-xs",
+              result.ok
+                ? "border-emerald-700 bg-emerald-950/30"
+                : "border-red-800 bg-red-950/30",
+            )}
+          >
+            <div className="mb-2 font-medium">
+              {result.ok ? "Build OK" : `Build falhou: ${result.error ?? ""}`}
+            </div>
+            <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-zinc-400">
+              {result.log_tail}
+            </pre>
+          </div>
+        ) : error ? (
+          <div className="rounded-lg border border-red-800 bg-red-950/30 p-3 text-xs">
+            <div className="mb-2 font-medium">
+              Build não pôde ser executado: {String((error as Error).message ?? error)}
+            </div>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -354,6 +701,7 @@ function WorkspaceEditor({
     description !== workspace.description ||
     isDefaultAuto !== workspace.is_default_auto ||
     isAvailableManual !== workspace.is_available_manual;
+  const [activeView, setActiveView] = useState<WorkspaceView>("summary");
 
   const saveM = useMutation({
     mutationFn: () =>
@@ -394,175 +742,154 @@ function WorkspaceEditor({
   }, [workspace.frontend_built_at]);
 
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Metadados</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-zinc-500">Nome</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-zinc-500">Slug</label>
-              <Input value={slug} onChange={(e) => setSlug(e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-zinc-500">Descrição</label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <label className="flex items-center justify-between gap-3 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2">
-              <div>
-                <div className="font-medium">Padrão para criação automática</div>
-                <div className="text-[11px] text-zinc-500">
-                  Modelo padrão sugerido na criação de tenants.
-                </div>
-              </div>
-              <Switch
-                checked={isDefaultAuto}
-                onCheckedChange={setIsDefaultAuto}
-              />
-            </label>
-            <label className="flex items-center justify-between gap-3 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2">
-              <div>
-                <div className="font-medium">Disponível no cadastro manual</div>
-                <div className="text-[11px] text-zinc-500">
-                  Aparece na seleção ao criar cliente.
-                </div>
-              </div>
-              <Switch
-                checked={isAvailableManual}
-                onCheckedChange={setIsAvailableManual}
-              />
-            </label>
-          </div>
-          <div className="rounded-md bg-zinc-950 px-3 py-2 text-xs text-zinc-500">
-            host_path:{" "}
-            <code className="font-mono text-zinc-400">{workspace.host_path}</code>
-          </div>
-          <div className="flex gap-2 pt-2">
-            <Button
-              onClick={() => saveM.mutate()}
-              disabled={!dirty || saveM.isPending}
-            >
-              <Save className="size-4" /> Salvar
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Apagar o modelo "${workspace.name}"? Os arquivos em ${workspace.host_path} ficam no disco.`,
-                  )
-                ) {
-                  deleteM.mutate();
-                }
-              }}
-              disabled={isDefaultAuto || deleteM.isPending}
-              title={
-                isDefaultAuto
-                  ? "Não dá para apagar o modelo marcado como padrão"
-                  : undefined
-              }
-            >
-              <Trash2 className="size-4" /> Apagar
-            </Button>
-          </div>
-          {saveM.error ? (
-            <div className="text-xs text-red-400">
-              Erro ao salvar: {String((saveM.error as Error).message ?? saveM.error)}
-            </div>
-          ) : null}
-          {deleteM.error ? (
-            <div className="text-xs text-red-400">
-              Erro ao apagar:{" "}
-              {String((deleteM.error as Error).message ?? deleteM.error)}
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <WorkspaceSyncPanel
+    <div className="space-y-4">
+      <WorkspaceHero
         workspace={workspace}
         syncStatus={syncStatus}
-        isLoading={syncLoading}
-        isError={syncError}
+        syncLoading={syncLoading}
+        syncError={syncError}
+        dirty={dirty}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Frontend</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <div className="text-xs text-zinc-500">{lastBuildLabel}</div>
-          <Button onClick={() => buildM.mutate()} disabled={buildM.isPending}>
-            <Hammer className="size-4" />{" "}
-            {buildM.isPending ? "Compilando…" : "Compilar frontend"}
-          </Button>
-          {buildM.data ? (
-            <div
-              className={`rounded-md border p-3 text-xs ${
-                buildM.data.ok
-                  ? "border-emerald-700 bg-emerald-950/30"
-                  : "border-red-800 bg-red-950/30"
-              }`}
-            >
-              <div className="mb-2 font-medium">
-                {buildM.data.ok ? "Build OK" : `Build falhou: ${buildM.data.error ?? ""}`}
-              </div>
-              <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-zinc-400">
-                {buildM.data.log_tail}
-              </pre>
-            </div>
-          ) : buildM.error ? (
-            <div className="rounded-md border border-red-800 bg-red-950/30 p-3 text-xs">
-              <div className="mb-2 font-medium">
-                Build não pôde ser executado:{" "}
-                {String((buildM.error as Error).message ?? buildM.error)}
-              </div>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+      <WorkspaceViewTabs activeView={activeView} onChange={setActiveView} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Editor completo de arquivos</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm">
-          <p className="mb-3 text-xs text-zinc-400">
-            Edite qualquer arquivo do modelo com árvore de navegação e
-            syntax highlight. Para os arquivos comuns (AGENT.md, SOUL.md, config.json, etc.) você
-            pode continuar usando o editor rápido abaixo.
-          </p>
-          <Link
-            to={`/workspaces/${encodeURIComponent(workspace.id)}/files`}
-            className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
-          >
-            <FolderTree className="mr-1 size-4" />
-            Abrir editor de arquivos
-          </Link>
-          <Link
-            to={`/workspaces/${encodeURIComponent(workspace.id)}/mcp`}
-            className="ml-2 inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
-          >
-            MCPs
-          </Link>
-        </CardContent>
-      </Card>
+      {activeView === "summary" ? (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Identidade</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-zinc-500">Nome</label>
+                    <Input value={name} onChange={(e) => setName(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-zinc-500">Slug</label>
+                    <Input value={slug} onChange={(e) => setSlug(e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-zinc-500">Descrição</label>
+                  <Textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={2}
+                  />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <SwitchLine
+                    title="Padrão automático"
+                    description="Usado como sugestão inicial em novos clientes."
+                    checked={isDefaultAuto}
+                    onCheckedChange={setIsDefaultAuto}
+                  />
+                  <SwitchLine
+                    title="Cadastro manual"
+                    description="Aparece na lista de modelos ao criar cliente."
+                    checked={isAvailableManual}
+                    onCheckedChange={setIsAvailableManual}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    onClick={() => saveM.mutate()}
+                    disabled={!dirty || saveM.isPending}
+                  >
+                    <Save className="size-4" /> Salvar
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Apagar o modelo "${workspace.name}"? Os arquivos em ${workspace.host_path} ficam no disco.`,
+                        )
+                      ) {
+                        deleteM.mutate();
+                      }
+                    }}
+                    disabled={isDefaultAuto || deleteM.isPending}
+                    title={
+                      isDefaultAuto
+                        ? "Não dá para apagar o modelo marcado como padrão"
+                        : undefined
+                    }
+                  >
+                    <Trash2 className="size-4" /> Apagar
+                  </Button>
+                </div>
+                {saveM.error ? (
+                  <div className="text-xs text-red-400">
+                    Erro ao salvar: {String((saveM.error as Error).message ?? saveM.error)}
+                  </div>
+                ) : null}
+                {deleteM.error ? (
+                  <div className="text-xs text-red-400">
+                    Erro ao apagar:{" "}
+                    {String((deleteM.error as Error).message ?? deleteM.error)}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
 
-      <ValidationPanel workspaceId={workspace.id} />
+            <FrontendBuildCard
+              lastBuildLabel={lastBuildLabel}
+              isPending={buildM.isPending}
+              result={buildM.data}
+              error={buildM.error}
+              onBuild={() => buildM.mutate()}
+            />
+          </div>
 
-      <FileEditor workspaceId={workspace.id} />
-    </>
+          <div className="space-y-4">
+            <WorkspaceSyncPanel
+              workspace={workspace}
+              syncStatus={syncStatus}
+              isLoading={syncLoading}
+              isError={syncError}
+              compact
+            />
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Acessos rápidos</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-2 text-sm">
+                <Button asChild variant="secondary" className="justify-start">
+                  <Link to={`/workspaces/${encodeURIComponent(workspace.id)}/files`}>
+                    <FolderTree className="size-4" />
+                    Editor completo de arquivos
+                  </Link>
+                </Button>
+                <Button asChild variant="secondary" className="justify-start">
+                  <Link to={`/workspaces/${encodeURIComponent(workspace.id)}/mcp`}>
+                    <Code2 className="size-4" />
+                    MCPs do workspace
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      ) : null}
+
+      {activeView === "files" ? <FileEditor workspaceId={workspace.id} /> : null}
+
+      {activeView === "checks" ? (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <ValidationPanel workspaceId={workspace.id} />
+          <WorkspaceSyncPanel
+            workspace={workspace}
+            syncStatus={syncStatus}
+            isLoading={syncLoading}
+            isError={syncError}
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -571,11 +898,13 @@ function WorkspaceSyncPanel({
   syncStatus,
   isLoading,
   isError,
+  compact = false,
 }: {
   workspace: Workspace;
   syncStatus?: WorkspaceSyncStatus;
   isLoading: boolean;
   isError: boolean;
+  compact?: boolean;
 }) {
   const status = syncStatus?.status ?? "unknown";
   const checkedAt = syncStatus?.checked_at
@@ -583,13 +912,16 @@ function WorkspaceSyncPanel({
     : "indisponivel";
 
   return (
-    <Card>
+    <Card size={compact ? "sm" : "default"}>
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-3">
-          <span>Sincronização Git</span>
+          <span className="inline-flex items-center gap-2">
+            <GitBranch className="size-4 text-zinc-500" />
+            Sincronização Git
+          </span>
           <span
             className={[
-              "rounded border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider",
+              "rounded-md border px-2 py-1 text-[10px] font-medium",
               workspaceSyncBadgeClass(status),
             ].join(" ")}
           >
@@ -598,7 +930,7 @@ function WorkspaceSyncPanel({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
-        <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className={cn("grid gap-3 text-xs", compact ? "grid-cols-1" : "grid-cols-2")}>
           <div className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2">
             <div className="text-zinc-500">Hash do modelo</div>
             <code className="font-mono text-zinc-200" title={syncStatus?.admin_hash_sha256 || ""}>
