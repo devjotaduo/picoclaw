@@ -273,6 +273,93 @@ if not state["promotion"].get("ready"):
 print("OK admin escape hatch clears agents_not_recommended soft blocker")
 PY
 
+WS_TEST_MODE="$TMP/test-mode/workspace"
+mkdir -p "$WS_TEST_MODE/skills/onboarding-state/scripts" "$WS_TEST_MODE/memory" "$WS_TEST_MODE/state"
+printf '# Test AGENT\n' > "$WS_TEST_MODE/AGENT.md"
+cat > "$WS_TEST_MODE/memory/empresa.md" <<'MD'
+# Empresa
+
+Nome: Cafe Norte Teste5
+Segmento: restaurante
+Email: bruno.teste5@jotaduo.com
+WhatsApp: 87988553793
+MD
+cp "$SCRIPT_DIR/state.py" "$WS_TEST_MODE/skills/onboarding-state/scripts/state.py"
+STATE_PY_TEST_MODE="$WS_TEST_MODE/skills/onboarding-state/scripts/state.py"
+cat > "$WS_TEST_MODE/state/onboarding.json" <<'JSON'
+{
+  "schema_version": 5,
+  "phase": "discovery_done",
+  "discovery": {
+    "started_at": "2026-06-01T00:00:00Z",
+    "completed_at": "2026-06-01T00:00:00Z",
+    "segment": "restaurante",
+    "summary": "Restaurante em teste.",
+    "agentes_recomendados": ["clara"]
+  },
+  "deepening": {
+    "started_at": null,
+    "first_contact_at": null,
+    "last_outreach_at": null,
+    "last_owner_response_at": null,
+    "last_bridge_attempt_at": null,
+    "last_bridge_failed_at": null,
+    "last_bridge_error": null,
+    "areas_covered": ["equipe", "casos-excecao", "faq", "historico", "regras-tacitas"],
+    "areas_required": ["equipe", "casos-excecao", "faq", "historico", "regras-tacitas"],
+    "completed_at": "2026-06-01T00:00:00Z",
+    "agent": "catarina"
+  },
+  "owner_captured": {
+    "name": "Bruno Teste5",
+    "email": "bruno.teste5@jotaduo.com",
+    "whatsapp": "87988553793",
+    "captured_by": "admin_test_setup",
+    "captured_at": "2026-06-01T00:00:00Z"
+  },
+  "promotion": {
+    "ready": false,
+    "blocked_by": ["test_mode_in_progress"],
+    "promoted_at": null,
+    "promoted_by": null
+  },
+  "testing": {
+    "status": "in_test",
+    "started_at": "2026-06-01T00:00:00Z",
+    "completed_at": null,
+    "completed_by": null,
+    "completed_source": null,
+    "allowlist_required": true
+  },
+  "audit": {"events": []}
+}
+JSON
+
+OUT_TEST_MODE="$(
+  printf '%s\n' \
+    '{"action":"finish_test","completed_by":"tenant-owner","completed_source":"owner"}' \
+    | python3 "$STATE_PY_TEST_MODE"
+)"
+OUT_TEST_MODE_2="$(
+  printf '%s\n' \
+    '{"action":"finish_test","completed_by":"admin","completed_source":"admin"}' \
+    | python3 "$STATE_PY_TEST_MODE"
+)"
+python3 - "$OUT_TEST_MODE" "$OUT_TEST_MODE_2" <<'PY'
+import json
+import sys
+
+first = json.loads(sys.argv[1])
+second = json.loads(sys.argv[2])
+if first["testing"]["status"] != "production":
+    raise SystemExit(f"finish_test did not set production: {first['testing']}")
+if "test_mode_in_progress" in first["promotion"]["blocked_by"]:
+    raise SystemExit(f"finish_test kept test blocker: {first['promotion']['blocked_by']}")
+if second["testing"]["completed_source"] != "owner":
+    raise SystemExit(f"finish_test is not idempotent: {second['testing']}")
+print("OK finish_test closes test mode idempotently")
+PY
+
 WS3="$TMP/invalid/workspace"
 mkdir -p "$WS3/skills/onboarding-state/scripts" "$WS3/memory" "$WS3/state"
 printf '# Test AGENT\n' > "$WS3/AGENT.md"
