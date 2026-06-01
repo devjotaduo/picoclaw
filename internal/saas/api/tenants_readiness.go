@@ -23,9 +23,11 @@ var tenantReadinessHTTPClient = &http.Client{
 	Timeout: tenantReadinessProbeTimeout,
 	Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{
-			// Local SaaS stacks commonly use self-signed Traefik certs; the
-			// probe is only a control-plane reachability check for known tenant
-			// hosts derived from the database.
+			// The probe targets the tenant launcher over the internal Docker
+			// network (plain HTTP), so TLS verification normally doesn't apply.
+			// Kept permissive in case a future caller points it at a self-signed
+			// HTTPS endpoint — it's only a control-plane reachability check for
+			// known tenant hosts derived from the database.
 			InsecureSkipVerify: true,
 		},
 		IdleConnTimeout: 10 * time.Second,
@@ -50,9 +52,21 @@ type tenantReadinessResponse struct {
 	CheckedAt      time.Time          `json:"checked_at"`
 }
 
-// handleTenantReadiness verifies both sides of "tenant is ready for access":
-// the DB provisioning status must be active and the public tenant subdomain
-// must answer through the same gateway URL the customer will open.
+// handleTenantReadiness verifies the tenant is ready for access: the DB
+// provisioning status must be active and the tenant launcher must answer
+// /api/auth/status over the internal Docker network.
+//
+// We deliberately probe the internal upstream (http://tenant-<id>:18800) — the
+// same target the gateway proxies to — instead of the public HTTPS subdomain.
+// The public path couples readiness to DNS, NAT hairpin, the tenant-router
+// debounce and, worst of all, first-touch Let's Encrypt cert issuance, which
+// for a brand-new subdomain routinely exceeds any sane probe timeout. That made
+// the access-gate hang on "context deadline exceeded" forever. The internal
+// route answers in <100ms once the launcher is listening, and /api/auth/status
+// is auth-exempt (see isPublicLauncherDashboardPath), so an unsigned GET returns
+// 200 — exactly the "container is serving" signal the gate needs. The customer's
+// first browser visit triggers cert issuance lazily; nothing is lost by not
+// blocking on it here.
 func (h *Handler) handleTenantReadiness(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
@@ -84,7 +98,8 @@ func (h *Handler) handleTenantReadiness(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	status, err := probeTenantSubdomain(r.Context(), resp.URL)
+	internalURL := h.tenantProxyTarget(r.Context(), t).String()
+	status, err := probeTenantAuthStatus(r.Context(), internalURL)
 	resp.HTTPStatus = status
 	if err != nil {
 		resp.Error = err.Error()
@@ -97,7 +112,7 @@ func (h *Handler) handleTenantReadiness(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func probeTenantSubdomain(ctx context.Context, baseURL string) (int, error) {
+func probeTenantAuthStatus(ctx context.Context, baseURL string) (int, error) {
 	probeURL := strings.TrimRight(baseURL, "/") + tenantReadinessProbePath
 	ctx, cancel := context.WithTimeout(ctx, tenantReadinessProbeTimeout)
 	defer cancel()
