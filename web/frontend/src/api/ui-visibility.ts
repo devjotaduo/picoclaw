@@ -40,6 +40,9 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
     admin: { visibility: {} },
     tenant: {
       visibility: {
+        "header.visible": true,
+        "header.brand": true,
+        "header.template_selector": true,
         "layout.sidebar_trigger": true,
         "header.actions": true,
         "header.sidebar_toggle": false,
@@ -66,6 +69,7 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "sidebar.skill_editor": false,
         "sidebar.tools": false,
         "sidebar.logs": false,
+        "chat.page_header": true,
         "chat.model_selector": false,
         "chat.assistant_details_toggle": false,
         "chat.new_chat": false,
@@ -82,6 +86,9 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
     },
     public: {
       visibility: {
+        "header.visible": true,
+        "header.brand": true,
+        "header.template_selector": false,
         "layout.sidebar_trigger": false,
         "header.actions": true,
         "header.sidebar_toggle": false,
@@ -118,6 +125,7 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "sidebar.admin_tenants": false,
         "sidebar.admin_new_tenant": false,
         "sidebar.admin_clone": false,
+        "chat.page_header": false,
         "chat.model_selector": false,
         "chat.assistant_details_toggle": false,
         "chat.new_chat": false,
@@ -137,6 +145,9 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "Tela de espera pós-discovery. Tudo oculto exceto a mensagem central.",
       visibility: {
         // Tudo false — só renderiza a WaitingScreen
+        "header.visible": false,
+        "header.brand": false,
+        "header.template_selector": false,
         "layout.sidebar_trigger": false,
         "header.actions": false,
         "header.sidebar_toggle": false,
@@ -173,6 +184,7 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "sidebar.admin_tenants": false,
         "sidebar.admin_new_tenant": false,
         "sidebar.admin_clone": false,
+        "chat.page_header": false,
         "chat.model_selector": false,
         "chat.assistant_details_toggle": false,
         "chat.new_chat": false,

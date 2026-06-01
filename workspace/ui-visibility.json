@@ -7,11 +7,18 @@
   "profiles": {
     "admin": {
       "description": "Painel SaaS admin (platform_admin). Visão completa.",
-      "visibility": {}
+      "visibility": {
+        "header.visible": true,
+        "header.brand": true,
+        "header.template_selector": true
+      }
     },
     "tenant": {
       "description": "Painel do dono do tenant pós-onboarding completo.",
       "visibility": {
+        "header.visible": true,
+        "header.brand": true,
+        "header.template_selector": true,
         "layout.sidebar_trigger": true,
         "header.actions": true,
         "header.sidebar_toggle": false,
@@ -45,6 +52,7 @@
         "sidebar.tools": false,
         "sidebar.config": false,
         "sidebar.logs": false,
+        "chat.page_header": true,
         "chat.model_selector": false,
         "chat.assistant_details_toggle": false,
         "chat.new_chat": true,
@@ -62,6 +70,9 @@
     "public": {
       "description": "Discovery inicial. Só chat com Sofia, resto oculto.",
       "visibility": {
+        "header.visible": true,
+        "header.brand": true,
+        "header.template_selector": false,
         "layout.sidebar_trigger": false,
         "header.actions": true,
         "header.sidebar_toggle": false,
@@ -98,6 +109,7 @@
         "sidebar.admin_tenants": false,
         "sidebar.admin_new_tenant": false,
         "sidebar.admin_clone": false,
+        "chat.page_header": false,
         "chat.model_selector": false,
         "chat.assistant_details_toggle": false,
         "chat.new_chat": false,
@@ -115,6 +127,9 @@
     "waiting": {
       "description": "Tela de espera pós-discovery. Sofia/Rafael chama set_ui_profile(\"waiting\") quando termina o discovery — cliente só vê a WaitingScreen central. Admin promove pra \"tenant\" via painel admin depois de fazer contato/integrações.",
       "visibility": {
+        "header.visible": false,
+        "header.brand": false,
+        "header.template_selector": false,
         "layout.sidebar_trigger": false,
         "header.actions": false,
         "header.sidebar_toggle": false,
@@ -151,6 +166,7 @@
         "sidebar.admin_tenants": false,
         "sidebar.admin_new_tenant": false,
         "sidebar.admin_clone": false,
+        "chat.page_header": false,
         "chat.model_selector": false,
         "chat.assistant_details_toggle": false,
         "chat.new_chat": false,

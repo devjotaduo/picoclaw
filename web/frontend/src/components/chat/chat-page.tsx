@@ -381,6 +381,7 @@ export function ChatPage() {
     launcherPolicyQ.data.ui?.show_tool_calls !== false
   const canToggleAssistantDetails = canShowReasoning || canShowToolCalls
   const showChatTitleExtra = isVisible("chat.title_extra", false)
+  const showChatPageHeader = isVisible("chat.page_header", !isPublicTenant)
   const showModelSelector = isVisible("chat.model_selector", false)
   const showAssistantDetailsToggle = isVisible(
     "chat.assistant_details_toggle",
@@ -587,82 +588,71 @@ export function ChatPage() {
         aria-hidden="true"
       />
       <div className="relative flex min-w-0 flex-1 flex-col">
-        <PageHeader
-          title=""
-          className={`border-b border-white/[0.06] bg-[#1c1c1b]/92 backdrop-blur-xl transition-shadow ${
-            hasScrolled ? "shadow-[0_3px_14px_rgba(0,0,0,0.16)]" : ""
-          }`}
-          titleExtra={
-            isPublicTenant ? (
-              <div className="flex min-w-0 items-center gap-3">
-                <img
-                  src="/logo_with_text_light.png"
-                  alt="Jota Duo"
-                  className="h-7 w-auto object-contain"
-                />
-                <span
-                  className="hidden h-5 w-px bg-white/10 sm:block"
-                  aria-hidden="true"
-                />
-                <span className="hidden truncate text-sm text-[#b8b5ac] sm:block">
-                  Atendimento com Sofia
+        {showChatPageHeader ? (
+          <PageHeader
+            title=""
+            className={`border-b border-white/[0.06] bg-[#1c1c1b]/92 backdrop-blur-xl transition-shadow ${
+              hasScrolled ? "shadow-[0_3px_14px_rgba(0,0,0,0.16)]" : ""
+            }`}
+            titleExtra={
+              hasChatHeaderControls ? (
+                <div className="flex min-w-0 items-center gap-2">
+                  <ModelSelector
+                    defaultModelName={defaultModelName}
+                    apiKeyModels={apiKeyModels}
+                    oauthModels={oauthModels}
+                    localModels={localModels}
+                    onValueChange={handleSetDefault}
+                  />
+                </div>
+              ) : null
+            }
+          >
+            {showAssistantDetailsToggle && canToggleAssistantDetails && (
+              <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 text-[#d2d0c8] sm:flex">
+                <span className="text-sm">
+                  {t("chat.showAssistantDetails")}
                 </span>
-              </div>
-            ) : hasChatHeaderControls ? (
-              <div className="flex min-w-0 items-center gap-2">
-                <ModelSelector
-                  defaultModelName={defaultModelName}
-                  apiKeyModels={apiKeyModels}
-                  oauthModels={oauthModels}
-                  localModels={localModels}
-                  onValueChange={handleSetDefault}
+                <Switch
+                  checked={showAssistantDetails}
+                  onCheckedChange={setShowAssistantDetails}
+                  aria-label={t("chat.showAssistantDetails")}
+                  size="sm"
                 />
               </div>
-            ) : null
-          }
-        >
-          {showAssistantDetailsToggle && canToggleAssistantDetails && (
-            <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 text-[#d2d0c8] sm:flex">
-              <span className="text-sm">{t("chat.showAssistantDetails")}</span>
-              <Switch
-                checked={showAssistantDetails}
-                onCheckedChange={setShowAssistantDetails}
-                aria-label={t("chat.showAssistantDetails")}
+            )}
+
+            {showNewChatButton && (
+              <Button
+                variant="secondary"
                 size="sm"
+                onClick={newChat}
+                className="h-9 gap-2 rounded-full border border-white/10 bg-white/[0.065] text-[#f3f2ec] hover:bg-white/[0.11]"
+              >
+                <IconPlus className="size-4" />
+                <span className="hidden sm:inline">{t("chat.newChat")}</span>
+              </Button>
+            )}
+
+            {showSessionHistoryButton && (
+              <SessionHistoryMenu
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                hasMore={hasMore}
+                loadError={loadError}
+                loadErrorMessage={loadErrorMessage}
+                observerRef={observerRef}
+                onOpenChange={(open) => {
+                  if (open) {
+                    void loadSessions(true)
+                  }
+                }}
+                onSwitchSession={switchSession}
+                onDeleteSession={handleDeleteSession}
               />
-            </div>
-          )}
-
-          {showNewChatButton && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={newChat}
-              className="h-9 gap-2 rounded-full border border-white/10 bg-white/[0.065] text-[#f3f2ec] hover:bg-white/[0.11]"
-            >
-              <IconPlus className="size-4" />
-              <span className="hidden sm:inline">{t("chat.newChat")}</span>
-            </Button>
-          )}
-
-          {showSessionHistoryButton && (
-            <SessionHistoryMenu
-              sessions={sessions}
-              activeSessionId={activeSessionId}
-              hasMore={hasMore}
-              loadError={loadError}
-              loadErrorMessage={loadErrorMessage}
-              observerRef={observerRef}
-              onOpenChange={(open) => {
-                if (open) {
-                  void loadSessions(true)
-                }
-              }}
-              onSwitchSession={switchSession}
-              onDeleteSession={handleDeleteSession}
-            />
-          )}
-        </PageHeader>
+            )}
+          </PageHeader>
+        ) : null}
 
         <Conversation
           ref={scrollRef}

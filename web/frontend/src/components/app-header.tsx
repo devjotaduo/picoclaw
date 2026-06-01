@@ -55,7 +55,14 @@ export function AppHeader() {
     queryFn: getLauncherPolicy,
     staleTime: 30_000,
   })
-  const { visible: isVisible } = useUIVisibility(launcherPolicyQ.data)
+  const { profile, visible: isVisible } = useUIVisibility(launcherPolicyQ.data)
+  const isAnonymousProfile = profile === "public" || profile === "waiting"
+  const showHeader = isVisible("header.visible", isVisible("header.actions"))
+  const showHeaderBrand = isVisible("header.brand", true)
+  const showTemplateSelector = isVisible(
+    "header.template_selector",
+    !isAnonymousProfile,
+  )
   const showSidebarToggle = isVisible("header.sidebar_toggle", false)
   const showConnectionStatus = isVisible("header.connection_status", false)
   const showHeaderActions = isVisible("header.actions")
@@ -113,6 +120,10 @@ export function AppHeader() {
     void restart()
   }
 
+  if (!showHeader) {
+    return null
+  }
+
   const confirmStop = () => {
     setShowStopDialog(false)
     stop()
@@ -126,20 +137,26 @@ export function AppHeader() {
             <IconMenu2 />
           </SidebarTrigger>
         )}
-        <div className="hidden w-36 shrink-0 items-center sm:flex">
-          <Link to="/">
-            <img
-              className="block w-full dark:hidden"
-              src="/logo_with_text_light.png"
-              alt="Logo"
-            />
-            <img
-              className="hidden w-full dark:block"
-              src="/logo_with_text_dark.png"
-              alt="Logo"
-            />
-          </Link>
-        </div>
+        {showHeaderBrand ? (
+          <div
+            className={`w-32 shrink-0 items-center sm:w-36 ${
+              showSidebarToggle ? "hidden sm:flex" : "flex"
+            }`}
+          >
+            <Link to="/">
+              <img
+                className="block w-full dark:hidden"
+                src="/logo_with_text_light.png"
+                alt="Logo"
+              />
+              <img
+                className="hidden w-full dark:block"
+                src="/logo_with_text_dark.png"
+                alt="Logo"
+              />
+            </Link>
+          </div>
+        ) : null}
       </div>
 
       {/* Center prominent connection status */}
@@ -201,7 +218,9 @@ export function AppHeader() {
         {/* Runtime persona/template switcher — DEV ONLY, ADMINS ONLY.
             Outras roles não veem este controle; recebem o template via
             resolveUIVisibilityProfile. Ver components/template-selector.tsx. */}
-        <TemplateSelector compact launcherPolicy={launcherPolicyQ.data} />
+        {showTemplateSelector ? (
+          <TemplateSelector compact launcherPolicy={launcherPolicyQ.data} />
+        ) : null}
 
         {restartRequired && showGatewayRestart && (
           <Tooltip delayDuration={700}>

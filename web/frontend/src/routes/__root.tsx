@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Toaster } from "sonner"
 
 import { getLauncherAuthStatus } from "@/api/launcher-auth"
+import { AppHeader } from "@/components/app-header"
 import { AppLayout } from "@/components/app-layout"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -46,6 +47,10 @@ const RootLayout = () => {
     !uiVisibility.isError &&
     (uiVisibility.profile === "public" || uiVisibility.profile === "waiting")
   const isWaiting = uiVisibility.profile === "waiting"
+  const showAnonymousHeader = uiVisibility.visible(
+    "header.visible",
+    uiVisibility.visible("header.actions", false),
+  )
 
   // Session guard: proactively check auth status on every page load.
   useEffect(() => {
@@ -84,13 +89,9 @@ const RootLayout = () => {
     initializeChatStore({ hydrateHistory: !isAnonymousTenantProfile })
   }, [isAnonymousTenantProfile, isPublicPage, uiVisibility.isLoading])
 
-  // Public/waiting tenant surfaces never mount AppLayout/app-header, so the
-  // theme toggle (useTheme) that applies the `.dark` class is absent — the
-  // chat would otherwise fall back to the bare light :root, where the
-  // dark-first chat components (e.g. suggestion cards with hardcoded #2d2d2d)
-  // render with broken colors. Force the app's default dark theme on these
-  // anonymous surfaces; they have no toggle, so this can't fight a user
-  // preference. The index.html bootstrap script handles the pre-paint default.
+  // Anonymous tenant surfaces may skip the normal authenticated AppLayout, so
+  // force the app's default dark theme before rendering public chat/waiting UI.
+  // The index.html bootstrap script handles the pre-paint default.
   useEffect(() => {
     if (isAnonymousTenantProfile || isWaiting) {
       document.documentElement.classList.add("dark")
@@ -133,6 +134,7 @@ const RootLayout = () => {
           defaultOpen={false}
           className="bg-background flex h-dvh flex-col overflow-hidden"
         >
+          {showAnonymousHeader ? <AppHeader /> : null}
           <main className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
             <Outlet />
           </main>

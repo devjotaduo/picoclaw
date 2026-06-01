@@ -103,6 +103,27 @@ describe("ui visibility policy", () => {
     expect(
       isUIElementVisible(
         DEFAULT_UI_VISIBILITY_POLICY,
+        "public",
+        "header.visible",
+      ),
+    ).toBe(true)
+    expect(
+      isUIElementVisible(
+        DEFAULT_UI_VISIBILITY_POLICY,
+        "public",
+        "header.template_selector",
+      ),
+    ).toBe(false)
+    expect(
+      isUIElementVisible(
+        DEFAULT_UI_VISIBILITY_POLICY,
+        "public",
+        "chat.page_header",
+      ),
+    ).toBe(false)
+    expect(
+      isUIElementVisible(
+        DEFAULT_UI_VISIBILITY_POLICY,
         "tenant",
         "chat.context_usage",
       ),
