@@ -135,7 +135,7 @@ describe("ui visibility policy", () => {
     ).toBe(true)
   })
 
-  it("hides onboarding and side panels from private tenant profiles", () => {
+  it("shows the right rail but hides onboarding and chat handoff panels from private tenant profiles", () => {
     for (const profile of ["tenant", "test"] as const) {
       expect(
         isUIElementVisible(
@@ -150,7 +150,7 @@ describe("ui visibility policy", () => {
           profile,
           "layout.right_rail",
         ),
-      ).toBe(false)
+      ).toBe(true)
       expect(
         isUIElementVisible(
           DEFAULT_UI_VISIBILITY_POLICY,
