@@ -237,14 +237,12 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// Agent roster from the catalog (e.g. ["attendant","assistant"]). Empty for
-	// publico/admin so those tenants keep their solo/legacy roster.
-	var roster []string
-	if len(resolvedType.Roster) > 0 {
-		if err = json.Unmarshal(resolvedType.Roster, &roster); err != nil {
-			writeError(w, http.StatusBadRequest, "roster do tipo de tenant está malformado")
-			return
-		}
+	// Active agents for this tenant type (object roster, v2.0). Legacy string
+	// rosters yield no ids → no activation, preserving current behavior.
+	activeAgentIDs, err := rosterActiveAgentIDs(resolvedType.Roster)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "roster do tipo de tenant está malformado")
+		return
 	}
 	modelRouting, err := req.ModelRouting.toTenantConfig()
 	if err != nil {
@@ -368,11 +366,11 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		IsPublic:              uiProfile == tenant.UIProfilePublic,
 		UIProfile:             uiProfile,
 		ModelRouting:          modelRouting,
-		Roster:                roster,
-		// TODO(B3): populate ActiveAgentIDs from the tenant type's object
-		// roster so born-configured activation fires. Until B3 wires it, this
-		// stays empty and ActivateRosterAgents is a no-op at provision.
-		ActiveAgentIDs: nil,
+		// v2.0: the object roster drives panel activation via ActiveAgentIDs;
+		// the legacy role-name Roster field is intentionally nil (the
+		// orchestrator agents.roster path is no longer fed from the catalog).
+		Roster:         nil,
+		ActiveAgentIDs: activeAgentIDs,
 		TestSetup:      testSetup,
 	})
 	if err != nil {
