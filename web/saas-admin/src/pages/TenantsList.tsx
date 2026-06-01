@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -48,6 +48,7 @@ import { formatUSD, relativeTime } from "@/lib/utils";
 type TenantStatus = "all" | "active" | "suspended" | "error" | "provisioning" | "deleting";
 
 const VALID_STATUSES: TenantStatus[] = ["all", "active", "suspended", "error", "provisioning", "deleting"];
+const BULK_DELETE_CONFIRM = "EXCLUIR";
 
 const STATUS_OPTIONS: { value: TenantStatus; label: string }[] = [
   { value: "all", label: "Todos os status" },
@@ -60,6 +61,16 @@ const STATUS_OPTIONS: { value: TenantStatus; label: string }[] = [
 
 function isValidStatus(v: string | null): v is TenantStatus {
   return v !== null && (VALID_STATUSES as string[]).includes(v);
+}
+
+interface BulkDeleteFailure {
+  tenant: Tenant;
+  message: string;
+}
+
+interface BulkDeleteResult {
+  deleted: Tenant[];
+  failed: BulkDeleteFailure[];
 }
 
 export function TenantsList() {
@@ -76,16 +87,62 @@ export function TenantsList() {
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Tenant | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [selectedTenantIds, setSelectedTenantIds] = useState<Set<string>>(() => new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState("");
 
   const deleteM = useMutation({
     mutationFn: (tenant: Tenant) => deleteTenant(tenant.id),
     onSuccess: async (_res, tenant) => {
       setDeleteTarget(null);
       setDeleteConfirm("");
+      setSelectedTenantIds((current) => {
+        const next = new Set(current);
+        next.delete(tenant.id);
+        return next;
+      });
       await qc.invalidateQueries({ queryKey: ["tenants"] });
       toast({ type: "success", message: `${tenant.subdomain} excluído.` });
     },
     onError: (e: { error?: string }) => toast({ type: "error", message: e?.error ?? "Falha ao excluir cliente." }),
+  });
+
+  const bulkDeleteM = useMutation({
+    mutationFn: async (targets: Tenant[]): Promise<BulkDeleteResult> => {
+      const deleted: Tenant[] = [];
+      const failed: BulkDeleteFailure[] = [];
+
+      for (const tenant of targets) {
+        try {
+          await deleteTenant(tenant.id);
+          deleted.push(tenant);
+        } catch (error) {
+          failed.push({ tenant, message: getErrorMessage(error) });
+        }
+      }
+
+      return { deleted, failed };
+    },
+    onSuccess: async (result) => {
+      await qc.invalidateQueries({ queryKey: ["tenants"] });
+      setBulkDeleteConfirm("");
+      setBulkDeleteOpen(false);
+
+      if (result.failed.length > 0) {
+        setSelectedTenantIds(new Set(result.failed.map((item) => item.tenant.id)));
+        toast({
+          type: "error",
+          message: `${result.deleted.length} excluídos; ${result.failed.length} falharam.`,
+        });
+        return;
+      }
+
+      setSelectedTenantIds(new Set());
+      toast({
+        type: "success",
+        message: `${result.deleted.length} cliente${result.deleted.length === 1 ? "" : "s"} excluído${result.deleted.length === 1 ? "" : "s"}.`,
+      });
+    },
   });
 
   const rawStatus = searchParams.get("status");
@@ -101,6 +158,14 @@ export function TenantsList() {
     const matchStatus = statusFilter === "all" || t.status === statusFilter;
     return matchSearch && matchStatus;
   });
+  const selectableFiltered = filtered.filter((t) => t.status !== "deleting");
+  const selectedTenants = tenants.filter((t) => selectedTenantIds.has(t.id));
+  const bulkDeleteTargets = selectedTenants.filter((t) => t.status !== "deleting");
+  const allFilteredSelected =
+    selectableFiltered.length > 0 && selectableFiltered.every((t) => selectedTenantIds.has(t.id));
+  const someFilteredSelected =
+    !allFilteredSelected && selectableFiltered.some((t) => selectedTenantIds.has(t.id));
+  const tableColumnCount = isPlatformAdmin ? 10 : 9;
 
   const handleStatusFilterChange = (value: TenantStatus) => {
     setSearchParams(value === "all" ? {} : { status: value }, { replace: true });
@@ -115,6 +180,39 @@ export function TenantsList() {
     if (deleteM.isPending) return;
     setDeleteTarget(null);
     setDeleteConfirm("");
+  };
+
+  const closeBulkDeleteDialog = () => {
+    if (bulkDeleteM.isPending) return;
+    setBulkDeleteOpen(false);
+    setBulkDeleteConfirm("");
+  };
+
+  const handleToggleTenantSelection = (tenant: Tenant, checked: boolean) => {
+    if (tenant.status === "deleting") return;
+    setSelectedTenantIds((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(tenant.id);
+      } else {
+        next.delete(tenant.id);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleFilteredSelection = (checked: boolean) => {
+    setSelectedTenantIds((current) => {
+      const next = new Set(current);
+      for (const tenant of selectableFiltered) {
+        if (checked) {
+          next.add(tenant.id);
+        } else {
+          next.delete(tenant.id);
+        }
+      }
+      return next;
+    });
   };
 
   return (
@@ -181,6 +279,41 @@ export function TenantsList() {
           </Alert>
         ) : null}
 
+        {isPlatformAdmin && selectedTenants.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+            <div className="text-sm">
+              <span className="font-medium">{selectedTenants.length}</span>{" "}
+              cliente{selectedTenants.length === 1 ? "" : "s"} selecionado{selectedTenants.length === 1 ? "" : "s"}
+              {bulkDeleteTargets.length !== selectedTenants.length ? (
+                <span className="ml-2 text-muted-foreground">
+                  ({selectedTenants.length - bulkDeleteTargets.length} já em exclusão)
+                </span>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedTenantIds(new Set())}
+                disabled={bulkDeleteM.isPending}
+              >
+                Limpar seleção
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                onClick={() => setBulkDeleteOpen(true)}
+                disabled={bulkDeleteTargets.length === 0 || bulkDeleteM.isPending}
+              >
+                <IconTrash data-icon="inline-start" />
+                Excluir selecionados
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         {!q.isLoading && tenants.length === 0 ? (
           <Empty>
             <EmptyTitle>Nenhum cliente ainda</EmptyTitle>
@@ -209,6 +342,17 @@ export function TenantsList() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
+                  {isPlatformAdmin ? (
+                    <TableHead className="w-10">
+                      <SelectionCheckbox
+                        checked={allFilteredSelected}
+                        indeterminate={someFilteredSelected}
+                        disabled={selectableFiltered.length === 0 || q.isLoading}
+                        ariaLabel="Selecionar clientes filtrados"
+                        onChange={handleToggleFilteredSelection}
+                      />
+                    </TableHead>
+                  ) : null}
                   <TableHead>Endereço</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Responsável</TableHead>
@@ -223,15 +367,25 @@ export function TenantsList() {
               <TableBody>
                 {q.isLoading ? (
                   <>
-                    <SkeletonRow cols={9} />
-                    <SkeletonRow cols={9} />
-                    <SkeletonRow cols={9} />
-                    <SkeletonRow cols={9} />
-                    <SkeletonRow cols={9} />
+                    <SkeletonRow cols={tableColumnCount} />
+                    <SkeletonRow cols={tableColumnCount} />
+                    <SkeletonRow cols={tableColumnCount} />
+                    <SkeletonRow cols={tableColumnCount} />
+                    <SkeletonRow cols={tableColumnCount} />
                   </>
                 ) : null}
                 {filtered.map((t) => (
                   <TableRow key={t.id} className="cursor-pointer" onClick={() => nav(`/tenants/${t.id}`)}>
+                    {isPlatformAdmin ? (
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <SelectionCheckbox
+                          checked={selectedTenantIds.has(t.id)}
+                          disabled={t.status === "deleting" || deleteM.isPending || bulkDeleteM.isPending}
+                          ariaLabel={`Selecionar ${t.subdomain}`}
+                          onChange={(checked) => handleToggleTenantSelection(t, checked)}
+                        />
+                      </TableCell>
+                    ) : null}
                     <TableCell>
                       <Link
                         className="font-medium text-primary hover:underline"
@@ -328,6 +482,111 @@ export function TenantsList() {
           </div>
         ) : null}
       </Dialog>
+
+      <Dialog
+        open={bulkDeleteOpen}
+        onClose={closeBulkDeleteDialog}
+        title={`Excluir ${bulkDeleteTargets.length} cliente${bulkDeleteTargets.length === 1 ? "" : "s"}?`}
+        size="md"
+        closable={!bulkDeleteM.isPending}
+      >
+        <div className="flex flex-col gap-4 text-sm">
+          <Alert className="border-destructive/40 bg-destructive/10">
+            <AlertDescription>
+              Isso executa a exclusão definitiva de cada cliente selecionado, incluindo arquivos vinculados e registros relacionados.
+            </AlertDescription>
+          </Alert>
+
+          <div className="max-h-52 overflow-auto rounded-lg border bg-background">
+            <ul className="divide-y divide-border/60">
+              {bulkDeleteTargets.map((tenant) => (
+                <li key={tenant.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{tenant.subdomain}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{tenant.owner_email || tenant.id}</span>
+                  </span>
+                  <StatusBadge status={tenant.status} />
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <Field>
+            <FieldLabel htmlFor="bulk-delete-confirm">Digite {BULK_DELETE_CONFIRM}</FieldLabel>
+            <Input
+              id="bulk-delete-confirm"
+              value={bulkDeleteConfirm}
+              onChange={(e) => setBulkDeleteConfirm(e.target.value)}
+              autoComplete="off"
+              autoFocus
+            />
+          </Field>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closeBulkDeleteDialog} disabled={bulkDeleteM.isPending}>Cancelar</Button>
+            <Button
+              variant="danger"
+              onClick={() => bulkDeleteM.mutate(bulkDeleteTargets)}
+              disabled={
+                bulkDeleteTargets.length === 0 ||
+                bulkDeleteConfirm !== BULK_DELETE_CONFIRM ||
+                bulkDeleteM.isPending
+              }
+            >
+              {bulkDeleteM.isPending ? "Excluindo..." : "Excluir em massa"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
+}
+
+interface SelectionCheckboxProps {
+  checked: boolean;
+  indeterminate?: boolean;
+  disabled?: boolean;
+  ariaLabel: string;
+  onChange: (checked: boolean) => void;
+}
+
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  disabled = false,
+  ariaLabel,
+  onChange,
+}: SelectionCheckboxProps) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      onChange={(event) => onChange(event.target.checked)}
+      className="size-4 rounded border-border accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+    />
+  );
+}
+
+function getErrorMessage(error: unknown): string {
+  if (typeof error === "object" && error !== null && "error" in error) {
+    const maybeError = (error as { error?: unknown }).error;
+    if (typeof maybeError === "string") {
+      return maybeError;
+    }
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "Falha desconhecida";
 }
