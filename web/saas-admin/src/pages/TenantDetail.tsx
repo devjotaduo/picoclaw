@@ -30,6 +30,7 @@ import {
   resendCredentials,
   recreateTenant,
   syncTenantWorkspace,
+  finishTenantTestMode,
   cloneTenant,
   getTenantSanity,
   listTenantMagicLinks,
@@ -205,6 +206,15 @@ export function TenantDetail() {
     },
     onError: (e: { error?: string }) =>
       toast({ type: "error", message: e?.error ?? "Falha ao sincronizar workspace." }),
+  });
+  const finishTestModeM = useMutation({
+    mutationFn: () => finishTenantTestMode(id),
+    onSuccess: () => {
+      invalidate();
+      toast({ type: "success", message: "Modo teste finalizado." });
+    },
+    onError: (e: { error?: string }) =>
+      toast({ type: "error", message: e?.error ?? "Falha ao finalizar modo teste." }),
   });
   // Clone: raw volume copy + new LiteLLM key. The cloned launcher-auth.db
   // and all secrets carry over — the new tenant is functionally a twin
@@ -515,6 +525,21 @@ export function TenantDetail() {
             >
               <RefreshCw className="h-4 w-4" />
               {syncWorkspaceM.isPending ? "Sincronizando..." : "Sincronizar"}
+            </Button>
+          )}
+          {isPlatformAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (confirm("Finalizar modo teste e liberar o tenant para produção?")) {
+                  finishTestModeM.mutate();
+                }
+              }}
+              disabled={finishTestModeM.isPending}
+              title="Finaliza o modo teste sem apagar a allowlist atual do WhatsApp"
+            >
+              {finishTestModeM.isPending ? "Finalizando..." : "Finalizar teste"}
             </Button>
           )}
           {isPlatformAdmin && (

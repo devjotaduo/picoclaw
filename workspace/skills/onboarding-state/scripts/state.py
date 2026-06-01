@@ -156,7 +156,7 @@ def sanitize_long_text(value: str, max_len: int = SUMMARY_MAX_LEN) -> str:
 # old state.json files get migrated lazily on load (`migrate_state`)
 # instead of silently breaking parsers. Don't change semantics of an
 # existing version — bump and migrate.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def migrate_state(state: dict) -> dict:
@@ -169,6 +169,8 @@ def migrate_state(state: dict) -> dict:
              Catarina bridge can retry safely after WhatsApp send errors.
     v3 -> v4: adds discovery.agentes_recomendados, the robust source used by
              promotion to expose only the recommended tenant-facing agents.
+    v4 -> v5: adds testing.*, the private pre-provisioned tenant mode that
+             gates owner/admin go-live without changing DB tenant status.
     """
     version = state.get("schema_version", 1)
     if version < 2:
@@ -184,6 +186,14 @@ def migrate_state(state: dict) -> dict:
     if version < 4:
         discovery = state.setdefault("discovery", {})
         discovery.setdefault("agentes_recomendados", [])
+    if version < 5:
+        testing = state.setdefault("testing", {})
+        testing.setdefault("status", "not_configured")
+        testing.setdefault("started_at", None)
+        testing.setdefault("completed_at", None)
+        testing.setdefault("completed_by", None)
+        testing.setdefault("completed_source", None)
+        testing.setdefault("allowlist_required", False)
     audit = state.setdefault("audit", {})
     audit.setdefault("events", [])
     state["schema_version"] = SCHEMA_VERSION
@@ -247,6 +257,14 @@ def empty_state() -> dict:
             "blocked_by": ["discovery_incomplete"],
             "promoted_at": None,
             "promoted_by": None,
+        },
+        "testing": {
+            "status": "not_configured",
+            "started_at": None,
+            "completed_at": None,
+            "completed_by": None,
+            "completed_source": None,
+            "allowlist_required": False,
         },
         "audit": {
             "events": [],
@@ -837,6 +855,10 @@ def recompute_phase_and_blockers(state: dict, workspace_root: Path | None = None
         if not filled:
             blocked.append(f"empresa_memory_empty: {reason}")
 
+    testing = state.get("testing") or {}
+    if testing.get("status") == "in_test" and not testing.get("completed_at"):
+        blocked.append("test_mode_in_progress")
+
     forced_completion = bool(state.get("deepening", {}).get("forced_completion_reason"))
     if (
         state["discovery"].get("completed_at")
@@ -1074,6 +1096,40 @@ def op_mark_promoted(state: dict, payload: dict) -> dict:
     return state
 
 
+def op_finish_test(state: dict, payload: dict) -> dict:
+    """Marca tenant privado pré-provisionado como pronto para produção.
+
+    A troca de ui-visibility.json para profile="tenant" é feita pelo backend
+    Go, que conhece o volume raiz. Esta operação só mantém o
+    workspace/state/onboarding.json consistente para Pico Web e painel.
+    """
+    testing = state.setdefault("testing", {})
+    testing.setdefault("started_at", now_iso())
+    already_completed = bool(testing.get("completed_at"))
+    if not testing.get("completed_at"):
+        testing["completed_at"] = now_iso()
+    if not already_completed:
+        testing["completed_by"] = sanitize_short_text(
+            payload.get("completed_by") or payload.get("actor") or "system",
+            120,
+        ) or "system"
+        testing["completed_source"] = sanitize_short_text(
+            payload.get("completed_source") or payload.get("source") or "system",
+            40,
+        ) or "system"
+    testing["status"] = "production"
+    events = (state.setdefault("audit", {})).setdefault("events", [])
+    events.append({
+        "at": now_iso(),
+        "stage": "finish_test",
+        "actor": testing["completed_by"],
+        "source": testing["completed_source"],
+    })
+    if len(events) > 100:
+        del events[:-100]
+    return state
+
+
 def op_get(state: dict, payload: dict) -> dict:
     return state
 
@@ -1091,6 +1147,7 @@ OPERATIONS = {
     "mark_area_complete": op_mark_area_complete,
     "mark_ready_for_promotion": op_mark_ready_for_promotion,
     "mark_promoted": op_mark_promoted,
+    "finish_test": op_finish_test,
     "get": op_get,
 }
 

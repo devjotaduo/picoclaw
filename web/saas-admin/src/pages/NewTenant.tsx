@@ -127,6 +127,26 @@ function cliOrderFromPreset(value: CLIOrderPreset): TenantCLIProvider[] {
   }
 }
 
+const TEST_AGENT_OPTIONS = [
+  { id: "clara", label: "Clara" },
+  { id: "luna", label: "Luna" },
+  { id: "marcos", label: "Marcos" },
+  { id: "camila", label: "Camila" },
+  { id: "lia", label: "Lia" },
+  { id: "sofia", label: "Sofia" },
+  { id: "catarina", label: "Catarina" },
+  { id: "vendas", label: "Vendas" },
+  { id: "marketing", label: "Marketing" },
+  { id: "assistente", label: "Assistente" },
+];
+
+function splitTestLines(value: string): string[] {
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export function NewTenant() {
   const nav = useNavigate();
   const [searchParams] = useSearchParams();
@@ -158,6 +178,13 @@ export function NewTenant() {
     mem_limit_mb: 512,
     cpu_quota: 0.5,
   });
+  const [testMode, setTestMode] = useState(false);
+  const [companySegment, setCompanySegment] = useState("");
+  const [companySummary, setCompanySummary] = useState("");
+  const [companyWhatsApp, setCompanyWhatsApp] = useState("");
+  const [selectedAgents, setSelectedAgents] = useState<string[]>(["clara"]);
+  const [allowedPhones, setAllowedPhones] = useState("");
+  const [allowedGroups, setAllowedGroups] = useState("");
   const [result, setResult] = useState<CreateTenantResponse | null>(null);
   const [subdomainError, setSubdomainError] = useState<string | null>(null);
   const subdomainRef = useRef<HTMLInputElement>(null);
@@ -294,6 +321,23 @@ export function NewTenant() {
       tenant_type: tenantType,
       owner_email: needsOwnerEmail ? form.owner_email : "",
       model_routing: modelRouting,
+      ...(testMode
+        ? {
+            setup_mode: "test" as const,
+            company_seed: {
+              name: form.display_name.trim(),
+              segment: companySegment.trim(),
+              summary: companySummary.trim(),
+              contact_email: form.owner_email.trim().toLowerCase(),
+              contact_whatsapp: companyWhatsApp.trim(),
+            },
+            selected_agents: selectedAgents,
+            whatsapp_test_allowlist: {
+              phones: splitTestLines(allowedPhones),
+              groups: splitTestLines(allowedGroups),
+            },
+          }
+        : {}),
     });
   };
 
@@ -469,6 +513,97 @@ export function NewTenant() {
                   </Field>
                 </div>
               </FieldGroup>
+
+              {needsOwnerEmail ? (
+                <div className="flex flex-col gap-4 rounded-lg border bg-muted/20 p-4">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={testMode}
+                      onChange={(e) => setTestMode(e.target.checked)}
+                    />
+                    Cliente em modo teste
+                  </label>
+                  {testMode ? (
+                    <div className="grid gap-4">
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <Field>
+                          <FieldLabel htmlFor="test-segment">Segmento</FieldLabel>
+                          <Input
+                            id="test-segment"
+                            value={companySegment}
+                            onChange={(e) => setCompanySegment(e.target.value)}
+                            placeholder="clinica, loja, restaurante"
+                            required={testMode}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="test-whatsapp">WhatsApp principal</FieldLabel>
+                          <Input
+                            id="test-whatsapp"
+                            value={companyWhatsApp}
+                            onChange={(e) => setCompanyWhatsApp(e.target.value)}
+                            placeholder="5587988553793"
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel>Agentes visíveis</FieldLabel>
+                          <div className="grid gap-2 text-sm">
+                            {TEST_AGENT_OPTIONS.map((agent) => (
+                              <label key={agent.id} className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedAgents.includes(agent.id)}
+                                  onChange={(e) => {
+                                    setSelectedAgents((current) =>
+                                      e.target.checked
+                                        ? [...current, agent.id]
+                                        : current.filter((id) => id !== agent.id),
+                                    );
+                                  }}
+                                />
+                                {agent.label}
+                              </label>
+                            ))}
+                          </div>
+                        </Field>
+                      </div>
+                      <Field>
+                        <FieldLabel htmlFor="test-summary">Resumo inicial</FieldLabel>
+                        <textarea
+                          id="test-summary"
+                          value={companySummary}
+                          onChange={(e) => setCompanySummary(e.target.value)}
+                          className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          required={testMode}
+                        />
+                      </Field>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor="test-phones">Números permitidos</FieldLabel>
+                          <textarea
+                            id="test-phones"
+                            value={allowedPhones}
+                            onChange={(e) => setAllowedPhones(e.target.value)}
+                            className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            placeholder="um número por linha"
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="test-groups">Grupos permitidos</FieldLabel>
+                          <textarea
+                            id="test-groups"
+                            value={allowedGroups}
+                            onChange={(e) => setAllowedGroups(e.target.value)}
+                            className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            placeholder="ID do grupo ou JID"
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
                 <CollapsibleTrigger asChild>

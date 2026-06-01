@@ -636,7 +636,18 @@ func (c *WhatsAppNativeChannel) handleIncoming(evt *events.Message) {
 	}
 
 	if !c.IsAllowedSender(sender) {
-		return
+		if evt.Info.Chat.Server != types.GroupServer {
+			return
+		}
+		groupSender := bus.SenderInfo{
+			Platform:    "whatsapp",
+			PlatformID:  chatID,
+			CanonicalID: identity.BuildCanonicalID("whatsapp", chatID),
+			DisplayName: evt.Info.PushName,
+		}
+		if !c.IsAllowedSender(groupSender) {
+			return
+		}
 	}
 
 	logger.DebugCF(

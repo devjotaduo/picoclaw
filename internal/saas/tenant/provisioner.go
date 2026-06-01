@@ -273,6 +273,9 @@ type CreateInput struct {
 	// from the tenant type catalog. Empty keeps the workspace's own roster /
 	// legacy 4-agent seed (public tenants pass empty so Sofia stays solo).
 	Roster []string
+	// TestSetup seeds private tenants that should start in a guided test mode
+	// instead of the public Sofia discovery flow.
+	TestSetup *TestSetup
 }
 
 type ModelRoutingConfig struct {
@@ -385,6 +388,7 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		in.UIProfile,
 		in.ModelRouting,
 		in.Roster,
+		in.TestSetup,
 	); err != nil {
 		msg := err.Error()
 		_ = p.Tenants.SetStatus(ctx, id, store.StatusError, &msg)
@@ -413,6 +417,7 @@ func (p *Provisioner) runProvision(
 	uiProfile UIVisibilityProfile,
 	modelRouting *ModelRoutingConfig,
 	roster []string,
+	testSetup *TestSetup,
 ) (err error) {
 	success := false
 	volumeCreated := false
@@ -520,6 +525,12 @@ func (p *Provisioner) runProvision(
 		// substitution + ValidateBundle so a malformed patch fails fast.
 		if err = SetAgentsRoster(t.VolumePath, roster); err != nil {
 			return fmt.Errorf("set agents roster: %w", err)
+		}
+
+		if testSetup != nil {
+			if err := ApplyTenantTestSetup(t.VolumePath, *testSetup); err != nil {
+				return fmt.Errorf("apply tenant test setup: %w", err)
+			}
 		}
 
 		// 2. Dashboard password (skipped for Supabase / public tenants).

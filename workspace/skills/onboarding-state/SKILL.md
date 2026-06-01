@@ -25,6 +25,8 @@ ele estar pronto pra virar cliente normal. **Não conversa com cliente** —
   - `mark_area_complete` quando fechar uma das 5 áreas (equipe, casos-excecao, faq, historico, regras-tacitas)
   - `mark_ready_for_promotion` automaticamente quando a 5ª área fechar
 - **Admin** (via painel) lê este JSON pra decidir quando promover.
+- **Pico Web / painel do tenant teste** chama `finish_test` quando o owner
+  confirma que o tenant pré-provisionado já pode operar em produção.
 
 ## Operações
 
@@ -188,6 +190,23 @@ aprofundamento). Catarina raramente chama; admin usa via painel.
   "reason": "cliente simples — sem necessidade de aprofundamento técnico"
 }
 ```
+
+### `finish_test`
+Marca o tenant privado pré-provisionado como fora do modo teste. O backend Go
+usa a mesma rotina para também trocar `ui-visibility.json::active_profile`
+para `tenant`; esta operação mantém `state/onboarding.json` consistente para
+Pico Web e para o painel.
+
+```json
+{
+  "action": "finish_test",
+  "completed_by": "tenant-owner",
+  "completed_source": "owner"
+}
+```
+
+Idempotente: se `testing.completed_at` já existe, chamadas futuras mantêm o
+primeiro `completed_by` / `completed_source`.
 
 ### `get`
 Lê o estado atual. Útil pra agentes consultarem onde estão.

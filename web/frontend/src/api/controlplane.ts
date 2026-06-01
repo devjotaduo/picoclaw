@@ -73,6 +73,25 @@ export interface CreateTenantInput {
   display_name: string
   owner_email: string
   subdomain: string
+  setup_mode?: "test"
+  company_seed?: {
+    name?: string
+    segment?: string
+    summary?: string
+    contact_email?: string
+    contact_whatsapp?: string
+    products_services?: string
+    business_hours?: string
+    address?: string
+    service_regions?: string
+    site?: string
+    instagram?: string
+  }
+  selected_agents?: string[]
+  whatsapp_test_allowlist?: {
+    phones?: string[]
+    groups?: string[]
+  }
   workspace_id?: string
   /**
    * Defaults to "cliente" on the server when omitted. Widened from the

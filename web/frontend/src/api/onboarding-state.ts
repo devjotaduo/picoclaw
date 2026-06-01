@@ -46,6 +46,15 @@ export interface OnboardingPromotion {
   promoted_by?: string | null
 }
 
+export interface OnboardingTesting {
+  status?: "not_configured" | "in_test" | "production" | string
+  started_at?: string | null
+  completed_at?: string | null
+  completed_by?: string | null
+  completed_source?: string | null
+  allowlist_required?: boolean
+}
+
 export interface OnboardingJourneyState {
   schema_version?: number
   phase: OnboardingPhase
@@ -53,6 +62,7 @@ export interface OnboardingJourneyState {
   deepening: OnboardingDeepening
   owner_captured: OnboardingOwnerCaptured
   promotion: OnboardingPromotion
+  testing?: OnboardingTesting
 }
 
 export interface OnboardingStateResponse {

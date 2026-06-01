@@ -93,6 +93,7 @@ const (
 	UIProfileTenant  UIVisibilityProfile = "tenant"
 	UIProfileAdmin   UIVisibilityProfile = "admin"
 	UIProfileWaiting UIVisibilityProfile = "waiting"
+	UIProfileTest    UIVisibilityProfile = "test"
 )
 
 // SetUIVisibilityActiveProfile rewrites ui-visibility.json in the tenant

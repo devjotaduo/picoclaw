@@ -9,6 +9,8 @@ import {
   getChannelsCatalog,
   patchAppConfig,
 } from "@/api/channels"
+import { WhatsAppGroupList } from "@/components/agent/editor/whatsapp-group-list"
+import { WhatsAppPhoneList } from "@/components/agent/editor/whatsapp-phone-list"
 import { type ArrayFieldFlusher } from "@/components/channels/channel-array-list-field"
 import {
   normalizeAllowFromValues,
@@ -55,6 +57,52 @@ function asString(value: unknown): string {
 
 function asBool(value: unknown): boolean {
   return value === true
+}
+
+function asStringArray(value: unknown): string[] {
+  const values = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[\n,]+/)
+      : []
+  return values
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+}
+
+function dedupeStringList(values: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const value of values) {
+    if (seen.has(value)) continue
+    seen.add(value)
+    out.push(value)
+  }
+  return out
+}
+
+function splitWhatsAppAllowFrom(value: unknown): {
+  phones: string[]
+  groups: string[]
+  rest: string[]
+} {
+  const list = dedupeStringList(asStringArray(value))
+  return {
+    phones: list.filter((item) => item.endsWith("@s.whatsapp.net")),
+    groups: list.filter((item) => item.endsWith("@g.us")),
+    rest: list.filter(
+      (item) =>
+        !item.endsWith("@s.whatsapp.net") && !item.endsWith("@g.us"),
+    ),
+  }
+}
+
+function mergeWhatsAppAllowFrom(
+  phones: string[],
+  groups: string[],
+  rest: string[],
+): string[] {
+  return dedupeStringList([...phones, ...groups, ...rest])
 }
 
 function setRecordValueByPath(
@@ -288,6 +336,62 @@ const CHANNELS_WITHOUT_DOCS = new Set([
   "mqtt",
 ])
 
+interface WhatsAppNativeAllowlistPanelProps {
+  phones: string[]
+  groups: string[]
+  onPhonesChange: (jids: string[]) => void
+  onGroupsChange: (jids: string[]) => void
+}
+
+function WhatsAppNativeAllowlistPanel({
+  phones,
+  groups,
+  onPhonesChange,
+  onGroupsChange,
+}: WhatsAppNativeAllowlistPanelProps) {
+  return (
+    <section className="bg-card text-card-foreground border-border/60 space-y-5 rounded-xl border p-5 shadow-sm">
+      <div className="space-y-1">
+        <h2 className="text-sm font-semibold">Remetentes permitidos</h2>
+        <p className="text-muted-foreground text-xs">
+          Enquanto o tenant estiver em teste, somente estes números e grupos
+          podem interagir com o WhatsApp nativo.
+        </p>
+      </div>
+      <div className="grid gap-5 md:grid-cols-2">
+        <div className="space-y-2">
+          <label
+            htmlFor="whatsapp-native-allowed-phones"
+            className="text-sm font-medium"
+          >
+            Números permitidos
+          </label>
+          <WhatsAppPhoneList
+            id="whatsapp-native-allowed-phones"
+            jids={phones}
+            onChange={onPhonesChange}
+            emptyHint="Nenhum número autorizado para teste."
+          />
+        </div>
+        <div className="space-y-2">
+          <label
+            htmlFor="whatsapp-native-allowed-groups"
+            className="text-sm font-medium"
+          >
+            Grupos permitidos
+          </label>
+          <WhatsAppGroupList
+            id="whatsapp-native-allowed-groups"
+            jids={groups}
+            onChange={onGroupsChange}
+            emptyHint="Nenhum grupo autorizado para teste."
+          />
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
   const { t, i18n } = useTranslation()
   const { state: gatewayState } = useGateway()
@@ -425,7 +529,7 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
       return ["use_native"]
     }
     if (channel.name === "whatsapp_native") {
-      return ["use_native", "bridge_url"]
+      return ["use_native", "bridge_url", "allow_from"]
     }
     return []
   }, [channel])
@@ -720,10 +824,35 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
             />
           </>
         )
-      case "whatsapp_native":
+      case "whatsapp_native": {
+        const allowFrom = splitWhatsAppAllowFrom(editConfig.allow_from)
         return (
           <>
             <WhatsAppNativeForm enabled={enabled} />
+            <WhatsAppNativeAllowlistPanel
+              phones={allowFrom.phones}
+              groups={allowFrom.groups}
+              onPhonesChange={(phones) =>
+                handleChange(
+                  "allow_from",
+                  mergeWhatsAppAllowFrom(
+                    phones,
+                    allowFrom.groups,
+                    allowFrom.rest,
+                  ),
+                )
+              }
+              onGroupsChange={(groups) =>
+                handleChange(
+                  "allow_from",
+                  mergeWhatsAppAllowFrom(
+                    allowFrom.phones,
+                    groups,
+                    allowFrom.rest,
+                  ),
+                )
+              }
+            />
             <GenericForm
               config={editConfig}
               onChange={handleChange}
@@ -736,6 +865,7 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
             />
           </>
         )
+      }
       default:
         return (
           <GenericForm

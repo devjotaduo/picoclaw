@@ -25,6 +25,7 @@ type onboardingJourneyState struct {
 	Deepening     onboardingDeepening `json:"deepening"`
 	OwnerCaptured onboardingOwner     `json:"owner_captured"`
 	Promotion     onboardingPromotion `json:"promotion"`
+	Testing       onboardingTesting   `json:"testing,omitempty"`
 }
 
 type onboardingDiscovery struct {
@@ -63,6 +64,15 @@ type onboardingPromotion struct {
 	BlockedBy  []string `json:"blocked_by"`
 	PromotedAt *string  `json:"promoted_at"`
 	PromotedBy *string  `json:"promoted_by"`
+}
+
+type onboardingTesting struct {
+	Status            string  `json:"status,omitempty"`
+	StartedAt         *string `json:"started_at"`
+	CompletedAt       *string `json:"completed_at"`
+	CompletedBy       *string `json:"completed_by"`
+	CompletedSource   *string `json:"completed_source"`
+	AllowlistRequired bool    `json:"allowlist_required,omitempty"`
 }
 
 func (h *Handler) registerOnboardingStateRoutes(mux *http.ServeMux) {
@@ -127,6 +137,9 @@ func defaultOnboardingState(now time.Time) onboardingJourneyState {
 			Ready:     false,
 			BlockedBy: []string{"discovery_incomplete"},
 		},
+		Testing: onboardingTesting{
+			Status: "not_configured",
+		},
 	}
 }
 
@@ -152,5 +165,8 @@ func normalizeOnboardingState(state *onboardingJourneyState, now time.Time) {
 	}
 	if state.Promotion.BlockedBy == nil {
 		state.Promotion.BlockedBy = []string{}
+	}
+	if state.Testing.Status == "" {
+		state.Testing.Status = "not_configured"
 	}
 }

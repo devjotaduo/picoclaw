@@ -3,10 +3,11 @@ import {
   IconClock,
   IconExternalLink,
   IconLoader2,
+  IconRocket,
   IconSparkles,
   IconUsers,
 } from "@tabler/icons-react"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useMemo } from "react"
 
 import {
@@ -14,6 +15,7 @@ import {
   getCompanyOnboardingStatus,
 } from "@/api/company-onboarding"
 import { getOnboardingState } from "@/api/onboarding-state"
+import { finishTestMode, getTestModeStatus } from "@/api/test-mode"
 import {
   DEFAULT_UI_VISIBILITY_POLICY,
   type UIVisibilityProfile,
@@ -48,7 +50,7 @@ const PROFILE_META: Record<
   UIVisibilityProfile,
   {
     label: string
-    tone: "discovery" | "waiting" | "active" | "admin"
+    tone: "discovery" | "waiting" | "active" | "admin" | "test"
     description: string
   }
 > = {
@@ -62,6 +64,12 @@ const PROFILE_META: Record<
     tone: "waiting",
     description:
       "Discovery concluído. O time da Jotaduo está finalizando os preparativos.",
+  },
+  test: {
+    label: "Modo teste",
+    tone: "test",
+    description:
+      "Pico Web está conferindo pendências antes da liberação para produção.",
   },
   tenant: {
     label: "Operação ativa",
@@ -87,9 +95,11 @@ const TONE_CLASSES: Record<
     "border-emerald-500/30 bg-emerald-500/5 text-emerald-900 dark:text-emerald-100",
   admin:
     "border-violet-500/30 bg-violet-500/5 text-violet-900 dark:text-violet-100",
+  test: "border-cyan-500/30 bg-cyan-500/5 text-cyan-900 dark:text-cyan-100",
 }
 
 export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
+  const qc = useQueryClient()
   const policyQuery = useQuery({
     queryKey: ["ui-visibility-policy", "local-json", "dashboard-banner"],
     queryFn: getLocalUIVisibilityPolicy,
@@ -112,18 +122,42 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
     staleTime: 15_000,
     refetchInterval: 30_000,
   })
+  const testModeQuery = useQuery({
+    queryKey: ["workspace-test-mode", "dashboard-banner"],
+    queryFn: getTestModeStatus,
+    retry: false,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  })
+  const finishTestMutation = useMutation({
+    mutationFn: finishTestMode,
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["workspace-test-mode"] }),
+        qc.invalidateQueries({ queryKey: ["workspace-onboarding-state"] }),
+        qc.invalidateQueries({ queryKey: ["ui-visibility-policy"] }),
+      ])
+    },
+  })
 
   const policy = policyQuery.data ?? DEFAULT_UI_VISIBILITY_POLICY
   const profile = (policy.active_profile ??
     policy.default_profile) as UIVisibilityProfile
   const state = onboardingStateQuery.data?.state
   const phase = state?.phase
+  const testMode = testModeQuery.data
+  const isTestMode = profile === "test" || testMode?.in_test
   const isPromoted = phase === "promoted"
   const isTenantProfileOutOfSync =
-    profile === "tenant" && onboardingStateQuery.data?.exists && !isPromoted
+    profile === "tenant" &&
+    onboardingStateQuery.data?.exists &&
+    !isPromoted &&
+    state?.testing?.status !== "production"
   const baseMeta = PROFILE_META[profile] ?? PROFILE_META.tenant
   const meta =
-    profile === "tenant" && isPromoted
+    isTestMode
+      ? PROFILE_META.test
+      : profile === "tenant" && isPromoted
       ? {
           ...baseMeta,
           label: "Tenant promovido",
@@ -137,8 +171,18 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
             description:
               "A UI está liberada como tenant, mas a jornada ainda não marcou promoção.",
           }
-        : baseMeta
+      : baseMeta
   const tone = TONE_CLASSES[meta.tone]
+
+  const handleFinishTest = () => {
+    if (!testMode?.can_finish || finishTestMutation.isPending) return
+    const ok = window.confirm(
+      "Finalizar modo teste e liberar este tenant para produção?",
+    )
+    if (ok) {
+      finishTestMutation.mutate()
+    }
+  }
 
   const readiness = useMemo(() => {
     const onb = onboardingQuery.data
@@ -205,8 +249,32 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
           </div>
         </div>
 
-        {readiness ? (
-          <div className="flex items-center gap-4 self-start md:self-center">
+        {readiness || isTestMode ? (
+          <div className="flex flex-wrap items-center gap-3 self-start md:self-center md:justify-end">
+            {isTestMode ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!testMode?.can_finish || finishTestMutation.isPending}
+                onClick={handleFinishTest}
+                title={
+                  testMode?.blocked_by?.length
+                    ? testMode.blocked_by.join(", ")
+                    : undefined
+                }
+                className="border-current/40"
+              >
+                {finishTestMutation.isPending ? (
+                  <IconLoader2 className="mr-1 size-3 animate-spin" />
+                ) : (
+                  <IconRocket className="mr-1 size-3" />
+                )}
+                Finalizar teste
+              </Button>
+            ) : null}
+            {readiness ? (
+              <>
             <div className="text-right">
               <div className="text-2xl leading-none font-bold">
                 {readiness.pct}%
@@ -227,6 +295,8 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
                 <IconExternalLink className="ml-1 size-3" />
               </a>
             </Button>
+              </>
+            ) : null}
           </div>
         ) : null}
       </div>

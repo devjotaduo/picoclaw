@@ -77,6 +77,25 @@ export type CreateTenantInput = {
   display_name: string;
   owner_email: string;
   subdomain: string;
+  setup_mode?: "test";
+  company_seed?: {
+    name?: string;
+    segment?: string;
+    summary?: string;
+    contact_email?: string;
+    contact_whatsapp?: string;
+    products_services?: string;
+    business_hours?: string;
+    address?: string;
+    service_regions?: string;
+    site?: string;
+    instagram?: string;
+  };
+  selected_agents?: string[];
+  whatsapp_test_allowlist?: {
+    phones?: string[];
+    groups?: string[];
+  };
   // tenant_type is optional for backwards compat — controlplane defaults to
   // "cliente" when missing. New tenants from this UI always send it. Widened
   // from the 3-union to string so vertical slugs from the tenant_types catalog
@@ -289,6 +308,25 @@ export type SyncTenantWorkspaceResponse = {
 export async function syncTenantWorkspace(id: string) {
   return api<SyncTenantWorkspaceResponse>(
     `/api/v1/tenants/${encodeURIComponent(id)}/sync-workspace`,
+    { method: "POST" },
+  );
+}
+
+export type FinishTenantTestModeResponse = {
+  tenant_id: string;
+  finished: boolean;
+  status: {
+    status: string;
+    in_test: boolean;
+    active_profile: string;
+    can_finish: boolean;
+    blocked_by: string[];
+  };
+};
+
+export async function finishTenantTestMode(id: string) {
+  return api<FinishTenantTestModeResponse>(
+    `/api/v1/tenants/${encodeURIComponent(id)}/test-mode/finish`,
     { method: "POST" },
   );
 }

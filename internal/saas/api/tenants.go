@@ -44,6 +44,12 @@ type createTenantReq struct {
 	// materialized tenant model auth: LiteLLM virtual key values, CLI auth
 	// selection, and fallback order.
 	ModelRouting *createTenantModelRoutingReq `json:"model_routing,omitempty"`
+	// SetupMode "test" provisions a private tenant already seeded with
+	// company data, selected visible agents, and a WhatsApp test allowlist.
+	SetupMode             string                       `json:"setup_mode,omitempty"`
+	CompanySeed           tenant.TestCompanySeed       `json:"company_seed,omitempty"`
+	SelectedAgents        []string                     `json:"selected_agents,omitempty"`
+	WhatsAppTestAllowlist tenant.WhatsAppTestAllowlist `json:"whatsapp_test_allowlist,omitempty"`
 }
 
 type createTenantModelRoutingReq struct {
@@ -135,6 +141,8 @@ func uiProfileFromCatalog(s string) (tenant.UIVisibilityProfile, error) {
 		return tenant.UIProfilePublic, nil
 	case "admin":
 		return tenant.UIProfileAdmin, nil
+	case "test", "teste":
+		return tenant.UIProfileTest, nil
 	default:
 		return "", fmt.Errorf("unknown ui_profile %q in tenant_types catalog", s)
 	}
@@ -231,6 +239,38 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	isPublic := uiProfile == tenant.UIProfilePublic
+	setupMode := strings.ToLower(strings.TrimSpace(req.SetupMode))
+	var testSetup *tenant.TestSetup
+	switch setupMode {
+	case "":
+	case "test":
+		if isPublic {
+			writeError(w, http.StatusBadRequest, "setup_mode=test requer tenant privado; escolha cliente, admin ou um vertical privado")
+			return
+		}
+		seed := req.CompanySeed
+		if strings.TrimSpace(seed.Name) == "" {
+			seed.Name = req.DisplayName
+		}
+		if strings.TrimSpace(seed.ContactEmail) == "" {
+			seed.ContactEmail = req.OwnerEmail
+		}
+		setup := tenant.TestSetup{
+			Company:           seed,
+			SelectedAgents:    append([]string(nil), req.SelectedAgents...),
+			WhatsAppAllowlist: req.WhatsAppTestAllowlist,
+		}
+		normalized, err := tenant.NormalizeTestSetup(setup)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		testSetup = &normalized
+		uiProfile = tenant.UIProfileTest
+	default:
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("unknown setup_mode %q (expected test)", req.SetupMode))
+		return
+	}
 
 	// Public tenants have no human owner — derive a stable ops mailbox from
 	// TenantBaseDomain so the owner_email column has a non-empty value the
@@ -316,6 +356,7 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		UIProfile:             uiProfile,
 		ModelRouting:          modelRouting,
 		Roster:                roster,
+		TestSetup:             testSetup,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

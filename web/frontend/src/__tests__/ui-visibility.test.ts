@@ -23,6 +23,11 @@ const policy: UIVisibilityPolicy = {
         "sidebar.models": false,
       },
     },
+    test: {
+      visibility: {
+        "sidebar.models": false,
+      },
+    },
     public: {
       visibility: {
         "sidebar.chat": true,

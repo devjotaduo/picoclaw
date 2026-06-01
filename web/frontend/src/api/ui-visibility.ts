@@ -1,6 +1,6 @@
 import type { LauncherPolicyResponse } from "@/api/launcher-policy"
 
-export type UIVisibilityProfile = "admin" | "tenant" | "public" | "waiting"
+export type UIVisibilityProfile = "admin" | "tenant" | "public" | "waiting" | "test"
 
 // `waiting`: tela de espera pós-discovery. Sofia/Rafael chama
 // set_ui_profile("waiting") quando termina o discovery — cliente vê só
@@ -81,6 +81,61 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "chat.reasoning_messages": true,
         "chat.tool_call_messages": true,
         "agent_editor.create_agents": true,
+        "chat.pending_handoffs_sidebar": true,
+      },
+    },
+    test: {
+      description:
+        "Tenant privado em teste. Mostra chat, pendências, prontidão, dados da empresa e WhatsApp.",
+      visibility: {
+        "header.visible": true,
+        "header.brand": true,
+        "header.template_selector": true,
+        "layout.sidebar_trigger": true,
+        "header.actions": true,
+        "header.sidebar_toggle": false,
+        "header.connection_status": false,
+        "header.settings": true,
+        "header.logout": true,
+        "header.gateway_restart": true,
+        "header.gateway_status": true,
+        "header.gateway_start_stop": true,
+        "header.theme_toggle": true,
+        "header.gateway_stop_menu": true,
+        "sidebar.navigation": true,
+        "sidebar.pending_requests": true,
+        "sidebar.chat": true,
+        "sidebar.models": false,
+        "sidebar.credentials": false,
+        "sidebar.agent_dashboard": true,
+        "sidebar.agent_editor": false,
+        "sidebar.whatsapp_inbox": true,
+        "sidebar.whatsapp_reports": true,
+        "sidebar.agent_hub": false,
+        "sidebar.agent_templates": false,
+        "sidebar.template_editor": false,
+        "sidebar.skills": false,
+        "sidebar.skill_editor": false,
+        "sidebar.readiness": true,
+        "sidebar.memory": true,
+        "sidebar.pendencias": true,
+        "sidebar.cron": false,
+        "sidebar.integrations": false,
+        "sidebar.tools": false,
+        "sidebar.config": false,
+        "sidebar.logs": false,
+        "chat.page_header": true,
+        "chat.model_selector": false,
+        "chat.assistant_details_toggle": false,
+        "chat.new_chat": true,
+        "chat.session_history": true,
+        "chat.test_attendant": true,
+        "chat.quality_indicator": true,
+        "chat.context_usage": true,
+        "chat.quick_tasks": true,
+        "chat.reasoning_messages": true,
+        "chat.tool_call_messages": true,
+        "agent_editor.create_agents": false,
         "chat.pending_handoffs_sidebar": true,
       },
     },
@@ -336,6 +391,7 @@ function normalizeUIVisibilityPolicy(value: unknown): UIVisibilityPolicy {
     profiles: {
       admin: normalizeProfile(raw.profiles?.admin),
       tenant: normalizeProfile(raw.profiles?.tenant),
+      test: normalizeProfile(raw.profiles?.test),
       public: normalizeProfile(raw.profiles?.public),
       waiting: normalizeProfile(raw.profiles?.waiting),
     },
@@ -370,6 +426,7 @@ function isUIVisibilityProfile(value: unknown): value is UIVisibilityProfile {
   return (
     value === "admin" ||
     value === "tenant" ||
+    value === "test" ||
     value === "public" ||
     value === "waiting"
   )

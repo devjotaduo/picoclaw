@@ -111,6 +111,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// after Sofia/Catarina and after admin promotion.
 	h.registerOnboardingStateRoutes(mux)
 
+	// Private pre-provisioned tenants can start in test mode and let the
+	// owner confirm when the workspace is ready for production.
+	h.registerTestModeRoutes(mux)
+
 	// Structured interaction + tool-call audit logs from workspace/state.
 	h.registerInteractionLogsRoutes(mux)
 

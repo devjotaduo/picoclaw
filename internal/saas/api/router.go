@@ -275,6 +275,7 @@ func (h *Handler) Routes() http.Handler {
 				r.Post("/tenants/{id}/restart", h.handleRestartTenant)
 				r.Post("/tenants/{id}/recreate", h.handleRecreateTenant)
 				r.Post("/tenants/{id}/sync-workspace", h.handleSyncTenantWorkspace)
+				r.Post("/tenants/{id}/test-mode/finish", h.handleFinishTenantTestMode)
 				r.Get("/tenants/{id}/model-routing", h.handleGetTenantModelRouting)
 				r.Put("/tenants/{id}/model-routing", h.handlePutTenantModelRouting)
 				r.Post("/tenants/{id}/rotate-password", h.handleRotatePassword)

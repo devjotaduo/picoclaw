@@ -69,6 +69,15 @@ function NewTenantForm() {
   const [budget, setBudget] = React.useState("")
   const [memMb, setMemMb] = React.useState("")
   const [cpuQuota, setCpuQuota] = React.useState("")
+  const [testMode, setTestMode] = React.useState(false)
+  const [companySegment, setCompanySegment] = React.useState("")
+  const [companySummary, setCompanySummary] = React.useState("")
+  const [companyWhatsApp, setCompanyWhatsApp] = React.useState("")
+  const [selectedAgents, setSelectedAgents] = React.useState<string[]>([
+    "clara",
+  ])
+  const [allowedPhones, setAllowedPhones] = React.useState("")
+  const [allowedGroups, setAllowedGroups] = React.useState("")
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState<string | null>(null)
@@ -122,6 +131,23 @@ function NewTenantForm() {
         monthly_budget_usd: budget ? Number(budget) : undefined,
         mem_limit_mb: memMb ? Number(memMb) : undefined,
         cpu_quota: cpuQuota ? Number(cpuQuota) : undefined,
+        ...(testMode
+          ? {
+              setup_mode: "test" as const,
+              company_seed: {
+                name: displayName.trim(),
+                segment: companySegment.trim(),
+                summary: companySummary.trim(),
+                contact_email: ownerEmail.trim().toLowerCase(),
+                contact_whatsapp: companyWhatsApp.trim(),
+              },
+              selected_agents: selectedAgents,
+              whatsapp_test_allowlist: {
+                phones: splitLines(allowedPhones),
+                groups: splitLines(allowedGroups),
+              },
+            }
+          : {}),
       })
       setSuccess(`Criado tenant ${res.tenant_id} em ${res.url}`)
       setTimeout(() => {
@@ -291,6 +317,80 @@ function NewTenantForm() {
             </p>
           </div>
 
+          {needsOwnerEmail ? (
+            <div className="border-border/60 flex flex-col gap-3 rounded-md border border-dashed p-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={testMode}
+                  onChange={(e) => setTestMode(e.target.checked)}
+                />
+                Cliente em modo teste
+              </label>
+              {testMode ? (
+                <div className="grid gap-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="test-segment">Segmento</Label>
+                      <Input
+                        id="test-segment"
+                        value={companySegment}
+                        onChange={(e) => setCompanySegment(e.target.value)}
+                        placeholder="clinica, loja, restaurante"
+                        required={testMode}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="test-whatsapp">WhatsApp principal</Label>
+                      <Input
+                        id="test-whatsapp"
+                        value={companyWhatsApp}
+                        onChange={(e) => setCompanyWhatsApp(e.target.value)}
+                        placeholder="5587988553793"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="test-summary">Resumo inicial</Label>
+                    <textarea
+                      id="test-summary"
+                      value={companySummary}
+                      onChange={(e) => setCompanySummary(e.target.value)}
+                      className="border-input bg-background min-h-20 rounded-md border px-2 py-2 text-sm"
+                      required={testMode}
+                    />
+                  </div>
+                  <AgentSelection
+                    selected={selectedAgents}
+                    onChange={setSelectedAgents}
+                  />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="test-phones">Números permitidos</Label>
+                      <textarea
+                        id="test-phones"
+                        value={allowedPhones}
+                        onChange={(e) => setAllowedPhones(e.target.value)}
+                        className="border-input bg-background min-h-20 rounded-md border px-2 py-2 text-sm"
+                        placeholder="um número por linha"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="test-groups">Grupos permitidos</Label>
+                      <textarea
+                        id="test-groups"
+                        value={allowedGroups}
+                        onChange={(e) => setAllowedGroups(e.target.value)}
+                        className="border-input bg-background min-h-20 rounded-md border px-2 py-2 text-sm"
+                        placeholder="ID do grupo ou JID"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <button
             type="button"
             onClick={() => setShowAdvanced((v) => !v)}
@@ -363,6 +463,58 @@ function NewTenantForm() {
             </p>
           ) : null}
         </form>
+      </div>
+    </div>
+  )
+}
+
+const TEST_AGENT_OPTIONS = [
+  { id: "clara", label: "Clara" },
+  { id: "luna", label: "Luna" },
+  { id: "marcos", label: "Marcos" },
+  { id: "camila", label: "Camila" },
+  { id: "lia", label: "Lia" },
+  { id: "sofia", label: "Sofia" },
+  { id: "catarina", label: "Catarina" },
+  { id: "vendas", label: "Vendas" },
+  { id: "marketing", label: "Marketing" },
+  { id: "assistente", label: "Assistente" },
+]
+
+function splitLines(value: string): string[] {
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function AgentSelection({
+  selected,
+  onChange,
+}: {
+  selected: string[]
+  onChange: (next: string[]) => void
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>Agentes visíveis no teste</Label>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {TEST_AGENT_OPTIONS.map((agent) => (
+          <label key={agent.id} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={selected.includes(agent.id)}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  onChange([...selected, agent.id])
+                } else {
+                  onChange(selected.filter((id) => id !== agent.id))
+                }
+              }}
+            />
+            {agent.label}
+          </label>
+        ))}
       </div>
     </div>
   )
