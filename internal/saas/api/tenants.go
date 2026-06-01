@@ -369,7 +369,11 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		UIProfile:             uiProfile,
 		ModelRouting:          modelRouting,
 		Roster:                roster,
-		TestSetup:             testSetup,
+		// TODO(B3): populate ActiveAgentIDs from the tenant type's object
+		// roster so born-configured activation fires. Until B3 wires it, this
+		// stays empty and ActivateRosterAgents is a no-op at provision.
+		ActiveAgentIDs: nil,
+		TestSetup:      testSetup,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

@@ -273,6 +273,11 @@ type CreateInput struct {
 	// from the tenant type catalog. Empty keeps the workspace's own roster /
 	// legacy 4-agent seed (public tenants pass empty so Sofia stays solo).
 	Roster []string
+	// ActiveAgentIDs are the workspace agent ids (clara, marcos, camila, lia,
+	// rafael→main, ...) the tenant is born with active in the panel. Derived from
+	// the tenant type's roster. Empty for publico/admin (no activation; Sofia/
+	// admin baseline untouched).
+	ActiveAgentIDs []string
 	// TestSetup seeds private tenants that should start in a guided test mode
 	// instead of the public Sofia discovery flow.
 	TestSetup *TestSetup
@@ -388,6 +393,7 @@ func (p *Provisioner) Create(ctx context.Context, in CreateInput) (*CreateOutput
 		in.UIProfile,
 		in.ModelRouting,
 		in.Roster,
+		in.ActiveAgentIDs,
 		in.TestSetup,
 	); err != nil {
 		msg := err.Error()
@@ -417,6 +423,7 @@ func (p *Provisioner) runProvision(
 	uiProfile UIVisibilityProfile,
 	modelRouting *ModelRoutingConfig,
 	roster []string,
+	activeAgentIDs []string,
 	testSetup *TestSetup,
 ) (err error) {
 	success := false
@@ -525,6 +532,15 @@ func (p *Provisioner) runProvision(
 		// substitution + ValidateBundle so a malformed patch fails fast.
 		if err = SetAgentsRoster(t.VolumePath, roster); err != nil {
 			return fmt.Errorf("set agents roster: %w", err)
+		}
+
+		// 1e. Born-configured activation (v2.0). Toggle panel_enabled so the tenant
+		// type's roster is active from first boot — the same mechanism promote uses,
+		// run at create time. No-op for empty ids (public/admin keep their baseline).
+		if len(activeAgentIDs) > 0 {
+			if _, err = ActivateRosterAgents(t.VolumePath, activeAgentIDs); err != nil {
+				return fmt.Errorf("activate roster agents: %w", err)
+			}
 		}
 
 		if testSetup != nil {
