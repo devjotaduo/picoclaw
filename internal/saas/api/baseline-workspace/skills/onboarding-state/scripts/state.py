@@ -46,6 +46,49 @@ VALID_PHASES = {
     "promoted",
 }
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+
+# Roster ids reais (ver jotaduo-discovery/references/agent-catalog.md).
+# A Sofia pode enviar nomes de exibicao; aqui normalizamos para ids de roster
+# e descartamos pendencias de criacao que ainda nao existem como agente.
+ROSTER_ALIASES = {
+    "rafael": "main",
+    "main": "main",
+    "clara": "clara",
+    "luna": "luna",
+    "marcos": "marcos",
+    "camila": "camila",
+    "lia": "lia",
+    "sofia": "sofia",
+    "catarina": "catarina",
+}
+
+
+def recommended_names(value) -> list[str]:
+    """Flatten agentes_recomendados from strings or {id,nome} objects."""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        value = [value]
+    names: list[str] = []
+    for item in value:
+        if isinstance(item, dict):
+            names.append(str(item.get("id") or item.get("nome") or item.get("name") or ""))
+        else:
+            names.append(str(item))
+    return names
+
+
+def normalize_recommended(value) -> list[str]:
+    """Normalize to real roster ids, deduped, preserving recommendation order."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in recommended_names(value):
+        roster_id = ROSTER_ALIASES.get(raw.strip().lower())
+        if roster_id and roster_id not in seen:
+            seen.add(roster_id)
+            out.append(roster_id)
+    return out
+
 # Brazilian-friendly: +55 11 99999-8888 / 11999998888 / etc. Strip non-digits then check length.
 WHATSAPP_DIGITS_MIN = 10  # 10 sem DDI; agente normaliza pra +55 depois
 
@@ -113,7 +156,7 @@ def sanitize_long_text(value: str, max_len: int = SUMMARY_MAX_LEN) -> str:
 # old state.json files get migrated lazily on load (`migrate_state`)
 # instead of silently breaking parsers. Don't change semantics of an
 # existing version — bump and migrate.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def migrate_state(state: dict) -> dict:
@@ -124,6 +167,8 @@ def migrate_state(state: dict) -> dict:
              key) is treated as v1.
     v2 -> v3: adds bridge attempt/failure observability so the Sofia ->
              Catarina bridge can retry safely after WhatsApp send errors.
+    v3 -> v4: adds discovery.agentes_recomendados, the robust source used by
+             promotion to expose only the recommended tenant-facing agents.
     """
     version = state.get("schema_version", 1)
     if version < 2:
@@ -136,6 +181,9 @@ def migrate_state(state: dict) -> dict:
         deep.setdefault("last_bridge_attempt_at", None)
         deep.setdefault("last_bridge_failed_at", None)
         deep.setdefault("last_bridge_error", None)
+    if version < 4:
+        discovery = state.setdefault("discovery", {})
+        discovery.setdefault("agentes_recomendados", [])
     audit = state.setdefault("audit", {})
     audit.setdefault("events", [])
     state["schema_version"] = SCHEMA_VERSION
@@ -171,6 +219,7 @@ def empty_state() -> dict:
             "completed_at": None,
             "segment": None,
             "summary": None,
+            "agentes_recomendados": [],
             "agent": "sofia",
         },
         "deepening": {
@@ -788,6 +837,14 @@ def recompute_phase_and_blockers(state: dict, workspace_root: Path | None = None
         if not filled:
             blocked.append(f"empresa_memory_empty: {reason}")
 
+    forced_completion = bool(state.get("deepening", {}).get("forced_completion_reason"))
+    if (
+        state["discovery"].get("completed_at")
+        and not state["discovery"].get("agentes_recomendados")
+        and not forced_completion
+    ):
+        blocked.append("agents_not_recommended")
+
     # P1 #17: surface stale-lead signal. Informational — never the SOLE
     # blocker, just appended when actual blockers already exist. If the
     # tenant is otherwise ready (no other blockers), the lead being slow
@@ -865,6 +922,11 @@ def op_mark_discovery_done(state: dict, payload: dict) -> dict:
         state["discovery"]["segment"] = segment
     if summary:
         state["discovery"]["summary"] = summary
+    recommended = normalize_recommended(
+        payload.get("agentes_recomendados") or payload.get("agents_recommended")
+    )
+    if recommended:
+        state["discovery"]["agentes_recomendados"] = recommended
     # Auto-start deepening clock
     if state["deepening"]["started_at"] is None:
         state["deepening"]["started_at"] = now_iso()
@@ -889,6 +951,13 @@ def op_discovery_close(state: dict, payload: dict) -> dict:
         "segment": normalized["segment"],
         "summary": normalized["summary"],
     })
+    recommended = normalize_recommended(
+        normalized["facts"].get("agentes_recomendados")
+        or payload.get("agentes_recomendados")
+        or payload.get("agents_recommended")
+    )
+    if recommended:
+        state["discovery"]["agentes_recomendados"] = recommended
     events = (state.setdefault("audit", {})).setdefault("events", [])
     events.append({
         "at": now_iso(),

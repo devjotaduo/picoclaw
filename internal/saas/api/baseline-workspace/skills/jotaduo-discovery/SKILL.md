@@ -107,6 +107,11 @@ num **único passo à prova de falha** (Fase 8b.5):
   owner + segmento + resumo + fatos). Isso aciona uma operação determinística
   que grava `state/onboarding.json`, sobrescreve `memory/empresa.md` com os
   campos mínimos válidos e salva o dossiê em `memory/jotaduo/clientes/`.
+- Inclua sempre `facts.agentes_recomendados` com ids/nomes do roster real.
+  Esse campo vira `onboarding.json::discovery.agentes_recomendados`, que é a
+  fonte que o backend de promoção usa para decidir quais agentes aparecem no
+  painel via `access.panel_enabled`. Pendências sem agente real ainda podem
+  aparecer no resumo, mas não devem substituir ids existentes.
 
 ⚠️ **Como cristalizar (importante):** em tenant publico você roda como o
 agente `main` (workspace raiz), então grava **direto** com `write_file` em
@@ -148,8 +153,12 @@ Após coletar dores e sistemas:
 1. Abra `references/agent-catalog.md`.
 2. Selecione 2-5 **agentes de IA** do roster local (Rafael, Clara, Luna,
    Marcos, Camila, Lia, Operador, QA-Tester) que respondam às dores
-   priorizadas.
-3. Para cada agente recomendado, explique em uma frase:
+  priorizadas.
+3. Grave internamente a lista usando ids existentes do roster:
+   `main`/Rafael, `clara`, `luna`, `marcos`, `camila`, `lia`, `sofia`,
+   `catarina`. Não use ids de pendências como `agente-cobranca` no payload de
+   ativação; descreva essas pendências no resumo ou próximos passos.
+4. Para cada agente recomendado, explique em uma frase:
    - **O que faz** (em linguagem do cliente)
    - **Qual dor resolve**
    - **Quais integrações precisa** (WhatsApp Business, Google Calendar,
@@ -158,12 +167,12 @@ Após coletar dores e sistemas:
      atendente de IA") e, ao apresentar o time, diga uma vez que **é IA
      dentro da conta dele, não gente na folha**. Bloco-modelo pronto no
      fim de `references/agent-catalog.md`.
-4. Se faltar integração crítica → marcar como **"a validar"**.
-5. Se a dor pedir agente que não existe (ex: `agente-cobranca`,
+5. Se faltar integração crítica → marcar como **"a validar"**.
+6. Se a dor pedir agente que não existe (ex: `agente-cobranca`,
    `agente-agendador` integrado), sinalize a **pendência de criação** e
    ofereça workaround com agentes existentes (ex: Rafael+cron pra cobrança).
-6. Sugira **ordem de implantação** — quem entra primeiro e por quê.
-7. Comece a recomendação com uma frase explícita, por exemplo:
+7. Sugira **ordem de implantação** — quem entra primeiro e por quê.
+8. Comece a recomendação com uma frase explícita, por exemplo:
    > "Com base no que você me contou, eu recomendo começar com este time
    > de agentes de IA. Eles não estão entrando na conversa agora; são os
    > papéis que a Jotaduo pode configurar depois que fecharmos o discovery."
@@ -343,14 +352,16 @@ confiável que você consegue fazer):
 write_file(
   path="state/discovery-close.request.json",
   overwrite=true,
-  content='{"action":"discovery_close","empresa":"<nome da empresa>","segment":"<segmento>","summary":"<resumo validado pelo dono>","owner":{"name":"<nome do dono>","email":"<email>","whatsapp":"<whatsapp>"},"facts":{"canais":["WhatsApp","Instagram"],"sistemas":["planilha","Pix"],"dores":["demora para responder"],"objetivos_90d":["responder em até 2 minutos"],"agentes_recomendados":["Clara"]},"captured_by":"sofia"}'
+  content='{"action":"discovery_close","empresa":"<nome da empresa>","segment":"<segmento>","summary":"<resumo validado pelo dono>","owner":{"name":"<nome do dono>","email":"<email>","whatsapp":"<whatsapp>"},"facts":{"canais":["WhatsApp","Instagram"],"sistemas":["planilha","Pix"],"dores":["demora para responder"],"objetivos_90d":["responder em até 2 minutos"],"agentes_recomendados":["clara","luna"]},"captured_by":"sofia"}'
 )
 ```
 
 Se a ferramenta/schema antigo recusar campos extras como `empresa`, `owner`
 ou `facts`, use o formato compatível abaixo. Neste modo o `summary` PRECISA
 começar com o nome exato da empresa, porque a state machine vai inferir o
-campo `Nome:` de `memory/empresa.md` a partir dele:
+campo `Nome:` de `memory/empresa.md` a partir dele. Esse fallback não carrega
+recomendação estruturada; por isso ele deixa o soft blocker
+`agents_not_recommended` para o admin revisar depois.
 
 ```
 write_file(

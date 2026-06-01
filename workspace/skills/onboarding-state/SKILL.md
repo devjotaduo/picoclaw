@@ -62,9 +62,17 @@ partir de `owner_captured + discovery.summary`, mantendo `onboarding.json` e
   "action": "mark_discovery_done",
   "empresa": "Clínica Boa Vida",
   "segment": "clinica",
-  "summary": "Clínica odontológica em SP, 5 funcionários, usa Shosp..."
+  "summary": "Clínica odontológica em SP, 5 funcionários, usa Shosp...",
+  "agentes_recomendados": ["clara", "luna", "camila"]
 }
 ```
+
+`agentes_recomendados` é a fonte operacional que o backend usa na promoção
+para habilitar/desabilitar `agents.list[*].access.panel_enabled`. Use ids
+reais do roster (`main`, `clara`, `luna`, `marcos`, `camila`, `lia`, `sofia`,
+`catarina`) ou nomes equivalentes como `Rafael`; pendências que ainda não
+existem no roster são descartadas. Sem recomendação, o estado mantém o soft
+blocker `agents_not_recommended` até um admin usar o escape hatch.
 
 ### `discovery_close`
 Operação final preferida da Sofia. Recebe um payload estruturado, valida os
@@ -97,6 +105,10 @@ Use com `--payload-file`; não dependa de stdin em `exec(action="run")`.
   "captured_by": "sofia"
 }
 ```
+
+No `discovery_close`, `facts.agentes_recomendados` também é normalizado e
+gravado em `state/onboarding.json::discovery.agentes_recomendados`; este campo
+é mais confiável que o dossiê para a promoção do tenant.
 
 Formato compatível com schemas antigos de ferramenta, caso campos extras
 sejam recusados. Neste modo, `summary` deve começar com o nome exato da

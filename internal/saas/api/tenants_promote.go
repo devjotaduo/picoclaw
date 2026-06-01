@@ -83,6 +83,7 @@ var emailRE = regexp.MustCompile(`^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,
 //  5. DB: Promote (sets is_public=false, owner_email, auth_backend) +
 //     EnsureInvited(user) + Memberships.Upsert(tenant_owner)
 //  6. Filesystem: SetUIVisibilityActiveProfile=tenant + SeedDashboardPassword
+//     + recommended-agent panel visibility from onboarding.json.
 //  7. Mark state.promoted_at via direct file write (skill exec would
 //     require the container alive during the transition)
 //  8. Provisioner.Recreate to pick up new container env
@@ -292,6 +293,34 @@ func (h *Handler) handlePromoteTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError,
 			"restaurar AGENT.md cliente falhou: "+err.Error()+" — DB foi revertido pra is_public=true")
 		return
+	}
+
+	activation, err := tenant.ActivateRecommendedAgents(t.VolumePath)
+	if err != nil {
+		log.Printf("promote %s: ActivateRecommendedAgents failed: %v", t.ID, err)
+		rollbackPromoteToPublic(
+			r.Context(),
+			h.Tenants,
+			t.ID,
+			t.VolumePath,
+			ownerEmail,
+			originalAuthBackend,
+			"ActivateRecommendedAgents",
+		)
+		writeError(w, http.StatusInternalServerError,
+			"ativar agentes recomendados falhou: "+err.Error()+" — DB foi revertido pra is_public=true")
+		return
+	}
+	if activation.FailOpenWhy != "" {
+		log.Printf("promote %s: recommended agents activation skipped: %s", t.ID, activation.FailOpenWhy)
+	} else if activation.Applied {
+		log.Printf(
+			"promote %s: recommended agents activated source=%s active=%v hidden=%v",
+			t.ID,
+			activation.Source,
+			activation.ActiveAgents,
+			activation.HiddenAgents,
+		)
 	}
 
 	// Step 7.5: flip the launcher UI profile to tenant. This is now fatal:

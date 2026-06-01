@@ -110,8 +110,12 @@ if state["owner_captured"]["whatsapp"] != "87988553793":
     raise SystemExit(f"owner whatsapp not captured: {state['owner_captured']}")
 if not state["discovery"].get("completed_at"):
     raise SystemExit(f"discovery.completed_at missing: {state['discovery']}")
+if state["discovery"].get("agentes_recomendados") != ["clara", "luna", "camila"]:
+    raise SystemExit(f"recommended agents not normalized into discovery: {state['discovery']}")
 if any("empresa_memory_empty" in item for item in state["promotion"]["blocked_by"]):
     raise SystemExit(f"empresa memory blocker still present: {state['promotion']['blocked_by']}")
+if "agents_not_recommended" in state["promotion"]["blocked_by"]:
+    raise SystemExit(f"agents_not_recommended should be cleared: {state['promotion']['blocked_by']}")
 
 required = [
     "# Empresa",
@@ -185,9 +189,88 @@ if state["owner_captured"]["email"] != "ana.compat@example.com":
     raise SystemExit(f"compat owner not captured: {state['owner_captured']}")
 if any("empresa_memory_empty" in item for item in state["promotion"]["blocked_by"]):
     raise SystemExit(f"compat empresa memory blocker still present: {state['promotion']['blocked_by']}")
+if "agents_not_recommended" not in state["promotion"]["blocked_by"]:
+    raise SystemExit(f"compat payload without recommendations should keep soft blocker: {state['promotion']['blocked_by']}")
 if "Nome: Clínica Compat" not in empresa:
     raise SystemExit(f"compat empresa name not inferred from summary:\n{empresa}")
 print("OK discovery_close accepts legacy flat payload with company in summary")
+PY
+
+WS2_NORMALIZE="$TMP/discovery-close-recommended/workspace"
+mkdir -p "$WS2_NORMALIZE/skills/onboarding-state/scripts" "$WS2_NORMALIZE/memory" "$WS2_NORMALIZE/state"
+printf '# Test AGENT\n' > "$WS2_NORMALIZE/AGENT.md"
+printf '# Empresa\n\nStatus: pendente de validação\n' > "$WS2_NORMALIZE/memory/empresa.md"
+cp "$SCRIPT_DIR/state.py" "$WS2_NORMALIZE/skills/onboarding-state/scripts/state.py"
+STATE_PY2_NORMALIZE="$WS2_NORMALIZE/skills/onboarding-state/scripts/state.py"
+cat > "$WS2_NORMALIZE/state/discovery-close-recommended.json" <<'JSON'
+{
+  "action": "discovery_close",
+  "empresa": "Studio Viva Recomendados",
+  "segment": "clinica",
+  "summary": "Studio Viva Recomendados: clínica com recepção sobrecarregada e rotina de retorno por WhatsApp.",
+  "owner": {
+    "name": "Carla Recomendada",
+    "email": "carla.recomendada@example.com",
+    "whatsapp": "87988553793"
+  },
+  "facts": {
+    "agentes_recomendados": ["Clara", "Luna", "Rafael", "agente-cobranca", "clara"]
+  },
+  "captured_by": "sofia"
+}
+JSON
+
+OUT2_NORMALIZE="$(python3 "$STATE_PY2_NORMALIZE" --payload-file "$WS2_NORMALIZE/state/discovery-close-recommended.json")"
+python3 - "$OUT2_NORMALIZE" <<'PY'
+import json
+import sys
+
+state = json.loads(sys.argv[1])
+got = state["discovery"].get("agentes_recomendados")
+if got != ["clara", "luna", "main"]:
+    raise SystemExit(f"recommended agents normalization mismatch: {got}")
+if "agents_not_recommended" in state["promotion"]["blocked_by"]:
+    raise SystemExit(f"recommended agents soft blocker was not cleared: {state['promotion']['blocked_by']}")
+print("OK discovery_close normalizes recommended agents into onboarding.json")
+PY
+
+WS2_FORCE="$TMP/discovery-close-force/workspace"
+mkdir -p "$WS2_FORCE/skills/onboarding-state/scripts" "$WS2_FORCE/memory" "$WS2_FORCE/state"
+printf '# Test AGENT\n' > "$WS2_FORCE/AGENT.md"
+printf '# Empresa\n\nStatus: pendente de validação\n' > "$WS2_FORCE/memory/empresa.md"
+cp "$SCRIPT_DIR/state.py" "$WS2_FORCE/skills/onboarding-state/scripts/state.py"
+STATE_PY2_FORCE="$WS2_FORCE/skills/onboarding-state/scripts/state.py"
+cat > "$WS2_FORCE/state/discovery-close-force.json" <<'JSON'
+{
+  "action": "discovery_close",
+  "empresa": "Studio Viva Force",
+  "segment": "clinica",
+  "summary": "Studio Viva Force: clínica simples com atendimento via WhatsApp.",
+  "owner": {
+    "name": "Carla Force",
+    "email": "carla.force@example.com",
+    "whatsapp": "87988553793"
+  },
+  "captured_by": "sofia"
+}
+JSON
+
+python3 "$STATE_PY2_FORCE" --payload-file "$WS2_FORCE/state/discovery-close-force.json" >/dev/null
+OUT2_FORCE="$(
+  printf '%s\n' \
+    '{"action":"mark_ready_for_promotion","reason":"admin revisou tenant legado sem recomendacao estruturada"}' \
+    | python3 "$STATE_PY2_FORCE"
+)"
+python3 - "$OUT2_FORCE" <<'PY'
+import json
+import sys
+
+state = json.loads(sys.argv[1])
+if "agents_not_recommended" in state["promotion"]["blocked_by"]:
+    raise SystemExit(f"admin escape hatch did not clear agents_not_recommended: {state['promotion']['blocked_by']}")
+if not state["promotion"].get("ready"):
+    raise SystemExit(f"admin escape hatch should make promotion ready: {state['promotion']}")
+print("OK admin escape hatch clears agents_not_recommended soft blocker")
 PY
 
 WS3="$TMP/invalid/workspace"
