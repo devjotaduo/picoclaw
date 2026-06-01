@@ -3,5 +3,5 @@
 # to regenerate after editing the repo's workspace/ tree.
 
 source_dir: workspace/
-content_hash_sha256: 42c37c2ed5978fffaece302c412c11ebdf874a83a8f883b13e2274ed36341ec2
-file_count: 286
+content_hash_sha256: ab156f0d624e9e915c5a1999c92650cd6a836f5e6d7460089e875fd5f7731f46
+file_count: 287

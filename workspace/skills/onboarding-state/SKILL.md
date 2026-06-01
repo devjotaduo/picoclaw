@@ -98,6 +98,22 @@ Use com `--payload-file`; não dependa de stdin em `exec(action="run")`.
 }
 ```
 
+Formato compatível com schemas antigos de ferramenta, caso campos extras
+sejam recusados. Neste modo, `summary` deve começar com o nome exato da
+empresa para a state machine preencher `memory/empresa.md`:
+
+```json
+{
+  "action": "discovery_close",
+  "name": "Bruno Teste5",
+  "email": "bruno.teste5@jotaduo.com",
+  "whatsapp": "87988553793",
+  "segment": "restaurante",
+  "summary": "Café Norte Teste5: restaurante com atendimento via WhatsApp...",
+  "captured_by": "sofia"
+}
+```
+
 Se falhar, a Sofia corrige o campo com o dono e tenta novamente. Ela não
 diz que registrou o resumo/dossiê enquanto essa ação não retornar sucesso.
 

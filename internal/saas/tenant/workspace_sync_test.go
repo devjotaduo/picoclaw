@@ -63,6 +63,7 @@ func TestSyncWorkspaceRuntimePublicUpdatesClienteBackupAndSofiaOverride(t *testi
 	ws := t.TempDir()
 	srcWorkspace := filepath.Join(ws, WorkspaceHomeSubdir, "workspace")
 	writeSyncTestFile(t, srcWorkspace, "AGENT.md", "# canonical cliente v2\n")
+	writeSyncTestFile(t, srcWorkspace, "agents/sofia/AGENT.public.md", "# public Sofia v2\n\nVocê é a **Sofia**.\n")
 	writeSyncTestFile(t, srcWorkspace, "skills/onboarding-state/SKILL.md", "skill v2")
 
 	vol := t.TempDir()
@@ -82,7 +83,7 @@ func TestSyncWorkspaceRuntimePublicUpdatesClienteBackupAndSofiaOverride(t *testi
 		t.Fatalf("public cliente backup not refreshed: %q", backup)
 	}
 	agent, _ := os.ReadFile(filepath.Join(vol, "workspace/AGENT.md"))
-	if !strings.Contains(string(agent), "Você é a **Sofia**") {
+	if string(agent) != "# public Sofia v2\n\nVocê é a **Sofia**.\n" {
 		t.Fatalf("public AGENT.md should stay Sofia mode, got %q", agent)
 	}
 	skill, _ := os.ReadFile(filepath.Join(vol, "workspace/skills/onboarding-state/SKILL.md"))

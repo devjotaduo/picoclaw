@@ -153,6 +153,43 @@ if not (client_dir / "cafe-norte-teste5.md").is_file():
 print("OK discovery_close atomically writes state, empresa.md and client dossier")
 PY
 
+WS2_COMPAT="$TMP/discovery-close-compat/workspace"
+mkdir -p "$WS2_COMPAT/skills/onboarding-state/scripts" "$WS2_COMPAT/memory" "$WS2_COMPAT/state"
+printf '# Test AGENT\n' > "$WS2_COMPAT/AGENT.md"
+printf '# Empresa\n\nStatus: pendente de validação\n' > "$WS2_COMPAT/memory/empresa.md"
+cp "$SCRIPT_DIR/state.py" "$WS2_COMPAT/skills/onboarding-state/scripts/state.py"
+STATE_PY2_COMPAT="$WS2_COMPAT/skills/onboarding-state/scripts/state.py"
+cat > "$WS2_COMPAT/state/discovery-close-compat.json" <<'JSON'
+{
+  "action": "discovery_close",
+  "name": "Ana Compat",
+  "email": "ana.compat@example.com",
+  "whatsapp": "87988553793",
+  "segment": "clinica",
+  "summary": "Clínica Compat: clínica de estética com agendamento por WhatsApp.",
+  "captured_by": "sofia"
+}
+JSON
+
+OUT2_COMPAT="$(python3 "$STATE_PY2_COMPAT" --payload-file "$WS2_COMPAT/state/discovery-close-compat.json")"
+python3 - "$WS2_COMPAT" "$OUT2_COMPAT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+ws = Path(sys.argv[1])
+state = json.loads(sys.argv[2])
+empresa = (ws / "memory" / "empresa.md").read_text(encoding="utf-8")
+
+if state["owner_captured"]["email"] != "ana.compat@example.com":
+    raise SystemExit(f"compat owner not captured: {state['owner_captured']}")
+if any("empresa_memory_empty" in item for item in state["promotion"]["blocked_by"]):
+    raise SystemExit(f"compat empresa memory blocker still present: {state['promotion']['blocked_by']}")
+if "Nome: Clínica Compat" not in empresa:
+    raise SystemExit(f"compat empresa name not inferred from summary:\n{empresa}")
+print("OK discovery_close accepts legacy flat payload with company in summary")
+PY
+
 WS3="$TMP/invalid/workspace"
 mkdir -p "$WS3/skills/onboarding-state/scripts" "$WS3/memory" "$WS3/state"
 printf '# Test AGENT\n' > "$WS3/AGENT.md"

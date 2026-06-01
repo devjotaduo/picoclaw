@@ -73,9 +73,21 @@ def archive(request: Path, suffix: str) -> None:
 def owner_from_payload(payload: dict) -> dict:
     owner = payload.get("owner") if isinstance(payload.get("owner"), dict) else {}
     return {
-        "name": owner.get("name") or payload.get("name") or "",
+        "name": (
+            owner.get("name")
+            or owner.get("nome")
+            or payload.get("name")
+            or payload.get("nome")
+            or ""
+        ),
         "email": owner.get("email") or payload.get("email") or "",
-        "whatsapp": owner.get("whatsapp") or payload.get("whatsapp") or "",
+        "whatsapp": (
+            owner.get("whatsapp")
+            or owner.get("telefone")
+            or payload.get("whatsapp")
+            or payload.get("telefone")
+            or ""
+        ),
     }
 
 
@@ -86,7 +98,7 @@ def validate_request(payload: object) -> str | None:
         return "request action must be discovery_close"
     owner = owner_from_payload(payload)
     missing: list[str] = []
-    for key in ("empresa", "segment", "summary"):
+    for key in ("segment", "summary"):
         if not str(payload.get(key) or "").strip():
             missing.append(key)
     if not str(owner["name"] or "").strip():

@@ -338,6 +338,19 @@ write_file(
 )
 ```
 
+Se a ferramenta/schema antigo recusar campos extras como `empresa`, `owner`
+ou `facts`, use o formato compatível abaixo. Neste modo o `summary` PRECISA
+começar com o nome exato da empresa, porque a state machine vai inferir o
+campo `Nome:` de `memory/empresa.md` a partir dele:
+
+```
+write_file(
+  path="state/discovery-close.request.json",
+  overwrite=true,
+  content='{"action":"discovery_close","name":"<nome do dono>","email":"<email>","whatsapp":"<whatsapp>","segment":"<segmento>","summary":"<nome exato da empresa>: <resumo validado pelo dono>","captured_by":"sofia"}'
+)
+```
+
 Isso **é suficiente**: o cron determinístico `onboarding-discovery-close`
 roda a cada poucos minutos, lê esse arquivo e cristaliza o estado
 (estado + `empresa.md` + dossiê) sem depender de você emitir mais nada.

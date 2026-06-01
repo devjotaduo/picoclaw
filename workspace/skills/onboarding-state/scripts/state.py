@@ -317,12 +317,44 @@ def slugify(value: str) -> str:
     return ascii_only or "cliente"
 
 
+def infer_empresa_from_summary(summary: str) -> str:
+    """Best-effort company name extraction for legacy discovery_close payloads.
+
+    Older tool schemas may reject extra fields such as `empresa`, `owner` and
+    `facts`. In that compatibility mode the Sofia prompt makes `summary`
+    start with the exact company name, e.g. "Clínica Aurora: ...".
+    """
+    first = sanitize_long_text(summary or "", SUMMARY_MAX_LEN).splitlines()[0].strip()
+    first = re.sub(
+        r"^(empresa|negócio|negocio)\s*[:\-]\s*",
+        "",
+        first,
+        flags=re.IGNORECASE,
+    )
+    match = re.match(r"^(.{3,120}?)(?:\s+[-–—]\s+|:\s+|,\s+)", first)
+    if match:
+        return sanitize_short_text(match.group(1), NAME_MAX_LEN)
+    return ""
+
+
 def normalize_owner_payload(payload: dict) -> dict:
     owner = payload.get("owner") if isinstance(payload.get("owner"), dict) else {}
     return {
-        "name": owner.get("name") or payload.get("name") or "",
+        "name": (
+            owner.get("name")
+            or owner.get("nome")
+            or payload.get("name")
+            or payload.get("nome")
+            or ""
+        ),
         "email": owner.get("email") or payload.get("email") or "",
-        "whatsapp": owner.get("whatsapp") or payload.get("whatsapp") or "",
+        "whatsapp": (
+            owner.get("whatsapp")
+            or owner.get("telefone")
+            or payload.get("whatsapp")
+            or payload.get("telefone")
+            or ""
+        ),
         "captured_by": payload.get("captured_by") or owner.get("captured_by") or "sofia",
     }
 
@@ -335,26 +367,29 @@ def normalize_discovery_close_payload(payload: dict) -> dict:
     da mudança de prompt.
     """
     owner_payload = normalize_owner_payload(payload)
+    summary = sanitize_long_text(
+        payload.get("summary") or payload.get("resumo") or "",
+        SUMMARY_MAX_LEN,
+    )
     empresa = sanitize_short_text(
         payload.get("empresa")
         or payload.get("company")
         or payload.get("company_name")
         or payload.get("nome_empresa")
+        or payload.get("business_name")
         or "",
         NAME_MAX_LEN,
     )
+    if not empresa:
+        empresa = infer_empresa_from_summary(summary)
     segment = sanitize_short_text(
         payload.get("segment") or payload.get("segmento") or "",
         SEGMENT_MAX_LEN,
     ).lower()
-    summary = sanitize_long_text(
-        payload.get("summary") or payload.get("resumo") or "",
-        SUMMARY_MAX_LEN,
-    )
 
     missing: list[str] = []
     if not empresa:
-        missing.append("empresa")
+        missing.append("empresa (ou summary começando com '<empresa>: ...')")
     if not segment:
         missing.append("segment")
     if not summary:

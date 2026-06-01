@@ -290,12 +290,12 @@ func SanitizeTenantSecurityConfig(volumePath string) error {
 	return os.WriteFile(path, out, mode)
 }
 
-// publicSofiaAgentMD overrides workspace/AGENT.md for public tenants so the
-// `main` agent assumes Sofia's persona from message 1 instead of falling back
-// to Rafael (front-line orchestrator of the team prompt). Without this, every
-// public tenant boots into the cliente experience: visitor says "oi" and gets
-// Rafael introducing the team, breaking the discovery funnel
-// (docs/architecture/public-tenant-promotion.md).
+// publicSofiaAgentMD is a fallback prompt for public tenants so the `main`
+// agent assumes Sofia's persona from message 1 instead of falling back to
+// Rafael (front-line orchestrator of the team prompt). Normal provisioned
+// workspaces read the source of truth from agents/sofia/AGENT.public.md; this
+// embedded copy exists only so non-standard workspaces without that file still
+// boot into Sofia mode.
 //
 // Why a separate file (not a runtime check on active_profile): the LLM has to
 // make the routing decision on every turn if it's a prompt-time check, and
@@ -490,6 +490,21 @@ sendo a Sofia normalmente.
 // public never have this file.
 const publicAgentBackupName = "AGENT.cliente.md"
 
+func publicSofiaAgentContent(wsDir string) ([]byte, error) {
+	source := filepath.Join(wsDir, "agents", "sofia", "AGENT.public.md")
+	data, err := os.ReadFile(source)
+	if err == nil {
+		if len(bytes.TrimSpace(data)) == 0 {
+			return nil, fmt.Errorf("%s is empty", filepath.ToSlash(source))
+		}
+		return data, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return []byte(publicSofiaAgentMD), nil
+	}
+	return nil, fmt.Errorf("read public Sofia agent prompt: %w", err)
+}
+
 // ApplyPublicSofiaAgentMD overrides workspace/AGENT.md with the Sofia-mode
 // prompt and preserves the original alongside as AGENT.cliente.md so the
 // promote flow can restore it. Idempotent: if the backup already exists,
@@ -502,6 +517,10 @@ func ApplyPublicSofiaAgentMD(volumePath string) error {
 	wsDir := filepath.Join(volumePath, "workspace")
 	agentMD := filepath.Join(wsDir, "AGENT.md")
 	backup := filepath.Join(wsDir, publicAgentBackupName)
+	publicContent, err := publicSofiaAgentContent(wsDir)
+	if err != nil {
+		return err
+	}
 
 	// Preserve canonical only on first run.
 	if _, err := os.Stat(backup); errors.Is(err, os.ErrNotExist) {
@@ -518,7 +537,7 @@ func ApplyPublicSofiaAgentMD(volumePath string) error {
 		}
 	}
 
-	if err := writeFileAtomic(agentMD, []byte(publicSofiaAgentMD), 0o644); err != nil {
+	if err := writeFileAtomic(agentMD, publicContent, 0o644); err != nil {
 		return fmt.Errorf("write public AGENT.md: %w", err)
 	}
 	return nil

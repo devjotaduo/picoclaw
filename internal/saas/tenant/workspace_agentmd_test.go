@@ -80,6 +80,31 @@ func TestApplyPublicSofiaAgentMD_IdempotentDoesNotReBackup(t *testing.T) {
 	}
 }
 
+func TestApplyPublicSofiaAgentMD_UsesPublicAgentFileWhenPresent(t *testing.T) {
+	const canonical = "# AGENT original\n"
+	vol := setupWorkspaceVolume(t, canonical)
+	publicPrompt := "---\nname: sofia-discovery-mode\n---\n\n# AGENT publico custom\n\nVocê é a **Sofia**.\nMARCador-publico-versionado\n"
+	publicPath := filepath.Join(vol, "workspace", "agents", "sofia", "AGENT.public.md")
+	if err := os.MkdirAll(filepath.Dir(publicPath), 0o755); err != nil {
+		t.Fatalf("mkdir public prompt dir: %v", err)
+	}
+	if err := os.WriteFile(publicPath, []byte(publicPrompt), 0o644); err != nil {
+		t.Fatalf("write public prompt: %v", err)
+	}
+
+	if err := ApplyPublicSofiaAgentMD(vol); err != nil {
+		t.Fatalf("ApplyPublicSofiaAgentMD: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(vol, "workspace", "AGENT.md"))
+	if err != nil {
+		t.Fatalf("read AGENT.md: %v", err)
+	}
+	if string(got) != publicPrompt {
+		t.Fatalf("AGENT.md did not use AGENT.public.md:\nwant %q\ngot  %q", publicPrompt, got)
+	}
+}
+
 func TestRestoreClienteAgentMD_RestoresAndCleansBackup(t *testing.T) {
 	const canonical = "# AGENT original team\n- Rafael\n- Clara\n"
 	vol := setupWorkspaceVolume(t, canonical)

@@ -105,4 +105,37 @@ if [ "$ALREADY_OUT" != "DISCOVERY_ALREADY_DONE" ]; then
   exit 1
 fi
 
+COMPAT_HOME="$TMP/compat"
+mkdir -p "$COMPAT_HOME/workspace/skills/onboarding-state/scripts"
+mkdir -p "$COMPAT_HOME/workspace/skills/jotaduo-discovery/scripts"
+mkdir -p "$COMPAT_HOME/workspace/memory" "$COMPAT_HOME/workspace/state"
+printf '# Test AGENT\n' > "$COMPAT_HOME/workspace/AGENT.md"
+printf '# Empresa\n\nStatus: pendente de validação\n' > "$COMPAT_HOME/workspace/memory/empresa.md"
+cp "$REPO_ROOT/workspace/skills/onboarding-state/scripts/state.py" \
+  "$COMPAT_HOME/workspace/skills/onboarding-state/scripts/state.py"
+cp "$REPO_ROOT/workspace/skills/jotaduo-discovery/scripts/save_client.py" \
+  "$COMPAT_HOME/workspace/skills/jotaduo-discovery/scripts/save_client.py"
+cat > "$COMPAT_HOME/workspace/state/discovery-close.request.json" <<'JSON'
+{
+  "action": "discovery_close",
+  "name": "Ana Compat",
+  "email": "ana.compat@jotaduo.com",
+  "whatsapp": "87988553793",
+  "segment": "clinica",
+  "summary": "Clínica Compat: clínica de estética com agendamento por WhatsApp.",
+  "captured_by": "sofia"
+}
+JSON
+PICOCLAW_HOME="$COMPAT_HOME" python3 "$SCRIPT_DIR/run.py" >/tmp/discovery-close-compat.out
+if ! grep -q "DISCOVERY_CLOSED email=ana.compat@jotaduo.com" /tmp/discovery-close-compat.out; then
+  echo "legacy-shaped request did not close discovery" >&2
+  cat /tmp/discovery-close-compat.out >&2
+  exit 1
+fi
+if ! grep -q "Nome: Clínica Compat" "$COMPAT_HOME/workspace/memory/empresa.md"; then
+  echo "legacy-shaped request did not infer empresa from summary" >&2
+  cat "$COMPAT_HOME/workspace/memory/empresa.md" >&2
+  exit 1
+fi
+
 echo "discovery-close-flow behavior ok"
