@@ -26,6 +26,7 @@ import { UserMessage } from "@/components/chat/user-message"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { readStoredSessionId } from "@/features/chat/state"
 import { useChatModels } from "@/hooks/use-chat-models"
 import { useGateway } from "@/hooks/use-gateway"
 import { usePicoChat } from "@/hooks/use-pico-chat"
@@ -278,6 +279,8 @@ export function ChatPage() {
     launcherPolicyQ.data,
   )
   const isPublicTenant = activeProfile === "public"
+  const hasStoredPublicSession =
+    isPublicTenant && Boolean(readStoredSessionId())
 
   const {
     messages,
@@ -670,6 +673,7 @@ export function ChatPage() {
                 displayName={assistantName}
                 displayDescription={emptyStateDescription}
                 activeProfile={activeProfile}
+                hasContinuableSession={hasStoredPublicSession}
                 avatarSeed={
                   testingPublicAttendant
                     ? "atendente-publico"

@@ -86,7 +86,7 @@ const RootLayout = () => {
     if (isPublicPage || uiVisibility.isLoading) {
       return
     }
-    initializeChatStore({ hydrateHistory: !isAnonymousTenantProfile })
+    initializeChatStore({ hydrateHistory: true })
   }, [isAnonymousTenantProfile, isPublicPage, uiVisibility.isLoading])
 
   // Anonymous tenant surfaces may skip the normal authenticated AppLayout, so

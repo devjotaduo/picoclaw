@@ -144,7 +144,8 @@
       "noSelectedModelDescription": "您已配置模型，但尚未设置默认模型。请选择一个模型后开始对话",
       "notRunning": "服务尚未运行",
       "notRunningDescription": "请先启动网关服务后再开始对话，可点击顶部栏中的「启动服务」按钮。",
-      "startPublicDiscovery": "立即开始"
+      "startPublicDiscovery": "立即开始",
+      "continuePublicDiscovery": "继续"
     },
     "modelGroup": {
       "apikey": "API Key",

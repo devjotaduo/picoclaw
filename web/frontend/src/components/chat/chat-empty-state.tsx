@@ -65,6 +65,7 @@ interface ChatEmptyStateProps {
   // activeProfile drives public-tenant overrides: when "public", agent
   // name + intro are forced to Sofia regardless of what `agent` reports.
   activeProfile?: UIVisibilityProfile | null
+  hasContinuableSession?: boolean
 }
 
 function normalizeAgentLookup(value: string): string {
@@ -143,6 +144,7 @@ export function ChatEmptyState({
   disabled,
   onQuickTask,
   activeProfile,
+  hasContinuableSession = false,
 }: ChatEmptyStateProps) {
   const { t } = useTranslation()
 
@@ -260,7 +262,11 @@ export function ChatEmptyState({
           className="mb-7 h-10 rounded-full bg-[#f4f3ef] px-5 text-sm font-medium text-[#242421] shadow-[0_8px_24px_rgba(0,0,0,0.2)] hover:bg-white disabled:opacity-60"
         >
           <IconSparkles className="size-4" />
-          {t("chat.empty.startPublicDiscovery")}
+          {t(
+            hasContinuableSession
+              ? "chat.empty.continuePublicDiscovery"
+              : "chat.empty.startPublicDiscovery",
+          )}
         </Button>
       ) : null}
 
