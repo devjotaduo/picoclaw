@@ -17,6 +17,30 @@ export function joinModelList(value: string[] | undefined): string {
   return (value ?? []).join("\n");
 }
 
+export function normalizeModelList(value: string[] | undefined): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of value ?? []) {
+    const model = item.trim();
+    if (!model || seen.has(model)) continue;
+    seen.add(model);
+    out.push(model);
+  }
+  return out;
+}
+
+export function modelNameChoices(registered: string[], current: string[] = []): string[] {
+  return normalizeModelList([...registered, ...current]);
+}
+
+export function addModelName(value: string[], model: string): string[] {
+  return normalizeModelList([...value, model]);
+}
+
+export function removeModelName(value: string[], model: string): string[] {
+  return normalizeModelList(value).filter((item) => item !== model);
+}
+
 export type CLIModelPreset = {
   id: string;
   label: string;

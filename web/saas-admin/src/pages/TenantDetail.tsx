@@ -27,6 +27,7 @@ import {
   type TenantModelRoutingInput,
   type TenantModelRoutingMode,
 } from "@/api/tenants";
+import { listPlatformLiteLLMModels } from "@/api/platform-litellm";
 import {
   getCRMContact,
   listContactDeals,
@@ -55,6 +56,7 @@ import { SkeletonCard } from "@/components/ui/skeleton";
 import { PromoteTenantCard } from "@/components/tenant/promote-tenant-card";
 import { ResendCredentialsDialog } from "@/components/tenant/resend-credentials-dialog";
 import { RotatedPasswordDialog } from "@/components/tenant/rotated-password-dialog";
+import { LiteLLMModelMultiSelect, LiteLLMModelSelect } from "@/components/tenant/litellm-model-picker";
 import { formatDate, formatInt, formatUSD, relativeTime } from "@/lib/utils";
 import {
   CLAUDE_CLI_MODEL_PRESETS,
@@ -63,8 +65,8 @@ import {
   cliModelValueFromPreset,
   cliPresetDescription,
   cliPresetIDForModel,
-  joinModelList,
-  splitModelList,
+  normalizeModelList,
+  removeModelName,
 } from "@/lib/model-routing";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/toast";
@@ -1045,8 +1047,8 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
   const [mode, setMode] = useState<TenantModelRoutingMode>("auto");
   const [litellmModelName, setLiteLLMModelName] = useState("gpt-4o-mini");
   const [litellmAPIBase, setLiteLLMAPIBase] = useState("");
-  const [litellmFallbacks, setLiteLLMFallbacks] = useState("");
-  const [litellmAllowedModels, setLiteLLMAllowedModels] = useState("");
+  const [litellmFallbacks, setLiteLLMFallbacks] = useState<string[]>([]);
+  const [litellmAllowedModels, setLiteLLMAllowedModels] = useState<string[]>([]);
   const [cliOrderPreset, setCLIOrderPreset] = useState<CLIOrderPreset>("claude-codex");
   const [claudeCLIModelPreset, setClaudeCLIModelPreset] = useState("sonnet");
   const [claudeCLICustomModel, setClaudeCLICustomModel] = useState("");
@@ -1058,8 +1060,8 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
     setMode(q.data.mode);
     setLiteLLMModelName(q.data.litellm?.model_name || "gpt-4o-mini");
     setLiteLLMAPIBase(q.data.litellm?.api_base || "");
-    setLiteLLMFallbacks(joinModelList(q.data.litellm?.fallbacks));
-    setLiteLLMAllowedModels(joinModelList(q.data.litellm?.allowed_models));
+    setLiteLLMFallbacks(normalizeModelList(q.data.litellm?.fallbacks));
+    setLiteLLMAllowedModels(normalizeModelList(q.data.litellm?.allowed_models));
     setCLIOrderPreset(presetFromCLIOrder(q.data.cli?.order));
     const claudeModel = q.data.cli?.claude_model || "sonnet";
     const claudePresetID = cliPresetIDForModel(claudeModel, CLAUDE_CLI_MODEL_PRESETS, "sonnet");
@@ -1072,6 +1074,15 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
     setCodexCLIModelPreset(codexPresetID);
     setCodexCLICustomModel(codexPresetID === CUSTOM_CLI_MODEL_PRESET_ID ? codexModel : "");
   }, [q.data]);
+
+  const litellmModelsQ = useQuery({
+    queryKey: ["platform-litellm-models"],
+    queryFn: listPlatformLiteLLMModels,
+    enabled: mode === "litellm",
+    staleTime: 30_000,
+    retry: false,
+  });
+  const litellmModels = litellmModelsQ.data?.models ?? [];
 
   const updateM = useMutation({
     mutationFn: () => updateTenantModelRouting(tenantId, buildTenantModelRoutingInput()),
@@ -1091,8 +1102,8 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
         litellm: {
           model_name: litellmModelName.trim() || undefined,
           api_base: litellmAPIBase.trim() || undefined,
-          fallbacks: splitModelList(litellmFallbacks),
-          allowed_models: splitModelList(litellmAllowedModels),
+          fallbacks: normalizeModelList(litellmFallbacks),
+          allowed_models: normalizeModelList(litellmAllowedModels),
         },
       };
     }
@@ -1239,13 +1250,25 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
 
           {mode === "litellm" ? (
             <>
+              {litellmModelsQ.isError ? (
+                <div className="md:col-span-3 rounded border border-red-900/50 bg-red-950/30 p-3 text-red-300">
+                  {(litellmModelsQ.error as { error?: string })?.error ??
+                    "Falha ao carregar modelos cadastrados no LiteLLM."}
+                </div>
+              ) : null}
               <Field>
                 <FieldLabel htmlFor="tenant-litellm-model">Modelo principal</FieldLabel>
-                <Input
+                <LiteLLMModelSelect
                   id="tenant-litellm-model"
                   value={litellmModelName}
-                  onChange={(event) => setLiteLLMModelName(event.target.value)}
+                  onChange={(next) => {
+                    setLiteLLMModelName(next);
+                    setLiteLLMFallbacks((current) => removeModelName(current, next));
+                  }}
+                  models={litellmModels}
                   placeholder="gpt-4o-mini"
+                  disabled={q.isLoading}
+                  loading={litellmModelsQ.isLoading}
                 />
               </Field>
               <Field>
@@ -1259,20 +1282,29 @@ function TenantModelRoutingCard({ tenantId }: { tenantId: string }) {
               </Field>
               <Field>
                 <FieldLabel htmlFor="tenant-litellm-fallbacks">Fallbacks</FieldLabel>
-                <Textarea
+                <LiteLLMModelMultiSelect
                   id="tenant-litellm-fallbacks"
                   value={litellmFallbacks}
-                  onChange={(event) => setLiteLLMFallbacks(event.target.value)}
-                  placeholder={"claude-haiku-4-5\ndeepseek-chat"}
+                  onChange={setLiteLLMFallbacks}
+                  models={litellmModels}
+                  placeholder="Adicionar fallback"
+                  emptyText="Nenhum fallback selecionado"
+                  exclude={[litellmModelName]}
+                  disabled={q.isLoading}
+                  loading={litellmModelsQ.isLoading}
                 />
               </Field>
               <Field className="md:col-span-2">
                 <FieldLabel htmlFor="tenant-litellm-allowed">Modelos liberados na chave</FieldLabel>
-                <Textarea
+                <LiteLLMModelMultiSelect
                   id="tenant-litellm-allowed"
                   value={litellmAllowedModels}
-                  onChange={(event) => setLiteLLMAllowedModels(event.target.value)}
-                  placeholder="Vazio = principal + fallbacks"
+                  onChange={setLiteLLMAllowedModels}
+                  models={litellmModels}
+                  placeholder="Adicionar modelo liberado"
+                  emptyText="Vazio = principal + fallbacks"
+                  disabled={q.isLoading}
+                  loading={litellmModelsQ.isLoading}
                 />
               </Field>
             </>
