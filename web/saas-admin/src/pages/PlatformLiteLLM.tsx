@@ -23,30 +23,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
-
-// Main LiteLLM providers, with the canonical api_base each one expects. An
-// empty apiBase means "leave api_base blank" — LiteLLM already knows the
-// default endpoint for that provider, so forcing a base only risks drift.
-// Order roughly by how often this product uses them.
-const PROVIDER_OPTIONS: { value: string; label: string; apiBase: string }[] = [
-  { value: "anthropic", label: "Anthropic", apiBase: "" },
-  { value: "openai", label: "OpenAI", apiBase: "" },
-  { value: "openrouter", label: "OpenRouter", apiBase: "https://openrouter.ai/api/v1" },
-  { value: "gemini", label: "Google Gemini", apiBase: "" },
-  { value: "groq", label: "Groq", apiBase: "https://api.groq.com/openai/v1" },
-  { value: "mistral", label: "Mistral", apiBase: "https://api.mistral.ai/v1" },
-  { value: "deepseek", label: "DeepSeek", apiBase: "https://api.deepseek.com" },
-  { value: "xai", label: "xAI (Grok)", apiBase: "https://api.x.ai/v1" },
-  { value: "together_ai", label: "Together AI", apiBase: "https://api.together.xyz/v1" },
-  { value: "azure", label: "Azure OpenAI", apiBase: "" },
-  { value: "ollama", label: "Ollama (local)", apiBase: "http://localhost:11434" },
-];
+import {
+  draftLiteLLMModelFromEnv,
+  LITELLM_PROVIDER_PRESETS,
+  modelWithPrefix,
+} from "@/lib/litellm-admin";
 
 // Distinct, non-empty api_base values offered as quick picks in the API base
 // select (any base a provider can prefill must appear here so it renders).
 const API_BASE_OPTIONS: string[] = Array.from(
-  new Set(PROVIDER_OPTIONS.map((p) => p.apiBase).filter((b): b is string => b.length > 0)),
+  new Set(LITELLM_PROVIDER_PRESETS.map((p) => p.apiBase).filter((b): b is string => b.length > 0)),
 );
 
 // Sentinels for the selects — Radix Select disallows empty-string item values,
@@ -64,11 +52,12 @@ export function PlatformLiteLLM() {
   const [modelName, setModelName] = useState("");
   const [providerModel, setProviderModel] = useState("");
   const [provider, setProvider] = useState("");
-  const [providerCustom, setProviderCustom] = useState(false);
+  const [providerPreset, setProviderPreset] = useState(SELECT_NONE);
   const [apiBase, setAPIBase] = useState("");
   const [apiBaseCustom, setApiBaseCustom] = useState(false);
   const [apiVersion, setAPIVersion] = useState("");
   const [apiKey, setAPIKey] = useState("");
+  const [envBlock, setEnvBlock] = useState("");
 
   useEffect(() => {
     if (q.data) setURL(q.data.url ?? "");
@@ -114,7 +103,7 @@ export function PlatformLiteLLM() {
       setModelName("");
       setProviderModel("");
       setProvider("");
-      setProviderCustom(false);
+      setProviderPreset(SELECT_NONE);
       setAPIBase("");
       setApiBaseCustom(false);
       setAPIVersion("");
@@ -136,30 +125,36 @@ export function PlatformLiteLLM() {
       toast({ type: "error", message: e?.error ?? "Falha ao remover modelo." }),
   });
   const models = modelsQ.data?.models ?? [];
+  const modelListError = (modelsQ.error as { error?: string; status?: number } | null)?.error ?? "";
+  const litellmAuthBlocked = Boolean(
+    modelsQ.isError && /(unauthorized|forbidden|status\s+(401|403)|bad master key)/i.test(modelListError),
+  );
 
+  const providerCustom = providerPreset === SELECT_CUSTOM;
   const providerSelectValue = providerCustom
     ? SELECT_CUSTOM
-    : provider
-      ? provider
-      : SELECT_NONE;
+    : providerPreset || SELECT_NONE;
 
   function onProviderChange(value: string) {
     if (value === SELECT_CUSTOM) {
-      setProviderCustom(true);
+      setProviderPreset(SELECT_CUSTOM);
       return;
     }
-    setProviderCustom(false);
     if (value === SELECT_NONE) {
+      setProviderPreset(SELECT_NONE);
       setProvider("");
       return;
     }
-    setProvider(value);
-    // Prefill the recommended api_base for the chosen provider (blank for
-    // providers where LiteLLM already knows the endpoint). User can still
-    // override via the API base select below.
-    const preset = PROVIDER_OPTIONS.find((p) => p.value === value);
+    const preset = LITELLM_PROVIDER_PRESETS.find((p) => p.value === value);
+    if (!preset) return;
+    setProviderPreset(value);
+    setProvider(preset.llmProvider);
     setApiBaseCustom(false);
-    setAPIBase(preset?.apiBase ?? "");
+    setAPIBase(preset.apiBase);
+    if (preset.defaultModel) {
+      setModelName((current) => current.trim() || preset.defaultModel || "");
+      setProviderModel((current) => current.trim() || modelWithPrefix(preset.defaultModel || "", preset.modelPrefix));
+    }
   }
 
   const apiBaseSelectValue = apiBaseCustom
@@ -179,6 +174,26 @@ export function PlatformLiteLLM() {
       return;
     }
     setAPIBase(value);
+  }
+
+  function applyEnvBlock() {
+    const draft = draftLiteLLMModelFromEnv(envBlock);
+    if (!draft) {
+      toast({ type: "error", message: "Cole variáveis LLM_API_KEY, LLM_BASE_URL ou LLM_MODEL." });
+      return;
+    }
+    if (draft.modelName) setModelName(draft.modelName);
+    if (draft.providerModel) setProviderModel(draft.providerModel);
+    if (draft.apiBase) {
+      setAPIBase(draft.apiBase);
+      setApiBaseCustom(!API_BASE_OPTIONS.includes(draft.apiBase));
+    }
+    if (draft.apiKey) setAPIKey(draft.apiKey);
+    setProvider(draft.provider);
+    setProviderPreset(draft.providerPreset);
+    setAPIVersion("");
+    setEnvBlock("");
+    toast({ type: "success", message: "Variáveis LLM aplicadas ao formulário." });
   }
 
   return (
@@ -297,10 +312,43 @@ export function PlatformLiteLLM() {
             {modelsQ.isError ? (
               <Alert className="border-red-900/50 bg-red-950/30 text-red-300">
                 <XCircle className="h-4 w-4" />
-                <AlertTitle>Falha ao carregar modelos</AlertTitle>
-                <AlertDescription>{(modelsQ.error as { error?: string })?.error ?? "erro desconhecido"}</AlertDescription>
+                <AlertTitle>
+                  {litellmAuthBlocked ? "Master key do LiteLLM recusada" : "Falha ao carregar modelos"}
+                </AlertTitle>
+                <AlertDescription>
+                  {litellmAuthBlocked
+                    ? "Corrija a LITELLM_MASTER_KEY usada pelo control-plane. A LLM_API_KEY do provedor serve para o modelo upstream e não substitui a master key do LiteLLM."
+                    : modelListError || "erro desconhecido"}
+                </AlertDescription>
               </Alert>
             ) : null}
+
+            <div className="grid gap-2 border-b border-zinc-800/60 pb-4">
+              <Field>
+                <FieldLabel htmlFor="litellm-env-block">Colar variáveis LLM_*</FieldLabel>
+                <Textarea
+                  id="litellm-env-block"
+                  value={envBlock}
+                  onChange={(event) => setEnvBlock(event.target.value)}
+                  placeholder={`LLM_API_KEY=sk-...\nLLM_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1\nLLM_MODEL=qwen-plus`}
+                  disabled={!configured}
+                  className="min-h-24 font-mono text-xs"
+                />
+                <FieldDescription>
+                  Preenche Qwen/DashScope como endpoint OpenAI-compatible no LiteLLM.
+                </FieldDescription>
+              </Field>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={applyEnvBlock}
+                  disabled={!configured || !envBlock.trim()}
+                >
+                  Preencher formulário
+                </Button>
+              </div>
+            </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <Field>
@@ -309,7 +357,7 @@ export function PlatformLiteLLM() {
                   id="litellm-model-name"
                   value={modelName}
                   onChange={(event) => setModelName(event.target.value)}
-                  placeholder="claude-sonnet-4-5"
+                  placeholder="qwen-plus"
                   disabled={!configured}
                 />
                 <FieldDescription>Este é o nome que tenants usam como modelo principal ou fallback.</FieldDescription>
@@ -320,7 +368,7 @@ export function PlatformLiteLLM() {
                   id="litellm-provider-model"
                   value={providerModel}
                   onChange={(event) => setProviderModel(event.target.value)}
-                  placeholder="anthropic/claude-sonnet-4-5"
+                  placeholder="openai/qwen-plus"
                   disabled={!configured}
                 />
                 <FieldDescription>Valor enviado em litellm_params.model.</FieldDescription>
@@ -337,7 +385,7 @@ export function PlatformLiteLLM() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={SELECT_NONE}>Não definir (padrão do LiteLLM)</SelectItem>
-                    {PROVIDER_OPTIONS.map((p) => (
+                    {LITELLM_PROVIDER_PRESETS.map((p) => (
                       <SelectItem key={p.value} value={p.value}>
                         {p.label}
                       </SelectItem>
@@ -356,8 +404,7 @@ export function PlatformLiteLLM() {
                   />
                 ) : null}
                 <FieldDescription>
-                  Mapeia para litellm_params.custom_llm_provider. Escolher um provedor
-                  pré-preenche a API base recomendada.
+                  Mapeia para litellm_params.custom_llm_provider. DashScope usa provider openai com API base própria.
                 </FieldDescription>
               </Field>
               <Field>
@@ -430,7 +477,14 @@ export function PlatformLiteLLM() {
               </Button>
               <Button
                 onClick={() => createModelM.mutate()}
-                disabled={!configured || createModelM.isPending || !modelName.trim() || !providerModel.trim()}
+                disabled={
+                  !configured ||
+                  litellmAuthBlocked ||
+                  createModelM.isPending ||
+                  !modelName.trim() ||
+                  !providerModel.trim()
+                }
+                title={litellmAuthBlocked ? "Corrija a LITELLM_MASTER_KEY antes de adicionar modelos." : undefined}
               >
                 <Plus className="h-4 w-4" />
                 {createModelM.isPending ? "Adicionando..." : "Adicionar modelo"}
