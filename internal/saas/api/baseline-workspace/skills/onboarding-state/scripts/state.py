@@ -110,6 +110,8 @@ def migrate_state(state: dict) -> dict:
         deep.setdefault("last_bridge_attempt_at", None)
         deep.setdefault("last_bridge_failed_at", None)
         deep.setdefault("last_bridge_error", None)
+    audit = state.setdefault("audit", {})
+    audit.setdefault("events", [])
     state["schema_version"] = SCHEMA_VERSION
     return state
 
@@ -170,6 +172,9 @@ def empty_state() -> dict:
             "blocked_by": ["discovery_incomplete"],
             "promoted_at": None,
             "promoted_by": None,
+        },
+        "audit": {
+            "events": [],
         },
     }
 
@@ -409,6 +414,16 @@ def op_discovery_close(state: dict, payload: dict) -> dict:
     email (via op_set_owner); segment/summary são opcionais."""
     state = op_set_owner(state, payload)
     state = op_mark_discovery_done(state, payload)
+    events = (state.setdefault("audit", {})).setdefault("events", [])
+    events.append({
+        "at": now_iso(),
+        "stage": sanitize_short_text(payload.get("stage") or "discovery_close", 80),
+        "trace_id": sanitize_short_text(payload.get("trace_id") or "", 120) or None,
+        "session_id": sanitize_short_text(payload.get("session_id") or "", 160) or None,
+        "actor": sanitize_short_text(payload.get("captured_by") or "sofia", 50) or "sofia",
+    })
+    if len(events) > 100:
+        del events[:-100]
     return state
 
 
