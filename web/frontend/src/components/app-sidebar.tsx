@@ -35,6 +35,8 @@ import {
 } from "@/api/launcher-policy"
 import { type WorkspaceAgent, getWorkspaceAgents } from "@/api/workspace-agents"
 import { NotificationPanel } from "@/components/notifications/notification-panel"
+import { SidebarConversations } from "@/components/sidebar/sidebar-conversations"
+import { SidebarUserFooter } from "@/components/sidebar/sidebar-user-footer"
 import {
   Sidebar,
   SidebarContent,
@@ -501,11 +503,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const showSidebarNavigation = isVisible("sidebar.navigation")
   const showSidebarPendingRequests = isVisible("sidebar.pending_requests")
   const showSidebarNotifications = isVisible("sidebar.notifications")
+  const showSidebarConversations = isVisible("sidebar.conversations")
+  const showSidebarUserFooter = isVisible("sidebar.user_footer")
+  // O right rail (terceira coluna) já mostra notificações + pendências.
+  // Quando ele está visível, não duplicamos esses blocos na sidebar — ela
+  // foca em navegação + conversas + usuário. Em perfis sem rail, mantemos os
+  // blocos legados como fallback.
+  const rightRailVisible = isVisible("layout.right_rail", true)
 
   if (
     !showSidebarNavigation &&
     !showSidebarPendingRequests &&
-    !showSidebarNotifications
+    !showSidebarNotifications &&
+    !showSidebarConversations &&
+    !showSidebarUserFooter
   ) {
     return null
   }
@@ -516,9 +527,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       collapsible="icon"
       className="bg-background border-r-border/20 border-r pt-3"
     >
-      {showSidebarNavigation ? (
+      {showSidebarNavigation || showSidebarConversations ? (
         <SidebarContent className="bg-background gap-1 px-2 pt-3 pb-2">
-          {navGroups.map((group) => {
+          {(showSidebarNavigation ? navGroups : []).map((group) => {
             const isFlatGroup =
               group.label === "navigation.agent_group" ||
               group.label === "navigation.chat" ||
@@ -597,19 +608,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </SidebarGroup>
             )
           })}
-          {/* Notifications panel — preenche o espaço inferior do sidebar
-              quando o tenant não tem o pending-requests footer. Visibilidade
-              controlada pela flag sidebar.notifications em ui-visibility.json
-              (default: true em admin+tenant, false em public). */}
-          {showSidebarNotifications && <NotificationPanel />}
+          {/* Lista de conversas com scroll infinito, agrupada por data
+              (estilo Claude/ChatGPT). Gated por sidebar.conversations. */}
+          {showSidebarConversations ? (
+            <div className="group-data-[collapsible=icon]:hidden">
+              <SidebarConversations />
+            </div>
+          ) : null}
+          {/* Notifications panel — fallback apenas em perfis SEM o right rail
+              (que já mostra notificações na terceira coluna). Evita duplicar. */}
+          {showSidebarNotifications && !rightRailVisible && <NotificationPanel />}
         </SidebarContent>
       ) : null}
-      {showSidebarPendingRequests ? (
-        <SidebarFooter className="bg-background px-2 pt-2 pb-3 group-data-[collapsible=icon]:hidden">
-          <SidebarAgentPendingList
-            agents={workspaceAgents}
-            items={sidebarPendingItems}
-          />
+      {showSidebarUserFooter || (showSidebarPendingRequests && !rightRailVisible) ? (
+        <SidebarFooter className="bg-background border-sidebar-border/40 gap-2 border-t px-2 pt-2 pb-3 group-data-[collapsible=icon]:border-t-0">
+          {/* Pendências no rodapé: só quando não há right rail (fallback). */}
+          {showSidebarPendingRequests && !rightRailVisible ? (
+            <SidebarAgentPendingList
+              agents={workspaceAgents}
+              items={sidebarPendingItems}
+            />
+          ) : null}
+          {showSidebarUserFooter ? <SidebarUserFooter /> : null}
         </SidebarFooter>
       ) : null}
       <SidebarRail />
