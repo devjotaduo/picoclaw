@@ -51,6 +51,26 @@ func TestDefaultRolePolicyRequestPermissions(t *testing.T) {
 	}
 }
 
+func TestRolePolicyKeepsPublicPicoWritableAndOperatorClosed(t *testing.T) {
+	rp := NormalizeRolePolicy(RolePolicy{
+		RolePublic: {
+			FeatureChannels:        AccessNone,
+			ChannelFeature("pico"): AccessNone,
+		},
+		RoleOperator: {
+			FeatureChannels:        AccessWrite,
+			ChannelFeature("pico"): AccessWrite,
+		},
+	})
+
+	if got := rp[RolePublic][ChannelFeature("pico")]; got != AccessWrite {
+		t.Fatalf("public channel:pico = %q, want write", got)
+	}
+	if got := rp[RoleOperator][ChannelFeature("pico")]; got != AccessNone {
+		t.Fatalf("operator channel:pico = %q, want none", got)
+	}
+}
+
 func TestNormalizeRolePolicyDerivesFineFeaturesFromLegacyGroups(t *testing.T) {
 	rp := NormalizeRolePolicy(RolePolicy{
 		RoleViewer: {

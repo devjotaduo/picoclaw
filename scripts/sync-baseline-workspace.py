@@ -20,7 +20,8 @@ What it does:
   3. Empties workspace/memory/ contents (filenames preserved as stubs,
      bodies become "# Title\n\n") — baseline should NOT ship client data.
   4. Normalizes home/config.json: replaces api_keys with ${LITELLM_KEY}
-     placeholder, sets workspace path to /root/.picoclaw/workspace.
+     placeholder, sets root workspace paths to /root/.picoclaw/workspace, and
+     preserves valid agent-specific workspaces under workspace/agents/<id>/.
   5. Writes SYNCED_FROM manifest with a deterministic content hash so CI
      does not create metadata-only commits on every `go generate`.
 
@@ -41,12 +42,13 @@ import os
 import re
 import shutil
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # Paths relative to repo root (script must be invoked from there)
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_WORKSPACE = REPO_ROOT / "workspace"
 DST_BASELINE = REPO_ROOT / "internal" / "saas" / "api" / "baseline-workspace"
+CONTAINER_WORKSPACE = "/root/.picoclaw/workspace"
 
 # Files in baseline that must SURVIVE the wipe (operator-managed, not synced)
 PRESERVE_AT_DST = {"README.md", ".gitkeep", "SYNCED_FROM"}
@@ -165,7 +167,9 @@ def normalize_config_json(path: Path) -> bool:
     """Sanitize home/config.json so the baseline is safe to ship:
       - Replace per-model api_keys with ${LITELLM_KEY} placeholder
       - Force agents.defaults.workspace to /root/.picoclaw/workspace (Linux container path)
-      - Strip Windows/Mac dev paths from agents.list[*].workspace
+      - Rewrite agents.list[*].workspace to the matching Linux container path.
+        Agent-specific workspaces under workspace/agents/<id>/ are preserved
+        when that directory exists; stale local-only paths fall back to root.
     Returns True if file was changed."""
     if not path.is_file():
         return False
@@ -183,14 +187,13 @@ def normalize_config_json(path: Path) -> bool:
     # agents.list[*].workspace → container path
     for agent in raw.get("agents", {}).get("list", []) or []:
         ws = agent.get("workspace")
-        if isinstance(ws, str) and (
-            ws.startswith("C:") or ws.startswith("/Users") or ws.startswith("/home/")
-        ):
-            agent["workspace"] = "/root/.picoclaw/workspace"
-            changed = True
+        if isinstance(ws, str):
+            normalized = normalize_agent_workspace(ws)
+            if normalized != ws:
+                agent["workspace"] = normalized
+                changed = True
 
     # model_list[*].api_keys → placeholder
-    placeholder_singular = "${LITELLM_KEY}"
     placeholder_plural = ["${LITELLM_KEY}"]
     for m in raw.get("model_list", []) or []:
         # api_keys (plural V3+)
@@ -208,6 +211,7 @@ def normalize_config_json(path: Path) -> bool:
         # as-is (validator only requires non-empty; operator can route via
         # LITELLM later by changing api_base to ${LITELLM_URL}).
 
+
     if changed:
         path.write_text(
             json.dumps(raw, indent=2, ensure_ascii=False) + "\n",
@@ -215,6 +219,39 @@ def normalize_config_json(path: Path) -> bool:
             newline="\n",
         )
     return changed
+
+
+def normalize_agent_workspace(workspace: str) -> str:
+    rel = workspace_relative_to_source(workspace)
+    if rel is None or rel.as_posix() in {"", "."}:
+        return CONTAINER_WORKSPACE
+
+    target = SRC_WORKSPACE.joinpath(*rel.parts)
+    if not target.is_dir():
+        return CONTAINER_WORKSPACE
+
+    return f"{CONTAINER_WORKSPACE}/{rel.as_posix()}"
+
+
+def workspace_relative_to_source(workspace: str) -> PurePosixPath | None:
+    normalized = workspace.replace("\\", "/").rstrip("/")
+
+    if normalized == CONTAINER_WORKSPACE:
+        return PurePosixPath(".")
+    if normalized.startswith(CONTAINER_WORKSPACE + "/"):
+        return PurePosixPath(normalized[len(CONTAINER_WORKSPACE) + 1 :])
+
+    if normalized.endswith("/workspace"):
+        return PurePosixPath(".")
+    marker = "/workspace/"
+    if marker in normalized:
+        return PurePosixPath(normalized.rsplit(marker, 1)[1])
+
+    try:
+        rel = Path(workspace).resolve().relative_to(SRC_WORKSPACE.resolve())
+    except (OSError, ValueError):
+        return None
+    return PurePosixPath(rel.as_posix())
 
 
 def baseline_content_hash(root: Path) -> str:

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Pico public policy reconciler frequently
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Unit=picoclaw-public-pico-policy-reconcile.service
+
+[Install]
+WantedBy=timers.target

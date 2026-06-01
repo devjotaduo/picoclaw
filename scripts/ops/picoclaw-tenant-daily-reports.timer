@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh PicoClaw tenant daily reports hourly
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+AccuracySec=1min
+Unit=picoclaw-tenant-daily-reports.service
+
+[Install]
+WantedBy=timers.target

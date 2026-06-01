@@ -169,6 +169,7 @@ func DefaultRolePolicy() RolePolicy {
 	}
 	public[FeatureChat] = AccessWrite
 	public[FeatureLogs] = AccessRead
+	public[ChannelFeature("pico")] = AccessWrite
 
 	// admin_panel is reserved for platform_admin (special-cased in
 	// EffectiveFeatures). Every tenant-scoped role must default to None so the
@@ -178,6 +179,7 @@ func DefaultRolePolicy() RolePolicy {
 	operator[FeatureAdminPanel] = AccessNone
 	viewer[FeatureAdminPanel] = AccessNone
 	public[FeatureAdminPanel] = AccessNone
+	operator[ChannelFeature("pico")] = AccessNone
 
 	return RolePolicy{
 		RoleTenantOwner: writeAll,
@@ -210,6 +212,7 @@ func NormalizeRolePolicy(in RolePolicy) RolePolicy {
 		}
 	}
 	applyDerivedFeatureFallbacks(base, explicit)
+	enforceRolePolicyInvariants(base)
 	return base
 }
 
@@ -448,6 +451,18 @@ func applyDerivedFeatureFallbacks(rolePolicy RolePolicy, explicit map[string]map
 			features[feature] = features[FeatureChannels]
 		}
 	}
+}
+
+func enforceRolePolicyInvariants(rolePolicy RolePolicy) {
+	if _, ok := rolePolicy[RolePublic]; !ok {
+		rolePolicy[RolePublic] = map[string]Access{}
+	}
+	rolePolicy[RolePublic][ChannelFeature("pico")] = AccessWrite
+
+	if _, ok := rolePolicy[RoleOperator]; !ok {
+		rolePolicy[RoleOperator] = map[string]Access{}
+	}
+	rolePolicy[RoleOperator][ChannelFeature("pico")] = AccessNone
 }
 
 func fineFeatureFallbacks() map[string]string {

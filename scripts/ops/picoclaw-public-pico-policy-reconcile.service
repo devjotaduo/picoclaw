@@ -1,0 +1,10 @@
+[Unit]
+Description=Reconcile Pico WebSocket policy for public PicoClaw SaaS tenants
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /srv/saas/scripts/reconcile-public-pico-policy.py
+Nice=5
+

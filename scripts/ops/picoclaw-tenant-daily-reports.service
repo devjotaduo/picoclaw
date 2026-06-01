@@ -1,0 +1,9 @@
+[Unit]
+Description=Generate actionable daily reports for PicoClaw SaaS tenants
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /srv/saas/scripts/generate-tenant-daily-reports.py
+Nice=5
+
