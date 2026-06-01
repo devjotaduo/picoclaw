@@ -4,8 +4,8 @@ import * as React from "react"
 
 import {
   ControlplaneError,
+  type RosterEntry,
   createTenant,
-  listLauncherProfiles,
   listTenantTypes,
 } from "@/api/controlplane"
 import { AdminGuard } from "@/components/admin/AdminGuard"
@@ -64,7 +64,6 @@ function NewTenantForm() {
   const [displayName, setDisplayName] = React.useState("")
   const [ownerEmail, setOwnerEmail] = React.useState("")
   const [subdomain, setSubdomain] = React.useState("")
-  const [workspaceId, setWorkspaceId] = React.useState("")
   const [showAdvanced, setShowAdvanced] = React.useState(false)
   const [budget, setBudget] = React.useState("")
   const [memMb, setMemMb] = React.useState("")
@@ -81,16 +80,6 @@ function NewTenantForm() {
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState<string | null>(null)
-
-  // listLauncherProfiles returns the workspace catalog under the legacy
-  // name. Until the API gets a dedicated /workspaces route, this is the
-  // source of truth for what the admin can pick from.
-  const workspaces = useQuery({
-    queryKey: ["launcher-profiles"],
-    queryFn: listLauncherProfiles,
-    enabled: Boolean(type),
-    retry: false,
-  })
 
   // v2.0: fetch the tenant_types catalog and append business verticals to the
   // three curated system cards. Additive — if the fetch fails the wizard still
@@ -127,7 +116,6 @@ function NewTenantForm() {
         owner_email: needsOwnerEmail ? ownerEmail.trim().toLowerCase() : "",
         subdomain: subdomain.trim().toLowerCase(),
         tenant_type: type,
-        workspace_id: workspaceId || undefined,
         monthly_budget_usd: budget ? Number(budget) : undefined,
         mem_limit_mb: memMb ? Number(memMb) : undefined,
         cpu_quota: cpuQuota ? Number(cpuQuota) : undefined,
@@ -223,6 +211,9 @@ function NewTenantForm() {
 
   // Step 2: form for the chosen type.
   const card = cards.find((c) => c.id === type) ?? cards[0]
+  // Resolve the catalog entry (may be absent for system-only types like
+  // publico/admin/cliente which are defined in TYPE_CARDS, not the catalog).
+  const catalogEntry = tenantTypes.data?.find((t) => t.slug === type)
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="mx-auto flex w-full max-w-xl flex-col gap-4 p-4 sm:p-6">
@@ -242,6 +233,7 @@ function NewTenantForm() {
           </div>
           <h1 className="text-2xl font-semibold">Novo tenant — {card.title}</h1>
           <p className="text-muted-foreground text-sm">{card.tagline}</p>
+          <RosterPreview roster={catalogEntry?.roster} />
         </header>
         <form className="flex flex-col gap-3" onSubmit={onSubmit}>
           <div className="flex flex-col gap-1.5">
@@ -296,27 +288,6 @@ function NewTenantForm() {
               )}
             </div>
           ) : null}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="t-ws">Workspace</Label>
-            <select
-              id="t-ws"
-              value={workspaceId}
-              onChange={(e) => setWorkspaceId(e.target.value)}
-              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
-            >
-              <option value="">(default)</option>
-              {(workspaces.data ?? []).map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                  {w.is_default ? " · default" : ""}
-                </option>
-              ))}
-            </select>
-            <p className="text-muted-foreground text-xs">
-              Define o conteúdo do volume (skills, agents, ui-visibility.json).
-            </p>
-          </div>
-
           {needsOwnerEmail ? (
             <div className="border-border/60 flex flex-col gap-3 rounded-md border border-dashed p-3">
               <label className="flex items-center gap-2 text-sm font-medium">
@@ -463,6 +434,66 @@ function NewTenantForm() {
             </p>
           ) : null}
         </form>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Type guard: true when `a` is a RosterEntry object rather than a legacy
+ * roster string (`["attendant","assistant"]`). Lets the preview render safely
+ * before the migration that converts roster_json to objects.
+ */
+function isRosterEntry(a: unknown): a is RosterEntry {
+  return (
+    a !== null &&
+    typeof a === "object" &&
+    typeof (a as RosterEntry).label === "string"
+  )
+}
+
+/**
+ * Read-only preview of the agent roster defined by the selected tenant type.
+ * Guards against legacy string[] form — only renders entries that are objects
+ * with a `.label` field so shipping before the migration doesn't crash.
+ */
+function RosterPreview({ roster }: { roster?: RosterEntry[] }) {
+  if (!Array.isArray(roster) || roster.length === 0) return null
+
+  const entries: RosterEntry[] = (roster as unknown[]).filter(isRosterEntry)
+
+  if (entries.length === 0) return null
+
+  return (
+    <div className="flex flex-col gap-1.5 pt-1">
+      <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+        Agentes deste tipo
+      </p>
+      <div className="flex flex-col gap-1">
+        {entries.map((entry) => (
+          <div
+            key={entry.id}
+            className="border-border/50 flex items-start gap-2 rounded-md border px-3 py-2"
+          >
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-foreground text-sm font-medium">
+                  {entry.label}
+                </span>
+                {entry.locked ? (
+                  <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium leading-none">
+                    fixo
+                  </span>
+                ) : null}
+              </div>
+              {entry.desc ? (
+                <span className="text-muted-foreground text-xs">
+                  {entry.desc}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
