@@ -1,7 +1,20 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Copy, Check, Sparkles, Bot, ExternalLink, PlusCircle, ScrollText, FolderTree, Link2, Mail } from "lucide-react";
+import {
+  ArrowLeft,
+  Copy,
+  Check,
+  Sparkles,
+  Bot,
+  ExternalLink,
+  PlusCircle,
+  ScrollText,
+  FolderTree,
+  Link2,
+  Mail,
+  RefreshCw,
+} from "lucide-react";
 import {
   getTenant,
   getUsage,
@@ -16,6 +29,7 @@ import {
   consumeMagicLink,
   resendCredentials,
   recreateTenant,
+  syncTenantWorkspace,
   cloneTenant,
   getTenantSanity,
   listTenantMagicLinks,
@@ -171,6 +185,22 @@ export function TenantDetail() {
     },
     onError: (e: { error?: string }) =>
       toast({ type: "error", message: e?.error ?? "Falha ao recriar a área." }),
+  });
+  const syncWorkspaceM = useMutation({
+    mutationFn: () => syncTenantWorkspace(id),
+    onSuccess: (r) => {
+      invalidate();
+      sanityQuery.refetch();
+      const memoryNote = r.memory_backfilled ? " Memória da empresa reparada." : "";
+      toast({
+        type: r.warning ? "info" : "success",
+        message: r.warning
+          ? `Workspace sincronizado (${r.files_copied} arquivos).${memoryNote} ${r.warning}`
+          : `Workspace sincronizado (${r.files_copied} arquivos).${memoryNote}`,
+      });
+    },
+    onError: (e: { error?: string }) =>
+      toast({ type: "error", message: e?.error ?? "Falha ao sincronizar workspace." }),
   });
   // Clone: raw volume copy + new LiteLLM key. The cloned launcher-auth.db
   // and all secrets carry over — the new tenant is functionally a twin
@@ -458,6 +488,29 @@ export function TenantDetail() {
           {isPlatformAdmin && tenant.status === "suspended" && (
             <Button variant="outline" size="sm" onClick={() => resumeM.mutate()} disabled={resumeM.isPending}>
               Reativar
+            </Button>
+          )}
+          {isPlatformAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (
+                  confirm(
+                    "Isso vai sincronizar agentes e habilidades do modelo aplicado para o volume vivo.\n\n" +
+                      "Preserva memory/, state/, sessões e segredos do cliente.\n" +
+                      "Para trocar imagem/env/config de container, use Recriar área depois.\n\n" +
+                      "Continuar?",
+                  )
+                ) {
+                  syncWorkspaceM.mutate();
+                }
+              }}
+              disabled={syncWorkspaceM.isPending}
+              title="Atualiza agentes e habilidades sem apagar memória ou estado"
+            >
+              <RefreshCw className="h-4 w-4" />
+              {syncWorkspaceM.isPending ? "Sincronizando..." : "Sincronizar"}
             </Button>
           )}
           {isPlatformAdmin && (

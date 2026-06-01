@@ -58,6 +58,34 @@ const frontendBuildTimeout = 5 * time.Minute
 // corepack which ships with node 20+.
 const workspaceBuildImage = "node:24-alpine3.23"
 
+type WorkspaceRuntimeSyncResult struct {
+	FilesCopied        int
+	DirsCreated        int
+	PublicAgentApplied bool
+}
+
+var workspaceRuntimeSyncSkipNames = map[string]struct{}{
+	"memory":       {},
+	"state":        {},
+	"sessions":     {},
+	"whatsapp":     {},
+	"matrix":       {},
+	"output":       {},
+	"logs":         {},
+	"cache":        {},
+	".cache":       {},
+	"node_modules": {},
+	"__pycache__":  {},
+}
+
+var workspaceRuntimeSyncSkipSuffixes = []string{
+	".log",
+	".tmp.json",
+	".pid",
+	".sock",
+	".pyc",
+}
+
 // CopyWorkspaceHome copies srcWorkspacePath/home/ into the tenant volume
 // destDir. Unlike CopyVolumeRaw it does NOT skip anything — the workspace's
 // home/ subtree is the authoritative content. Per-tenant secrets and runtime
@@ -105,6 +133,112 @@ func CopyWorkspaceHome(srcWorkspacePath, destDir string) error {
 		}
 		return copyFile(path, target, fi.Mode().Perm())
 	})
+}
+
+func shouldSkipWorkspaceRuntimeSyncRel(rel string) bool {
+	rel = filepath.ToSlash(filepath.Clean(rel))
+	if rel == "." || rel == "" {
+		return false
+	}
+	if rel == publicAgentBackupName {
+		return true
+	}
+	for _, part := range strings.Split(rel, "/") {
+		if _, ok := workspaceRuntimeSyncSkipNames[part]; ok {
+			return true
+		}
+	}
+	for _, suffix := range workspaceRuntimeSyncSkipSuffixes {
+		if strings.HasSuffix(rel, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// SyncWorkspaceRuntime overlays the operational workspace tree from a
+// Workspace's home/workspace/ into a live tenant volume. It intentionally
+// avoids mutable runtime data (memory/, state/, sessions/, WhatsApp stores,
+// pycache/logs) so an admin can update agents/skills without erasing the
+// customer's source-of-truth memory.
+//
+// Public tenants get one special case: source AGENT.md is copied to
+// AGENT.cliente.md and then the Sofia public AGENT.md override is applied.
+// That keeps future promotion able to restore the fresh cliente prompt while
+// the live public chat continues to start as Sofia.
+func SyncWorkspaceRuntime(srcWorkspacePath, destVolumePath string, isPublic bool) (WorkspaceRuntimeSyncResult, error) {
+	var result WorkspaceRuntimeSyncResult
+
+	src := filepath.Join(srcWorkspacePath, WorkspaceHomeSubdir, "workspace")
+	info, err := os.Stat(src)
+	if err != nil {
+		return result, fmt.Errorf("workspace runtime source not found at %s: %w", src, err)
+	}
+	if !info.IsDir() {
+		return result, fmt.Errorf("workspace runtime source %s is not a directory", src)
+	}
+
+	dst := filepath.Join(destVolumePath, "workspace")
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return result, fmt.Errorf("mkdir tenant workspace: %w", err)
+	}
+
+	if err := filepath.Walk(src, func(path string, fi os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		if shouldSkipWorkspaceRuntimeSyncRel(rel) {
+			if fi.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if !fi.IsDir() && !fi.Mode().IsRegular() {
+			return nil
+		}
+
+		target := filepath.Join(dst, rel)
+		if fi.IsDir() {
+			if err := os.MkdirAll(target, fi.Mode().Perm()); err != nil {
+				return err
+			}
+			result.DirsCreated++
+			return nil
+		}
+
+		if isPublic && filepath.ToSlash(rel) == "AGENT.md" {
+			target = filepath.Join(dst, publicAgentBackupName)
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if err := copyFile(path, target, fi.Mode().Perm()); err != nil {
+			return err
+		}
+		result.FilesCopied++
+		return nil
+	}); err != nil {
+		return result, err
+	}
+
+	if isPublic {
+		if err := ApplyPublicSofiaAgentMD(destVolumePath); err != nil {
+			return result, fmt.Errorf("apply public Sofia AGENT.md: %w", err)
+		}
+		result.PublicAgentApplied = true
+	}
+
+	return result, nil
 }
 
 // SanitizeTenantSecurityConfig removes legacy .security.yml shapes that are

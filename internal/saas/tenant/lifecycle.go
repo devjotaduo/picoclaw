@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sipeed/picoclaw/internal/saas/auth"
@@ -119,6 +120,92 @@ func (p *Provisioner) Recreate(ctx context.Context, id string) error {
 		return err
 	}
 	return p.Tenants.SetStatus(ctx, id, store.StatusActive, nil)
+}
+
+type SyncWorkspaceResult struct {
+	TenantID                string
+	WorkspaceID             string
+	WorkspaceVersionApplied int64
+	FilesCopied             int
+	DirsCreated             int
+	PublicAgentApplied      bool
+	StateRefreshed          bool
+	MemoryBackfilled        bool
+	Warning                 string
+}
+
+// SyncWorkspace overlays the tenant's selected Workspace onto the live
+// volume without touching per-tenant memory/state/sessions/secrets. It is
+// the admin-facing "re-apply workspace" operation for shipping agent/skill
+// fixes to already-provisioned tenants without a destructive recreate.
+func (p *Provisioner) SyncWorkspace(ctx context.Context, id string) (SyncWorkspaceResult, error) {
+	var out SyncWorkspaceResult
+	t, err := p.Tenants.Get(ctx, id)
+	if err != nil {
+		return out, err
+	}
+	if p.Workspaces == nil {
+		return out, errors.New("workspaces store is not configured")
+	}
+	if t.WorkspaceID == nil || *t.WorkspaceID == "" {
+		return out, errors.New("tenant has no workspace_id")
+	}
+	ws, err := p.Workspaces.Get(ctx, *t.WorkspaceID)
+	if err != nil {
+		return out, fmt.Errorf("workspace: %w", err)
+	}
+
+	syncResult, err := SyncWorkspaceRuntime(ws.HostPath, t.VolumePath, t.IsPublic)
+	if err != nil {
+		return out, err
+	}
+	if err := p.Tenants.SetWorkspaceApplied(ctx, t.ID, ws.ID, ws.Version); err != nil {
+		return out, fmt.Errorf("record workspace applied: %w", err)
+	}
+
+	out = SyncWorkspaceResult{
+		TenantID:                t.ID,
+		WorkspaceID:             ws.ID,
+		WorkspaceVersionApplied: ws.Version,
+		FilesCopied:             syncResult.FilesCopied,
+		DirsCreated:             syncResult.DirsCreated,
+		PublicAgentApplied:      syncResult.PublicAgentApplied,
+	}
+
+	backfillResult, backfillErr := BackfillEmpresaMemoryFromOnboardingState(t.VolumePath)
+	if backfillErr != nil {
+		out.Warning = appendSyncWarning(out.Warning, "fallback de memory/empresa.md falhou: "+backfillErr.Error())
+	} else {
+		out.MemoryBackfilled = backfillResult.Written
+		if backfillResult.StateUpdated {
+			out.StateRefreshed = true
+		}
+	}
+
+	if t.Status != store.StatusActive {
+		out.Warning = appendSyncWarning(out.Warning, "tenant não está ativo; refresh do onboarding-state foi pulado")
+		return out, nil
+	}
+
+	refreshCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	if err := RefreshOnboardingState(refreshCtx, t.ID); err != nil {
+		out.Warning = appendSyncWarning(out.Warning, "workspace sincronizado, mas refresh do onboarding-state falhou: "+err.Error())
+		return out, nil
+	}
+	out.StateRefreshed = true
+	return out, nil
+}
+
+func appendSyncWarning(current, next string) string {
+	next = strings.TrimSpace(next)
+	if next == "" {
+		return current
+	}
+	if strings.TrimSpace(current) == "" {
+		return next
+	}
+	return current + "; " + next
 }
 
 func (p *Provisioner) tenantUsesRawWorkspace(ctx context.Context, t *store.Tenant) (bool, error) {
