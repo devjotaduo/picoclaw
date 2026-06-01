@@ -26,6 +26,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import {
+  buildPlatformLiteLLMModelInput,
   draftLiteLLMModelFromEnv,
   LITELLM_PROVIDER_PRESETS,
   modelWithPrefix,
@@ -91,14 +92,16 @@ export function PlatformLiteLLM() {
 
   const createModelM = useMutation({
     mutationFn: () =>
-      createPlatformLiteLLMModel({
-        model_name: modelName.trim(),
-        model: providerModel.trim(),
-        custom_llm_provider: provider.trim() || undefined,
-        api_base: apiBase.trim() || undefined,
-        api_version: apiVersion.trim() || undefined,
-        api_key: apiKey.trim() || undefined,
-      }),
+      createPlatformLiteLLMModel(
+        buildPlatformLiteLLMModelInput({
+          modelName,
+          providerModel,
+          provider,
+          apiBase,
+          apiVersion,
+          apiKey,
+        }),
+      ),
     onSuccess: () => {
       setModelName("");
       setProviderModel("");
@@ -481,7 +484,6 @@ export function PlatformLiteLLM() {
                   !configured ||
                   litellmAuthBlocked ||
                   createModelM.isPending ||
-                  !modelName.trim() ||
                   !providerModel.trim()
                 }
                 title={litellmAuthBlocked ? "Corrija a LITELLM_MASTER_KEY antes de adicionar modelos." : undefined}

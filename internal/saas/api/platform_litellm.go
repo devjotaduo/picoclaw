@@ -47,6 +47,54 @@ type platformLiteLLMModelReq struct {
 	TPM               *int   `json:"tpm,omitempty"`
 }
 
+func normalizePlatformLiteLLMModelReq(req platformLiteLLMModelReq) platformLiteLLMModelReq {
+	req.ModelName = strings.TrimSpace(req.ModelName)
+	req.Model = strings.TrimSpace(req.Model)
+	req.APIKey = strings.TrimSpace(req.APIKey)
+	req.APIBase = strings.TrimSpace(req.APIBase)
+	req.APIVersion = strings.TrimSpace(req.APIVersion)
+	req.CustomLLMProvider = normalizePlatformLiteLLMProvider(req.CustomLLMProvider, req.Model)
+	req.Model = normalizePlatformLiteLLMModel(req.Model, req.CustomLLMProvider)
+	return req
+}
+
+func normalizePlatformLiteLLMProvider(provider, model string) string {
+	provider = strings.TrimSpace(strings.ToLower(provider))
+	switch provider {
+	case "google", "google-ai", "google-ai-studio", "ai-studio":
+		return "gemini"
+	case "vertex", "vertexai":
+		return "vertex_ai"
+	case "":
+		model = strings.TrimSpace(strings.ToLower(model))
+		switch {
+		case strings.HasPrefix(model, "gemini/"), strings.HasPrefix(model, "gemini-"):
+			return "gemini"
+		case strings.HasPrefix(model, "openrouter/"):
+			return "openrouter"
+		case strings.HasPrefix(model, "openai/"):
+			return "openai"
+		case strings.HasPrefix(model, "anthropic/"):
+			return "anthropic"
+		default:
+			return ""
+		}
+	default:
+		return provider
+	}
+}
+
+func normalizePlatformLiteLLMModel(model, provider string) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return ""
+	}
+	if provider == "gemini" && !strings.Contains(model, "/") {
+		return "gemini/" + model
+	}
+	return model
+}
+
 type effectiveLiteLLMConfig struct {
 	URL       string
 	MasterKey string
@@ -238,6 +286,7 @@ func (h *Handler) handleCreatePlatformLiteLLMModel(w http.ResponseWriter, r *htt
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
+	req = normalizePlatformLiteLLMModelReq(req)
 	if strings.TrimSpace(req.ModelName) == "" {
 		writeError(w, http.StatusBadRequest, "model_name is required")
 		return
