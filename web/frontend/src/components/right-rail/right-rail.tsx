@@ -58,7 +58,7 @@ export function RightRail() {
     })
   }, [])
 
-  if (!visible("layout.right_rail", true)) {
+  if (!visible("layout.right_rail", false)) {
     return null
   }
 

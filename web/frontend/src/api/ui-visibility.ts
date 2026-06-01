@@ -37,12 +37,18 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
   default_profile: "tenant",
   default_visibility: true,
   profiles: {
-    admin: { visibility: {} },
+    admin: {
+      visibility: {
+        "layout.onboarding_banner": false,
+        "layout.right_rail": true,
+      },
+    },
     tenant: {
       visibility: {
         "header.visible": true,
         "header.brand": true,
         "header.template_selector": true,
+        "layout.onboarding_banner": false,
         "layout.sidebar_trigger": true,
         "header.actions": true,
         "header.sidebar_toggle": false,
@@ -58,7 +64,7 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "sidebar.pending_requests": true,
         "sidebar.conversations": true,
         "sidebar.user_footer": true,
-        "layout.right_rail": true,
+        "layout.right_rail": false,
         "sidebar.models": false,
         "sidebar.credentials": false,
         "sidebar.agent_hub": false,
@@ -84,7 +90,7 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "chat.reasoning_messages": true,
         "chat.tool_call_messages": true,
         "agent_editor.create_agents": true,
-        "chat.pending_handoffs_sidebar": true,
+        "chat.pending_handoffs_sidebar": false,
       },
     },
     test: {
@@ -94,6 +100,7 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "header.visible": true,
         "header.brand": true,
         "header.template_selector": true,
+        "layout.onboarding_banner": false,
         "layout.sidebar_trigger": true,
         "header.actions": true,
         "header.sidebar_toggle": false,
@@ -107,6 +114,7 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "header.gateway_stop_menu": true,
         "sidebar.navigation": true,
         "sidebar.pending_requests": true,
+        "layout.right_rail": false,
         "sidebar.chat": true,
         "sidebar.models": false,
         "sidebar.credentials": false,
@@ -139,7 +147,7 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "chat.reasoning_messages": true,
         "chat.tool_call_messages": true,
         "agent_editor.create_agents": false,
-        "chat.pending_handoffs_sidebar": true,
+        "chat.pending_handoffs_sidebar": false,
       },
     },
     public: {
@@ -147,6 +155,7 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "header.visible": true,
         "header.brand": true,
         "header.template_selector": false,
+        "layout.onboarding_banner": false,
         "layout.sidebar_trigger": false,
         "header.actions": true,
         "header.sidebar_toggle": false,
@@ -209,6 +218,7 @@ export const DEFAULT_UI_VISIBILITY_POLICY: UIVisibilityPolicy = {
         "header.visible": false,
         "header.brand": false,
         "header.template_selector": false,
+        "layout.onboarding_banner": false,
         "layout.sidebar_trigger": false,
         "header.actions": false,
         "header.sidebar_toggle": false,

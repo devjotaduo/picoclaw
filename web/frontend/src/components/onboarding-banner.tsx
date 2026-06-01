@@ -70,7 +70,7 @@ export function OnboardingBanner() {
   // business; the "Cadastro incompleto" framing confuses anonymous visitors
   // who never agreed to onboard anything yet. Sofia's discovery flow is the
   // onboarding here, not a banner on top of the chat.
-  const { profile } = useUIVisibility(policy)
+  const { profile, visible } = useUIVisibility(policy)
   const isPublicTenant = profile === "public"
 
   const incomplete = policy?.onboarding?.incomplete === true
@@ -82,7 +82,14 @@ export function OnboardingBanner() {
     if (!incomplete) clearDismissed()
   }, [incomplete])
 
-  if (isPublicTenant || !incomplete || dismissed) return null
+  if (
+    !visible("layout.onboarding_banner", false) ||
+    isPublicTenant ||
+    !incomplete ||
+    dismissed
+  ) {
+    return null
+  }
 
   const handleDismiss = () => {
     setDismissed()

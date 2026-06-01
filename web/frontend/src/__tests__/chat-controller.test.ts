@@ -12,8 +12,10 @@ class MockWebSocket {
   onmessage: ((event: { data: string }) => void) | null = null
   onclose: (() => void) | null = null
   onerror: (() => void) | null = null
+  readonly url: string
 
-  constructor(public readonly url: string) {
+  constructor(url: string) {
+    this.url = url
     MockWebSocket.instances.push(this)
   }
 

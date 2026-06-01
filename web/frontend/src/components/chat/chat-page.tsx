@@ -260,7 +260,6 @@ export function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isAtBottom, setIsAtBottom] = useState(true)
-  const [hasScrolled, setHasScrolled] = useState(false)
   const [input, setInput] = useState("")
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [mainAgent, setMainAgent] = useState<AgentSummary | null>(null)
@@ -439,7 +438,6 @@ export function ChatPage() {
 
   const syncScrollState = (element: HTMLDivElement) => {
     const { clientHeight, scrollHeight, scrollTop } = element
-    setHasScrolled(scrollTop > 0)
     setIsAtBottom(scrollHeight - scrollTop <= clientHeight + 10)
   }
 
@@ -586,17 +584,11 @@ export function ChatPage() {
 
   return (
     <div className="relative isolate flex h-full overflow-hidden bg-[#1c1c1b] text-[#f4f3ef]">
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(28,28,27,0))]"
-        aria-hidden="true"
-      />
       <div className="relative flex min-w-0 flex-1 flex-col">
         {showChatPageHeader ? (
           <PageHeader
             title=""
-            className={`border-b border-white/[0.06] bg-[#1c1c1b]/92 backdrop-blur-xl transition-shadow ${
-              hasScrolled ? "shadow-[0_3px_14px_rgba(0,0,0,0.16)]" : ""
-            }`}
+            className="border-border/60 bg-background border-b shadow-none"
             titleExtra={
               hasChatHeaderControls ? (
                 <div className="flex min-w-0 items-center gap-2">
@@ -612,7 +604,7 @@ export function ChatPage() {
             }
           >
             {showAssistantDetailsToggle && canToggleAssistantDetails && (
-              <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 text-[#d2d0c8] sm:flex">
+              <div className="border-border bg-muted/40 text-muted-foreground hidden items-center gap-2 rounded-full border px-3 py-1.5 sm:flex">
                 <span className="text-sm">
                   {t("chat.showAssistantDetails")}
                 </span>
@@ -630,7 +622,7 @@ export function ChatPage() {
                 variant="secondary"
                 size="sm"
                 onClick={newChat}
-                className="h-9 gap-2 rounded-full border border-white/10 bg-white/[0.065] text-[#f3f2ec] hover:bg-white/[0.11]"
+                className="border-border bg-muted/60 text-foreground hover:bg-muted h-9 gap-2 rounded-full border shadow-none"
               >
                 <IconPlus className="size-4" />
                 <span className="hidden sm:inline">{t("chat.newChat")}</span>

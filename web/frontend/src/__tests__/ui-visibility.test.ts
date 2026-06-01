@@ -134,4 +134,30 @@ describe("ui visibility policy", () => {
       ),
     ).toBe(true)
   })
+
+  it("hides onboarding and side panels from private tenant profiles", () => {
+    for (const profile of ["tenant", "test"] as const) {
+      expect(
+        isUIElementVisible(
+          DEFAULT_UI_VISIBILITY_POLICY,
+          profile,
+          "layout.onboarding_banner",
+        ),
+      ).toBe(false)
+      expect(
+        isUIElementVisible(
+          DEFAULT_UI_VISIBILITY_POLICY,
+          profile,
+          "layout.right_rail",
+        ),
+      ).toBe(false)
+      expect(
+        isUIElementVisible(
+          DEFAULT_UI_VISIBILITY_POLICY,
+          profile,
+          "chat.pending_handoffs_sidebar",
+        ),
+      ).toBe(false)
+    }
+  })
 })
