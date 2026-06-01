@@ -522,6 +522,35 @@ func (h *Handler) handleRecreateTenant(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *Handler) handleSyncTenantWorkspace(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	result, err := h.Provisioner.SyncWorkspace(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrTenantNotFound) {
+			writeError(w, http.StatusNotFound, "cliente não encontrado")
+			return
+		}
+		if errors.Is(err, store.ErrWorkspaceNotFound) {
+			writeError(w, http.StatusBadRequest, "workspace do tenant não foi encontrado")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.auditTenantOp(r, id, "tenant.workspace.sync")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"tenant_id":                 result.TenantID,
+		"workspace_id":              result.WorkspaceID,
+		"workspace_version_applied": result.WorkspaceVersionApplied,
+		"files_copied":              result.FilesCopied,
+		"dirs_created":              result.DirsCreated,
+		"public_agent_applied":      result.PublicAgentApplied,
+		"state_refreshed":           result.StateRefreshed,
+		"memory_backfilled":         result.MemoryBackfilled,
+		"warning":                   result.Warning,
+	})
+}
+
 func (h *Handler) handleDeleteTenant(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.Provisioner.Delete(r.Context(), id); err != nil {

@@ -12,6 +12,7 @@ import (
 const (
 	envPublicTenant                  = "PICOCLAW_PUBLIC_TENANT"
 	publicTenantTechnicalErrorNotice = "Tive uma instabilidade técnica agora. Me chama de novo em alguns instantes que eu retomo daqui."
+	publicTenantSafeFallback         = "Sou a Sofia, da Jotaduo. Pra eu continuar: em uma frase, o que sua empresa faz hoje?"
 )
 
 var publicTenantInternalMarkers = []string{
@@ -43,11 +44,28 @@ var publicTenantInternalMarkers = []string{
 	"pasta de segmentos",
 	"validação técnica",
 	"validacao tecnica",
+	"estado do cadastro",
+	"estado do onboarding",
+	"estado em workspace",
+	"cadastro pendente",
+	"cadastro ainda está pendente",
+	"cadastro ainda esta pendente",
+	"discovery está pendente",
+	"discovery esta pendente",
+	"modo discovery",
+	"memória da empresa",
+	"memoria da empresa",
 	"vou puxar",
+	"vou verificar",
+	"vou localizar",
+	"vou confirmar o estado",
+	"vou reler",
 	"vou sinalizar internamente",
 	"vou gravar",
 	"marcar o discovery",
+	"bloqueio:",
 	"bloqueio antigo",
+	"encontrei o bloqueio",
 	"estado ficou",
 	"sincronizar isso",
 }
@@ -122,8 +140,8 @@ func sanitizePublicTenantContent(content string) string {
 	}
 
 	cleaned := strings.TrimSpace(strings.Join(kept, "\n"))
-	if cleaned == "" {
-		return "Anotei. Vou seguir com o cadastro por aqui. Me confirma o próximo dado da operação?"
+	if cleaned == "" || !strings.Contains(cleaned, "?") {
+		return publicTenantSafeFallback
 	}
 	return cleaned
 }

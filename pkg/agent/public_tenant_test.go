@@ -37,6 +37,37 @@ func TestSanitizePublicTenantContentFallback(t *testing.T) {
 	}
 }
 
+func TestSanitizePublicTenantContentDropsPublicDiscoveryLeak(t *testing.T) {
+	input := strings.Join([]string{
+		"Vou verificar o estado do cadastro e a memória da empresa antes de te responder.",
+		"Encontrei o bloqueio: a empresa já tem nome registrado, mas o discovery está pendente.",
+		"Sou a Sofia, consultora de discovery da Jotaduo.",
+		"Vi que a `teste11` já tem o nome registrado, mas o cadastro ainda está pendente. Pra eu conduzir isso direito: qual é o segmento do negócio hoje?",
+	}, "\n")
+
+	got := sanitizePublicTenantContent(input)
+	lower := strings.ToLower(got)
+
+	for _, forbidden := range []string{
+		"estado do cadastro",
+		"memória da empresa",
+		"bloqueio",
+		"discovery está pendente",
+		"cadastro ainda está pendente",
+		"`teste11`",
+	} {
+		if strings.Contains(lower, forbidden) {
+			t.Fatalf("expected %q to be removed from %q", forbidden, got)
+		}
+	}
+	if !strings.Contains(got, "?") {
+		t.Fatalf("expected sanitizer to leave a public-facing question, got %q", got)
+	}
+	if publicTenantTextContainsInternalMarker(got) {
+		t.Fatalf("sanitized response should not contain internal markers, got %q", got)
+	}
+}
+
 func TestIsPublicTenantRuntimeFromEnv(t *testing.T) {
 	t.Setenv(envPublicTenant, "true")
 	t.Setenv(config.EnvHome, t.TempDir())

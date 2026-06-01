@@ -5,6 +5,7 @@ param(
   [switch]$NoLauncher,
   [switch]$NoControlplane,
   [switch]$ResetPostgres,
+  [switch]$AllowForeignPorts,
   [int]$DockerWaitSeconds = 90
 )
 
@@ -43,10 +44,68 @@ function Require-Command {
 
 function Test-Port {
   param([int]$Port)
-  $conn = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+  $conn = Get-ListeningConnection $Port
+  return $null -ne $conn
+}
+
+function Get-ListeningConnection {
+  param([int]$Port)
+  return Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
     Where-Object { $_.LocalPort -eq $Port -and $_.LocalAddress -in @("127.0.0.1", "0.0.0.0", "::1", "::") } |
     Select-Object -First 1
-  return $null -ne $conn
+}
+
+function Get-ProcessDetails {
+  param([int]$ProcessId)
+  return Get-CimInstance Win32_Process -Filter "ProcessId=$ProcessId" -ErrorAction SilentlyContinue
+}
+
+function Test-ProcessOwnedByThisDevRun {
+  param(
+    [string]$Name,
+    [int]$ProcessId
+  )
+
+  $pidFile = Join-Path $logDir "$Name.pid"
+  if ((Test-Path $pidFile) -and ((Get-Content $pidFile -Raw).Trim() -eq [string]$ProcessId)) {
+    return $true
+  }
+
+  $proc = Get-ProcessDetails $ProcessId
+  if ($null -eq $proc) {
+    return $false
+  }
+
+  $haystack = @(
+    [string]$proc.CommandLine
+    [string]$proc.ExecutablePath
+  ) -join "`n"
+  return $haystack.Contains($repoRoot)
+}
+
+function Assert-DevPortOwner {
+  param(
+    [string]$Name,
+    [int]$Port
+  )
+
+  if ($AllowForeignPorts) {
+    return
+  }
+
+  $conn = Get-ListeningConnection $Port
+  if ($null -eq $conn) {
+    return
+  }
+
+  $ownerPid = [int]$conn.OwningProcess
+  if (Test-ProcessOwnedByThisDevRun $Name $ownerPid) {
+    return
+  }
+
+  $proc = Get-ProcessDetails $ownerPid
+  $cmd = if ($proc -and $proc.CommandLine) { $proc.CommandLine } else { "<unknown>" }
+  throw "$Name port $Port is already owned by pid=$ownerPid outside this checkout. Stop that process before running this dev stack, or pass -AllowForeignPorts if this is intentional. CommandLine: $cmd"
 }
 
 function Wait-Port {
@@ -119,6 +178,7 @@ function Start-LoggedProcess {
   }
 
   Write-Ok "$Name started pid=$($process.Id) logs=$stdout"
+  Set-Content -Path (Join-Path $logDir "$Name.pid") -Value ([string]$process.Id)
   return $process
 }
 
@@ -202,6 +262,7 @@ $go = Require-Command "go.exe"
 
 if (-not $NoFrontend) {
   if (Test-Port 5173) {
+    Assert-DevPortOwner "frontend-vite" 5173
     Write-Ok "frontend already listening on http://127.0.0.1:5173/"
   } else {
     Write-Step "starting frontend on http://127.0.0.1:5173/"
@@ -216,6 +277,7 @@ if (-not $NoFrontend) {
 
 if (-not $NoLauncher) {
   if (Test-Port 18800) {
+    Assert-DevPortOwner "launcher-backend" 18800
     Write-Ok "launcher backend already listening on http://127.0.0.1:18800/"
   } else {
     $gatewayBinary = Ensure-GatewayBinary
@@ -237,6 +299,7 @@ if (-not $NoControlplane) {
 
 if (-not $NoControlplane) {
   if (Test-Port 18801) {
+    Assert-DevPortOwner "controlplane" 18801
     Write-Ok "controlplane already listening on http://127.0.0.1:18801/"
   } elseif ($dockerReady) {
     Ensure-DevPostgres
@@ -268,6 +331,7 @@ if (-not $NoControlplane) {
 
 if (-not $NoAdmin) {
   if (Test-Port 5174) {
+    Assert-DevPortOwner "saas-admin-vite" 5174
     Write-Ok "admin UI already listening on http://127.0.0.1:5174/"
   } else {
     Write-Step "starting admin UI on http://127.0.0.1:5174/"

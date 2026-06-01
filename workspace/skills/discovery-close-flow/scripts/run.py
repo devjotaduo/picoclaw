@@ -12,7 +12,8 @@ How it works:
     root workspace in a public tenant) drops ONE file:
         state/discovery-close.request.json
     a valid onboarding-state `discovery_close` payload
-    ({action, name, email, whatsapp, segment, summary}). Dropping a single
+    ({action, empresa, segment, summary, owner:{name,email,whatsapp}, facts}).
+    Dropping a single
     file is the most reliable action the model can take; everything else is
     deterministic.
   - This poller (cron `onboarding-discovery-close`, every few minutes) reads
@@ -83,6 +84,70 @@ def segment_block(segment: str) -> str:
     return blocks.get(seg, "")
 
 
+def company_from_payload(payload: dict) -> str:
+    empresa = (
+        payload.get("empresa")
+        or payload.get("company")
+        or payload.get("company_name")
+        or payload.get("nome_empresa")
+        or payload.get("business_name")
+        or ""
+    )
+    empresa = str(empresa or "").strip()
+    if empresa:
+        return empresa
+    summary = str(payload.get("summary") or payload.get("resumo") or "").strip()
+    first = summary.splitlines()[0].strip() if summary else ""
+    for separator in (":", " - ", " – ", " — ", ", "):
+        if separator in first:
+            candidate = first.split(separator, 1)[0].strip()
+            if len(candidate) >= 3:
+                return candidate
+    return "a validar"
+
+
+def owner_from_payload(payload: dict) -> dict:
+    owner = payload.get("owner") if isinstance(payload.get("owner"), dict) else {}
+    return {
+        "name": (
+            owner.get("name")
+            or owner.get("nome")
+            or payload.get("name")
+            or payload.get("nome")
+            or ""
+        ),
+        "email": owner.get("email") or payload.get("email") or "",
+        "whatsapp": (
+            owner.get("whatsapp")
+            or owner.get("telefone")
+            or payload.get("whatsapp")
+            or payload.get("telefone")
+            or ""
+        ),
+    }
+
+
+def validate_request(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return "request must be a JSON object"
+    if payload.get("action") != "discovery_close":
+        return "request action must be discovery_close"
+    owner = owner_from_payload(payload)
+    missing: list[str] = []
+    for key in ("segment", "summary"):
+        if not str(payload.get(key) or "").strip():
+            missing.append(key)
+    if not str(owner["name"] or "").strip():
+        missing.append("owner.name")
+    if not str(owner["email"] or "").strip():
+        missing.append("owner.email")
+    if not str(owner["whatsapp"] or "").strip():
+        missing.append("owner.whatsapp")
+    if missing:
+        return "request missing required field(s): " + ", ".join(missing)
+    return None
+
+
 def bootstrap_empresa_md(workspace: Path, payload: dict) -> None:
     """Create a minimally valid memory/empresa.md when absent/empty.
 
@@ -97,9 +162,10 @@ def bootstrap_empresa_md(workspace: Path, payload: dict) -> None:
     except OSError:
         return
 
-    name = (payload.get("name") or "a validar").strip()
-    email = (payload.get("email") or "a validar").strip()
-    whatsapp = (payload.get("whatsapp") or "a validar").strip()
+    owner = owner_from_payload(payload)
+    name = company_from_payload(payload)
+    email = (owner.get("email") or "a validar").strip()
+    whatsapp = (owner.get("whatsapp") or "a validar").strip()
     segment = (payload.get("segment") or "default").strip().lower() or "default"
     summary = (payload.get("summary") or "a validar com dono").strip()
     extra = segment_block(segment)
@@ -150,9 +216,10 @@ def main() -> int:
     except (OSError, json.JSONDecodeError) as exc:
         archive(request, "error")
         return fail(f"unreadable/invalid request json: {exc}")
-    if not isinstance(payload, dict) or not (payload.get("email") or "").strip():
+    validation_error = validate_request(payload)
+    if validation_error:
         archive(request, "error")
-        return fail("request missing required field: email")
+        return fail(validation_error)
 
     # If the inline path (Messages API) already crystallized, just archive.
     try:
@@ -177,7 +244,7 @@ def main() -> int:
 
     archive(request, "done")
     bootstrap_empresa_md(workspace, payload)
-    email = (payload.get("email") or "").strip().lower()
+    email = (owner_from_payload(payload).get("email") or "").strip().lower()
     print(f"DISCOVERY_CLOSED email={email}")
     return 0
 

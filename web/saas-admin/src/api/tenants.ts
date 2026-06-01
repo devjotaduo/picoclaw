@@ -269,7 +269,28 @@ export async function restartTenant(id: string) {
 // the container's env vars must be refreshed (e.g. PICOCLAW_AUTH_MODE
 // flipped after toggling is_public, ALLOWED_CHANNELS updated).
 export async function recreateTenant(id: string) {
-  return api<void>(`/api/v1/tenants/${encodeURIComponent(id)}/recreate`, { method: "POST" });
+  return api<void>(`/api/v1/tenants/${encodeURIComponent(id)}/recreate`, {
+    method: "POST",
+  });
+}
+
+export type SyncTenantWorkspaceResponse = {
+  tenant_id: string;
+  workspace_id: string;
+  workspace_version_applied: number;
+  files_copied: number;
+  dirs_created: number;
+  public_agent_applied: boolean;
+  state_refreshed: boolean;
+  memory_backfilled: boolean;
+  warning?: string;
+};
+
+export async function syncTenantWorkspace(id: string) {
+  return api<SyncTenantWorkspaceResponse>(
+    `/api/v1/tenants/${encodeURIComponent(id)}/sync-workspace`,
+    { method: "POST" },
+  );
 }
 
 export type TenantModelRouting = TenantModelRoutingInput;
