@@ -59,6 +59,31 @@ SEGMENT_MAX_LEN = 80
 SUMMARY_MAX_LEN = 2000
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 _TAG_LIKE_RE = re.compile(r"<[^>]+>")
+MEMORY_SEGMENT_ALIASES = {
+    "clinica": "saude",
+    "clínica": "saude",
+    "clinico": "saude",
+    "clínico": "saude",
+    "saude": "saude",
+    "saúde": "saude",
+    "restaurante": "alimentacao",
+    "alimentacao": "alimentacao",
+    "alimentação": "alimentacao",
+    "ecommerce": "varejo",
+    "e-commerce": "varejo",
+    "loja": "varejo",
+    "varejo": "varejo",
+    "vendas": "servicos",
+    "servicos": "servicos",
+    "serviços": "servicos",
+    "beleza": "beleza",
+    "estetica": "beleza",
+    "estética": "beleza",
+    "educacao": "educacao",
+    "educação": "educacao",
+    "imobiliaria": "imobiliaria",
+    "imobiliária": "imobiliaria",
+}
 
 
 def sanitize_short_text(value: str, max_len: int = NAME_MAX_LEN) -> str:
@@ -257,6 +282,140 @@ def empresa_memory_filled(workspace_root: Path) -> tuple[bool, str]:
     if filled < 3:
         return False, f"memory/empresa.md has only {filled} filled field(s) (min 3)"
     return True, ""
+
+
+def canonical_memory_segment(segment: str | None) -> str:
+    raw = sanitize_short_text(segment or "", SEGMENT_MAX_LEN).lower()
+    return MEMORY_SEGMENT_ALIASES.get(raw, raw or "servicos")
+
+
+def infer_company_name(state: dict, payload: dict) -> str:
+    for key in ("empresa", "company", "company_name", "nome_empresa", "business_name"):
+        value = sanitize_short_text(payload.get(key) or "", NAME_MAX_LEN)
+        if value:
+            return value
+
+    summary = sanitize_long_text(
+        (state.get("discovery") or {}).get("summary") or "",
+        SUMMARY_MAX_LEN,
+    )
+    first_line = summary.splitlines()[0] if summary else ""
+    before_colon = first_line.split(":", 1)[0].strip() if ":" in first_line else ""
+    if before_colon and 1 <= len(before_colon.split()) <= 8:
+        return sanitize_short_text(before_colon, NAME_MAX_LEN)
+
+    return ""
+
+
+def segment_specific_memory_lines(segment: str, summary: str) -> list[str]:
+    if segment == "saude":
+        return [
+            "Canal de agendamento: WhatsApp e agenda informados no discovery; detalhar com Catarina",
+            f"Especialidades: {summary or 'a detalhar com Catarina'}",
+            "Convênios aceitos: a detalhar com Catarina",
+        ]
+    if segment == "alimentacao":
+        return [
+            "Cardápio: a detalhar com Catarina",
+            "Delivery próprio: a detalhar com Catarina",
+            "Plataformas de delivery: a detalhar com Catarina",
+        ]
+    if segment == "varejo":
+        return [
+            "Catálogo: a detalhar com Catarina",
+            "Política de troca: a detalhar com Catarina",
+            "Faz entrega: a detalhar com Catarina",
+        ]
+    if segment == "beleza":
+        return [
+            "Canal de agendamento: WhatsApp e agenda informados no discovery; detalhar com Catarina",
+            f"Lista de serviços: {summary or 'a detalhar com Catarina'}",
+        ]
+    if segment == "educacao":
+        return [
+            "Cursos oferecidos: a detalhar com Catarina",
+            "Como faz matrícula: a detalhar com Catarina",
+        ]
+    if segment == "imobiliaria":
+        return [
+            "Tipos de imóvel: a detalhar com Catarina",
+            "Como agenda visita: a detalhar com Catarina",
+        ]
+    return [
+        "Como gera orçamento: a detalhar com Catarina",
+        "Prazo padrão: a detalhar com Catarina",
+    ]
+
+
+def render_empresa_memory_from_state(state: dict, payload: dict) -> str:
+    discovery = state.get("discovery") or {}
+    owner = state.get("owner_captured") or {}
+    summary = sanitize_long_text(discovery.get("summary") or "", SUMMARY_MAX_LEN)
+    company = infer_company_name(state, payload)
+    email = (owner.get("email") or "").strip().lower()
+    whatsapp = sanitize_short_text(owner.get("whatsapp") or "", 30)
+    owner_name = sanitize_short_text(owner.get("name") or "", NAME_MAX_LEN)
+    if not company or not email or not whatsapp or not discovery.get("completed_at"):
+        return ""
+
+    segment = canonical_memory_segment(discovery.get("segment") or payload.get("segment"))
+    validated_at = now_iso().split("T", 1)[0]
+    description = summary or f"Empresa do segmento {segment} capturada no discovery da Sofia."
+
+    lines = [
+        "# Memória da empresa",
+        "",
+        f"Nome: {company}",
+        f"Segmento: {segment}",
+        f"Descrição: {description}",
+        "Produtos ou serviços: a detalhar com Catarina",
+        "Horário: a detalhar com Catarina",
+        "Endereço: a detalhar com Catarina",
+        "Regiões atendidas: a detalhar com Catarina",
+        f"WhatsApp: {whatsapp}",
+        f"Email: {email}",
+        "Instagram: a detalhar com Catarina",
+        "Site: a detalhar com Catarina",
+        "Formas de pagamento: a detalhar com Catarina",
+        "Pode falar preço: a detalhar com Catarina",
+        "Faixa de preço: a detalhar com Catarina",
+        "Quando chamar humano: a detalhar com Catarina",
+        "Informações que nunca podem ser inventadas: dados não confirmados pelo dono",
+        "Informações proibidas de falar: a detalhar com Catarina",
+        f"Segmento detectado: {segment}",
+        *segment_specific_memory_lines(segment, summary),
+        f"Status da informação: validado pelo dono em {validated_at} (onboarding via discovery; aprofundamento com Catarina pendente)",
+        "",
+        "## Cadastro da empresa — concluído",
+        "",
+        f"- Responsável: {owner_name or 'a detalhar com Catarina'}",
+        f"- E-mail de acesso: {email}",
+        f"- WhatsApp do responsável: {whatsapp}",
+    ]
+    if summary:
+        lines.append(f"- Resumo do discovery: {summary}")
+    lines.extend([
+        "",
+        "## Pendências sinalizadas pro dono resolver",
+        "",
+        "- Catarina deve aprofundar equipe, casos de exceção, FAQ, histórico e regras tácitas antes da promoção final.",
+    ])
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def sync_empresa_memory_from_state(state: dict, payload: dict, workspace_root: Path) -> None:
+    """Materializa memory/empresa.md quando Sofia fechou discovery mas o
+    arquivo canônico continua no template. Isso torna onboarding.json e
+    empresa.md convergentes sem depender de uma segunda escrita do LLM."""
+    filled, _ = empresa_memory_filled(workspace_root)
+    if filled:
+        return
+    content = render_empresa_memory_from_state(state, payload)
+    if not content:
+        return
+    empresa_path = workspace_root / "memory" / "empresa.md"
+    empresa_path.parent.mkdir(parents=True, exist_ok=True)
+    empresa_path.write_text(content, encoding="utf-8")
 
 
 def _lead_stale_days(state: dict) -> int | None:
@@ -588,6 +747,7 @@ def main() -> int:
     with locked_state_file(state_path):
         state = load_state(state_path)
         state = OPERATIONS[action](state, payload)
+        sync_empresa_memory_from_state(state, payload, workspace_root)
         recompute_phase_and_blockers(state, workspace_root)
         save_state(state_path, state)
     json.dump(state, sys.stdout, indent=2, ensure_ascii=False)

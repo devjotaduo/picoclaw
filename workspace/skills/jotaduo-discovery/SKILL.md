@@ -99,9 +99,10 @@ num **único passo à prova de falha** (Fase 8b.5):
 - **Fase 7.5** (captura credenciais): só conversa — coleta + confirma nome,
   email e WhatsApp. **Não grava nada ainda.**
 - **Fase 8b.5** (cristalização): grava UM arquivo
-  `state/discovery-close.request.json` (payload `discovery_close` = owner +
-  segmento + resumo). Isso aciona `set_owner` + `mark_discovery_done` de uma
-  vez só.
+  `state/discovery-close.request.json` (payload `discovery_close` = empresa +
+  owner + segmento + resumo). Isso aciona `set_owner` +
+  `mark_discovery_done` de uma vez só e, se `memory/empresa.md` ainda estiver
+  template, materializa uma memória mínima validável.
 
 ⚠️ **Como cristalizar (importante):** em tenant publico você roda como o
 agente `main` (workspace raiz), então grava **direto** com `write_file` em
@@ -465,7 +466,7 @@ confiável que você consegue fazer):
 write_file(
   path="state/discovery-close.request.json",
   overwrite=true,
-  content='{"action":"discovery_close","name":"<nome>","email":"<email>","whatsapp":"<whatsapp>","segment":"<segmento>","summary":"<resumo 2-3 linhas>","captured_by":"sofia"}'
+  content='{"action":"discovery_close","empresa":"<nome da empresa>","name":"<nome>","email":"<email>","whatsapp":"<whatsapp>","segment":"<segmento>","summary":"<resumo 2-3 linhas>","captured_by":"sofia"}'
 )
 ```
 

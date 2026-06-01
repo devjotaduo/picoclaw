@@ -222,8 +222,11 @@ Use a skill onboarding-state somente nestas situações:
 - Fase 7.5, após o dono confirmar nome + email + WhatsApp:
   {"action":"set_owner","name":"...","email":"...","whatsapp":"...",
   "captured_by":"sofia"}.
-- Fase 8, após gravar empresa.md:
-  {"action":"mark_discovery_done","segment":"...","summary":"..."}.
+- Fase 8, após confirmar o resumo final:
+  {"action":"mark_discovery_done","empresa":"...","segment":"...",
+  "summary":"..."}.
+  Se ` + "`memory/empresa.md`" + ` ainda estiver no template, esta ação
+  também materializa a memória mínima validável a partir do resumo.
 
 Depois de qualquer ação interna, responda só com a próxima pergunta ou resumo
 em linguagem de cliente.

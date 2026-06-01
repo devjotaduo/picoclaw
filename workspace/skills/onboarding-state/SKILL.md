@@ -51,12 +51,16 @@ Captura nome + email + WhatsApp do dono. Validação básica de formato.
 ```
 
 ### `mark_discovery_done`
-Sofia chama no fim do discovery (após gravar empresa.md). Inclui resumo
-do segmento detectado pra Catarina contextualizar depois.
+Sofia chama no fim do discovery. Inclui nome da empresa, segmento e resumo
+pra Catarina contextualizar depois. Se `memory/empresa.md` ainda estiver no
+template, a state machine também materializa uma memória mínima validável a
+partir de `owner_captured + discovery.summary`, mantendo `onboarding.json` e
+`empresa.md` convergentes.
 
 ```json
 {
   "action": "mark_discovery_done",
+  "empresa": "Clínica Boa Vida",
   "segment": "clinica",
   "summary": "Clínica odontológica em SP, 5 funcionários, usa Shosp..."
 }
