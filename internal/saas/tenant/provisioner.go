@@ -30,7 +30,7 @@ const (
 	// defaultSaaSLiteLLMModel must exist in docker/saas/litellm/config.yaml.
 	// Tenants receive a per-tenant virtual LiteLLM key, so their config should
 	// point at the controlplane-managed model name, not at raw upstream providers.
-	defaultSaaSLiteLLMModel = "gpt-4o-mini"
+	defaultSaaSLiteLLMModel = "qwen-plus"
 
 	tenantCodexCLIHomeRel       = ".codex"
 	tenantCodexCLIHomeContainer = "/root/.picoclaw/.codex"

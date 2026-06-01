@@ -4,7 +4,15 @@
 # direct, set the corresponding env var in .env and add a model_list entry.
 
 model_list:
-  # ----- Default OpenAI-class model (cheap, fast) -----
+  # ----- DashScope/Qwen primary (OpenAI-compatible) -----
+  - model_name: qwen-plus
+    litellm_params:
+      model: openai/qwen-plus
+      api_key: os.environ/LLM_API_KEY
+      api_base: os.environ/LLM_BASE_URL
+      custom_llm_provider: openai
+
+  # ----- OpenAI-class fallback (cheap, fast) -----
   - model_name: gpt-4o-mini
     litellm_params:
       model: openrouter/openai/gpt-4o-mini

@@ -180,8 +180,8 @@ func TestPreferLiteLLMForPublicAutoRouting(t *testing.T) {
 
 func TestDefaultSaaSLiteLLMModelRoutingIncludesOpenRouterFallback(t *testing.T) {
 	cfg := defaultSaaSLiteLLMModelRoutingConfig()
-	if cfg.ModelName != "gpt-4o-mini" {
-		t.Fatalf("default model = %q, want gpt-4o-mini", cfg.ModelName)
+	if cfg.ModelName != "qwen-plus" {
+		t.Fatalf("default model = %q, want qwen-plus", cfg.ModelName)
 	}
 	if len(cfg.Fallbacks) != 1 || cfg.Fallbacks[0] != "deepseek-chat" {
 		t.Fatalf("default fallbacks = %#v, want deepseek-chat", cfg.Fallbacks)

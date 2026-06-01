@@ -13,7 +13,7 @@ import {
 
 describe("model routing helpers", () => {
   it("keeps the global LiteLLM defaults for new tenants", () => {
-    expect(DEFAULT_LITELLM_MODEL_NAME).toBe("gpt-4o-mini");
+    expect(DEFAULT_LITELLM_MODEL_NAME).toBe("qwen-plus");
     expect(DEFAULT_LITELLM_FALLBACKS).toEqual(["deepseek-chat"]);
   });
 

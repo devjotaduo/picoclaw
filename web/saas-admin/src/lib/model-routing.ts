@@ -29,7 +29,7 @@ export function normalizeModelList(value: string[] | undefined): string[] {
   return out;
 }
 
-export const DEFAULT_LITELLM_MODEL_NAME = "gpt-4o-mini";
+export const DEFAULT_LITELLM_MODEL_NAME = "qwen-plus";
 export const DEFAULT_LITELLM_FALLBACKS = ["deepseek-chat"];
 
 export function modelNameChoices(registered: string[], current: string[] = []): string[] {
