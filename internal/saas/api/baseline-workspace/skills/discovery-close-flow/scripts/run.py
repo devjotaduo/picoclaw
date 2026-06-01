@@ -69,6 +69,68 @@ def archive(request: Path, suffix: str) -> None:
         print(f"WARN: could not archive request to {target.name}: {exc}")
 
 
+def segment_block(segment: str) -> str:
+    seg = (segment or "").strip().lower()
+    blocks = {
+        "saude": "Canal de agendamento: a validar com dono\nEspecialidades: a validar com dono\nConvênios aceitos: a validar com dono\n",
+        "alimentacao": "Cardápio: a validar com dono\nDelivery próprio: a validar com dono\nPlataformas de delivery: a validar com dono\n",
+        "varejo": "Catálogo: a validar com dono\nPolítica de troca: a validar com dono\nFaz entrega: a validar com dono\n",
+        "servicos": "Como gera orçamento: a validar com dono\nPrazo padrão: a validar com dono\n",
+        "beleza": "Canal de agendamento: a validar com dono\nLista de serviços: a validar com dono\n",
+        "educacao": "Cursos oferecidos: a validar com dono\nComo faz matrícula: a validar com dono\n",
+        "imobiliaria": "Tipos de imóvel: a validar com dono\nComo agenda visita: a validar com dono\n",
+    }
+    return blocks.get(seg, "")
+
+
+def bootstrap_empresa_md(workspace: Path, payload: dict) -> None:
+    """Create a minimally valid memory/empresa.md when absent/empty.
+
+    We only bootstrap on first discovery close to avoid tenant-liberation
+    deadlocks where onboarding state is closed but empresa.md stays blank.
+    Existing non-empty files are preserved.
+    """
+    empresa = workspace / "memory" / "empresa.md"
+    try:
+        if empresa.is_file() and empresa.read_text(encoding="utf-8").strip():
+            return
+    except OSError:
+        return
+
+    name = (payload.get("name") or "a validar").strip()
+    email = (payload.get("email") or "a validar").strip()
+    whatsapp = (payload.get("whatsapp") or "a validar").strip()
+    segment = (payload.get("segment") or "default").strip().lower() or "default"
+    summary = (payload.get("summary") or "a validar com dono").strip()
+    extra = segment_block(segment)
+    text = (
+        "# Memória da empresa\n\n"
+        f"Nome: {name}\n"
+        f"Segmento: {segment}\n"
+        f"Descrição: {summary}\n"
+        "Produtos ou serviços: a validar com dono\n"
+        "Horário: a validar com dono\n"
+        "Endereço: a validar com dono\n"
+        "Regiões atendidas: a validar com dono\n"
+        f"WhatsApp: {whatsapp}\n"
+        f"Email: {email}\n"
+        "Instagram: a validar com dono\n"
+        "Site: a validar com dono\n"
+        "Formas de pagamento: a validar com dono\n"
+        "Pode falar preço: a validar com dono\n"
+        "Faixa de preço: a validar com dono\n"
+        "Quando chamar humano: a validar com dono\n"
+        "Informações que nunca podem ser inventadas: a validar com dono\n"
+        "Informações proibidas de falar: a validar com dono\n"
+        f"Segmento detectado: {segment}\n"
+        f"{extra}"
+        "Status da informação: validado pelo dono em bootstrap-discovery-close\n"
+        "\n## Cadastro da empresa — concluído\n"
+    )
+    empresa.parent.mkdir(parents=True, exist_ok=True)
+    empresa.write_text(text, encoding="utf-8")
+
+
 def main() -> int:
     home = Path(os.environ.get("PICOCLAW_HOME", "/root/.picoclaw"))
     workspace = home / "workspace"
@@ -114,6 +176,7 @@ def main() -> int:
         return fail(reason or "state.py discovery_close failed")
 
     archive(request, "done")
+    bootstrap_empresa_md(workspace, payload)
     email = (payload.get("email") or "").strip().lower()
     print(f"DISCOVERY_CLOSED email={email}")
     return 0
