@@ -15,6 +15,7 @@ import contextlib
 import json
 import re
 import sys
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -307,6 +308,281 @@ def infer_company_name(state: dict, payload: dict) -> str:
     return ""
 
 
+def slugify(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    ascii_only = normalized.encode("ascii", "ignore").decode("ascii")
+    ascii_only = ascii_only.strip().lower()
+    ascii_only = re.sub(r"[^a-z0-9]+", "-", ascii_only)
+    ascii_only = re.sub(r"-+", "-", ascii_only).strip("-")
+    return ascii_only or "cliente"
+
+
+def normalize_owner_payload(payload: dict) -> dict:
+    owner = payload.get("owner") if isinstance(payload.get("owner"), dict) else {}
+    return {
+        "name": owner.get("name") or payload.get("name") or "",
+        "email": owner.get("email") or payload.get("email") or "",
+        "whatsapp": owner.get("whatsapp") or payload.get("whatsapp") or "",
+        "captured_by": payload.get("captured_by") or owner.get("captured_by") or "sofia",
+    }
+
+
+def normalize_discovery_close_payload(payload: dict) -> dict:
+    """Normaliza o contrato final do discovery para uma forma interna.
+
+    O payload novo usa `owner.{name,email,whatsapp}`; mantemos leitura dos
+    campos planos por compatibilidade com tenants que já geraram request antes
+    da mudança de prompt.
+    """
+    owner_payload = normalize_owner_payload(payload)
+    empresa = sanitize_short_text(
+        payload.get("empresa")
+        or payload.get("company")
+        or payload.get("company_name")
+        or payload.get("nome_empresa")
+        or "",
+        NAME_MAX_LEN,
+    )
+    segment = sanitize_short_text(
+        payload.get("segment") or payload.get("segmento") or "",
+        SEGMENT_MAX_LEN,
+    ).lower()
+    summary = sanitize_long_text(
+        payload.get("summary") or payload.get("resumo") or "",
+        SUMMARY_MAX_LEN,
+    )
+
+    missing: list[str] = []
+    if not empresa:
+        missing.append("empresa")
+    if not segment:
+        missing.append("segment")
+    if not summary:
+        missing.append("summary")
+    if not sanitize_short_text(owner_payload.get("name") or "", NAME_MAX_LEN):
+        missing.append("owner.name")
+    if not (owner_payload.get("email") or "").strip():
+        missing.append("owner.email")
+    if not (owner_payload.get("whatsapp") or "").strip():
+        missing.append("owner.whatsapp")
+    if missing:
+        raise SystemExit(
+            "discovery_close: campos obrigatórios ausentes: "
+            + ", ".join(missing)
+        )
+
+    facts = payload.get("facts") if isinstance(payload.get("facts"), dict) else {}
+    return {
+        "empresa": empresa,
+        "segment": segment,
+        "summary": summary,
+        "owner": owner_payload,
+        "facts": facts,
+        "captured_by": sanitize_short_text(
+            payload.get("captured_by") or owner_payload.get("captured_by") or "sofia",
+            50,
+        ) or "sofia",
+    }
+
+
+def fact_list(facts: dict, key: str) -> list[str]:
+    raw = facts.get(key)
+    if raw is None:
+        return []
+    values = raw if isinstance(raw, list) else [raw]
+    out: list[str] = []
+    for value in values:
+        if isinstance(value, dict):
+            text = (
+                value.get("nome")
+                or value.get("name")
+                or value.get("id")
+                or value.get("descricao")
+                or value.get("description")
+                or ""
+            )
+        else:
+            text = str(value)
+        cleaned = sanitize_short_text(text, 300)
+        if cleaned:
+            out.append(cleaned)
+    return out
+
+
+def markdown_bullets(items: list[str], fallback: str = "a detalhar com Catarina") -> list[str]:
+    if not items:
+        return [f"- {fallback}"]
+    return [f"- {item}" for item in items]
+
+
+def render_discovery_close_empresa_memory(state: dict, payload: dict) -> str:
+    normalized = normalize_discovery_close_payload(payload)
+    owner_payload = normalized["owner"]
+    owner_name = sanitize_short_text(owner_payload.get("name") or "", NAME_MAX_LEN)
+    email = (owner_payload.get("email") or "").strip().lower()
+    whatsapp = sanitize_short_text(owner_payload.get("whatsapp") or "", 30)
+    facts = normalized["facts"]
+    completed_at = (state.get("discovery") or {}).get("completed_at") or now_iso()
+    canonical_segment = canonical_memory_segment(normalized["segment"])
+
+    lines = [
+        "# Empresa",
+        "",
+        f"Status: validado pelo dono em {completed_at}",
+        f"Nome: {normalized['empresa']}",
+        f"Segmento: {normalized['segment']}",
+        f"Contato email: {email}",
+        f"Contato WhatsApp: {whatsapp}",
+        "",
+        "## Resumo",
+        normalized["summary"],
+        "",
+        "## Canais",
+        *markdown_bullets(fact_list(facts, "canais")),
+        "",
+        "## Sistemas atuais",
+        *markdown_bullets(fact_list(facts, "sistemas")),
+        "",
+        "## Dores priorizadas",
+        *markdown_bullets(fact_list(facts, "dores")),
+        "",
+        "## Objetivos 90 dias",
+        *markdown_bullets(fact_list(facts, "objetivos_90d")),
+        "",
+        "## Responsável",
+        f"Nome: {owner_name}",
+        f"Capturado por: {normalized['captured_by']}",
+        "",
+        "## Agentes recomendados",
+        *markdown_bullets(fact_list(facts, "agentes_recomendados")),
+        "",
+        "## Campos operacionais",
+        f"Segmento detectado: {canonical_segment}",
+        "Produtos ou serviços: a detalhar com Catarina",
+        "Horário: a detalhar com Catarina",
+        "Endereço: a detalhar com Catarina",
+        "Regiões atendidas: a detalhar com Catarina",
+        "Quando chamar humano: a detalhar com Catarina",
+        "Informações que nunca podem ser inventadas: dados não confirmados pelo dono",
+        "",
+        "## Pendências sinalizadas pro dono resolver",
+        "- Catarina deve aprofundar equipe, casos de exceção, FAQ, histórico e regras tácitas antes da promoção final.",
+    ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def build_discovery_dossier_payload(state: dict, payload: dict) -> dict:
+    normalized = normalize_discovery_close_payload(payload)
+    owner_payload = normalized["owner"]
+    facts = normalized["facts"]
+    return {
+        "empresa": normalized["empresa"],
+        "segmento": normalized["segment"],
+        "contato": {
+            "nome": sanitize_short_text(owner_payload.get("name") or "", NAME_MAX_LEN),
+            "email": (owner_payload.get("email") or "").strip().lower(),
+            "telefone": sanitize_short_text(owner_payload.get("whatsapp") or "", 30),
+        },
+        "stack": fact_list(facts, "sistemas"),
+        "canais": fact_list(facts, "canais"),
+        "dores": [
+            {"prioridade": i, "descricao": item}
+            for i, item in enumerate(fact_list(facts, "dores"), start=1)
+        ],
+        "objetivos": fact_list(facts, "objetivos_90d"),
+        "agentes_recomendados": [
+            {"id": item, "justificativa": "recomendado no discovery inicial"}
+            for item in fact_list(facts, "agentes_recomendados")
+        ],
+        "ordem_implantacao": fact_list(facts, "agentes_recomendados"),
+        "observacoes": normalized["summary"],
+        "_meta": {
+            "captured_by": normalized["captured_by"],
+            "source": "onboarding-state.discovery_close",
+            "discovery_completed_at": (state.get("discovery") or {}).get("completed_at"),
+        },
+    }
+
+
+def render_discovery_dossier_markdown(dossier: dict, collected_at: str) -> str:
+    contato = dossier.get("contato") or {}
+    lines = [
+        f"# Dossiê — {dossier.get('empresa') or 'Cliente'}",
+        "",
+        f"_Coletado em {collected_at}_",
+        "",
+        "## Contato",
+        f"- Nome: {contato.get('nome') or '—'}",
+        f"- E-mail: {contato.get('email') or '—'}",
+        f"- Telefone: {contato.get('telefone') or '—'}",
+        "",
+        "## Empresa",
+        f"- Segmento: {dossier.get('segmento') or '—'}",
+        "",
+        "## Resumo",
+        dossier.get("observacoes") or "—",
+        "",
+        "## Canais",
+        *markdown_bullets(dossier.get("canais") or [], "(não informado)"),
+        "",
+        "## Stack atual",
+        *markdown_bullets(dossier.get("stack") or [], "(não informado)"),
+        "",
+        "## Dores priorizadas",
+    ]
+    dores = dossier.get("dores") or []
+    if dores:
+        for dor in dores:
+            lines.append(f"- #{dor.get('prioridade', '?')} {dor.get('descricao', '')}")
+    else:
+        lines.append("- (não informado)")
+    lines.extend([
+        "",
+        "## Objetivos / métricas de sucesso",
+        *markdown_bullets(dossier.get("objetivos") or [], "(não informado)"),
+        "",
+        "## Time de agentes recomendado",
+    ])
+    agentes = dossier.get("agentes_recomendados") or []
+    if agentes:
+        for agente in agentes:
+            lines.append(f"- {agente.get('id') or '?'} — {agente.get('justificativa') or ''}")
+    else:
+        lines.append("- (não definido)")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def atomic_write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    tmp.replace(path)
+
+
+def write_discovery_close_outputs(state: dict, payload: dict, workspace_root: Path) -> None:
+    """Escritas determinísticas que fecham o discovery como unidade lógica.
+
+    Falhar aqui interrompe a operação antes de salvar onboarding.json, então a
+    Sofia só recebe sucesso quando empresa.md e o dossiê também foram gravados.
+    """
+    normalized = normalize_discovery_close_payload(payload)
+    empresa_path = workspace_root / "memory" / "empresa.md"
+    atomic_write_text(empresa_path, render_discovery_close_empresa_memory(state, payload))
+
+    dossier = build_discovery_dossier_payload(state, payload)
+    clientes_dir = workspace_root / "memory" / "jotaduo" / "clientes"
+    slug = slugify(normalized["empresa"])
+    collected_at = (state.get("discovery") or {}).get("completed_at") or now_iso()
+    atomic_write_text(
+        clientes_dir / f"{slug}.json",
+        json.dumps(dossier, ensure_ascii=False, indent=2) + "\n",
+    )
+    atomic_write_text(
+        clientes_dir / f"{slug}.md",
+        render_discovery_dossier_markdown(dossier, collected_at),
+    )
+
+
 def segment_specific_memory_lines(segment: str, summary: str) -> list[str]:
     if segment == "saude":
         return [
@@ -564,10 +840,15 @@ def op_discovery_close(state: dict, payload: dict) -> dict:
     inline (Messages API) quanto o cron `onboarding-discovery-close`
     (claude-cli) rodam `state.py --payload-file <esse arquivo>`.
 
-    Idempotente: re-rodar com os mesmos dados só atualiza timestamps. Exige
-    email (via op_set_owner); segment/summary são opcionais."""
-    state = op_set_owner(state, payload)
-    state = op_mark_discovery_done(state, payload)
+    Requer o payload completo (empresa, segment, summary, owner.*). As
+    escritas de `memory/empresa.md` e do dossiê acontecem em main(), depois
+    desta mutação e antes do save de onboarding.json."""
+    normalized = normalize_discovery_close_payload(payload)
+    state = op_set_owner(state, normalized["owner"])
+    state = op_mark_discovery_done(state, {
+        "segment": normalized["segment"],
+        "summary": normalized["summary"],
+    })
     return state
 
 
@@ -747,6 +1028,8 @@ def main() -> int:
     with locked_state_file(state_path):
         state = load_state(state_path)
         state = OPERATIONS[action](state, payload)
+        if action == "discovery_close":
+            write_discovery_close_outputs(state, payload, workspace_root)
         sync_empresa_memory_from_state(state, payload, workspace_root)
         recompute_phase_and_blockers(state, workspace_root)
         save_state(state_path, state)

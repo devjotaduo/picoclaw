@@ -12,7 +12,8 @@ How it works:
     root workspace in a public tenant) drops ONE file:
         state/discovery-close.request.json
     a valid onboarding-state `discovery_close` payload
-    ({action, name, email, whatsapp, segment, summary}). Dropping a single
+    ({action, empresa, segment, summary, owner:{name,email,whatsapp}, facts}).
+    Dropping a single
     file is the most reliable action the model can take; everything else is
     deterministic.
   - This poller (cron `onboarding-discovery-close`, every few minutes) reads
@@ -69,6 +70,36 @@ def archive(request: Path, suffix: str) -> None:
         print(f"WARN: could not archive request to {target.name}: {exc}")
 
 
+def owner_from_payload(payload: dict) -> dict:
+    owner = payload.get("owner") if isinstance(payload.get("owner"), dict) else {}
+    return {
+        "name": owner.get("name") or payload.get("name") or "",
+        "email": owner.get("email") or payload.get("email") or "",
+        "whatsapp": owner.get("whatsapp") or payload.get("whatsapp") or "",
+    }
+
+
+def validate_request(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return "request must be a JSON object"
+    if payload.get("action") != "discovery_close":
+        return "request action must be discovery_close"
+    owner = owner_from_payload(payload)
+    missing: list[str] = []
+    for key in ("empresa", "segment", "summary"):
+        if not str(payload.get(key) or "").strip():
+            missing.append(key)
+    if not str(owner["name"] or "").strip():
+        missing.append("owner.name")
+    if not str(owner["email"] or "").strip():
+        missing.append("owner.email")
+    if not str(owner["whatsapp"] or "").strip():
+        missing.append("owner.whatsapp")
+    if missing:
+        return "request missing required field(s): " + ", ".join(missing)
+    return None
+
+
 def main() -> int:
     home = Path(os.environ.get("PICOCLAW_HOME", "/root/.picoclaw"))
     workspace = home / "workspace"
@@ -88,9 +119,10 @@ def main() -> int:
     except (OSError, json.JSONDecodeError) as exc:
         archive(request, "error")
         return fail(f"unreadable/invalid request json: {exc}")
-    if not isinstance(payload, dict) or not (payload.get("email") or "").strip():
+    validation_error = validate_request(payload)
+    if validation_error:
         archive(request, "error")
-        return fail("request missing required field: email")
+        return fail(validation_error)
 
     # If the inline path (Messages API) already crystallized, just archive.
     try:
@@ -114,7 +146,7 @@ def main() -> int:
         return fail(reason or "state.py discovery_close failed")
 
     archive(request, "done")
-    email = (payload.get("email") or "").strip().lower()
+    email = (owner_from_payload(payload).get("email") or "").strip().lower()
     print(f"DISCOVERY_CLOSED email={email}")
     return 0
 

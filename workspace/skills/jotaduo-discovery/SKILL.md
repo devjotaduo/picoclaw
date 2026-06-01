@@ -88,8 +88,8 @@ atual.
 5. **Priorização de dores** → ranking 1-3 (Fase 5)
 6. **Objetivos e expectativas (90 dias)** → Fase 6
 7. **Recomendação do time de agentes** → `references/agent-catalog.md`
-7.5. **Captura das credenciais do dono** → pergunta email + WhatsApp + chama `onboarding-state.set_owner`
-8. **Confirmação e salvamento** → `scripts/save_client.py` + atualizar `memory/empresa.md` + chama `onboarding-state.mark_discovery_done`
+7.5. **Captura das credenciais do dono** → pergunta nome + email + WhatsApp e confirma os três, sem gravar ainda
+8. **Confirmação e salvamento** → chama uma única operação `onboarding-state.discovery_close`, que grava estado + `memory/empresa.md` + dossiê
 
 ## State machine do onboarding
 
@@ -100,9 +100,9 @@ num **único passo à prova de falha** (Fase 8b.5):
   email e WhatsApp. **Não grava nada ainda.**
 - **Fase 8b.5** (cristalização): grava UM arquivo
   `state/discovery-close.request.json` (payload `discovery_close` = empresa +
-  owner + segmento + resumo). Isso aciona `set_owner` +
-  `mark_discovery_done` de uma vez só e, se `memory/empresa.md` ainda estiver
-  template, materializa uma memória mínima validável.
+  owner + segmento + resumo + fatos). Isso aciona uma operação determinística
+  que grava `state/onboarding.json`, sobrescreve `memory/empresa.md` com os
+  campos mínimos válidos e salva o dossiê em `memory/jotaduo/clientes/`.
 
 ⚠️ **Como cristalizar (importante):** em tenant publico você roda como o
 agente `main` (workspace raiz), então grava **direto** com `write_file` em
@@ -206,182 +206,54 @@ dígitos) e, se inválido, pergunte de novo só aquele campo.
 
 **Por que aqui e não antes:** se o dono não confirmar o time recomendado (Fase 7), o discovery pode pivotar — e aí captura de email seria prematura. Captura DEPOIS de Fase 7 = confirma intenção real.
 
-## Salvamento (Fase 8) — duas escritas
+## Salvamento (Fase 8) — uma operação determinística
 
-Quando o cliente confirmar que as informações estão corretas:
+Quando o cliente confirmar que as informações estão corretas, **não faça duas
+ou três escritas manuais**. Monte o payload `discovery_close` e grave
+`state/discovery-close.request.json`. Em seguida, rode
+`python3 skills/onboarding-state/scripts/state.py --payload-file
+state/discovery-close.request.json` quando a ferramenta estiver disponível.
 
-### 8a. Dossiê estruturado (JSON + Markdown)
+Essa única operação valida `empresa`, `segment`, `summary`, `owner.name`,
+`owner.email` e `owner.whatsapp`; depois grava:
 
-⚠️ **CRÍTICO:** o `save_client.py` auto-detecta o workspace subindo até
-achar `AGENT.md + memory/`. A partir do diretório da skill, ele para no
-`workspace/agents/sofia/` (workspace dela), gravando em
-`workspace/agents/sofia/memory/jotaduo/clientes/` — lugar **errado**.
-Os outros agentes (Rafael, Clara, etc.) precisam ler do workspace raiz.
+- `state/onboarding.json`
+- `memory/empresa.md`
+- `memory/jotaduo/clientes/<slug>.json`
+- `memory/jotaduo/clientes/<slug>.md`
 
-⚠️ **DOIS bloqueios do sandbox** que você precisa contornar:
+Se a operação retornar erro, corrija o dado com o dono e tente novamente. Se
+ela não retornar sucesso, **não diga que o dossiê foi gravado** nem que o
+cadastro foi registrado.
 
-1. `exec(action="run")` NÃO tem STDIN — `data` arg só vale pra `action="write"`
-2. Seu sandbox (workspace `agents/sofia/`) bloqueia exec que aponte pra
-   workspace raiz. **Delegue ao Rafael** que tem workspace raiz e roda livre.
-
-**Fluxo correto em 3 passos:**
-
-**Passo 1 (Sofia):** grava payload temp DENTRO do teu workspace:
-
-```
-write_file(
-  path="memory/jotaduo-payload.tmp.json",
-  overwrite=true,
-  content='{"empresa":"jotaduo","segmento":"clinica", ...JSON COMPLETO...}'
-)
-```
-
-(Vai pra `agents/sofia/memory/jotaduo-payload.tmp.json` — dentro do teu sandbox.)
-
-**Passo 2 (delegate ao Rafael):** Rafael copia o payload pra dentro do
-workspace dele e roda o script com cwd=raiz:
-
-```
-delegate(
-  agent_id="main",
-  task="""1. Use read_file pra ler workspace/agents/sofia/memory/jotaduo-payload.tmp.json
-2. Use write_file pra salvar em memory/jotaduo-payload.tmp.json (no seu workspace raiz)
-3. Execute o save_client com:
-
-exec(
-  action="run",
-  command="python skills/jotaduo-discovery/scripts/save_client.py --workspace . --payload-file memory/jotaduo-payload.tmp.json",
-  cwd="<seu workspace raiz>"
-)
-
-4. Me devolva o stdout do comando.
-"""
-)
-```
-
-(Em produção tenant: workspace raiz é `/root/.picoclaw/workspace`.)
-
-O script grava em (relativo ao `--workspace`):
-- `memory/jotaduo/clientes/<slug>.json` (payload completo)
-- `memory/jotaduo/clientes/<slug>.md` (dossiê legível)
-- Linha em `memory/MEMORY.md` sob `## Jotaduo - Clientes`
-
-Schema completo no final deste arquivo.
-
-### 8b. memory/empresa.md (formato dos outros agentes)
-
-**CRÍTICO:** o detector de onboarding (`pkg/agent/onboarding_default.go`)
-monitora `workspace/memory/empresa.md`. Enquanto esse arquivo tiver
-`Status: pendente de validação` OU campo `Nome:` vazio OU `Segmento:`
-vazio, Sofia continua como default agent. Para liberar Rafael e os outros,
-esse arquivo precisa estar preenchido.
-
-**Sofia NÃO consegue escrever direto nesse arquivo** porque o workspace
-dela é `workspace/agents/sofia/` (sandbox-restrito). Você delega ao
-Rafael (`main`), que tem workspace raiz e permissão de escrita.
-
-⚠️ **CRÍTICO sobre o path:** o Rafael TEM `workspace = workspace/` como
-cwd dele. Então o path passado pra ele deve ser **`memory/empresa.md`**
-(relativo ao workspace dele), **NÃO** `workspace/memory/empresa.md`.
-Path errado vira `workspace/workspace/memory/empresa.md` que ninguém lê.
-
-```
-delegate(
-  agent_id="main",
-  task="""Use write_file com overwrite=true e path EXATAMENTE igual a
-"memory/empresa.md" (sem prefixo workspace/). Conteúdo já validado
-pela Sofia durante o discovery — NÃO altere nada, só grave exatamente
-como está.
-
-<COLE AQUI O MARKDOWN COMPLETO NO FORMATO ABAIXO>
-"""
-)
-```
-
-Formato exato a passar pro Rafael:
+`memory/empresa.md` sai neste formato mínimo:
 
 ```markdown
-# Memória da empresa
+# Empresa
 
+Status: validado pelo dono em <timestamp>
 Nome: <nome do negócio>
-Segmento: <chave — saude/alimentacao/varejo/servicos/beleza/educacao/imobiliaria>
-Descrição: <1 frase>
-Produtos ou serviços: <lista>
-Horário: <faixa>
-Endereço: <cidade ou "atendimento 100% online">
-Regiões atendidas: <lista>
-WhatsApp: <número>
-Email: <contato_email do dono — CAMPO OBRIGATÓRIO pro validate>
-Instagram:
-Site:
-Formas de pagamento: <lista>
-Pode falar preço: <pode informar | só faixa | nunca>
-Faixa de preço:
-Quando chamar humano: <regras de escalation>
-Informações que nunca podem ser inventadas: <lista>
-Informações proibidas de falar:
-Segmento detectado: <mesma chave do Segmento, em snake_case>
+Segmento: <segmento dito pelo dono>
+Contato email: <email>
+Contato WhatsApp: <whatsapp>
 
-# Campos específicos do segmento — CRÍTICO pra liberação
-# Preencha EXATAMENTE as chaves abaixo conforme o segmento detectado.
-# O validate_workspace.py procura essas chaves específicas e bloqueia
-# liberação se faltarem. NÃO mude o nome das chaves — só o valor.
+## Resumo
+<resumo executivo validado>
 
-# Se segmento = saude:
-Canal de agendamento: <Shosp/Doctoralia/iClinic/etc + observações>
-Especialidades: <lista>
-Convênios aceitos: <lista OU "somente particular">
+## Canais
+- <canal>
 
-# Se segmento = alimentacao:
-Cardápio: <link OU "sob demanda">
-Delivery próprio: <sim/não>
-Plataformas de delivery: <iFood/Rappi/etc OU "nenhuma">
+## Sistemas atuais
+- <sistema>
 
-# Se segmento = varejo:
-Catálogo: <link OU descrição>
-Política de troca: <texto>
-Faz entrega: <sim/não>
+## Dores priorizadas
+- <dor>
 
-# Se segmento = servicos:
-Como gera orçamento: <texto>
-Prazo padrão: <texto>
-
-# Se segmento = beleza:
-Canal de agendamento: <texto>
-Lista de serviços: <texto>
-
-# Se segmento = educacao:
-Cursos oferecidos: <lista>
-Como faz matrícula: <texto>
-
-# Se segmento = imobiliaria:
-Tipos de imóvel: <lista>
-Como agenda visita: <texto>
-
-Status da informação: validado pelo dono em <YYYY-MM-DD> (onboarding via discovery)
-
-## Cadastro da empresa — concluído
-
-<resumo de 5-10 bullets dos pontos principais que coletou — texto livre>
-
-## Pendências sinalizadas pro dono resolver
-
-<lista das integrações/decisões "a validar" — IMPORTANTE pra admin saber>
+## Objetivos 90 dias
+- <objetivo>
 ```
 
-**Regras de ouro pro formato:**
-- **NUNCA** mude o nome das chaves (`Nome:`, `Segmento:`, `Email:`,
-  `Canal de agendamento:`, etc.) — o validate_workspace procura match exato
-- **NÃO** coloque info do segmento como bullet no "## Cadastro" — bullets
-  são pra RESUMO narrativo; campos do segmento têm que ser `chave: valor`
-  no topo
-- Inclua **só os campos do segmento detectado** — apague os comentários e
-  blocos de outros segmentos
-- Campo `Email:` é OBRIGATÓRIO (universal) — sem ele admin não consegue
-  liberar
-
-Rafael (workspace raiz) executa o `write_file` real. Sofia só formata o
-payload e delega — não tenta escrever direto no raiz (o sandbox bloqueia).
+O dossiê completo usa o schema abaixo e fica em `memory/jotaduo/clientes/`.
 
 ## Schema JSON do dossiê
 
@@ -429,30 +301,26 @@ payload e delega — não tenta escrever direto no raiz (o sandbox bloqueia).
 
 ## Memória de longo prazo
 
-Além do dossiê, o `save_client.py` registra automaticamente uma linha em
-`memory/MEMORY.md` sob `## Jotaduo - Clientes` no formato:
-
-```
-- <empresa> (<segmento>) - dossiê em memory/jotaduo/clientes/<slug>.md - <data>
-```
+O `discovery_close` grava o dossiê legível e o JSON em
+`memory/jotaduo/clientes/`. Não salve cópias paralelas fora desse diretório.
 
 **Não salve dados sensíveis** (CPF, senhas, tokens, dados clínicos
 detalhados). E-mail e telefone comerciais OK.
 
 ## Passos finais do discovery — gate-by-gate (8c a 8i)
 
-Após salvar dossiê + delegar `memory/empresa.md` ao Rafael, você NÃO
-encerra. Ainda faltam 7 passos: validate, decisão de gate, teste com
-Clara, ajustes, aprovação do dono, **marcar discovery_done na state
-machine**, e (opcionalmente) liberação.
+Após `discovery_close` retornar sucesso, você NÃO encerra dizendo bastidores.
+Ainda faltam os passos de validate, decisão de gate, teste com Clara, ajustes,
+aprovação do dono e, quando aplicável, liberação pelo admin.
 
-### Passo 8b.5 — Cristalização (owner + discovery_done) — UM arquivo
+### Passo 8b.5 — Cristalização (estado + memória + dossiê) — UM arquivo
 
 Este é o passo **mais importante** do fechamento e o **mais à prova de
 falha**. Cristaliza, de uma vez só, o owner capturado (Fase 7.5) + o
-discovery_done. Faça-o **logo no começo do fechamento** — antes de qualquer
-delegate pesado (save_client/empresa.md) — pra garantir que a promoção
-destrava mesmo se o resto falhar.
+discovery_done + `memory/empresa.md` + o dossiê em `memory/jotaduo/clientes/`.
+Faça-o **logo no começo do fechamento** e não faça chamadas separadas de
+`set_owner`, `mark_discovery_done`, `save_client.py` ou atualização manual de
+`empresa.md`.
 
 ⚠️ **Contexto que muda tudo:** em tenant publico você (Sofia) roda como o
 agente `main`, com **workspace raiz**. Você NÃO está num sandbox `agents/sofia/`
@@ -466,13 +334,13 @@ confiável que você consegue fazer):
 write_file(
   path="state/discovery-close.request.json",
   overwrite=true,
-  content='{"action":"discovery_close","empresa":"<nome da empresa>","name":"<nome>","email":"<email>","whatsapp":"<whatsapp>","segment":"<segmento>","summary":"<resumo 2-3 linhas>","captured_by":"sofia"}'
+  content='{"action":"discovery_close","empresa":"<nome da empresa>","segment":"<segmento>","summary":"<resumo validado pelo dono>","owner":{"name":"<nome do dono>","email":"<email>","whatsapp":"<whatsapp>"},"facts":{"canais":["WhatsApp","Instagram"],"sistemas":["planilha","Pix"],"dores":["demora para responder"],"objetivos_90d":["responder em até 2 minutos"],"agentes_recomendados":["Clara"]},"captured_by":"sofia"}'
 )
 ```
 
 Isso **é suficiente**: o cron determinístico `onboarding-discovery-close`
 roda a cada poucos minutos, lê esse arquivo e cristaliza o estado
-(set_owner + mark_discovery_done) sem depender de você emitir mais nada.
+(estado + `empresa.md` + dossiê) sem depender de você emitir mais nada.
 Ver skill `discovery-close-flow`.
 
 **Melhor esforço — cristalize na hora (opcional):** logo depois do
@@ -481,15 +349,20 @@ write_file, rode UMA vez:
 ```
 exec(
   action="run",
-  command="python skills/onboarding-state/scripts/state.py --payload-file state/discovery-close.request.json"
+  command="python3 skills/onboarding-state/scripts/state.py --payload-file state/discovery-close.request.json"
 )
 ```
 
 Se isso retornar o JSON com `phase=discovery_done`, ótimo — destravou na
-hora. **Se der erro ou você não conseguir emitir o exec, NÃO insista nem
-fique tentando de novo** — o arquivo de request já garante via o cron.
-Apenas siga e encerre com o dono. (`set_owner: email inválido` → corrija o
-email com o dono e regrave o arquivo.)
+hora. Só depois desse sucesso use linguagem de cliente como:
+
+> "Registrei o resumo inicial e vou seguir para o aprofundamento dos detalhes."
+
+**Se der erro ou você não conseguir emitir o exec, NÃO diga que registrou
+dossiê, cadastro ou resumo.** Corrija o campo apontado com o dono quando for
+erro de contato (`email inválido`, `whatsapp tem...`) e regrave o arquivo. Se
+apenas o exec não estiver disponível, responda sem alegar persistência, por
+exemplo: "Tenho o resumo inicial fechado; vou seguir com o próximo passo."
 
 Isso é o que sinaliza pro backend de promoção que o discovery acabou. Sem
 o request gravado, `onboarding.json` fica em `discovery_in_progress` e a

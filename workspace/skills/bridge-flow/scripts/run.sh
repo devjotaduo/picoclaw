@@ -36,12 +36,15 @@ print(s.get('deepening', {}).get('first_contact_at') or '')
 o = s.get('owner_captured', {})
 print((o.get('whatsapp') or '').lstrip('+'))
 print(o.get('name') or 'lá')
+blocked = s.get('promotion', {}).get('blocked_by') or []
+print(next((b for b in blocked if str(b).startswith('empresa_memory_empty')), ''))
 ")
 
 PHASE=$(printf '%s\n' "$INFO" | sed -n 1p)
 FIRST_CONTACT=$(printf '%s\n' "$INFO" | sed -n 2p)
 PHONE=$(printf '%s\n' "$INFO" | sed -n 3p)
 NAME=$(printf '%s\n' "$INFO" | sed -n 4p)
+EMPRESA_MEMORY_BLOCKER=$(printf '%s\n' "$INFO" | sed -n 5p)
 
 # 2. SILENT_NOOP gates
 case "$PHASE" in
@@ -54,6 +57,11 @@ esac
 
 if [ -n "$FIRST_CONTACT" ]; then
   echo "SILENT_NOOP first_contact_at=$FIRST_CONTACT"
+  exit 0
+fi
+
+if [ -n "$EMPRESA_MEMORY_BLOCKER" ]; then
+  echo "SILENT_NOOP $EMPRESA_MEMORY_BLOCKER"
   exit 0
 fi
 

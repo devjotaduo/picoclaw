@@ -3,7 +3,7 @@ name: discovery-close-flow
 description: >
   Poller determinístico (cron) que cristaliza o fim do discovery da Sofia:
   lê state/discovery-close.request.json e roda onboarding-state discovery_close
-  (set_owner + mark_discovery_done) sem depender do LLM emitir tool_call.
+  (estado + memory/empresa.md + dossiê) sem depender do LLM emitir tool_call.
   Simétrico ao catarina-inbox-flow (lado deepening). NÃO conversa com cliente.
 visibility: internal
 ---
@@ -17,8 +17,9 @@ claude-cli — ver [[project_catarina_tool_call_blocker]]).
 ## Por que existe
 
 O discovery da Sofia roda perfeito em texto puro, mas o passo final precisa
-PERSISTIR estado estruturado (`set_owner` + `mark_discovery_done`). Pedir
-isso ao LLM via tool call é o ponto frágil: no claude-cli o tool call cai e a
+PERSISTIR estado estruturado, `memory/empresa.md` e o dossiê do cliente numa
+operação verificável. Pedir múltiplas escritas ao LLM é o ponto frágil: no
+claude-cli o tool call cai ou uma das fontes de verdade fica vazia, e a
 promoção nunca destrava. Este poller move a EXECUÇÃO pra um script
 determinístico, espelhando o que o `catarina-inbox-flow` já faz no lado do
 aprofundamento.
@@ -37,11 +38,21 @@ Conteúdo = um payload válido de `onboarding-state` com `action=discovery_close
 ```json
 {
   "action": "discovery_close",
-  "name": "<nome do dono>",
-  "email": "<email>",
-  "whatsapp": "<whatsapp>",
+  "empresa": "<nome da empresa>",
   "segment": "<segmento detectado>",
   "summary": "<resumo executivo 2-3 linhas>",
+  "owner": {
+    "name": "<nome do dono>",
+    "email": "<email>",
+    "whatsapp": "<whatsapp>"
+  },
+  "facts": {
+    "canais": ["WhatsApp", "Instagram"],
+    "sistemas": ["planilha", "Pix"],
+    "dores": ["demora para responder"],
+    "objetivos_90d": ["responder em até 2 minutos"],
+    "agentes_recomendados": ["Clara"]
+  },
   "captured_by": "sofia"
 }
 ```
@@ -52,13 +63,13 @@ o resto é determinístico.
 ## O que o poller faz (cron `onboarding-discovery-close`, a cada poucos min)
 
 1. Sem `discovery-close.request.json` → `SILENT_NOOP no_request`.
-2. Request inválido / sem email → arquiva como `.error` e loga `CLOSE_ERROR`
-   (não fica em loop).
+2. Request inválido / sem campo obrigatório → arquiva como `.error` e loga
+   `CLOSE_ERROR` (não fica em loop).
 3. Estado já fechado (o caminho inline da Messages API ganhou a corrida) →
    arquiva como `.done` e loga `DISCOVERY_ALREADY_DONE`.
 4. Caso normal → roda `state.py --payload-file <request>` (action
-   `discovery_close` = set_owner + mark_discovery_done atômico), arquiva o
-   request como `.done`, loga `DISCOVERY_CLOSED email=...`.
+   `discovery_close` = owner + discovery_done + empresa.md + dossiê),
+   arquiva o request como `.done`, loga `DISCOVERY_CLOSED email=...`.
 
 Idempotente: o request vira `.done` depois do primeiro sucesso, então o cron
 não re-roda. Se o caminho inline já tinha fechado, o poller só arquiva.

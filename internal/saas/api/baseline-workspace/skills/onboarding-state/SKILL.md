@@ -19,8 +19,8 @@ ele estar pronto pra virar cliente normal. **Não conversa com cliente** —
 ## Quando usar
 
 - **Sofia** chama no fim do discovery (Phase 7.5+) pra:
-  - `set_owner` quando capturar email/WhatsApp do dono
-  - `mark_discovery_done` quando terminar as 8 fases + grava empresa.md
+  - `discovery_close` quando terminar as 8 fases e o dono confirmar resumo + contato
+  - `set_owner` + `mark_discovery_done` continuam suportados só para tenants antigos
 - **Catarina** chama em cada sessão de aprofundamento pra:
   - `mark_area_complete` quando fechar uma das 5 áreas (equipe, casos-excecao, faq, historico, regras-tacitas)
   - `mark_ready_for_promotion` automaticamente quando a 5ª área fechar
@@ -65,6 +65,41 @@ partir de `owner_captured + discovery.summary`, mantendo `onboarding.json` e
   "summary": "Clínica odontológica em SP, 5 funcionários, usa Shosp..."
 }
 ```
+
+### `discovery_close`
+Operação final preferida da Sofia. Recebe um payload estruturado, valida os
+campos críticos e só retorna sucesso depois de gravar os três artefatos:
+
+- `state/onboarding.json`
+- `memory/empresa.md`
+- `memory/jotaduo/clientes/<slug>.json` e `.md`
+
+Use com `--payload-file`; não dependa de stdin em `exec(action="run")`.
+
+```json
+{
+  "action": "discovery_close",
+  "empresa": "Café Norte Teste5",
+  "segment": "restaurante",
+  "summary": "Resumo executivo validado pelo dono...",
+  "owner": {
+    "name": "Bruno Teste5",
+    "email": "bruno.teste5@jotaduo.com",
+    "whatsapp": "87988553793"
+  },
+  "facts": {
+    "canais": ["WhatsApp", "Instagram"],
+    "sistemas": ["cardápio em PDF", "planilha de pedidos", "Pix"],
+    "dores": ["demora para responder", "pedidos esquecidos"],
+    "objetivos_90d": ["responder em até 2 minutos", "aumentar recompra"],
+    "agentes_recomendados": ["Clara", "Luna", "Camila"]
+  },
+  "captured_by": "sofia"
+}
+```
+
+Se falhar, a Sofia corrige o campo com o dono e tenta novamente. Ela não
+diz que registrou o resumo/dossiê enquanto essa ação não retornar sucesso.
 
 ### `mark_first_contact`
 Catarina chama **antes** de mandar a primeira mensagem WhatsApp pro lead
@@ -193,11 +228,10 @@ empresa.md manualmente antes ou aceitar o bloqueio.
 
 ```
 1. Sofia.turn[1]:    init                              → discovery_in_progress
-2. Sofia.turn[N]:    set_owner(email, whatsapp)        → owner_captured.* set
-3. Sofia.turn[N+1]:  mark_discovery_done(segment)      → discovery.completed_at
-4. (admin opcional libera tenant pra Catarina rodar via WhatsApp)
-5. Catarina.day[1]:  mark_area_complete("equipe")      → deepening.areas_covered++
-6. Catarina.day[2]:  mark_area_complete("casos-...")   → 2/5
+2. Sofia.turn[N]:    discovery_close(payload-file)     → owner + discovery + empresa.md + dossiê
+3. (bridge só dispara Catarina se empresa.md estiver válido)
+4. Catarina.day[1]:  mark_area_complete("equipe")      → deepening.areas_covered++
+5. Catarina.day[2]:  mark_area_complete("casos-...")   → 2/5
 7. ...
 8. Catarina.day[5]:  mark_area_complete("regras-...")  → 5/5 + auto-promotion.ready=true
 9. admin painel sees ready_for_promotion=true → clica "Promover" → backend lê este JSON

@@ -34,6 +34,8 @@ sem chamar tool). Sem timeout do exec tool (default 60s) é folgado.
 Saídas (stdout):
 - `SILENT_NOOP phase=X` — discovery ainda em andamento OU já promovido
 - `SILENT_NOOP first_contact_at=X` — já fez antes
+- `SILENT_NOOP empresa_memory_empty: X` — discovery fechou, mas
+  `memory/empresa.md` ainda não é fonte de verdade válida
 - `BRIDGE_ERROR: <motivo>` — owner sem phone, send falhou, etc.
 - `BRIDGE_DISPATCHED area=equipe phone=X` — sucesso, WA enviado
 

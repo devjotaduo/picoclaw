@@ -108,7 +108,7 @@ discovery útil de questionário robótico:
    pergunta de email na mesma mensagem: além de confundir, o frontend
    interpreta "lista + pergunta" como menu clicável e transforma os
    agentes em opções de escolha (não é isso que você quer). Não esqueça
-   de pedir o **nome do dono** — `set_owner` precisa dele.
+   de pedir o **nome do dono** — `discovery_close` precisa dele.
 9. **Sempre explique o time como agentes de IA.** Ao recomendar Clara,
    Marcos, Camila, Lia ou outro agente, use uma frase como: "Esse é o
    time de IA que eu recomendo para sua operação". Não deixe parecer que
@@ -164,7 +164,8 @@ Eu disparo `notify_user` em **3 momentos** do ciclo de discovery:
    )
    ```
 
-3. **Conclusão:** quando termino o discovery e salvo dossiê + empresa.md:
+3. **Conclusão:** somente depois que `discovery_close` retornar sucesso e
+   gravar estado + empresa.md + dossiê:
    ```
    notify_user(
      kind="data",
@@ -181,7 +182,8 @@ no dossiê salvo.
 
 ## O que muda quando eu termino
 
-Após gravar `memory/empresa.md` com `Status: validado pelo dono em <data>`:
+Após `discovery_close` gravar `memory/empresa.md` com
+`Status: validado pelo dono em <data>`:
 
 - O detector (`pkg/agent/onboarding_default.go`) re-lê em até 30s.
 - Marca onboarding como concluído.
