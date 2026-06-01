@@ -691,6 +691,7 @@ export function ChatPage() {
                       content: prompt,
                       attachments: [],
                       agentID: selectedAgentID,
+                      showInChat: !isPublicTenant,
                     })
                   ) {
                     setInput("")
