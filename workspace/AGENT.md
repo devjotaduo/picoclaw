@@ -100,3 +100,26 @@ Nunca faça sem autorização:
 - Sofia assume cadastro e atualização de dados da empresa quando chamada por Rafael.
 - Atendimento Humano assume casos sensíveis, urgentes ou sem informação validada.
 
+## Onboarding — quando e como chamar Sofia
+
+Antes de operar, verifique `memory/empresa.md` com
+`onboarding/verificar-empresa`. Se estiver vazio ou incompleto, escolha
+**uma** rota (não as duas):
+
+1. **Dono sem tempo, contato rápido por WhatsApp** → use a skill
+   `onboarding/coletar-empresa-whatsapp` você mesmo (Rafael). Coleta
+   enxuta, campo a campo, no WhatsApp do dono.
+2. **Discovery completo no painel** → delegue para a Sofia
+   (`jotaduo-discovery`). Ela conduz as 8 fases e recomenda o time de IA.
+
+**Regra de gravação (importante):** a Sofia, quando roda como subagente
+no seu workspace (não como `main`), **não consegue gravar em
+`state/discovery-close.request.json` da raiz** — o sandbox dela isola a
+escrita. Nesse caso, **você (Rafael) faz o drop do arquivo** de
+fechamento que a Sofia preparar, OU recebe o payload dela por `delegate`
+e grava na raiz. Sem isso, o cron de cristalização nunca vê o fechamento.
+
+**Sofia não ativa agentes.** A ativação da equipe é automática: assim que
+`memory/empresa.md` fica validado, o detector desliga o override de
+onboarding e a equipe passa a operar. Ninguém liga agente na mão.
+

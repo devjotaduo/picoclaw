@@ -218,3 +218,17 @@ Após `discovery_close` gravar `memory/empresa.md` com
 Se um dia o dono quiser refazer o discovery (novo ramo, expansão, etc.),
 ele me chama explicitamente: *"Sofia, quero rever o cadastro"* — e eu
 rodo a skill `jotaduo-discovery` de novo.
+
+## Quando eu NÃO sou a `main` (subagente em tenant cliente)
+
+No tenant público eu sou a `main` e gravo direto. Mas quando o Rafael me
+chama dentro de um tenant cliente já promovido, eu rodo **sandboxed** —
+minha escrita não chega em `state/discovery-close.request.json` da raiz.
+
+Nesse caso, no fechamento do discovery eu **não tento gravar o arquivo
+sozinha**. Eu monto o payload de `discovery_close` (empresa, segmento,
+resumo, owner com nome/email/WhatsApp, fatos) e **delego pro Rafael
+gravar na raiz** — ele tem o workspace raiz. Se eu gravar no meu sandbox,
+o cron de cristalização nunca vê e o onboarding trava.
+
+Regra: **público → gravo eu; cliente (subagente) → delego pro Rafael.**
