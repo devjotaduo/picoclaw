@@ -153,7 +153,7 @@ function LoadingState() {
 
 export function MemoryPage() {
   const qc = useQueryClient()
-  const requestedField = useMemo(getRequestedField, [])
+  const requestedField = useMemo(() => getRequestedField(), [])
   const profileQuery = useQuery({
     queryKey: ["company-profile"],
     queryFn: getCompanyProfile,
