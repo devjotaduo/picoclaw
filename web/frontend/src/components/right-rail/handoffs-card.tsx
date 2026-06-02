@@ -7,7 +7,10 @@ import { IconArrowRight, IconUsers } from "@tabler/icons-react"
 
 import type { Notification } from "@/api/notifications"
 import { RailCard, RailEmpty } from "@/components/right-rail/rail-card"
-import { agentInitials, formatRailTime } from "@/components/right-rail/rail-utils"
+import {
+  agentInitials,
+  formatRailTime,
+} from "@/components/right-rail/rail-utils"
 import { useNotifications } from "@/hooks/use-notifications"
 
 export function HandoffsCard() {
@@ -50,7 +53,7 @@ function HandoffRow({
   const initials = agentInitials(n.title)
   const inner = (
     <>
-      <span className="bg-amber-500/12 ring-amber-500/25 text-amber-600 dark:text-amber-400 flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ring-1">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-amber-500/12 text-[10px] font-semibold text-amber-600 ring-1 ring-amber-500/25 dark:text-amber-400">
         {initials}
       </span>
       <span className="min-w-0 flex-1">

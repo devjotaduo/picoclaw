@@ -6,7 +6,11 @@ import { IconTargetArrow } from "@tabler/icons-react"
 
 import { RailCard, RailEmpty } from "@/components/right-rail/rail-card"
 import { formatRailTime } from "@/components/right-rail/rail-utils"
-import { type LeadSignal, type LeadTemperature, useLeads } from "@/hooks/use-leads"
+import {
+  type LeadSignal,
+  type LeadTemperature,
+  useLeads,
+} from "@/hooks/use-leads"
 import { cn } from "@/lib/utils"
 
 const TEMPERATURE_LABEL: Record<LeadTemperature, string> = {

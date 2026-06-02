@@ -279,4 +279,3 @@ export async function rotateTenantPassword(
 export async function deleteTenant(id: string): Promise<void> {
   await call<void>(`/tenants/${encodeURIComponent(id)}`, { method: "DELETE" })
 }
-

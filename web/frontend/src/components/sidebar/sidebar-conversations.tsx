@@ -15,8 +15,8 @@ import * as React from "react"
 import type { SessionSummary } from "@/api/sessions"
 import { newChatSession, switchChatSession } from "@/features/chat/controller"
 import { useSessionHistory } from "@/hooks/use-session-history"
-import { chatAtom } from "@/store/chat"
 import { cn } from "@/lib/utils"
+import { chatAtom } from "@/store/chat"
 
 interface DateBucket {
   label: string

@@ -41,7 +41,7 @@ export function SidebarUserFooter() {
         {agentInitials(name)}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="text-foreground block truncate text-[13px] font-medium leading-tight">
+        <span className="text-foreground block truncate text-[13px] leading-tight font-medium">
           {name}
         </span>
         {roleLabel ? (
