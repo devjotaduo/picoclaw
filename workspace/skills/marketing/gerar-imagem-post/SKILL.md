@@ -20,12 +20,17 @@ stub). Fatos do runtime que você PRECISA respeitar:
   `name` (radical do arquivo).
 - O `size` é convertido em **aspect ratio** pelo provider — então use os
   tamanhos reais de cada formato (tabela abaixo), não `1024x1024`.
-- O arquivo é salvo em **`public/marketing/<name>.png`** (o `output_dir` do
-  tool já aponta pra pasta pública). **O `name` é achatado**: barras `/` e
-  acentos são removidos. NÃO tente criar subpasta `YYYY-MM-DD/` pelo `name` —
-  coloque a data no próprio radical: `post-<slug>-<formato>-<YYYYMMDD>`.
-- O tool retorna a tag `[file:.../public/marketing/<name>.png]`. Use esse path
-  exato para montar o link público (passo abaixo).
+- O arquivo é salvo em **`workspace/public/marketing/<name><ext>`** (o
+  `output_dir` do tool já aponta pra pasta pública). ⚠️ **A extensão NÃO é
+  sempre `.png`**: o tool escolhe `<ext>` pelo Content-Type do provider — pode
+  vir `.jpg` ou `.webp`. Nunca assuma `.png`.
+- **O `name` é achatado**: barras `/` e acentos são removidos. NÃO tente criar
+  subpasta `YYYY-MM-DD/` pelo `name` — coloque a data no próprio radical:
+  `post-<slug>-<formato>-<YYYYMMDD>`.
+- O tool retorna a tag `[file:.../workspace/public/marketing/<filename>]` com o
+  **filename real** (já com a extensão certa). Extraia o basename dessa tag e
+  use-o exato para montar o link público (passo abaixo) — não remonte o nome
+  na mão.
 
 ### Pré-condições — checar ANTES de chamar o tool
 
@@ -59,9 +64,11 @@ stub). Fatos do runtime que você PRECISA respeitar:
    - `prompt`: o prompt montado.
    - `size`: o valor da tabela acima para o formato.
    - `name`: `post-<slug>-<formato>-<YYYYMMDD>` (sem barra, sem acento).
-3. Ler o path retornado na tag `[file:...]`.
+3. Ler o path retornado na tag `[file:...]` e extrair o **basename real**
+   (`<filename>`, já com a extensão que o provider devolveu).
 4. Montar o link público: `GET /api/marketing/public-base-url` →
-   `<base_url>/public/marketing/<name>.png` (absoluto em prod, relativo em dev).
+   `<base_url>/public/marketing/<filename>` usando o basename do passo 3 — nunca
+   `.png` fixo (absoluto em prod, relativo em dev).
 5. **Verificar** (ver Seção "Verificação").
 6. Registrar em `memory/marketing.md`: data, campanha, formato, `name`, prompt
    usado, status=rascunho.
@@ -91,9 +98,9 @@ credencial/provider:
 ## Saída obrigatória
 ```
 [IMAGEM GERADA]
-Arquivo: public/marketing/post-<slug>-<formato>-<YYYYMMDD>.png   (ou .../<slug>-card/index.html no fallback)
-Link público: <base_url>/public/marketing/post-<slug>-<formato>-<YYYYMMDD>.png
-(base_url de GET /api/marketing/public-base-url; relativo se env não setado)
+Arquivo: workspace/public/marketing/<filename>   (basename real da tag [file:...]; ou .../<slug>-card/index.html no fallback)
+Link público: <base_url>/public/marketing/<filename>
+(filename = basename retornado pelo tool, com a extensão real .png/.jpg/.webp; base_url de GET /api/marketing/public-base-url; relativo se env não setado)
 Modelo: generate_image (config tools.image_generation.model) | fallback: card CSS
 [STATUS] rascunho — aguardando aprovação humana
 [PRÓXIMO PASSO] Lia gera legenda via criar-post-instagram
