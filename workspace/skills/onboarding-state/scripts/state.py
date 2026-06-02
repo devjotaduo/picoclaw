@@ -695,9 +695,25 @@ def write_discovery_close_outputs(state: dict, payload: dict, workspace_root: Pa
 
     Falhar aqui interrompe a operação antes de salvar onboarding.json, então a
     Sofia só recebe sucesso quando empresa.md e o dossiê também foram gravados.
+
+    Guard anti-perda (audit 2026-06-02, Gap D): se já existe um empresa.md
+    preenchido pelo dono (≥3 campos reais, ex: coletado pelo Rafael via
+    coletar-empresa-whatsapp antes de um re-discovery), fazemos um backup
+    .pre-discovery.bak antes de sobrescrever. A escrita do discovery continua
+    sendo a fonte de verdade do funil, mas o dado manual nunca é perdido em
+    silêncio — fica recuperável e o operador pode reconciliar.
     """
     normalized = normalize_discovery_close_payload(payload)
     empresa_path = workspace_root / "memory" / "empresa.md"
+    already_filled, _ = empresa_memory_filled(workspace_root)
+    if already_filled:
+        try:
+            backup_path = empresa_path.with_name("empresa.md.pre-discovery.bak")
+            backup_path.write_text(
+                empresa_path.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+        except OSError:
+            pass
     atomic_write_text(empresa_path, render_discovery_close_empresa_memory(state, payload))
 
     dossier = build_discovery_dossier_payload(state, payload)
