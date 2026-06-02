@@ -18,17 +18,30 @@ sempre **qual entra primeiro** (maior ROI percebido) e justifique.
 
 ## Agentes disponíveis no roster
 
+### Agentes de atendimento / vendas / marketing (recomendáveis ao dono)
+
 | ID config | Nome | Workspace | Papel principal |
 |---|---|---|---|
 | `main` | Rafael | `workspace/` | Assistente interno do dono — orquestra equipe, alerta, resume, chama outros |
-| `clara` | Clara | `workspace/` | Atendente principal (horário comercial) — triagem, FAQ, encaminhamento |
-| `luna` | Luna | `workspace/` | Atendente noturna / fim-de-semana — triagem off-hours + briefing matinal |
-| `marcos` | Marcos | `workspace/` | Consultor comercial — qualifica leads, BANT, agenda reunião, propõe |
-| `camila` | Camila | `workspace/` | Suporte e pós-venda — orienta cliente, coleta dados, registra recorrência |
+| `clara` | Clara | `workspace/agents/clara/` | Atendente principal (horário comercial) — triagem, FAQ, encaminhamento |
+| `luna` | Luna | `workspace/agents/luna/` | Atendente noturna / fim-de-semana — triagem off-hours + briefing matinal |
+| `marcos` | Marcos | `workspace/agents/marcos/` | Consultor comercial — qualifica leads, BANT, agenda reunião, propõe |
+| `camila` | Camila | `workspace/agents/camila/` | Suporte e pós-venda — orienta cliente, coleta dados, registra recorrência |
 | `lia` | Lia | `workspace/agents/lia/` | Marketing digital — posts Instagram, catálogo HTML, calendário, campanhas |
-| `operador` | Operador | `workspace/agents/operador/` | Operador técnico/dev — diagnóstico, github, terminal, skill-creator. Nunca cliente final |
+
+### Agentes internos / plataforma (NÃO recomendar ao dono como "sua equipe")
+
+| ID config | Nome | Workspace | Papel |
+|---|---|---|---|
+| `sofia` | Sofia | `workspace/agents/sofia/` | Onboarding — coleta dados da empresa. Ativa só enquanto `empresa.md` incompleto |
+| `catarina` | Catarina | `workspace/agents/catarina/` | Curadoria de conhecimento aprofundado pós-discovery — outreach via WhatsApp da Jotaduo |
+| `operador` | Operador | `workspace/agents/operador/` | Técnico/dev — diagnóstico, GitHub, terminal, skill-creator. Nunca cliente final |
 | `qa-tester` | QA Tester | `workspace/agents/qa-tester/` | Testador interno — valida skills/agentes em ambiente simulado |
-| `sofia` | Sofia | `workspace/` | Especialista em onboarding (você) — só ativa enquanto cadastro empresa incompleto |
+| `pixel` | Pixel | `workspace/agents/pixel/` | Geração de imagens — delegado por Lia. Nunca cliente final |
+| `doc` | Doc | `workspace/agents/doc/` | Geração de documentos (PDF/DOCX/MD) — relatórios, atas, dossiês. Nunca cliente final |
+| `dev` | Dev | `workspace/agents/dev/` | Programação interna — implementar, revisar, debugar. Nunca cliente final |
+
+> ⚠️ **Regra de recomendação:** Sofia, Catarina, Operador, QA Tester, Pixel, Doc e Dev são agentes **internos da plataforma**. Não os apresente ao dono como "integrantes do time de atendimento". Ao citar Rafael (main), use "seu assistente de IA" ou "Rafael, seu assistente interno".
 
 ## Mapeamento dor → agente (use pra justificar a recomendação)
 

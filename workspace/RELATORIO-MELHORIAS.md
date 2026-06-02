@@ -25,12 +25,17 @@
 > - Skills órfãs absorvidas pelo Operador (github/tmux/weather/summarize/skill-creator/agent-browser)
 > - Skills de moderação criadas (`anti-fraude`, `sensitive-data-protection`, `log-sanitizer`)
 >
-> **Score estimado: 8.5/10** (base: 6.8 → pós-fase-1: 7.8 → pós-fase-2: 8.5)
+> - IDs fantasma nos 10 arquivos de segmento (`jotaduo-discovery/references/segments/*.md`)
+> - Footer de `agent-catalog.md` atualizado para folder-pattern
+> - **`catarina`, `pixel`, `doc`, `dev` adicionados ao roster do `agent-catalog.md`** (2026-06-02)
+> - B1+B2: XSS/path-injection em `skills/onboarding-state/scripts/state.py`
 >
-> **Itens ainda pendentes (baixa prioridade):**
+> **Score estimado: 9.0/10** (base: 6.8 → pós-fase-1: 7.8 → pós-fase-2: 8.5 → pós-fase-3: 9.0)
+>
+> **Itens de baixa prioridade (não bloqueantes):**
 > - §2.2 Centralizar resposta "é IA?" em `config/tone-of-voice.md` (parcial)
 > - §2.3 Acessibilidade — skill existe mas não cobre todos os agentes
-> - `memory/marca.md` com campos vazios (bloqueia Lia e Pixel)
+> - `memory/marca.md` com campos vazios (Sofia/Lia devem solicitar ao dono no primeiro pedido de arte)
 
 ---
 

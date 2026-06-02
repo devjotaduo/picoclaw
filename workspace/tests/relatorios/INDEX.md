@@ -4,6 +4,7 @@ Ordem cronológica decrescente. Atualizado por `gerar-relatorio-teste`.
 
 | Data | Alvo | Cenário | Nota | Status | Relatório |
 |---|---|---|---|---|---|
+| 2026-06-02 | workspace inteiro (13 agentes) | audit-pos-melhore: catalog expansion + fixtures | 9.0 | catarina/pixel/doc/dev adicionados ao catalog; B1+B2 fixes; phantom IDs; footer | (inline — ver agent-catalog.md + RELATORIO-MELHORIAS.md) |
 | 2026-06-02 | sofia (discovery flow) | E2E init→discovery_close→deepening→promotion.ready | 8.2 | 2 bloqueantes + 2 melhorias | [2026-06-02-sofia-e2e.md](2026-06-02-sofia-e2e.md) |
 | 2026-05-26 | port novoPico + fixes da auditoria | 15 skills + 3 ghost agents registrados + Lia cron consertado | n/a | 3 fixes P0/P1 aplicados | [2026-05-26-port-novopico.md](2026-05-26-port-novopico.md) |
 | 2026-05-26 | workspace inteiro (10 agentes) | auditoria-completa | 5.8 (média) | 3 bloqueantes + 4 ghosts | [2026-05-26-audit-10-agentes.md](2026-05-26-audit-10-agentes.md) |
