@@ -33,9 +33,9 @@ export async function finishTestMode(): Promise<FinishTestModeResponse> {
     method: "POST",
   })
   if (!res.ok) {
-    const data = (await res.json().catch(() => null)) as
-      | FinishTestModeResponse
-      | null
+    const data = (await res
+      .json()
+      .catch(() => null)) as FinishTestModeResponse | null
     if (data) return data
     throw new Error(`API error: ${res.status}`)
   }

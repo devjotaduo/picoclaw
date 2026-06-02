@@ -60,7 +60,9 @@ function notificationToLead(n: Notification): LeadSignal | null {
     id: `notif:${n.id}`,
     title: n.title,
     body: n.body,
-    agentName: n.agent_id ? friendlyAgentName({ agent_id: n.agent_id }) : undefined,
+    agentName: n.agent_id
+      ? friendlyAgentName({ agent_id: n.agent_id })
+      : undefined,
     ctaUrl: n.cta_url,
     stamp: n.created_at,
     temperature: detectTemperature(haystack),

@@ -617,10 +617,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           ) : null}
           {/* Notifications panel — fallback apenas em perfis SEM o right rail
               (que já mostra notificações na terceira coluna). Evita duplicar. */}
-          {showSidebarNotifications && !rightRailVisible && <NotificationPanel />}
+          {showSidebarNotifications && !rightRailVisible && (
+            <NotificationPanel />
+          )}
         </SidebarContent>
       ) : null}
-      {showSidebarUserFooter || (showSidebarPendingRequests && !rightRailVisible) ? (
+      {showSidebarUserFooter ||
+      (showSidebarPendingRequests && !rightRailVisible) ? (
         <SidebarFooter className="bg-background border-sidebar-border/40 gap-2 border-t px-2 pt-2 pb-3 group-data-[collapsible=icon]:border-t-0">
           {/* Pendências no rodapé: só quando não há right rail (fallback). */}
           {showSidebarPendingRequests && !rightRailVisible ? (
