@@ -52,6 +52,19 @@ export interface Tenant {
 export type TenantType = "publico" | "admin" | "cliente"
 
 /**
+ * RosterEntry describes one agent slot defined by a tenant type. The backend
+ * serialises these as JSON objects inside tenant_types.roster. Legacy data may
+ * be a string array — always guard with typeof checks before rendering.
+ */
+export interface RosterEntry {
+  id: string
+  role: "master" | "atendente" | "especialista" | "discovery"
+  label: string
+  desc: string
+  locked?: boolean
+}
+
+/**
  * TenantTypeCatalogEntry mirrors the controlplane tenant_types catalog row
  * (internal/saas/api/tenant_types.go::tenantTypeResponse). The v2.0 create
  * wizard fetches selectable entries to offer business verticals (clinica,
@@ -67,6 +80,8 @@ export interface TenantTypeCatalogEntry {
   is_system: boolean
   is_selectable: boolean
   sort_order: number
+  /** Agent roster for this type. May be absent or a legacy string[]. */
+  roster?: RosterEntry[]
 }
 
 export interface CreateTenantInput {
@@ -92,11 +107,11 @@ export interface CreateTenantInput {
     phones?: string[]
     groups?: string[]
   }
-  workspace_id?: string
   /**
    * Defaults to "cliente" on the server when omitted. Widened from the
    * 3-union to string so vertical catalog slugs (clinica, loja, …) are
-   * accepted; the controlplane resolves any catalog slug.
+   * accepted; the controlplane resolves any catalog slug. The server now
+   * resolves the canonical workspace automatically — no workspace_id needed.
    */
   tenant_type?: string
   monthly_budget_usd?: number
@@ -137,15 +152,6 @@ export interface CloneTenantResponse extends CreateTenantResponse {
 export interface SanityResponse {
   tenant_id: string
   sanity_checks: SanityCheck[]
-}
-
-export interface LauncherProfileSummary {
-  id: string
-  name: string
-  slug: string
-  description: string
-  is_default: boolean
-  version: number
 }
 
 export interface RotatePasswordResponse {
@@ -274,11 +280,3 @@ export async function deleteTenant(id: string): Promise<void> {
   await call<void>(`/tenants/${encodeURIComponent(id)}`, { method: "DELETE" })
 }
 
-export async function listLauncherProfiles(): Promise<
-  LauncherProfileSummary[]
-> {
-  const data = await call<{ profiles: LauncherProfileSummary[] }>(
-    "/launcher-profiles",
-  )
-  return data.profiles ?? []
-}

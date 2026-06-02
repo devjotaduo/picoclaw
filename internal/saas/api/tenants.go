@@ -224,14 +224,25 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(req.WorkspaceID) == "" && resolvedType.DefaultWorkspaceID != "" {
 		req.WorkspaceID = resolvedType.DefaultWorkspaceID
 	}
-	// Agent roster from the catalog (e.g. ["attendant","assistant"]). Empty for
-	// publico/admin so those tenants keep their solo/legacy roster.
-	var roster []string
-	if len(resolvedType.Roster) > 0 {
-		if err = json.Unmarshal(resolvedType.Roster, &roster); err != nil {
-			writeError(w, http.StatusBadRequest, "roster do tipo de tenant está malformado")
+	// If still empty (no catalog row or catalog row has no default workspace),
+	// fall back to the workspace marked is_default_auto. This keeps tenant
+	// creation working when the wizard omits workspace_id entirely — the
+	// provisioner's "workspace_id is required" error is the final backstop when
+	// no default-auto workspace exists.
+	if strings.TrimSpace(req.WorkspaceID) == "" && h.Workspaces != nil {
+		if defaultWS, werr := h.Workspaces.GetDefaultAuto(r.Context()); werr == nil {
+			req.WorkspaceID = defaultWS.ID
+		} else if !errors.Is(werr, store.ErrWorkspaceNotFound) {
+			writeError(w, http.StatusInternalServerError, "db error")
 			return
 		}
+	}
+	// Active agents for this tenant type (object roster, v2.0). Legacy string
+	// rosters yield no ids → no activation, preserving current behavior.
+	activeAgentIDs, err := rosterActiveAgentIDs(resolvedType.Roster)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "roster do tipo de tenant está malformado")
+		return
 	}
 	modelRouting, err := req.ModelRouting.toTenantConfig()
 	if err != nil {
@@ -355,8 +366,12 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		IsPublic:              uiProfile == tenant.UIProfilePublic,
 		UIProfile:             uiProfile,
 		ModelRouting:          modelRouting,
-		Roster:                roster,
-		TestSetup:             testSetup,
+		// v2.0: the object roster drives panel activation via ActiveAgentIDs;
+		// the legacy role-name Roster field is intentionally nil (the
+		// orchestrator agents.roster path is no longer fed from the catalog).
+		Roster:         nil,
+		ActiveAgentIDs: activeAgentIDs,
+		TestSetup:      testSetup,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
