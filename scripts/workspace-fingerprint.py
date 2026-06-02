@@ -25,6 +25,7 @@ EXCLUDE_NAMES_EXACT = {
     "whatsapp",
     "state",
     "output",
+    "public",  # Lia's runtime marketing output; mirror sync-baseline-workspace.py
     "logs",
     "cache",
     ".cache",

@@ -16,6 +16,11 @@ env_required:
 
 # Skill: publicar-instagram-buffer
 
+> **Provedor de `marketing/publicar-instagram`.** Não invocar direto — Lia
+> sempre entra por `publicar-instagram`, que roteia pra cá quando o Buffer é o
+> canal configurado. As regras universais (aprovação, sem claim, registro
+> pós-publicação) vêm de lá.
+
 Agenda ou publica post no Instagram via **Buffer API** — sem Meta App, sem burocracia, gratuito ate 10 posts na fila.
 
 > So chamar apos aprovacao humana registrada em `memory/marketing.md`.

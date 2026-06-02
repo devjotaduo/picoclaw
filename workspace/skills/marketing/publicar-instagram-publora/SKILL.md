@@ -17,6 +17,11 @@ mcp_servers:
 
 # Skill: publicar-instagram-publora
 
+> **Provedor de `marketing/publicar-instagram`.** Não invocar direto — Lia
+> sempre entra por `publicar-instagram`, que roteia pra cá quando o MCP
+> `publora-instagram` é o canal configurado. As regras universais (aprovação,
+> sem claim, registro pós-publicação) vêm de lá.
+
 Use esta skill para publicar ou agendar no Instagram via Publora, sempre depois de aprovacao humana registrada.
 
 ## Requisitos

@@ -15,10 +15,41 @@ requires_human_confirmation: true
 
 # Skill: publicar-instagram
 
-Publica conteudo no Instagram via **Instagram Graph API** (canal oficial da Meta).
+**Ponto único de publicação no Instagram.** Esta é a ÚNICA skill que Lia chama
+para publicar — ela roteia para o provedor configurado no workspace. As skills
+`publicar-instagram-publora`, `publicar-instagram-buffer` e
+`publicar-instagram-webhook` são **referências de provedor**, chamadas por aqui;
+não invocar nenhuma delas diretamente.
 
 > ATENCAO: Esta skill so pode ser chamada APOS aprovacao humana registrada.
 > Nunca usar agent-browser, Selenium, Puppeteer ou qualquer automacao de browser para publicar no Instagram — viola os Termos de Uso da Meta e pode resultar em bloqueio permanente da conta.
+
+## 0. Roteamento — escolha do provedor
+
+Antes de qualquer coisa, descobrir **qual canal está configurado** e despachar.
+Ordem de preferência (usar o primeiro disponível):
+
+| Prioridade | Provedor | Como detectar se está disponível | Referência |
+|---|---|---|---|
+| 1 | **Instagram Graph API** (oficial Meta) | `$META_ACCESS_TOKEN` + `$INSTAGRAM_USER_ID` setados | Seções 1–12 deste arquivo |
+| 2 | **Publora** (MCP) | MCP `publora-instagram` conectado no workspace | `marketing/publicar-instagram-publora` |
+| 3 | **Buffer** | credencial Buffer configurada | `marketing/publicar-instagram-buffer` |
+| 4 | **Webhook Make.com** | `$MAKE_INSTAGRAM_WEBHOOK_URL` setado | `marketing/publicar-instagram-webhook` |
+
+Processo de dispatch:
+
+1. Verificar aprovação humana registrada em `memory/marketing.md` (sem isso, parar).
+2. Detectar o provedor pela tabela acima (primeiro que casar).
+3. Se **nenhum** estiver configurado: **não publicar**. Marcar a publicação como
+   pendente, salvar tudo pronto (arte + legenda aprovadas) e avisar o Rafael
+   qual credencial falta. Nunca cair em automação de browser como "plano B".
+4. Seguir a referência do provedor escolhido. As regras universais (aprovação,
+   sem claim não validado, sem dado pessoal, rate limit, registro pós-publicação
+   em `memory/marketing.md`) valem para TODOS os provedores — estão detalhadas
+   abaixo para o Graph API e se aplicam igualmente aos outros.
+
+O restante deste arquivo (Seções 1–12) é a referência do **provedor 1 (Graph
+API)** — o caminho oficial e recomendado.
 
 ---
 

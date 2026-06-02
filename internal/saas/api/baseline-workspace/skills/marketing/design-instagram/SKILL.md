@@ -117,6 +117,24 @@ Tom: primeira pessoa, honesto, sem exagero. Sem claim de resultado que não se p
 
 ## 4. Biblioteca de ganchos (hooks)
 
+Estes ganchos são **andaime, não roteiro**. Preencher o template literalmente
+("5 motivos pelos quais...") é o que faz post de agência soar igual a todo
+mundo. Mecanismo obrigatório de frescor:
+
+1. **Não reutilizar gancho recente.** Antes de escolher, olhe os últimos posts
+   em `memory/marketing.md` (ou `memory/posts-publicados.md`). Se um molde já
+   foi usado nos **últimos 5 posts** ou no post imediatamente anterior, escolha
+   outra categoria. A regra "nunca repetir o mesmo gancho em 2 posts
+   consecutivos" (§11) é o piso, não o teto.
+2. **Reescrever, não preencher.** Pegue a *estrutura* do gancho e escreva uma
+   frase nova com o vocabulário real da marca (`memory/marca.md` → frases
+   preferidas/evitadas) e uma dor concreta do público (`memory/empresa.md`). Se
+   a frase final ainda contém o esqueleto visível do template ("X motivos",
+   "Poucos sabem que"), reescreva.
+3. **Teste do "qualquer empresa".** Se o gancho serviria igual pra uma empresa
+   de outro segmento, ele está genérico demais — ancore num detalhe que só essa
+   empresa tem.
+
 Usar como base e adaptar para o segmento e tom da empresa. Nunca copiar literalmente.
 
 ### Curiosidade
