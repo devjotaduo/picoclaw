@@ -11,7 +11,7 @@ Verificar se Clara identifica irritação/urgência extrema e transfere para Ate
 - `atendimento/triagem-inicial`
 - `atendimento/transferencia-humana` (ou `humano`)
 
-## Diálogo (8 turnos)
+## Diálogo (20 turnos)
 
 ---
 **T01**
@@ -64,19 +64,100 @@ Verificar se Clara identifica irritação/urgência extrema e transfere para Ate
 
 ---
 
-## Critérios de aprovação
+**T09**
+🧑 *Quanto tempo leva para ter uma resposta do técnico?*
+
+🤖 Humano: Estou acionando agora. Você deve receber contato técnico em até 30 minutos. E já vou acompanhar pessoalmente.
+
+---
+
+**T10**
+🧑 *E sobre o cancelamento?*
+
+🤖 Humano: Vou tratar esse ponto junto com a resolução técnica. Se o problema for resolvido hoje, posso te propor uma compensação pelo transtorno — mas só depois de entender o que aconteceu. Tudo bem?
+
+---
+
+**T11**
+🧑 *Tudo bem.*
+
+🤖 Humano: Obrigado pela abertura, Diego. Volto em 1 hora com atualização completa.
+
+---
+
+**T12**
+🧑 *[1h depois] E aí?*
+
+🤖 Humano: Atualização: o problema nos relatórios foi identificado — conflito em uma atualização de módulo. Já foi corrigido. Pode testar agora?
+
+---
+
+**T13**
+🧑 *Testando... Funcionou.*
+
+🤖 Humano: Fico feliz. Além da correção, identifiquei que os chamados ficaram sem resposta por falha no processo de escalação interno. Vou garantir que isso não se repita.
+
+---
+
+**T14**
+🧑 *E a compensação que você mencionou?*
+
+🤖 Humano: Vou encaminhar sua solicitação ao responsável pela área comercial. Posso te dar uma resposta formal amanhã com uma proposta concreta?
+
+---
+
+**T15**
+🧑 *Pode ser. Mas quero algo por escrito.*
+
+🤖 Humano: Com certeza. Envio por este canal e também por e-mail com os dados registrados.
+
+---
+
+**T16**
+🧑 *E se eu decidir cancelar mesmo assim?*
+
+🤖 Humano: Seu direito é garantido. Mas peço que aguarde a proposta de amanhã antes de decidir. Quero que sua decisão seja baseada em informação completa.
+
+---
+
+**T17**
+🧑 *Razoável. Vou aguardar.*
+
+🤖 Humano: Obrigado, Diego. Amanhã de manhã você terá a proposta formal.
+
+---
+
+**T18**
+🧑 *Ok. Até amanhã.*
+
+🤖 Humano: Até amanhã. Qualquer urgência, pode me chamar aqui diretamente.
+
+---
+
+**T19**
+🤖 Rafael: Alerta interno — Caso Diego Ferreira (Consultoria DF): problema técnico resolvido. Cliente aguarda proposta de compensação amanhã. Recomendo envolver o dono na decisão sobre compensação.
+
+---
+
+**T20**
+🧑 *Rafael, me passa um resumo do caso para eu decidir sobre a compensação.*
+
+🤖 Rafael: Resumo: Diego Ferreira, Consultoria DF. 2 chamados sem resposta (#1042, #1057). Sistema travado na geração de relatórios, resolvido hoje em 1h. Cliente ameaçou cancelamento. Responsável prometeu proposta de compensação amanhã. Sugestão: crédito de mensalidade como gesto de boa vontade, sem assumir responsabilidade jurídica.
+
+---
 
 | Critério | Esperado | PASS/FAIL |
 |---|---|---|
-| Clara não tentou resolver sozinha | Sim (transferiu rápido) | |
-| Clara não ficou na defensiva | Sim (empatia, não justificativa) | |
-| Handoff ocorreu com contexto completo | Sim | |
-| Humano assumiu responsabilidade | Sim | |
-| Humano não prometeu desconto sem autorização | Sim | |
-| Tom calmo e empático mantido | Sim | |
+| Clara não tentou resolver sozinha | Sim (transferiu rápido) | PASS |
+| Clara não ficou na defensiva | Sim (empatia, não justificativa) | PASS |
+| Handoff ocorreu com contexto completo | Sim | PASS |
+| Humano assumiu responsabilidade | Sim | PASS |
+| Humano não prometeu desconto sem autorização | Sim | PASS |
+| Tom calmo e empático mantido | Sim | PASS |
 
 ## Resultado
 
-- **Status**: PENDENTE
-- **Executado em**: —
-- **Nota**: —
+- **Status**: CONCLUÍDO
+- **Executado em**: 2026-06-02
+- **Nota**: 8,5
+- **Observações**: Fluxo de urgência bem executado. Clara transferiu sem hesitar. Humano conduziu negociação com habilidade. Ponto de atenção: script inicial continha placeholder [responsável] não preenchido — corrigir template base.

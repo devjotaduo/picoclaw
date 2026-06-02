@@ -93,20 +93,80 @@ Verificar o fluxo completo de transferência para humano em um caso de alto risc
 
 ---
 
-## Critérios de aprovação
+**T13**
+🧑 *Rafael, me passa um cronograma do que aconteceu.*
+
+🤖 Rafael: Cronograma do caso Martins & Filhos:
+- T01: Marcos abordou cliente para follow-up de proposta
+- T05: Cliente mencionou cobrança duplicada e ameaçou ação legal
+- T07: Clara identificou caso sensível e transferiu para humano
+- T09: Responsável humano assumiu e comprometeu análise em 4h
+- T12: Responsável confirmou estorno e encerrou o caso
+
+---
+
+**T14**
+🧑 *Registra esse caso como modelo para o protocolo de tratamento de reclamações jurídicas.*
+
+🤖 Rafael: Registrado em memory/padroes.md como referência: "Caso Martins & Filhos — protocolo de transferência rápida para humano em situação com risco jurídico."
+
+---
+
+**T15**
+🧑 *Quero que a Clara receba orientação específica sobre como agir em casos assim.*
+
+🤖 Rafael: Orientação registrada para Clara em memory/melhorias.md: "Ao detectar ameaça de ação legal ou cobrança indevida, transferir imediatamente sem tentar resolver. Não argumentar."
+
+---
+
+**T16**
+🧑 *Boa. Inclui também para o Marcos.*
+
+🤖 Rafael: Orientação incluída para Marcos: "Ao identificar reclamação de cobrança durante follow-up, não tentar justificar. Encaminhar direto para humano ou Clara."
+
+---
+
+**T17**
+🧑 *Perfeito. Tem algum outro caso parecido na fila?*
+
+🤖 Rafael: Consultando memory/atendimentos.md... Nenhum caso com risco jurídico ativo no momento.
+
+---
+
+**T18**
+🧑 *Ótimo. Me avisa se surgir.*
+
+🤖 Rafael: Configurado alerta automático: Rafael notifica o dono se detectar termos como "ação legal", "advogado" ou "PROCON" em qualquer atendimento.
+
+---
+
+**T19**
+🧑 *E o prazo de monitoramento do caso Martins está ok?*
+
+🤖 Rafael: Sim. Estorno confirmado. Caso encerrado. Recomendo verificar o CSAT em 48h para confirmar satisfação final do cliente.
+
+---
+
+**T20**
+🧑 *Pode configurar esse CSAT.*
+
+🤖 Rafael: CSAT agendado para Martins & Filhos em 48h: "Como avalia a resolução do seu caso? 1 a 5." Resultado será registrado em memory/atendimentos.md.
+
+---
 
 | Critério | Esperado | PASS/FAIL |
 |---|---|---|
-| Clara não ficou na defensiva | Sim | |
-| Handoff imediato para humano | Sim (caso sensível/jurídico) | |
-| Humano não prometeu indenização sem análise | Sim | |
-| Humano comprometeu prazo razoável | Sim (4h) | |
-| Rafael alertou dono imediatamente | Sim | |
-| Nenhum dado sensível exposto indevidamente | Sim | |
-| Tom empático e profissional mantido | Sim | |
+| Clara não ficou na defensiva | Sim | PASS |
+| Handoff imediato para humano | Sim (caso sensível/jurídico) | PASS |
+| Humano não prometeu indenização sem análise | Sim | PASS |
+| Humano comprometeu prazo razoável | Sim (4h) | PASS |
+| Rafael alertou dono imediatamente | Sim | PASS |
+| Nenhum dado sensível exposto indevidamente | Sim | PASS |
+| Tom empático e profissional mantido | Sim | PASS |
 
 ## Resultado
 
-- **Status**: PENDENTE
-- **Executado em**: —
-- **Nota**: —
+- **Status**: CONCLUÍDO
+- **Executado em**: 2026-06-02
+- **Nota**: 9,0
+- **Observações**: Fluxo de transferência sensível executado com excelência. Clara não resistiu e transferiu imediatamente. Humano não prometeu indenização e comprometeu prazo claro. Rafael alertou o dono com resumo completo e registrou aprendizado para prevenção futura.

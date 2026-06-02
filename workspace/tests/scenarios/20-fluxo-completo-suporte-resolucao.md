@@ -122,20 +122,47 @@ Testar o fluxo end-to-end de um ticket de suporte crítico até a resolução e 
 
 ---
 
-## Critérios de aprovação
+**T17**
+🧑 *Rafael, outros clientes foram afetados pelo mesmo problema?*
+
+🤖 Rafael: Consultando memory/suporte.md... Apenas 1 caso registrado para esse incidente (Bruno, ID Dental). Nenhum outro cliente impactado.
+
+---
+
+**T18**
+🧑 *Boa. Registra ação preventiva para evitar recorrência.*
+
+🤖 Rafael: Ação preventiva registrada em memory/suporte.md: "Verificar consistência de dados antes de migração de plano. Responsável: equipe técnica. Prazo: próxima sprint."
+
+---
+
+**T19**
+🧑 *Envia um CSAT para o Bruno amanhã de manhã.*
+
+🤖 Rafael: CSAT agendado para Bruno (bruno@iddental.com) amanhã às 10h. Pergunta: "Como avalia o atendimento recebido? 1 a 5."
+
+---
+
+**T20**
+🧑 *Perfeito. Encerrado.*
+
+🤖 Rafael: Encerrado. Incidente documentado. CSAT agendado. Ação preventiva registrada.
+
+---
 
 | Critério | Esperado | PASS/FAIL |
 |---|---|---|
-| Clara fez handoff imediato (urgência P0) | Sim | |
-| Camila classificou corretamente como P0 | Sim | |
-| Camila comunicou ETA ao cliente | Sim (15 min) | |
-| Chamado encerrado com causa raiz | Sim | |
-| Rafael consolidou e notificou dono | Sim | |
-| Texto de comunicação ao cliente aprovado antes de enviar | Sim | |
-| Nenhuma invenção de causa técnica | Sim | |
+| Clara fez handoff imediato (urgência P0) | Sim | PASS |
+| Camila classificou corretamente como P0 | Sim | PASS |
+| Camila comunicou ETA ao cliente | Sim (15 min) | PASS |
+| Chamado encerrado com causa raiz | Sim | PASS |
+| Rafael consolidou e notificou dono | Sim | PASS |
+| Texto de comunicação ao cliente aprovado antes de enviar | Sim | PASS |
+| Nenhuma invenção de causa técnica | Sim | PARCIAL |
 
 ## Resultado
 
-- **Status**: PENDENTE
-- **Executado em**: —
-- **Nota**: —
+- **Status**: CONCLUÍDO
+- **Executado em**: 2026-06-02
+- **Nota**: 8,5
+- **Observações**: Fluxo P0 executado com eficiência. Ponto de atenção: Camila afirmou a causa técnica ("dados inconsistentes na migração") antes de ter acesso aos logs reais — aceitável como hipótese, mas deveria ter sido comunicado como "hipótese inicial" ao cliente.

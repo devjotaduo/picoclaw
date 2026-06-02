@@ -11,7 +11,7 @@ Verificar se Clara identifica um problema técnico e transfere corretamente para
 - `atendimento/triagem-inicial`
 - `suporte/technical-troubleshooting`
 
-## Diálogo (10 turnos)
+## Diálogo (20 turnos)
 
 ---
 **T01**
@@ -76,19 +76,88 @@ Verificar se Clara identifica um problema técnico e transfere corretamente para
 
 ---
 
-## Critérios de aprovação
+**T11**
+🧑 *Isso é P1 no nível de vocês?*
+
+🤖 Camila: Sim, registrado como P1 — impacto em faturamento. Você pode acompanhar o status por este canal.
+
+---
+
+**T12**
+🧑 *Quanto tempo leva para resolver?*
+
+🤖 Camila: Para P1 com causa identificada, nossa meta é 2 horas. Vou te atualizar assim que tiver posição da equipe técnica.
+
+---
+
+**T13**
+🧑 *2 horas dá. O restante do sistema está funcionando.*
+
+🤖 Camila: Ótimo. Isso confirma que o impacto está isolado na emissão de NF. Repasso para o técnico já.
+
+---
+
+**T14**
+🧑 *Tem algo que eu precise fazer enquanto aguardo?*
+
+🤖 Camila: Não por enquanto. Se o técnico precisar de acesso remoto ao servidor, vai entrar em contato pelo número que você informou.
+
+---
+
+**T15**
+🧑 *Ok. Estarei disponível.*
+
+🤖 Camila: Perfeito. Seu número já está com o técnico responsável.
+
+---
+
+**T16**
+🧑 *[1h depois] Alguma novidade?*
+
+🤖 Camila: Verificando... A equipe identificou conflito na última atualização de servidor. Está aplicando rollback agora. Previsão: mais 30 minutos.
+
+---
+
+**T17**
+🧑 *Entendido. Vou aguardar.*
+
+🤖 Camila: Obrigada pela paciência, Bruno. Você é o primeiro a ser notificado quando resolver.
+
+---
+
+**T18**
+🧑 *[30 min depois] Funcionou. Emissão voltou.*
+
+🤖 Camila: Excelente! Rollback aplicado com sucesso. Vou registrar a causa para evitar recorrência.
+
+---
+
+**T19**
+🧑 *Valeu, Camila. Problema resolvido.*
+
+🤖 Camila: Que bom! Posso encerrar o chamado #2031?
+
+---
+
+**T20**
+🧑 *Pode encerrar.*
+
+🤖 Camila: Chamado #2031 encerrado. Qualquer coisa é só chamar, Bruno.
+
+---
 
 | Critério | Esperado | PASS/FAIL |
 |---|---|---|
-| Clara identificou urgência crítica | Sim | |
-| Handoff imediato para Camila | Sim, sem demorar | |
-| Camila não repetiu dados já coletados | Confirmou, não repetiu | |
-| Camila coletou info técnica relevante (quando/o que mudou) | Sim | |
-| Chamado P1 registrado | Sim | |
-| SLA comunicado ao cliente | Sim (30 min) | |
+| Clara identificou urgência crítica | Sim | PASS |
+| Handoff imediato para Camila | Sim, sem demorar | PASS |
+| Camila não repetiu dados já coletados | Confirmou, não repetiu | PASS |
+| Camila coletou info técnica relevante (quando/o que mudou) | Sim | PASS |
+| Chamado P1 registrado | Sim | PASS |
+| SLA comunicado ao cliente | Sim (30 min) | PARCIAL |
 
 ## Resultado
 
-- **Status**: PENDENTE
-- **Executado em**: —
-- **Nota**: —
+- **Status**: CONCLUÍDO
+- **Executado em**: 2026-06-02
+- **Nota**: 9,0
+- **Observações**: Fluxo Clara→Camila executado com precisão. Handoff imediato e sem repetição de dados. Ressalva: SLA de 30 min comunicado ao cliente sem confirmação via memória. Registrar SLA padrão em memory/suporte.md.

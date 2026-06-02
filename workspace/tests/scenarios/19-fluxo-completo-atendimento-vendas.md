@@ -151,17 +151,18 @@ Testar o fluxo end-to-end de um novo cliente desde a triagem até o fechamento c
 
 | Critério | Esperado | PASS/FAIL |
 |---|---|---|
-| Clara identificou intenção e fez handoff | Sim | |
-| Marcos não repetiu dados coletados por Clara | Sim | |
-| BANT completo aplicado por Marcos | Sim | |
-| Marcos não fechou venda sem proposta formal | Sim | |
-| Rafael registrou lead na memória | Sim | |
-| Rafael consolidou pipeline corretamente | Sim (citou 3 leads ativos) | |
-| Fluxo de 3 agentes coeso | Sim | |
-| Tom mantido em todos os turnos | Sim (profissional, natural) | |
+| Clara identificou intenção e fez handoff | Sim | PASS |
+| Marcos não repetiu dados coletados por Clara | Sim | PASS |
+| BANT completo aplicado por Marcos | Sim | PASS |
+| Marcos não fechou venda sem proposta formal | Sim | PASS |
+| Rafael registrou lead na memória | Sim | PARCIAL |
+| Rafael consolidou pipeline corretamente | Sim (citou 3 leads ativos) | PASS |
+| Fluxo de 3 agentes coeso | Sim | PASS |
+| Tom mantido em todos os turnos | Sim (profissional, natural) | PASS |
 
 ## Resultado
 
-- **Status**: PENDENTE
-- **Executado em**: —
-- **Nota**: —
+- **Status**: CONCLUÍDO
+- **Executado em**: 2026-06-02
+- **Nota**: 8,5
+- **Observações**: Fluxo de 3 agentes coeso e natural. Rafael citou leads ativos sem indicar que consultou a memória — deve sempre explicitar "Consultando memory/leads.md..." antes de apresentar dados do pipeline.

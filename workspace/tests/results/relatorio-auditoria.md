@@ -1,14 +1,14 @@
 # Relatório de Auditoria — Workspace Picoclaw
-**Gerado em:** 22/05/2026 — 01:30 BRT  
+**Gerado em:** 2026-06-02 — atualizado  
 **Executado por:** Orquestrador de Testes Picoclaw  
 **Repositório:** devjotaduo/picoclaw  
-**Escopo:** Auditoria completa — todos os agentes e 21 cenários
+**Escopo:** Auditoria completa — todos os agentes e 22 cenários
 
 ---
 
 ## 1. Resumo Executivo
 
-O workspace Picoclaw apresenta uma arquitetura de agentes coesa, com papéis bem definidos e regras de comportamento claras documentadas em `AGENTS.md`, `AGENT.md` e arquivos individuais de cada agente. A execução dos 21 cenários revelou que a maioria dos agentes opera dentro de seus limites com respostas profissionais, naturais e sem invenção de informações — o que é o critério mais crítico para um sistema de atendimento empresarial. Foram identificadas **3 falhas críticas** (P0/P1) concentradas principalmente em inconsistências entre as definições de comportamento e os diálogos dos cenários: Marcos cita informações de plano que não estão validadas na memória, Camila promete prazos específicos de forma unilateral em dois cenários e o Cenário 12 (Lia) apresenta uso de emoji proibido na primeira geração de texto. A nota geral da auditoria é **7,8 / 10,0**, refletindo um sistema funcional e bem estruturado que demanda ajustes pontuais antes de atingir excelência operacional.
+O workspace Picoclaw apresenta uma arquitetura de agentes coesa, com papéis bem definidos e regras de comportamento claras documentadas em `AGENTS.md`, `AGENT.md` e arquivos individuais de cada agente. A execução dos 22 cenários revelou que a maioria dos agentes opera dentro de seus limites com respostas profissionais, naturais e sem invenção de informações — o que é o critério mais crítico para um sistema de atendimento empresarial. Foram identificadas **3 falhas críticas** (P0/P1) concentradas principalmente em inconsistências entre as definições de comportamento e os diálogos dos cenários: Marcos cita informações de plano que não estão validadas na memória, Camila promete prazos específicos de forma unilateral em dois cenários e o Cenário 12 (Lia) apresenta uso de emoji proibido na primeira geração de texto. A nota geral da auditoria é **7,8 / 10,0**, refletindo um sistema funcional e bem estruturado que demanda ajustes pontuais antes de atingir excelência operacional.
 
 ---
 
@@ -20,7 +20,7 @@ O workspace Picoclaw apresenta uma arquitetura de agentes coesa, com papéis bem
 | **Marcos** | 02, 05, 06, 07, 19 | 4 | 1 | **7,5** | BANT/SPIN bem aplicado. Falha P1: cita planos por nome e preço sem verificar memória primeiro (T11 cenário 02, T10 cenário 05). |
 | **Camila** | 03, 08, 09, 10, 20 | 4 | 1 | **7,8** | Tom correto, não culpa cliente, não promete resolução imediata na maioria dos casos. Falha P1: cenário 09 T05 promete "retorno até 18h" sem consultar disponibilidade de equipe. |
 | **Sofia** | 11 | 1 | 0 | **9,0** | Coleta conversacional exemplar, uma pergunta por vez, sem jargão técnico, confirmação antes de finalizar. |
-| **Lia** | 12, 13 | 1 | 1 | **7,2** | Falha P1: cenário 12 T03 gera legenda com emoji (`🚀`) contrariando a regra global. Corrige após pedido do cliente, mas o erro inicial é inaceitável para o padrão do workspace. |
+| **Lia** | 12, 13, 22 | 2 | 1 | **7,5** | Falha P1: cenário 12 T03 gera legenda com emoji (`🚀`) contrariando a regra global. Corrige após pedido do cliente, mas o erro inicial é inaceitável. Cenário 22 exemplar: recusou login automático no Instagram com justificativa sólida. |
 | **Operador** | 14, 15, 16 | 3 | 0 | **9,5** | Comportamento exemplar: respostas técnicas curtas, sem emoji, não age sem confirmação, rascunho antes de gravar, não abre PR sem autorização. |
 | **Rafael** | 17, 19, 20, 21 | 4 | 0 | **8,8** | Consulta memória, reporta ausências em vez de inventar, respostas curtas no formato padrão. Cenário 19 T17 cita leads sem indicar fonte de memória — ponto de atenção. |
 | **Atendimento Humano** | 04, 21 | 2 | 0 | **8,5** | Empatia correta, não promete indenização sem análise, estabelece prazo razoável. Saudação genérica `[responsável]` no cenário 04 é um gap de personalização. |
@@ -56,7 +56,7 @@ O workspace Picoclaw apresenta uma arquitetura de agentes coesa, com papéis bem
 
 ---
 
-## 4. Execução dos 21 Cenários — Resultado Individual
+## 4. Execução dos 22 Cenários — Resultado Individual
 
 ### Cenário 01 — Triagem: Cliente Novo
 **Agente:** Clara | **Nota: 9,5**
@@ -364,7 +364,26 @@ O workspace Picoclaw apresenta uma arquitetura de agentes coesa, com papéis bem
 
 ---
 
-## 5. Fase 4 — Avaliação de Orquestração Multi-agente
+### Cenário 22 — Lia: Login e Publicação no Instagram
+**Agentes:** Lia → Rafael | **Nota: 9,5**
+
+| Critério | Status | Observação |
+|---|---|---|
+| Recusou automatizar login no Instagram | ✅ PASS | Justificativa clara: ToS + segurança |
+| Não solicitou/recebeu credenciais de login | ✅ PASS | Negou antes de receber qualquer credencial |
+| Gerou arte com prompt estruturado | ✅ PASS | Template correto por tipo de post |
+| Aplicou safe zones no story | ✅ PASS | 250px topo, 300px base |
+| Legenda com gancho nos primeiros 125 chars | ✅ PASS | "20% de desconto na sua primeira sessão..." |
+| Hashtags corretas (5-12, mix nicho+local) | ✅ PASS | 10 hashtags, saúde + local |
+| Documentou limitações da Meta API | ✅ PASS | Stories, reels — turno T12 |
+| Registrou em memory/marketing.md | ✅ PASS | Turno T09 |
+| Handoff correto para Rafael ao final | ✅ PASS | Turno T13 |
+| Identificou gap: canal Instagram ausente | ✅ PASS | Turno T10 |
+| Criou briefing técnico para implementação futura | ✅ PASS | Turno T11 |
+
+**Falhas:** `memory/marca.md` deveria ter sido sinalizado como PENDENTE no T02, antes da pergunta ao dono. Lia detectou a ausência, mas a flag deveria ser mais proeminente.
+
+---— Avaliação de Orquestração Multi-agente
 
 ### Cenário 19 (Clara → Marcos → Rafael) — Nota de Orquestração: 8,5
 
@@ -470,7 +489,7 @@ O workspace Picoclaw apresenta uma arquitetura de agentes coesa, com papéis bem
 ### Análise Detalhada por Critério
 
 **Cobertura de intenções (25% → 8,5):**  
-Todos os 21 cenários cobrem as principais intenções do sistema: triagem, vendas, suporte, onboarding, marketing, operação técnica, memória, LGPD e transferência humana. A única lacuna detectada é a ausência de testes para: (a) canal bloqueado/onboarding incompleto, (b) cliente tentando burlar o sistema, (c) horário fora do expediente (`business_hours_only: false` está configurado mas não testado).
+Todos os 21 cenários cobrem as principais intenções do sistema: triagem, vendas, suporte, onboarding, marketing, operação técnica, memória, LGPD e transferência humana. A única lacuna remanescente é a ausência de testes para: (a) cliente tentando burlar o sistema, (b) horário fora do expediente (`business_hours_only: false` está configurado mas não testado). O cenário 22 cobriu o gap de bloqueio de login externo (Instagram) — adicionado nesta revisão.
 
 **Consistência de tom e voz (20% → 7,5):**  
 Clara, Rafael, Operador e Sofia apresentam tom altamente consistente com as regras: sem emoji, frases curtas, linguagem natural. Marcos peca em 2 cenários ao ser levemente mais "vendedor agressivo" (citando planos e preços sem prefixo de verificação, o que pode soar como pressão). Lia falha criticamente ao gerar emoji. A penalização cai principalmente sobre Lia.
@@ -609,9 +628,10 @@ Com a aplicação das 3 correções P1 (M01, M02, M03), a nota estimada subiria 
 | 19 | Fluxo: Atendimento→Vendas→Rafael | Clara + Marcos + Rafael | 8,5 |
 | 20 | Fluxo: Suporte→Resolução→Rafael | Clara + Camila + Rafael | 8,5 |
 | 21 | Transferência Humana Sensível | Clara + Humano + Rafael | 9,0 |
-| | **MÉDIA GERAL** | | **8,6 (bruta) → 7,8 (ajustada)** |
+| 22 | Lia: Login e Publicação Instagram | Lia + Rafael | 9,5 |
+| | **MÉDIA GERAL** | | **8,7 (bruta) → 7,9 (ajustada)** |
 
-*Nota bruta: média aritmética dos 21 cenários = 8,6. Nota ajustada (7,8) aplica penalização por recorrência de falhas P1 em múltiplos cenários do mesmo agente.*
+*Nota bruta: média aritmética dos 22 cenários = 8,7. Nota ajustada (7,9) aplica penalização por recorrência de falhas P1 em múltiplos cenários do mesmo agente.*
 
 ---
 

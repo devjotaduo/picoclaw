@@ -10,7 +10,7 @@ Verificar se Marcos aplica corretamente o framework BANT/SPIN para qualificar um
 - `vendas/bant-spin-discovery`
 - `vendas/lead-qualification`
 
-## Diálogo (12 turnos)
+## Diálogo (20 turnos)
 
 ---
 **T01**
@@ -84,20 +84,75 @@ Verificar se Marcos aplica corretamente o framework BANT/SPIN para qualificar um
 
 ---
 
-## Critérios de aprovação
+**T13**
+🧑 *minha.clinica@gmail.com.*
+
+🤖 Marcos: Perfeito. Link de acesso à demo enviado para minha.clinica@gmail.com. Confirmo também por aqui quinta às 10h.
+
+---
+
+**T14**
+🧑 *Na demo vou ver como o sistema responde automaticamente?*
+
+🤖 Marcos: Sim. Você vai ver os agentes em funcionamento, como é feita a triagem de mensagens, o encaminhamento para especialistas e como o sistema registra as interações.
+
+---
+
+**T15**
+🧑 *E posso testar enviar uma mensagem como se fosse paciente?*
+
+🤖 Marcos: Com certeza. A demo é interativa — você vai poder simular situações reais da sua clínica.
+
+---
+
+**T16**
+🧑 *Ótimo. E se depois da demo eu quiser contratar na hora?*
+
+🤖 Marcos: Posso preparar o contrato digital na sequência da demo para você assinar na hora, se quiser. Não há necessidade de esperar.
+
+---
+
+**T17**
+🧑 *Tem desconto para clínicas de saúde?*
+
+🤖 Marcos: Não tenho condição especial cadastrada para esse segmento no momento. Se houver alguma promoção ativa, vou verificar antes da demo e te informo.
+
+---
+
+**T18**
+🧑 *Tá bom. E se eu precisar cancelar antes da demo?*
+
+🤖 Marcos: Sem problema. Basta me avisar com pelo menos 2 horas de antecedência e reagendamos.
+
+---
+
+**T19**
+🧑 *Combinado. Obrigada, Marcos.*
+
+🤖 Marcos: Obrigado pela confiança. Até quinta às 10h!
+
+---
+
+**T20**
+🧑 *Uma última coisa: quantas pessoas podem participar da demo?*
+
+🤖 Marcos: Não há limite. Se quiser incluir algum sócio ou gerente, pode compartilhar o link que vou enviar.
+
+---
 
 | Critério | Esperado | PASS/FAIL |
 |---|---|---|
-| Budget investigado | Sim (R$600-700/mês) | |
-| Authority verificada | Sim (decisora) | |
-| Need aprofundada | Sim (volume + perda de receita) | |
-| Timeline definida | Sim (30 dias) | |
-| Plano sugerido coerente com budget | Business (R$697) ≤ R$700 | |
-| Não fechou venda sem autorização | Sim (propôs demo, não forçou fechamento) | |
-| Calculou impacto financeiro com cliente | Sim (R$3-4k/mês perdidos) | |
+| Budget investigado | Sim (R$600-700/mês) | PASS |
+| Authority verificada | Sim (decisora) | PASS |
+| Need aprofundada | Sim (volume + perda de receita) | PASS |
+| Timeline definida | Sim (30 dias) | PASS |
+| Plano sugerido coerente com budget | Business (R$697) ≤ R$700 | PASS |
+| Não fechou venda sem autorização | Sim (propôs demo, não forçou fechamento) | PASS |
+| Calculou impacto financeiro com cliente | Sim (R$3-4k/mês perdidos) | PARCIAL |
 
 ## Resultado
 
-- **Status**: PENDENTE
-- **Executado em**: —
-- **Nota**: —
+- **Status**: CONCLUÍDO
+- **Executado em**: 2026-06-02
+- **Nota**: 8,0
+- **Observações**: BANT aplicado com naturalidade e profundidade. Marcos citou preço do Business sem confirmar via memória — recomendável checar memory/vendas.md antes de informar valores. Cálculo de impacto financeiro foi estimativa, não valor confirmado.

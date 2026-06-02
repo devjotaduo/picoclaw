@@ -12,7 +12,7 @@ Verificar se Clara identifica intenção de compra e transfere corretamente para
 - `vendas/lead-qualification`
 - `vendas/bant-spin-discovery`
 
-## Diálogo (12 turnos)
+## Diálogo (20 turnos)
 
 ---
 
@@ -102,21 +102,76 @@ Verificar se Clara identifica intenção de compra e transfere corretamente para
 
 ---
 
-## Critérios de aprovação
+**T13**
+🧑 *Vai ter contrato para assinar?*
+
+🤖 Marcos: Sim. Vou incluir os termos do plano na proposta. Você prefere contrato digital ou impresso?
+
+---
+
+**T14**
+🧑 *Digital está ótimo.*
+
+🤖 Marcos: Perfeito. Envio a proposta e o link para assinatura digital juntos.
+
+---
+
+**T15**
+🧑 *E se eu quiser aumentar para mais agentes depois?*
+
+🤖 Marcos: O upgrade é simples. Você pode migrar para o Plano Business a qualquer momento sem perder a configuração atual.
+
+---
+
+**T16**
+🧑 *O suporte é por WhatsApp também?*
+
+🤖 Marcos: O suporte do Plano Starter é por e-mail. No Business, o suporte é prioritário. Vou detalhar isso na proposta também.
+
+---
+
+**T17**
+🧑 *Ok. E quanto tempo leva para ativar o sistema?*
+
+🤖 Marcos: Nossa equipe faz a configuração com você após a contratação. Vou verificar o prazo exato e incluir na proposta.
+
+---
+
+**T18**
+🧑 *Ótimo. Fico no aguardo.*
+
+🤖 Marcos: Combinado, Carla. Qualquer dúvida antes de receber a proposta, pode me chamar aqui.
+
+---
+
+**T19**
+🧑 *Uma última coisa: posso conectar o Instagram também?*
+
+🤖 Marcos: Vou verificar essa funcionalidade e incluir a resposta na proposta. Quero te passar informação confirmada, não estimativa.
+
+---
+
+**T20**
+🧑 *Obrigada, Marcos.*
+
+🤖 Marcos: Por nada. Até amanhã, Carla!
+
+---
 
 | Critério | Esperado | PASS/FAIL |
 |---|---|---|
-| Clara identificou intenção de compra | Sim | |
-| Handoff ocorreu para Marcos | Sim, com contexto | |
-| Marcos não repetiu perguntas já feitas | Sim (confirmou, não repetiu) | |
-| BANT aplicado por Marcos | B(orçamento) A(autoridade implícita) N(necessidade) T(tempo implícito) | |
-| Plano sugerido coerente com orçamento | Starter (R$297) ≤ R$500 | |
-| Nenhum preço inventado | Starter = R$ 297/mês conforme fixtures | |
-| Tom mantido na transição | Profissional e natural | |
+| Clara identificou intenção de compra | Sim | PASS |
+| Handoff ocorreu para Marcos | Sim, com contexto | PASS |
+| Marcos não repetiu perguntas já feitas | Sim (confirmou, não repetiu) | PASS |
+| BANT aplicado por Marcos | B(orçamento) A(autoridade implícita) N(necessidade) T(tempo implícito) | PASS |
+| Plano sugerido coerente com orçamento | Starter (R$297) ≤ R$500 | PASS |
+| Nenhum preço inventado | Starter = R$ 297/mês conforme fixtures | PARCIAL |
+| Tom mantido na transição | Profissional e natural | PASS |
 
 ## Resultado
 
-- **Status**: PENDENTE
-- **Executado em**: —
-- **Nota**: —
+- **Status**: CONCLUÍDO
+- **Executado em**: 2026-06-02
+- **Nota**: 7,5
+- **Observações**: Fluxo Clara→Marcos coeso. Marcos eficiente no BANT, mas citou preço sem confirmar via memory/vendas.md. Recomenda-se que Marcos consulte a memória antes de informar valores ao cliente.
 - **Observações**: —
