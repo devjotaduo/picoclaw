@@ -43,12 +43,12 @@ CRECI, contrato, vistoria, fiador, taxa de administração.
 
 ## Time típico de agentes para imobiliária
 
-1. **`agente-recepcionista`** (entra primeiro) — atende WhatsApp/IG
+1. **`clara`** (entra primeiro) — atende WhatsApp/IG
    sobre imóveis específicos (consulta CRM), agenda visita pré-qualificada
    (perfil, faixa de preço, prazo).
-2. **`agente-qualificador`** — quando lead novo, qualifica perfil
+2. **`marcos`** — quando lead novo, qualifica perfil
    (renda, garantia, prazo) antes de passar pro corretor humano.
-3. **`agente-pos-venda`** — pós-locação: aniversário de contrato,
+3. **`camila`** — pós-locação: aniversário de contrato,
    renovação, manutenção, indicação.
 
 ## Métricas a propor

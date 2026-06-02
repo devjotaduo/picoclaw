@@ -154,6 +154,20 @@ E no fechamento da liberação (Passo 8i), reforce a mesma ideia:
 ~/.picoclaw/config.json                        ← roster + dispatch rules
 workspace/AGENT.md                             ← protocolo da equipe
 workspace/AGENTS.md                            ← spec narrativa
-workspace/agents/<id>/AGENT.md                 ← override por agente (sofia, lia, operador, qa-tester)
-workspace/agents/<persona>.md                  ← persona docs (clara, marcos, camila, luna, rafael)
+workspace/agents/<id>/AGENT.md                 ← prompt por agente (pasta com AGENT.md + behavior.json)
+workspace/agents/<id>/behavior.json            ← switches de comportamento por agente
+```
+
+Exemplos de estrutura atual:
+```
+workspace/agents/sofia/AGENT.md
+workspace/agents/sofia/behavior.json
+workspace/agents/clara/AGENT.md
+workspace/agents/marcos/AGENT.md
+workspace/agents/camila/AGENT.md
+workspace/agents/luna/AGENT.md
+workspace/agents/lia/AGENT.md
+workspace/agents/operador/AGENT.md
+workspace/agents/qa-tester/AGENT.md
+workspace/agents/catarina/AGENT.md
 ```

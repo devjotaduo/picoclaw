@@ -40,14 +40,14 @@ estoque, frete, devolução, marketplace, reviews.
 
 ## Time típico de agentes para e-commerce
 
-1. **`agente-recepcionista`** (entra primeiro) — responde frete, prazo,
+1. **`clara`** (entra primeiro) — responde frete, prazo,
    trocas, política de devolução; consulta status de pedido.
-2. **`agente-vendedor`** — conduz dúvida pré-compra até o checkout, envia
+2. **`marcos`** — conduz dúvida pré-compra até o checkout, envia
    link, recupera carrinho abandonado.
-3. **`agente-pos-venda`** — pede review após entrega, oferece cross-sell,
+3. **`camila`** — pede review após entrega, oferece cross-sell,
    reativa cliente inativo.
-4. **`agente-suporte`** (se dor for rastreamento/2ª via) — integra com
-   transportadora e gateway de pagamento.
+4. **`camila`** (suporte pós-compra) — rastreamento, 2ª via de boleto;
+   integra com transportadora e gateway de pagamento.
 
 ## Métricas a propor
 

@@ -43,12 +43,12 @@ ticket médio, fidelidade, conferência.
 
 ## Time típico de agentes para varejo
 
-1. **`agente-recepcionista`** (entra primeiro) — atende WhatsApp/IG
+1. **`clara`** (entra primeiro) — atende WhatsApp/IG
    sobre disponibilidade, preço, localização, horário. Reduz fila do
    atendente físico.
-2. **`agente-vendedor`** — quando lead quente, conduz pra compra
+2. **`marcos`** — quando lead quente, conduz pra compra
    (Pix, link de pagamento, reserva pra retirada).
-3. **`agente-pos-venda`** — segunda venda, reativação, programa
+3. **`camila`** — segunda venda, reativação, programa
    fidelidade simples.
 
 ## Métricas a propor

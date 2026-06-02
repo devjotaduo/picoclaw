@@ -42,14 +42,15 @@ ciclo de venda, decisor.
 
 ## Time típico de agentes para vendas B2B
 
-1. **`agente-qualificador`** (entra primeiro) — recebe lead inbound em
+1. **`marcos`** (entra primeiro) — recebe lead inbound em
    segundos, faz perguntas de qualificação, marca reunião no calendário
    do vendedor certo.
-2. **`agente-prospeccao`** — outbound em lista segmentada, dentro de
-   regras LGPD, abre conversa por e-mail/LinkedIn.
-3. **`agente-pos-venda`** (= follow-up de proposta) — toca leads parados,
+2. ⚠️ **prospecção outbound** — `agente-prospeccao` não existe no roster
+   atual. `marcos` cobre inbound; outbound ativo em lista segmentada:
+   marcar como "a validar" — criar via `operador` + `skill-creator`.
+3. **`camila`** (= follow-up de proposta) — toca leads parados,
    reativa pipeline frio, lembra reunião.
-4. **`agente-resumos`** — devolve diariamente ao gestor: leads novos,
+4. **`main`** (Rafael) — devolve diariamente ao gestor: leads novos,
    propostas paradas, reuniões da semana.
 
 ## Restrições LGPD (outbound)

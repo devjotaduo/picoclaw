@@ -38,13 +38,14 @@ cozinha, ticket médio, giro de mesa.
 
 ## Time típico de agentes para restaurante
 
-1. **`agente-recepcionista`** (entra primeiro) — atende WhatsApp,
+1. **`clara`** (entra primeiro) — atende WhatsApp,
    responde horário, cardápio, localização, faz reserva.
-2. **`agente-agendador`** (= reservas) — confirma reserva 24h antes,
-   reduz no-show em finais de semana.
-3. **`agente-vendedor`** (se delivery próprio) — recebe pedido, sugere
+2. ⚠️ **reservas / confirmação** — `agente-agendador` não existe no roster
+   atual. Confirmação 24h / redução de no-show: ampliar `camila` ou
+   criar agente dedicado via `operador` + `skill-creator`.
+3. **`marcos`** (se delivery próprio) — recebe pedido, sugere
    acompanhamento, fecha com link de pagamento Pix.
-4. **`agente-pos-venda`** — pede review no Google, oferece cupom de
+4. **`camila`** — pede review no Google, oferece cupom de
    retorno, ativa cliente que sumiu.
 
 ## Métricas a propor

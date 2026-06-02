@@ -38,11 +38,12 @@ recorrente, retorno, sinal/caução.
 
 ## Time típico de agentes para beleza
 
-1. **`agente-recepcionista`** (entra primeiro) — atende WhatsApp,
+1. **`clara`** (entra primeiro) — atende WhatsApp,
    responde preço de serviços, faz pré-agendamento.
-2. **`agente-agendador`** — confirma 24h antes (reduz no-show),
-   reagenda no mesmo turno, gerencia pacotes.
-3. **`agente-pos-venda`** — pergunta como ficou, oferece retorno,
+2. ⚠️ **agendamento** — `agente-agendador` não existe no roster atual.
+   Confirmação 24h / gestão de pacotes / reagendamento: ampliar `camila`
+   ou criar agente dedicado via `operador` + `skill-creator`.
+3. **`camila`** — pergunta como ficou, oferece retorno,
    reativa cliente que sumiu há >60d.
 
 ## Métricas a propor

@@ -38,13 +38,14 @@ LMS, trial.
 
 ## Time típico de agentes para educação
 
-1. **`agente-qualificador`** (entra primeiro) — recebe lead do anúncio,
+1. **`marcos`** (entra primeiro) — recebe lead do anúncio,
    tira dúvida sobre curso, agenda call de matrícula ou já manda link.
-2. **`agente-recepcionista`** (suporte ao aluno) — responde dúvidas
+2. **`clara`** (suporte ao aluno) — responde dúvidas
    operacionais: acesso, certificado, plataforma.
-3. **`agente-cobranca`** — lembra vencimento, recupera inadimplente,
-   oferece renegociação dentro de regras.
-4. **`agente-pos-venda`** (= retenção) — acompanha progresso do aluno,
+3. ⚠️ **cobrança** — `agente-cobranca` não existe no roster atual.
+   Workaround: `main` (Rafael) + cron para lembretes de mensalidade.
+   Automação de renegociação: marcar como "a validar".
+4. **`camila`** (= retenção) — acompanha progresso do aluno,
    reengaja quem parou de assistir aula.
 
 ## Métricas a propor

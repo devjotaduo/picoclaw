@@ -38,13 +38,15 @@ proposta, orçamento.
 
 ## Time típico de agentes para serviços
 
-1. **`agente-recepcionista`** (entra primeiro) — atende dúvida inicial,
-   triage o caso, agenda reunião de avaliação.
-2. **`agente-agendador`** — gerencia agenda de atendimentos / reuniões,
-   confirma 24h antes.
-3. **`agente-cobranca`** — lembra mensalidade, envia 2ª via, recupera
-   inadimplente.
-4. **`agente-pos-venda`** — pesquisa de satisfação, pede indicação,
+1. **`clara`** (entra primeiro) — atende dúvida inicial,
+   tria o caso, agenda reunião de avaliação.
+2. ⚠️ **agendamento** — `agente-agendador` não existe no roster atual.
+   Gestão de agenda / confirmação 24h: ampliar `camila` ou criar agente
+   dedicado via `operador` + `skill-creator`.
+3. ⚠️ **cobrança** — `agente-cobranca` não existe no roster atual.
+   Workaround: `main` (Rafael) + cron para lembretes de mensalidade.
+   Automação completa: marcar como "a validar".
+4. **`camila`** — pesquisa de satisfação, pede indicação,
    reativa cliente parado.
 
 ## Métricas a propor

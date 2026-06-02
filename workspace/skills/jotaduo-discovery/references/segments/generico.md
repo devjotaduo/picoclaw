@@ -31,8 +31,9 @@ Use quando o cliente não se encaixa nos segmentos pré-definidos
 ## Time típico (default)
 
 Quase sempre faz sentido começar com:
-1. **`agente-recepcionista`** — captura primeiro contato e qualifica.
-2. **`agente-pos-venda`** OU **`agente-cobranca`** — depende da dor
+1. **`clara`** — captura primeiro contato e qualifica.
+2. **`camila`** (pós-venda) OU ⚠️ cobrança: `agente-cobranca` não existe
+   no roster atual; workaround: `main` (Rafael) + cron — depende da dor
    priorizada.
 
 Adicione outros conforme as dores específicas emergirem.

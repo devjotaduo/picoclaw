@@ -50,15 +50,17 @@ particular, no-show, recepção, profissional, especialidade.
 
 ## Time típico de agentes para clínica
 
-1. **`agente-recepcionista`** (entra primeiro) — atende WhatsApp 24/7,
+1. **`clara`** (entra primeiro) — atende WhatsApp 24/7,
    responde dúvidas sobre especialidades, preços de particular,
    localização, convênios aceitos.
-2. **`agente-agendador`** — marca/remarca/cancela, confirma consulta
-   24h antes, integra com a agenda do sistema clínico.
-3. **`agente-pos-venda`** (segunda onda) — lembrete de retorno, pesquisa
+2. ⚠️ **agendamento** — `agente-agendador` não existe no roster atual.
+   Confirmação 24h / marcação integrada com sistema clínico: ampliar
+   `camila` ou criar agente dedicado via `operador` + `skill-creator`.
+3. **`camila`** (segunda onda) — lembrete de retorno, pesquisa
    de satisfação, reativação de paciente inativo.
-4. **`agente-cobranca`** (se houver dor de inadimplência em particular)
-   — envia 2ª via, lembra vencimento.
+4. ⚠️ **cobrança** — `agente-cobranca` não existe no roster atual.
+   Workaround: `main` (Rafael) + cron para alertas de inadimplência.
+   Automação completa de cobrança: marcar como "a validar".
 
 ## Métricas a propor
 
