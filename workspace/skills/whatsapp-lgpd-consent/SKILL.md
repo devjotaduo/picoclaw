@@ -14,3 +14,10 @@ será desenvolvido conforme a feature for priorizada pelo time.
 
 Esta skill é referenciada pelos templates em
 `web/frontend/src/components/agent/templates/catalog.ts`.
+
+## Relacionada
+
+- `consent-lgpd` — skill complementar (gestão programática de estado de
+  consentimento: verificar, gravar, revogar). Use esta skill
+  (`whatsapp-lgpd-consent`) para **solicitar** consentimento em conversa;
+  use `consent-lgpd` para **verificar e registrar** o estado resultante.

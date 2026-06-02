@@ -1,0 +1,23 @@
+{
+  "master_enabled": true,
+  "respond_in_dm": true,
+  "respond_in_groups": false,
+  "group_mention_only": true,
+  "ignore_other_bots": true,
+  "ignore_self_messages": true,
+  "process_images": false,
+  "process_documents": true,
+  "process_audio": false,
+  "process_video": false,
+  "process_stickers": false,
+  "process_location": false,
+  "max_media_size_mb": 20,
+  "session_timeout_minutes": 60,
+  "max_messages_per_session": 30,
+  "mask_pii_in_replies": true,
+  "store_received_media": false,
+  "max_messages_per_minute_per_user": 5,
+  "response_cooldown_seconds": 0,
+  "handoff_keywords": ["humano", "rafael", "operador"],
+  "handoff_after_failures": 2
+}

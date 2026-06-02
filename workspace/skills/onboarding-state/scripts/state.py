@@ -130,13 +130,24 @@ MEMORY_SEGMENT_ALIASES = {
 }
 
 
+_SCRIPT_CONTENT_RE = re.compile(
+    r"<(script|style|iframe|object|embed)[^>]*>.*?</(script|style|iframe|object|embed)>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
 def sanitize_short_text(value: str, max_len: int = NAME_MAX_LEN) -> str:
     """Strip control chars + HTML-ish tags from a single-line field and
     truncate. Returns empty when input is empty/whitespace. Use for owner
-    name, segment, etc. — fields where newlines should not survive."""
+    name, segment, etc. — fields where newlines should not survive.
+
+    NOTE: script/style content is stripped entirely (including inner text)
+    before generic tag removal, so <script>alert(1)</script> → "" not "alert(1)".
+    """
     if not value:
         return ""
     cleaned = _CONTROL_CHAR_RE.sub("", value)
+    cleaned = _SCRIPT_CONTENT_RE.sub("", cleaned)
     cleaned = _TAG_LIKE_RE.sub("", cleaned).strip()
     return cleaned[:max_len]
 
@@ -148,6 +159,7 @@ def sanitize_long_text(value: str, max_len: int = SUMMARY_MAX_LEN) -> str:
         return ""
     # Keep \n + \t; strip everything else in 0x00-0x1f.
     cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", value)
+    cleaned = _SCRIPT_CONTENT_RE.sub("", cleaned)
     cleaned = _TAG_LIKE_RE.sub("", cleaned).strip()
     return cleaned[:max_len]
 
@@ -205,13 +217,25 @@ def now_iso() -> str:
 
 
 def find_workspace_root(start: Path) -> Path:
-    """Sobe diretórios procurando um que tenha AGENT.md. Fallback: $PICOCLAW_HOME/workspace."""
+    """Sobe diretórios procurando um que tenha AGENT.md. Fallback: $PICOCLAW_HOME/workspace.
+
+    Define PICOCLAW_WORKSPACE_OVERRIDE env var to point directly to a workspace
+    directory for isolated testing without touching the real workspace."""
+    import os
+
+    # Allow full override for testing/CI isolation.
+    override = os.environ.get("PICOCLAW_WORKSPACE_OVERRIDE")
+    if override:
+        candidate = Path(override).resolve()
+        if candidate.is_dir():
+            return candidate
+        raise SystemExit(f"PICOCLAW_WORKSPACE_OVERRIDE path not found: {override}")
+
     cur = start.resolve()
     for parent in [cur, *cur.parents]:
         if (parent / "AGENT.md").is_file() and parent.name.lower() == "workspace":
             return parent
     # Fallback: olhar PICOCLAW_HOME env
-    import os
     home = os.environ.get("PICOCLAW_HOME")
     if home:
         candidate = Path(home) / "workspace"

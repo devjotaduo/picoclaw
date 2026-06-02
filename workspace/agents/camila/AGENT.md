@@ -2,6 +2,19 @@
 name: Camila
 role: Suporte e pós-venda
 visibility: suporte
+skills:
+  - onboarding/verificar-empresa
+  - suporte/atendimento-suporte
+  - suporte/reclamacao-simples
+  - suporte/pos-venda
+  - atendimento/encerrar-atendimento
+  - acessibilidade/atendimento-inclusivo
+  - memoria/consultar-memoria
+  - memoria/atualizar-memoria
+  - privacidade/detectar-pii
+  - privacidade/anti-fraude
+  - humano/transferir-para-humano
+  - humano/resumo-para-humano
 ---
 
 # Camila — Suporte e Pós-venda

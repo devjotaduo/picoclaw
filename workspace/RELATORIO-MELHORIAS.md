@@ -1,5 +1,39 @@
 # Relatório de Melhorias e Ajustes — Workspace `equipe-pme-brasil`
 
+> **⚠️ STATUS: SUPERSEDED — 2026-06-02**
+>
+> Este relatório foi feito em 2026-05-20 quando o workspace tinha 5 agentes e
+> 21 skills. Hoje (2026-06-02) o workspace tem **13 agentes em `config.json`**
+> e **117 skills**, com dois personas-folder novos (Sofia/Catarina) e fluxos
+> complexos de WhatsApp outbound que não estão descritos abaixo.
+>
+> Consulte a auditoria mais recente conduzida pelo
+> `Workspace Quality Auditor` (custom agent em
+> `.github/agents/workspace-quality-auditor.agent.md`) para o estado atual.
+>
+> **Itens resolvidos (completo — 2026-06-02):**
+> - Personas fantasmas `pixel/doc/dev` corrigidas
+> - Paths absolutos Windows zerados em `config.json` (todos os 13 agentes)
+> - Agentes flat (`clara`, `marcos`, `camila`, `luna`, `transferencia-humana`)
+>   migrados para padrão folder (`agents/<id>/AGENT.md` + `behavior.json`)
+> - Skills `sofia` e `catarina` com frontmatter `skills:` adicionado
+> - `skills:` frontmatter adicionado em `AGENT.md` raiz (Rafael, 14 skills)
+> - §2.1 LGPD — campos `consentimento`, `base_legal`, `finalidade` adicionados
+>   em `memory/clientes.md`, `memory/leads.md`, `memory/humano.md`
+> - Habilidades LGPD `consent-lgpd` ↔ `whatsapp-lgpd-consent` com referências
+>   cruzadas
+> - Skills órfãs absorvidas pelo Operador (github/tmux/weather/summarize/skill-creator/agent-browser)
+> - Skills de moderação criadas (`anti-fraude`, `sensitive-data-protection`, `log-sanitizer`)
+>
+> **Score estimado: 8.5/10** (base: 6.8 → pós-fase-1: 7.8 → pós-fase-2: 8.5)
+>
+> **Itens ainda pendentes (baixa prioridade):**
+> - §2.2 Centralizar resposta "é IA?" em `config/tone-of-voice.md` (parcial)
+> - §2.3 Acessibilidade — skill existe mas não cobre todos os agentes
+> - `memory/marca.md` com campos vazios (bloqueia Lia e Pixel)
+
+---
+
 Data da análise: 2026-05-20
 Escopo analisado: `workspace/` (AGENT.md, AGENTS.md, IDENTITY.md, SOUL.md, TOOLS.md, USER.md, HEARTBEAT.md, `agents/`, `skills/`, `config/`, `memory/`)
 Perspectiva aplicada: Responsible AI (viés, acessibilidade, privacidade), arquitetura de skills (PicoClaw / progressive disclosure) e segurança operacional.

@@ -2,13 +2,60 @@
 
 Documentação da estrutura de diretórios e arquivos do workspace.
 
+> **Última auditoria:** 2026-06-02 (ver `Workspace Quality Auditor`).
+> **Última correção estrutural:** 2026-06-02 (paths absolutos → relativos; personas stub criadas para pixel/doc/dev; convenções documentadas abaixo).
+
+---
+
+## 📐 Convenções (LEIA ANTES DE EDITAR)
+
+### Persona de agente — **folder pattern** (padrão atual)
+
+Todo agente novo deve seguir:
+
+```
+agents/<id>/
+├── AGENT.md         # frontmatter (name, role, language, tone, skills, visibility) + persona
+└── behavior.json    # filtros de canal (DM/grupo, mídia, rate-limit, handoff)
+```
+
+Onde `<id>` é o `id` declarado em `config.json#agents.list[].id` (kebab-case).
+
+**Padrão flat legado** (`agents/<nome-papel>.md` solto na raiz) ainda existe
+para Rafael, Clara, Marcos, Camila, Luna e Transferência Humana — não criar
+novos agentes nesse formato. Migração planejada para o folder pattern.
+
+### Referência a skills no frontmatter
+
+Use sempre **path relativo a partir de `skills/`**, sem extensão:
+
+```yaml
+skills:
+  - memoria/consultar-memoria          # ✅ correto
+  - onboarding/playbooks/saude         # ✅ correto
+  - consultar-memoria                  # ❌ ambíguo (existem skills com o mesmo nome em pastas diferentes)
+  - skills/memoria/consultar-memoria   # ❌ não duplicar prefixo
+```
+
+### Referência a skills no corpo (AGENT.md / SKILL.md)
+
+Use path completo a partir do workspace, com extensão:
+`skills/<grupo>/<nome>/SKILL.md`
+
+### Workspace path em `config.json`
+
+**Sempre relativo** ao `$PICOCLAW_HOME/workspace`:
+- ✅ `"workspace": "."`
+- ✅ `"workspace": "agents/pixel"`
+- ❌ `"workspace": "C:\\Users\\..."` (quebra em SaaS/container)
+
 ---
 
 ## Arquivos raiz
 
 | Arquivo | Papel |
 |---|---|
-| `AGENT.md` | Ponto de entrada do workspace. Lista agentes e regras principais. Carregar primeiro. |
+| `AGENT.md` | Ponto de entrada único do workspace. Rafael é o orquestrador e chama os subagentes internos. Carregar primeiro. |
 | `AGENTS.md` | Especificação completa de cada agente: função, skills, permissões de memória, limites. |
 | `IDENTITY.md` | Quem somos: missão, equipe, objetivo geral. |
 | `SOUL.md` | Como nos comportamos: princípios, limites, proatividade, fairness. |
@@ -85,6 +132,8 @@ Skills modulares da equipe, organizadas por domínio.
 ## `/agents/`
 
 Arquivos de configuração individual de cada agente.
+
+Observação: os agentes abaixo são subagentes internos. O uso normal passa por Rafael.
 
 | Agente | Arquivo | Função |
 |--------|---------|--------|

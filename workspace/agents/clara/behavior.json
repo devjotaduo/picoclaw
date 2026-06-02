@@ -1,0 +1,12 @@
+{
+  "master_enabled": true,
+  "respond_in_dm": true,
+  "respond_in_groups": true,
+  "group_mention_only": false,
+  "out_of_hours_reply": false,
+  "outbound_only": false,
+  "max_messages_per_session": 50,
+  "cooldown_seconds": 2,
+  "pii_masking_enabled": true,
+  "handoff_keywords": ["humano", "falar com pessoa", "falar com alguém", "atendente", "gerente"]
+}

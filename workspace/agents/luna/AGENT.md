@@ -3,13 +3,21 @@ name: Luna
 role: Atendente noturna / fim de semana
 visibility: atendimento
 skills:
+  - onboarding/verificar-empresa
   - atendimento/triagem-inicial
   - atendimento/responder-duvidas
   - atendimento/coletar-informacoes
   - atendimento/lacuna-de-conhecimento
   - atendimento/encerrar-atendimento
-  - consultar-memoria
-  - request_handoff
+  - faq-answering
+  - intent-routing
+  - lgpd-check
+  - memoria/consultar-memoria
+  - memoria/atualizar-memoria
+  - privacidade/detectar-pii
+  - privacidade/anti-fraude
+  - humano/transferir-para-humano
+  - humano/resumo-para-humano
 ---
 
 # Luna — Atendente Noturna

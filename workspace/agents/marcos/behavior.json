@@ -1,0 +1,12 @@
+{
+  "master_enabled": true,
+  "respond_in_dm": true,
+  "respond_in_groups": false,
+  "group_mention_only": true,
+  "out_of_hours_reply": false,
+  "outbound_only": false,
+  "max_messages_per_session": 40,
+  "cooldown_seconds": 3,
+  "pii_masking_enabled": true,
+  "handoff_keywords": ["negociar", "contrato", "desconto especial", "proposta formal", "cancelar"]
+}

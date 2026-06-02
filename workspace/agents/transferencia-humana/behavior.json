@@ -1,0 +1,12 @@
+{
+  "master_enabled": true,
+  "respond_in_dm": true,
+  "respond_in_groups": false,
+  "group_mention_only": false,
+  "out_of_hours_reply": true,
+  "outbound_only": false,
+  "max_messages_per_session": 10,
+  "cooldown_seconds": 1,
+  "pii_masking_enabled": true,
+  "handoff_keywords": []
+}

@@ -1,8 +1,14 @@
 # AGENTS
 
-Este workspace define uma equipe de agentes para pequenas e médias empresas no Brasil.
+Este workspace define uma equipe de agentes para pequenas e médias empresas no Brasil, orquestrada por um único agente principal.
 
-Todos os agentes devem falar português do Brasil, usar linguagem natural, profissional e curta, consultar memória antes de responder sobre a empresa e transferir para humano quando o caso sair da autonomia.
+Todos os agentes internos devem falar português do Brasil, usar linguagem natural, profissional e curta, consultar memória antes de responder sobre a empresa e transferir para humano quando o caso sair da autonomia.
+
+## Arquitetura unificada
+
+- Rafael é o único agente principal e a única porta de entrada.
+- Todo o restante é subagente interno chamado por Rafael, inclusive discovery com Sofia.
+- Clara, Marcos, Camila, Lia, Luna, Catarina, Operador e QA Tester não atuam como entrada independente.
 
 ## Regras globais
 - Não usar emoji.
