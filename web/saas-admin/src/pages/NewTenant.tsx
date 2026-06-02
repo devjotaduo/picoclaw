@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -18,12 +18,12 @@ import {
   markPasswordDelivered,
   type CreateTenantInput,
   type CreateTenantResponse,
+  type RosterEntry,
   type TenantCLIProvider,
   type TenantModelRoutingMode,
   type TenantType,
 } from "@/api/tenants";
 import { listPlatformLiteLLMModels } from "@/api/platform-litellm";
-import { listWorkspaces } from "@/api/workspaces";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +38,6 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -147,6 +146,57 @@ function splitTestLines(value: string): string[] {
     .filter(Boolean);
 }
 
+// isRosterEntry: true when a roster item is a RosterEntry object rather than a
+// legacy roster string (["attendant","assistant"]). Lets the preview render
+// safely on catalog rows seeded before migration 0022.
+function isRosterEntry(a: unknown): a is RosterEntry {
+  return (
+    a !== null &&
+    typeof a === "object" &&
+    typeof (a as RosterEntry).label === "string"
+  );
+}
+
+// RosterPreview renders the read-only list of agents a tenant type is born
+// with. Renders nothing for publico/admin (sofia-only / empty) handled by the
+// caller passing the type's roster. No checkboxes — read-only by design.
+function RosterPreview({ roster }: { roster?: RosterEntry[] }) {
+  if (!Array.isArray(roster) || roster.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+        Atendimento direto, sem time de agentes adicional.
+      </div>
+    );
+  }
+  const entries = (roster as unknown[]).filter(isRosterEntry);
+  if (entries.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+        Atendimento direto, sem time de agentes adicional.
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2 rounded-md border bg-muted/20 p-3">
+      {entries.map((entry) => (
+        <div key={entry.id} className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">{entry.label}</span>
+            {entry.locked ? (
+              <Badge className="border border-border bg-transparent text-[10px] uppercase tracking-wide text-muted-foreground">
+                fixo
+              </Badge>
+            ) : null}
+          </div>
+          {entry.desc ? (
+            <span className="text-xs text-muted-foreground">{entry.desc}</span>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function NewTenant() {
   const nav = useNavigate();
   const [searchParams] = useSearchParams();
@@ -173,7 +223,6 @@ export function NewTenant() {
     display_name: "",
     owner_email: "",
     subdomain: "",
-    workspace_id: "",
     monthly_budget_usd: 5,
     mem_limit_mb: 512,
     cpu_quota: 0.5,
@@ -189,12 +238,6 @@ export function NewTenant() {
   const [subdomainError, setSubdomainError] = useState<string | null>(null);
   const subdomainRef = useRef<HTMLInputElement>(null);
 
-  const workspacesQ = useQuery({
-    queryKey: ["workspaces", "manual"],
-    queryFn: () => listWorkspaces({ manualOnly: true }),
-  });
-  const workspaces = workspacesQ.data?.workspaces ?? [];
-  const defaultWorkspace = workspaces.find((ws) => ws.is_default_auto);
   const litellmModelsQ = useQuery({
     queryKey: ["platform-litellm-models"],
     queryFn: listPlatformLiteLLMModels,
@@ -223,12 +266,6 @@ export function NewTenant() {
       icon: IconSparkles,
     }));
   const cards: TypeCard[] = [...TYPE_CARDS, ...verticalCards];
-
-  useEffect(() => {
-    if (!form.workspace_id && defaultWorkspace) {
-      setForm((prev) => ({ ...prev, workspace_id: defaultWorkspace.id }));
-    }
-  }, [defaultWorkspace, form.workspace_id]);
 
   const m = useMutation({
     mutationFn: (input: CreateTenantInput) => createTenant(input),
@@ -260,9 +297,12 @@ export function NewTenant() {
     readinessQuery.data?.error ??
     (readinessQuery.isError ? "Não foi possível verificar o subdomínio agora." : null);
 
-  const selectedWorkspace = useMemo(
-    () => workspaces.find((ws) => ws.id === form.workspace_id),
-    [form.workspace_id, workspaces],
+  // Catalog entry for the selected type — carries the agent roster the wizard
+  // previews (and that the tenant is born with). System types are in the
+  // catalog too, so this resolves for publico/admin/cliente as well.
+  const catalogEntry = useMemo(
+    () => tenantTypesQ.data?.tenant_types?.find((t) => t.slug === tenantType),
+    [tenantTypesQ.data, tenantType],
   );
 
   const errPayload = (() => {
@@ -486,42 +526,11 @@ export function NewTenant() {
                   </Field>
 
                   <Field>
-                    <FieldLabel>Modelo base</FieldLabel>
-                    {workspaces.length === 0 ? (
-                      <Alert className="border-chart-3/40 bg-chart-3/10">
-                        <AlertTitle>Nenhum modelo base disponível</AlertTitle>
-                        <AlertDescription>
-                          Crie um modelo base antes de criar clientes.
-                        </AlertDescription>
-                      </Alert>
-                    ) : (
-                      <>
-                        <Select
-                          value={form.workspace_id}
-                          onValueChange={(value) => setForm({ ...form, workspace_id: value })}
-                          required
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Escolha um modelo base" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {workspaces.map((ws) => (
-                                <SelectItem key={ws.id} value={ws.id}>
-                                  {ws.name} · v{ws.version}
-                                  {ws.is_default_auto ? " (padrão)" : ""}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                        <FieldDescription>
-                          {selectedWorkspace
-                            ? `${selectedWorkspace.name} aplica agentes, habilidades e telas prontas.`
-                            : "Modelo inicial da área do cliente."}
-                        </FieldDescription>
-                      </>
-                    )}
+                    <FieldLabel>Agentes deste tipo</FieldLabel>
+                    <RosterPreview roster={catalogEntry?.roster} />
+                    <FieldDescription>
+                      Estes agentes já nascem ativos e configurados para o tipo escolhido.
+                    </FieldDescription>
                   </Field>
                 </div>
               </FieldGroup>
@@ -862,7 +871,7 @@ export function NewTenant() {
                 <Button type="button" variant="outline" onClick={() => nav("/tenants")}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={m.isPending || workspaces.length === 0}>
+                <Button type="submit" disabled={m.isPending}>
                   {m.isPending ? <IconLoader2 data-icon="inline-start" className="animate-spin" /> : <IconSparkles data-icon="inline-start" />}
                   {m.isPending ? "Preparando..." : "Criar cliente"}
                 </Button>

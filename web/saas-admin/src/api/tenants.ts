@@ -42,6 +42,15 @@ export type TenantType = "publico" | "admin" | "cliente";
 // (internal/saas/api/tenant_types.go::tenantTypeResponse). The v2.0 create
 // wizard fetches selectable entries to offer business verticals (clinica,
 // loja, …) on top of the three system types.
+// RosterEntry is one agent spec in a tenant type's roster (object form, v2.0).
+// Legacy catalog rows may still carry a flat string[]; render defensively.
+export type RosterEntry = {
+  id: string;
+  role: "master" | "atendente" | "especialista" | "discovery";
+  label: string;
+  desc: string;
+  locked?: boolean;
+};
 export type TenantTypeCatalogEntry = {
   slug: string;
   display_name: string;
@@ -49,6 +58,9 @@ export type TenantTypeCatalogEntry = {
   icon: string;
   category: string;
   ui_profile: string;
+  // roster: the named agents this type is born with, each with a description.
+  // May be absent or a legacy string[] on rows seeded before migration 0022.
+  roster?: RosterEntry[];
   is_system: boolean;
   is_selectable: boolean;
   sort_order: number;
@@ -104,9 +116,10 @@ export type CreateTenantInput = {
   monthly_budget_usd?: number;
   mem_limit_mb?: number;
   cpu_quota?: number;
-  // workspace_id is required: it selects the Workspace whose home/ subtree
-  // seeds the tenant volume and whose frontend-dist/ is bind-mounted.
-  workspace_id: string;
+  // workspace_id is optional: the controlplane resolves the canonical
+  // is_default_auto workspace when the wizard omits it. The type-driven wizard
+  // no longer asks the operator to pick one.
+  workspace_id?: string;
   // model_routing lets the SaaS admin decide whether the materialized tenant
   // uses LiteLLM virtual-key routing or shared Claude/Codex CLI auth, plus
   // the ordered fallback chain.
