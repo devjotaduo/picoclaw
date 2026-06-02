@@ -283,6 +283,13 @@ func (h *Handler) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// When the wizard sends selected_agents without setup_mode, use them for
+	// ActivateRosterAgents at provision time. Overrides the catalog roster so
+	// the admin's explicit per-tenant choice wins.
+	if !isPublic && setupMode == "" && len(req.SelectedAgents) > 0 {
+		activeAgentIDs = req.SelectedAgents
+	}
+
 	// Public tenants have no human owner — derive a stable ops mailbox from
 	// TenantBaseDomain so the owner_email column has a non-empty value the
 	// controlplane can audit, and the operator never has to invent one in the

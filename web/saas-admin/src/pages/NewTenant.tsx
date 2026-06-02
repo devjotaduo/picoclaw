@@ -1,34 +1,29 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   IconChevronDown,
+  IconChevronRight,
   IconExternalLink,
   IconLoader2,
-  IconMessageCircle,
-  IconShieldCheck,
+  IconLock,
   IconSparkles,
-  IconUserCheck,
 } from "@tabler/icons-react";
 
 import {
   createTenant,
   getTenantReadiness,
-  listTenantTypes,
   markPasswordDelivered,
   type CreateTenantInput,
   type CreateTenantResponse,
   type TenantCLIProvider,
   type TenantModelRoutingMode,
-  type TenantType,
 } from "@/api/tenants";
 import { listPlatformLiteLLMModels } from "@/api/platform-litellm";
-import { listWorkspaces } from "@/api/workspaces";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CopyableField } from "@/components/ui/copyable-field";
 import { Dialog } from "@/components/ui/dialog";
@@ -38,7 +33,6 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -57,6 +51,8 @@ import {
 } from "@/lib/model-routing";
 import { cn } from "@/lib/utils";
 
+// ─── Constants ──────────────────────────────────────────────────────────────
+
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 
 function validateSubdomain(value: string): string | null {
@@ -66,135 +62,106 @@ function validateSubdomain(value: string): string | null {
   return null;
 }
 
-interface TypeCard {
-  // id is the tenant_type slug sent to the controlplane: a system type
-  // (publico/admin/cliente) or a catalog vertical slug (clinica, loja, …).
-  id: string;
-  title: string;
-  tagline: string;
-  bullets: string[];
-  subdomainHint: string;
-  displayNameHint: string;
-  icon: React.ComponentType<{ className?: string }>;
-}
+type TenantType = "cliente" | "admin" | "publico";
 
-const TYPE_CARDS: TypeCard[] = [
+const TENANT_TYPES: { id: TenantType; label: string; hint: { subdomain: string; name: string } }[] = [
+  { id: "cliente", label: "Cliente", hint: { subdomain: "acme", name: "Acme Corp" } },
+  { id: "admin", label: "Equipe Jota Duo", hint: { subdomain: "ops", name: "Operações" } },
+  { id: "publico", label: "Público", hint: { subdomain: "onboarding", name: "Onboarding" } },
+];
+
+const AGENT_CATEGORIES = [
   {
-    id: "cliente",
-    title: "Cliente",
-    tagline: "Cliente com área própria e responsável definido",
-    bullets: ["Link curto de acesso + senha como alternativa", "Atendimento, canais e configurações básicas", "Sem ferramentas internas da Jota Duo"],
-    subdomainHint: "acme",
-    displayNameHint: "Acme Corp",
-    icon: IconUserCheck,
+    label: "Atendimento",
+    agents: [
+      { id: "clara", label: "Clara", description: "Atendente principal" },
+      { id: "luna", label: "Luna", description: "Atendente noturna" },
+    ],
   },
   {
-    id: "admin",
-    title: "Equipe Jota Duo",
-    tagline: "Área interna para gestão da operação",
-    bullets: ["Link curto de acesso", "Menu completo da equipe", "Habilidades, registros e configurações visíveis"],
-    subdomainHint: "ops",
-    displayNameHint: "Operações",
-    icon: IconShieldCheck,
+    label: "Vendas & Suporte",
+    agents: [
+      { id: "marcos", label: "Marcos", description: "Consultor de vendas" },
+      { id: "camila", label: "Camila", description: "Suporte e pós-venda" },
+    ],
   },
   {
-    id: "publico",
-    title: "Público",
-    tagline: "Atendimento aberto, sem senha",
-    bullets: ["Visitante entra direto no chat", "Ideal para descoberta guiada com Sofia", "Entrega endereço público, sem pacote interno"],
-    subdomainHint: "onboarding",
-    displayNameHint: "Onboarding",
-    icon: IconMessageCircle,
+    label: "Criação",
+    agents: [
+      { id: "lia", label: "Lia", description: "Marketing digital" },
+      { id: "pixel", label: "Pixel", description: "Geração de imagens" },
+      { id: "doc", label: "Doc", description: "Geração de documentos" },
+    ],
+  },
+  {
+    label: "Especialistas",
+    agents: [
+      { id: "sofia", label: "Sofia", description: "Discovery e onboarding" },
+      { id: "catarina", label: "Catarina", description: "Curadoria via WhatsApp" },
+    ],
   },
 ];
 
-function parseTenantTypeParam(value: string | null): TenantType | null {
-  return value === "publico" || value === "admin" || value === "cliente" ? value : null;
-}
+const ALL_AGENTS = AGENT_CATEGORIES.flatMap((c) => c.agents);
 
 type CLIOrderPreset = "claude-codex" | "codex-claude" | "claude" | "codex";
 
 function cliOrderFromPreset(value: CLIOrderPreset): TenantCLIProvider[] {
   switch (value) {
-    case "codex-claude":
-      return ["codex-cli", "claude-cli"];
-    case "claude":
-      return ["claude-cli"];
-    case "codex":
-      return ["codex-cli"];
-    default:
-      return ["claude-cli", "codex-cli"];
+    case "codex-claude": return ["codex-cli", "claude-cli"];
+    case "claude": return ["claude-cli"];
+    case "codex": return ["codex-cli"];
+    default: return ["claude-cli", "codex-cli"];
   }
 }
 
-const TEST_AGENT_OPTIONS = [
-  { id: "clara", label: "Clara" },
-  { id: "luna", label: "Luna" },
-  { id: "marcos", label: "Marcos" },
-  { id: "camila", label: "Camila" },
-  { id: "lia", label: "Lia" },
-  { id: "sofia", label: "Sofia" },
-  { id: "catarina", label: "Catarina" },
-  { id: "vendas", label: "Vendas" },
-  { id: "marketing", label: "Marketing" },
-  { id: "assistente", label: "Assistente" },
-];
-
-function splitTestLines(value: string): string[] {
-  return value
-    .split(/\r?\n|,/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+function parseTenantTypeParam(value: string | null): TenantType | null {
+  return value === "publico" || value === "admin" || value === "cliente" ? value : null;
 }
+
+// ─── Component ──────────────────────────────────────────────────────────────
 
 export function NewTenant() {
   const nav = useNavigate();
   const [searchParams] = useSearchParams();
   const qc = useQueryClient();
-  const initialTenantType =
+
+  const initialType =
     parseTenantTypeParam(searchParams.get("type")) ??
     parseTenantTypeParam(searchParams.get("tenant_type")) ??
     "cliente";
-  const [tenantType, setTenantType] = useState<string>(initialTenantType);
+
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  // Step 1
+  const [tenantType, setTenantType] = useState<TenantType>(initialType);
+  const [displayName, setDisplayName] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [subdomain, setSubdomain] = useState("");
+  const [subdomainError, setSubdomainError] = useState<string | null>(null);
+  const subdomainRef = useRef<HTMLInputElement>(null);
+
+  // Step 2
+  const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
+
+  // Step 3 — advanced (collapsed by default)
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [monthlyBudget, setMonthlyBudget] = useState(10);
+  const [memLimit, setMemLimit] = useState(512);
+  const [cpuQuota, setCpuQuota] = useState(0.5);
   const [modelRoutingMode, setModelRoutingMode] = useState<TenantModelRoutingMode>("auto");
   const [litellmModelName, setLiteLLMModelName] = useState(DEFAULT_LITELLM_MODEL_NAME);
   const [litellmAPIBase, setLiteLLMAPIBase] = useState("");
-  const [litellmFallbacks, setLiteLLMFallbacks] = useState<string[]>(() => [
-    ...DEFAULT_LITELLM_FALLBACKS,
-  ]);
+  const [litellmFallbacks, setLiteLLMFallbacks] = useState<string[]>([...DEFAULT_LITELLM_FALLBACKS]);
   const [litellmAllowedModels, setLiteLLMAllowedModels] = useState<string[]>([]);
   const [cliOrderPreset, setCLIOrderPreset] = useState<CLIOrderPreset>("claude-codex");
   const [claudeCLIModelPreset, setClaudeCLIModelPreset] = useState("sonnet");
   const [claudeCLICustomModel, setClaudeCLICustomModel] = useState("");
   const [codexCLIModelPreset, setCodexCLIModelPreset] = useState("codex-cli");
   const [codexCLICustomModel, setCodexCLICustomModel] = useState("");
-  const [form, setForm] = useState<CreateTenantInput>({
-    display_name: "",
-    owner_email: "",
-    subdomain: "",
-    workspace_id: "",
-    monthly_budget_usd: 5,
-    mem_limit_mb: 512,
-    cpu_quota: 0.5,
-  });
-  const [testMode, setTestMode] = useState(false);
-  const [companySegment, setCompanySegment] = useState("");
-  const [companySummary, setCompanySummary] = useState("");
-  const [companyWhatsApp, setCompanyWhatsApp] = useState("");
-  const [selectedAgents, setSelectedAgents] = useState<string[]>(["clara"]);
-  const [allowedPhones, setAllowedPhones] = useState("");
-  const [allowedGroups, setAllowedGroups] = useState("");
-  const [result, setResult] = useState<CreateTenantResponse | null>(null);
-  const [subdomainError, setSubdomainError] = useState<string | null>(null);
-  const subdomainRef = useRef<HTMLInputElement>(null);
 
-  const workspacesQ = useQuery({
-    queryKey: ["workspaces", "manual"],
-    queryFn: () => listWorkspaces({ manualOnly: true }),
-  });
-  const workspaces = workspacesQ.data?.workspaces ?? [];
-  const defaultWorkspace = workspaces.find((ws) => ws.is_default_auto);
+  const [result, setResult] = useState<CreateTenantResponse | null>(null);
+
   const litellmModelsQ = useQuery({
     queryKey: ["platform-litellm-models"],
     queryFn: listPlatformLiteLLMModels,
@@ -203,32 +170,6 @@ export function NewTenant() {
     retry: false,
   });
   const litellmModels = litellmModelsQ.data?.models ?? [];
-
-  // v2.0: fetch the tenant_types catalog and append business verticals
-  // (clinica, loja, …) to the three curated system cards. Additive — if the
-  // fetch fails the wizard still shows the system types.
-  const tenantTypesQ = useQuery({
-    queryKey: ["tenant-types", "selectable"],
-    queryFn: () => listTenantTypes(true),
-  });
-  const verticalCards: TypeCard[] = (tenantTypesQ.data?.tenant_types ?? [])
-    .filter((t) => !t.is_system)
-    .map((t) => ({
-      id: t.slug,
-      title: t.display_name,
-      tagline: t.description,
-      bullets: [],
-      subdomainHint: t.slug,
-      displayNameHint: t.display_name,
-      icon: IconSparkles,
-    }));
-  const cards: TypeCard[] = [...TYPE_CARDS, ...verticalCards];
-
-  useEffect(() => {
-    if (!form.workspace_id && defaultWorkspace) {
-      setForm((prev) => ({ ...prev, workspace_id: defaultWorkspace.id }));
-    }
-  }, [defaultWorkspace, form.workspace_id]);
 
   const m = useMutation({
     mutationFn: (input: CreateTenantInput) => createTenant(input),
@@ -249,7 +190,7 @@ export function NewTenant() {
     },
   });
 
-  const card = cards.find((c) => c.id === tenantType) ?? cards[0];
+  // ── Derived
   const needsOwnerEmail = tenantType !== "publico";
   const tenantStatus = readinessQuery.data?.status;
   const hasError = tenantStatus === "error";
@@ -259,38 +200,43 @@ export function NewTenant() {
     readinessQuery.data?.last_error ??
     readinessQuery.data?.error ??
     (readinessQuery.isError ? "Não foi possível verificar o subdomínio agora." : null);
-
-  const selectedWorkspace = useMemo(
-    () => workspaces.find((ws) => ws.id === form.workspace_id),
-    [form.workspace_id, workspaces],
-  );
-
   const errPayload = (() => {
     const e = m.error as unknown;
     if (!e || typeof e !== "object") return null;
-    return e as {
-      error?: string;
-      status?: number;
-      body?: { tenant_id?: string; url?: string };
-    };
+    return e as { error?: string; status?: number; body?: { tenant_id?: string; url?: string } };
   })();
   const errMsg = errPayload?.error ?? (m.error ? "request failed" : null);
   const duplicateTenant =
-    errPayload && errPayload.status === 409 && errPayload.body?.tenant_id
-      ? {
-          tenantId: errPayload.body.tenant_id,
-          url: errPayload.body.url,
-        }
+    errPayload?.status === 409 && errPayload.body?.tenant_id
+      ? { tenantId: errPayload.body.tenant_id, url: errPayload.body.url }
       : null;
+  const typeHint = TENANT_TYPES.find((t) => t.id === tenantType)?.hint ?? TENANT_TYPES[0].hint;
+  const accessLink = result?.access_link ?? result?.short_magic_link ?? result?.magic_link;
+  const dialogTitle = hasError
+    ? "Erro ao preparar cliente"
+    : canReleaseAccess
+      ? "Cliente pronto"
+      : "Preparando cliente";
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const err = validateSubdomain(form.subdomain);
-    if (err) {
-      setSubdomainError(err);
+  // ── Navigation
+  const goToStep2 = () => {
+    const sdErr = validateSubdomain(subdomain);
+    if (sdErr) {
+      setSubdomainError(sdErr);
       subdomainRef.current?.focus();
       return;
     }
+    if (!displayName.trim()) return;
+    if (needsOwnerEmail && !ownerEmail.trim()) return;
+    setStep(2);
+  };
+
+  const toggleAgent = (id: string) =>
+    setSelectedAgents((prev) =>
+      prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id],
+    );
+
+  const submit = () => {
     const claudeCLIModel = cliModelValueFromPreset(
       claudeCLIModelPreset,
       claudeCLICustomModel,
@@ -322,28 +268,17 @@ export function NewTenant() {
               },
             }
           : { mode: "auto" };
+
     m.mutate({
-      ...form,
+      display_name: displayName.trim(),
+      owner_email: needsOwnerEmail ? ownerEmail.trim() : "",
+      subdomain,
       tenant_type: tenantType,
-      owner_email: needsOwnerEmail ? form.owner_email : "",
+      selected_agents: ["main", ...selectedAgents.filter((a) => a !== "main")],
+      monthly_budget_usd: monthlyBudget,
+      mem_limit_mb: memLimit,
+      cpu_quota: cpuQuota,
       model_routing: modelRouting,
-      ...(testMode
-        ? {
-            setup_mode: "test" as const,
-            company_seed: {
-              name: form.display_name.trim(),
-              segment: companySegment.trim(),
-              summary: companySummary.trim(),
-              contact_email: form.owner_email.trim().toLowerCase(),
-              contact_whatsapp: companyWhatsApp.trim(),
-            },
-            selected_agents: selectedAgents,
-            whatsapp_test_allowlist: {
-              phones: splitTestLines(allowedPhones),
-              groups: splitTestLines(allowedGroups),
-            },
-          }
-        : {}),
     });
   };
 
@@ -358,81 +293,95 @@ export function NewTenant() {
     setResult(null);
   };
 
-  const accessLink = result?.access_link ?? result?.short_magic_link ?? result?.magic_link;
-  const dialogTitle = hasError ? "Erro ao preparar cliente" : canReleaseAccess ? "Cliente pronto" : "Preparando cliente";
+  const STEPS = ["Info", "Agentes", "Revisar"];
 
   return (
     <div className="flex min-h-full flex-col">
       <PageHeader
         title="Novo cliente"
-        description="Crie a área do cliente com modelo base, preparação automática e pacote de acesso no mesmo fluxo."
+        description="Preencha as 3 etapas para criar a área do cliente."
       >
         <Button variant="outline" asChild>
           <Link to="/tenants">Cancelar</Link>
         </Button>
       </PageHeader>
 
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 p-4 lg:p-6">
-        <div className="grid gap-3 lg:grid-cols-3">
-          {cards.map((type) => {
-            const Icon = type.icon;
-            const selected = tenantType === type.id;
+      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-4 lg:p-6">
+        {/* Progress */}
+        <div className="flex items-center gap-2">
+          {STEPS.map((label, i) => {
+            const n = (i + 1) as 1 | 2 | 3;
+            const active = step === n;
+            const done = step > n;
             return (
-              <button
-                key={type.id}
-                type="button"
-                onClick={() => setTenantType(type.id)}
-                className={cn(
-                  "flex min-h-44 flex-col gap-4 rounded-xl border bg-card p-4 text-left text-card-foreground shadow-xs transition hover:bg-accent/40",
-                  selected ? "border-primary ring-2 ring-primary/20" : "border-border",
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <Icon className="size-5" />
-                    </div>
-                    <div>
-                      <div className="font-medium">{type.title}</div>
-                      <div className="text-xs text-muted-foreground">{type.tagline}</div>
-                    </div>
-                  </div>
-                  {selected ? <Badge className="border-primary/30 bg-primary/10 text-primary">Selecionado</Badge> : null}
+              <div key={label} className="flex items-center gap-2">
+                <div
+                  className={cn(
+                    "flex size-6 items-center justify-center rounded-full text-xs font-semibold",
+                    done
+                      ? "bg-primary text-primary-foreground"
+                      : active
+                        ? "ring-primary/30 bg-primary/20 text-primary ring-2"
+                        : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {n}
                 </div>
-                <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-                  {type.bullets.map((bullet) => (
-                    <li key={bullet} className="flex gap-2">
-                      <span className="mt-2 size-1 rounded-full bg-muted-foreground/50" />
-                      <span>{bullet}</span>
-                    </li>
-                  ))}
-                </ul>
-              </button>
+                <span
+                  className={cn(
+                    "text-sm",
+                    active ? "font-medium text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {label}
+                </span>
+                {i < STEPS.length - 1 && (
+                  <div className={cn("h-px w-8 bg-border", done && "bg-primary")} />
+                )}
+              </div>
             );
           })}
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Criar cliente — {card.title}</CardTitle>
-            <CardDescription>
-              {needsOwnerEmail
-                ? "Ao concluir, o responsável recebe o link curto de acesso e a senha inicial como alternativa."
-                : "O atendimento público não gera responsável, senha ou link interno automático."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={submit} className="flex flex-col gap-5">
+        {/* ── Step 1: Tipo + Info ─────────────────────────────────────── */}
+        {step === 1 && (
+          <Card>
+            <CardContent className="flex flex-col gap-5 pt-6">
+              <Field>
+                <FieldLabel>Tipo de tenant</FieldLabel>
+                <div className="flex gap-1 rounded-lg border bg-muted/30 p-1">
+                  {TENANT_TYPES.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setTenantType(t.id)}
+                      className={cn(
+                        "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
+                        tenantType === t.id
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                {tenantType === "publico" && (
+                  <FieldDescription>
+                    Tenant de onboarding público — Sofia será a agente ativa. Sem responsável.
+                  </FieldDescription>
+                )}
+              </Field>
+
               <FieldGroup>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <Field>
-                    <FieldLabel htmlFor="display_name">Nome do cliente</FieldLabel>
+                    <FieldLabel htmlFor="display_name">Nome da empresa</FieldLabel>
                     <Input
                       id="display_name"
-                      required
-                      value={form.display_name}
-                      onChange={(e) => setForm({ ...form, display_name: e.target.value })}
-                      placeholder={card.displayNameHint}
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder={typeHint.name}
                     />
                   </Field>
 
@@ -442,191 +391,211 @@ export function NewTenant() {
                       <Input
                         id="owner_email"
                         type="email"
-                        required
-                        value={form.owner_email}
-                        onChange={(e) => setForm({ ...form, owner_email: e.target.value })}
+                        value={ownerEmail}
+                        onChange={(e) => setOwnerEmail(e.target.value)}
                         placeholder="responsavel@empresa.com"
                       />
-                      <FieldDescription>Recebe acesso como responsável pela área.</FieldDescription>
                     </Field>
-                  ) : (
-                    <Field>
-                      <FieldLabel>Responsável</FieldLabel>
-                      <div className="flex h-9 items-center rounded-md border border-dashed px-3 text-sm text-muted-foreground">
-                        Não se aplica ao atendimento público
-                      </div>
-                    </Field>
-                  )}
-                </div>
+                  ) : null}
 
-                <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
-                  <Field data-invalid={Boolean(subdomainError)}>
+                  <Field
+                    data-invalid={Boolean(subdomainError)}
+                    className={cn(!needsOwnerEmail && "sm:col-span-2")}
+                  >
                     <FieldLabel htmlFor="subdomain">Endereço curto</FieldLabel>
                     <Input
                       id="subdomain"
                       ref={subdomainRef}
-                      required
-                      maxLength={30}
-                      value={form.subdomain}
+                      value={subdomain}
                       onChange={(e) => {
                         const v = e.target.value.toLowerCase();
-                        setForm({ ...form, subdomain: v });
+                        setSubdomain(v);
                         setSubdomainError(validateSubdomain(v));
                       }}
-                      onBlur={() => setSubdomainError(validateSubdomain(form.subdomain))}
-                      aria-invalid={Boolean(subdomainError)}
-                      placeholder={card.subdomainHint}
+                      onBlur={() => setSubdomainError(validateSubdomain(subdomain))}
+                      placeholder={typeHint.subdomain}
                       autoCapitalize="off"
                       autoCorrect="off"
                       spellCheck={false}
+                      maxLength={30}
+                      aria-invalid={Boolean(subdomainError)}
                     />
                     <FieldDescription>
-                      {subdomainError ?? "3 a 30 caracteres: letras minúsculas, números e hífen."}
+                      {subdomainError ? (
+                        <span className="text-destructive">{subdomainError}</span>
+                      ) : subdomain ? (
+                        `${subdomain}.jotaduo.com`
+                      ) : (
+                        "3–30 chars: letras minúsculas, números e hífen."
+                      )}
                     </FieldDescription>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel>Modelo base</FieldLabel>
-                    {workspaces.length === 0 ? (
-                      <Alert className="border-chart-3/40 bg-chart-3/10">
-                        <AlertTitle>Nenhum modelo base disponível</AlertTitle>
-                        <AlertDescription>
-                          Crie um modelo base antes de criar clientes.
-                        </AlertDescription>
-                      </Alert>
-                    ) : (
-                      <>
-                        <Select
-                          value={form.workspace_id}
-                          onValueChange={(value) => setForm({ ...form, workspace_id: value })}
-                          required
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Escolha um modelo base" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {workspaces.map((ws) => (
-                                <SelectItem key={ws.id} value={ws.id}>
-                                  {ws.name} · v{ws.version}
-                                  {ws.is_default_auto ? " (padrão)" : ""}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                        <FieldDescription>
-                          {selectedWorkspace
-                            ? `${selectedWorkspace.name} aplica agentes, habilidades e telas prontas.`
-                            : "Modelo inicial da área do cliente."}
-                        </FieldDescription>
-                      </>
-                    )}
                   </Field>
                 </div>
               </FieldGroup>
 
-              {needsOwnerEmail ? (
-                <div className="flex flex-col gap-4 rounded-lg border bg-muted/20 p-4">
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      checked={testMode}
-                      onChange={(e) => setTestMode(e.target.checked)}
-                    />
-                    Cliente em modo teste
-                  </label>
-                  {testMode ? (
-                    <div className="grid gap-4">
-                      <div className="grid gap-4 md:grid-cols-3">
-                        <Field>
-                          <FieldLabel htmlFor="test-segment">Segmento</FieldLabel>
-                          <Input
-                            id="test-segment"
-                            value={companySegment}
-                            onChange={(e) => setCompanySegment(e.target.value)}
-                            placeholder="clinica, loja, restaurante"
-                            required={testMode}
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="test-whatsapp">WhatsApp principal</FieldLabel>
-                          <Input
-                            id="test-whatsapp"
-                            value={companyWhatsApp}
-                            onChange={(e) => setCompanyWhatsApp(e.target.value)}
-                            placeholder="5587988553793"
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel>Agentes visíveis</FieldLabel>
-                          <div className="grid gap-2 text-sm">
-                            {TEST_AGENT_OPTIONS.map((agent) => (
-                              <label key={agent.id} className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedAgents.includes(agent.id)}
-                                  onChange={(e) => {
-                                    setSelectedAgents((current) =>
-                                      e.target.checked
-                                        ? [...current, agent.id]
-                                        : current.filter((id) => id !== agent.id),
-                                    );
-                                  }}
-                                />
-                                {agent.label}
-                              </label>
-                            ))}
-                          </div>
-                        </Field>
+              <div className="flex justify-end border-t pt-4">
+                <Button
+                  type="button"
+                  onClick={goToStep2}
+                  disabled={
+                    !displayName.trim() ||
+                    (needsOwnerEmail && !ownerEmail.trim()) ||
+                    Boolean(subdomainError) ||
+                    !subdomain
+                  }
+                >
+                  Agentes
+                  <IconChevronRight data-icon="inline-end" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Step 2: Agentes ─────────────────────────────────────────── */}
+        {step === 2 && (
+          <Card>
+            <CardContent className="flex flex-col gap-4 pt-6">
+              {/* Rafael — always on */}
+              <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-lg">🧠</span>
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      Rafael
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                        padrão
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">Orquestrador principal</div>
+                  </div>
+                </div>
+                <IconLock className="size-4 text-muted-foreground/40" />
+              </div>
+
+              {tenantType === "publico" ? (
+                /* Public tenants have Sofia forced by the provisioner */
+                <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">🔍</span>
+                    <div>
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        Sofia
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                          onboarding público
+                        </span>
                       </div>
-                      <Field>
-                        <FieldLabel htmlFor="test-summary">Resumo inicial</FieldLabel>
-                        <textarea
-                          id="test-summary"
-                          value={companySummary}
-                          onChange={(e) => setCompanySummary(e.target.value)}
-                          className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          required={testMode}
-                        />
-                      </Field>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <Field>
-                          <FieldLabel htmlFor="test-phones">Números permitidos</FieldLabel>
-                          <textarea
-                            id="test-phones"
-                            value={allowedPhones}
-                            onChange={(e) => setAllowedPhones(e.target.value)}
-                            className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                            placeholder="um número por linha"
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="test-groups">Grupos permitidos</FieldLabel>
-                          <textarea
-                            id="test-groups"
-                            value={allowedGroups}
-                            onChange={(e) => setAllowedGroups(e.target.value)}
-                            className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                            placeholder="ID do grupo ou JID"
-                          />
-                        </Field>
+                      <div className="text-xs text-muted-foreground">
+                        Agente de discovery — ativa automaticamente em tenants públicos
                       </div>
                     </div>
-                  ) : null}
+                  </div>
+                  <IconLock className="size-4 text-muted-foreground/40" />
                 </div>
-              ) : null}
+              ) : (
+                AGENT_CATEGORIES.map((cat) => (
+                  <div key={cat.label} className="flex flex-col gap-1.5">
+                    <div className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {cat.label}
+                    </div>
+                    {cat.agents.map((agent) => {
+                      const active = selectedAgents.includes(agent.id);
+                      return (
+                        <button
+                          key={agent.id}
+                          type="button"
+                          onClick={() => toggleAgent(agent.id)}
+                          className={cn(
+                            "flex items-center justify-between rounded-lg border px-4 py-3 text-left transition-colors",
+                            active
+                              ? "border-primary/30 bg-primary/5 hover:bg-primary/10"
+                              : "bg-card hover:bg-muted/30",
+                          )}
+                        >
+                          <div className="text-sm">
+                            <span className="font-medium">{agent.label}</span>
+                            <span className="ml-2 text-muted-foreground">
+                              — {agent.description}
+                            </span>
+                          </div>
+                          {/* CSS toggle */}
+                          <div
+                            className={cn(
+                              "relative h-5 w-9 rounded-full transition-colors",
+                              active ? "bg-primary" : "bg-muted",
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform",
+                                active ? "left-4" : "left-0.5",
+                              )}
+                            />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))
+              )}
 
+              <div className="flex justify-between border-t pt-4">
+                <Button type="button" variant="outline" onClick={() => setStep(1)}>
+                  Voltar
+                </Button>
+                <Button type="button" onClick={() => setStep(3)}>
+                  Revisar
+                  <IconChevronRight data-icon="inline-end" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Step 3: Revisão + Criar ──────────────────────────────────── */}
+        {step === 3 && (
+          <Card>
+            <CardContent className="flex flex-col gap-5 pt-6">
+              {/* Summary */}
+              <div className="rounded-lg border bg-muted/20 p-4">
+                <div className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Resumo
+                </div>
+                <SummaryRow
+                  label="Tipo"
+                  value={TENANT_TYPES.find((t) => t.id === tenantType)?.label ?? tenantType}
+                />
+                <SummaryRow label="Nome" value={displayName} />
+                {needsOwnerEmail && <SummaryRow label="Email" value={ownerEmail} />}
+                <SummaryRow label="Subdomínio" value={`${subdomain}.jotaduo.com`} accent />
+                <SummaryRow
+                  label="Agentes"
+                  value={[
+                    "Rafael",
+                    ...ALL_AGENTS.filter((a) => selectedAgents.includes(a.id)).map(
+                      (a) => a.label,
+                    ),
+                  ].join(" · ")}
+                />
+              </div>
+
+              {/* Advanced */}
               <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
                 <CollapsibleTrigger asChild>
-                  <Button type="button" variant="ghost" className="w-fit">
-                    Ajustes avançados
-                    <IconChevronDown className={cn("transition-transform", advancedOpen && "rotate-180")} />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-fit text-muted-foreground hover:text-foreground"
+                  >
+                    Configurações avançadas
+                    <IconChevronDown
+                      className={cn("ml-1 size-4 transition-transform", advancedOpen && "rotate-180")}
+                    />
                   </Button>
                 </CollapsibleTrigger>
-                <CollapsibleContent className="pt-3">
+                <CollapsibleContent className="pt-2">
                   <div className="flex flex-col gap-4 rounded-lg border bg-muted/20 p-4">
-                    <div className="grid gap-4 md:grid-cols-3">
+                    <div className="grid gap-4 sm:grid-cols-3">
                       <Field>
                         <FieldLabel htmlFor="budget">Limite mensal (USD)</FieldLabel>
                         <Input
@@ -634,8 +603,8 @@ export function NewTenant() {
                           type="number"
                           step="0.01"
                           min="0"
-                          value={form.monthly_budget_usd ?? ""}
-                          onChange={(e) => setForm({ ...form, monthly_budget_usd: e.target.value === "" ? undefined : Number(e.target.value) })}
+                          value={monthlyBudget}
+                          onChange={(e) => setMonthlyBudget(Number(e.target.value))}
                         />
                       </Field>
                       <Field>
@@ -645,8 +614,8 @@ export function NewTenant() {
                           type="number"
                           min="128"
                           max="8192"
-                          value={form.mem_limit_mb ?? 512}
-                          onChange={(e) => setForm({ ...form, mem_limit_mb: Number(e.target.value) })}
+                          value={memLimit}
+                          onChange={(e) => setMemLimit(Number(e.target.value))}
                         />
                       </Field>
                       <Field>
@@ -657,18 +626,20 @@ export function NewTenant() {
                           step="0.1"
                           min="0.1"
                           max="8"
-                          value={form.cpu_quota ?? 0.5}
-                          onChange={(e) => setForm({ ...form, cpu_quota: Number(e.target.value) })}
+                          value={cpuQuota}
+                          onChange={(e) => setCpuQuota(Number(e.target.value))}
                         />
                       </Field>
                     </div>
 
-                    <div className="grid gap-4 border-t pt-4 md:grid-cols-3">
+                    <div className="grid gap-4 border-t pt-4 sm:grid-cols-3">
                       <Field>
                         <FieldLabel>Roteamento de modelo</FieldLabel>
                         <Select
                           value={modelRoutingMode}
-                          onValueChange={(value) => setModelRoutingMode(value as TenantModelRoutingMode)}
+                          onValueChange={(v) =>
+                            setModelRoutingMode(v as TenantModelRoutingMode)
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -679,7 +650,9 @@ export function NewTenant() {
                             <SelectItem value="cli">CLIs compartilhados</SelectItem>
                           </SelectContent>
                         </Select>
-                        <FieldDescription>Define a origem da chave e a cadeia principal do tenant.</FieldDescription>
+                        <FieldDescription>
+                          Define a origem da chave e a cadeia principal do tenant.
+                        </FieldDescription>
                       </Field>
 
                       {modelRoutingMode === "cli" ? (
@@ -688,78 +661,92 @@ export function NewTenant() {
                             <FieldLabel>Ordem dos CLIs</FieldLabel>
                             <Select
                               value={cliOrderPreset}
-                              onValueChange={(value) => setCLIOrderPreset(value as CLIOrderPreset)}
+                              onValueChange={(v) => setCLIOrderPreset(v as CLIOrderPreset)}
                             >
                               <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="claude-codex">Claude CLI → Codex CLI</SelectItem>
-                                <SelectItem value="codex-claude">Codex CLI → Claude CLI</SelectItem>
+                                <SelectItem value="claude-codex">
+                                  Claude CLI → Codex CLI
+                                </SelectItem>
+                                <SelectItem value="codex-claude">
+                                  Codex CLI → Claude CLI
+                                </SelectItem>
                                 <SelectItem value="claude">Somente Claude CLI</SelectItem>
                                 <SelectItem value="codex">Somente Codex CLI</SelectItem>
                               </SelectContent>
                             </Select>
-                            <FieldDescription>O backend valida se o auth escolhido existe no host.</FieldDescription>
+                            <FieldDescription>
+                              O backend valida se o auth escolhido existe no host.
+                            </FieldDescription>
                           </Field>
                           <Field>
-                            <FieldLabel htmlFor="claude-cli-model">Modelo Claude CLI</FieldLabel>
+                            <FieldLabel>Modelo Claude CLI</FieldLabel>
                             <Select
                               value={claudeCLIModelPreset}
                               onValueChange={setClaudeCLIModelPreset}
                             >
-                              <SelectTrigger id="claude-cli-model">
+                              <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {CLAUDE_CLI_MODEL_PRESETS.map((preset) => (
-                                  <SelectItem key={preset.id} value={preset.id}>
-                                    {preset.label} · {preset.model}
+                                {CLAUDE_CLI_MODEL_PRESETS.map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.label} · {p.model}
                                   </SelectItem>
                                 ))}
-                                <SelectItem value={CUSTOM_CLI_MODEL_PRESET_ID}>Personalizado</SelectItem>
+                                <SelectItem value={CUSTOM_CLI_MODEL_PRESET_ID}>
+                                  Personalizado
+                                </SelectItem>
                               </SelectContent>
                             </Select>
-                            {claudeCLIModelPreset === CUSTOM_CLI_MODEL_PRESET_ID ? (
+                            {claudeCLIModelPreset === CUSTOM_CLI_MODEL_PRESET_ID && (
                               <Input
-                                id="claude-cli-custom-model"
                                 value={claudeCLICustomModel}
                                 onChange={(e) => setClaudeCLICustomModel(e.target.value)}
                                 placeholder="claude-sonnet-4-6"
                               />
-                            ) : null}
+                            )}
                             <FieldDescription>
-                              {cliPresetDescription(claudeCLIModelPreset, CLAUDE_CLI_MODEL_PRESETS)}
+                              {cliPresetDescription(
+                                claudeCLIModelPreset,
+                                CLAUDE_CLI_MODEL_PRESETS,
+                              )}
                             </FieldDescription>
                           </Field>
                           <Field>
-                            <FieldLabel htmlFor="codex-cli-model">Modelo Codex CLI</FieldLabel>
+                            <FieldLabel>Modelo Codex CLI</FieldLabel>
                             <Select
                               value={codexCLIModelPreset}
                               onValueChange={setCodexCLIModelPreset}
                             >
-                              <SelectTrigger id="codex-cli-model">
+                              <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {CODEX_CLI_MODEL_PRESETS.map((preset) => (
-                                  <SelectItem key={preset.id} value={preset.id}>
-                                    {preset.label} · {preset.model}
+                                {CODEX_CLI_MODEL_PRESETS.map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.label} · {p.model}
                                   </SelectItem>
                                 ))}
-                                <SelectItem value={CUSTOM_CLI_MODEL_PRESET_ID}>Personalizado</SelectItem>
+                                <SelectItem value={CUSTOM_CLI_MODEL_PRESET_ID}>
+                                  Personalizado
+                                </SelectItem>
                               </SelectContent>
                             </Select>
-                            {codexCLIModelPreset === CUSTOM_CLI_MODEL_PRESET_ID ? (
+                            {codexCLIModelPreset === CUSTOM_CLI_MODEL_PRESET_ID && (
                               <Input
-                                id="codex-cli-custom-model"
                                 value={codexCLICustomModel}
                                 onChange={(e) => setCodexCLICustomModel(e.target.value)}
                                 placeholder="gpt-5.5"
                               />
-                            ) : null}
+                            )}
                             <FieldDescription>
-                              {cliPresetDescription(codexCLIModelPreset, CODEX_CLI_MODEL_PRESETS)}
+                              {cliPresetDescription(
+                                codexCLIModelPreset,
+                                CODEX_CLI_MODEL_PRESETS,
+                              )}
                             </FieldDescription>
                           </Field>
                         </>
@@ -768,19 +755,18 @@ export function NewTenant() {
                       {modelRoutingMode === "litellm" ? (
                         <>
                           {litellmModelsQ.isError ? (
-                            <div className="md:col-span-3 rounded border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                            <div className="rounded border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive sm:col-span-3">
                               {(litellmModelsQ.error as { error?: string })?.error ??
                                 "Falha ao carregar modelos cadastrados no LiteLLM."}
                             </div>
                           ) : null}
                           <Field>
-                            <FieldLabel htmlFor="litellm-model">Modelo principal LiteLLM</FieldLabel>
+                            <FieldLabel>Modelo principal LiteLLM</FieldLabel>
                             <LiteLLMModelSelect
-                              id="litellm-model"
                               value={litellmModelName}
                               onChange={(next) => {
                                 setLiteLLMModelName(next);
-                                setLiteLLMFallbacks((current) => removeModelName(current, next));
+                                setLiteLLMFallbacks((cur) => removeModelName(cur, next));
                               }}
                               models={litellmModels}
                               placeholder={DEFAULT_LITELLM_MODEL_NAME}
@@ -788,18 +774,16 @@ export function NewTenant() {
                             />
                           </Field>
                           <Field>
-                            <FieldLabel htmlFor="litellm-api-base">API base no tenant</FieldLabel>
+                            <FieldLabel>API base no tenant</FieldLabel>
                             <Input
-                              id="litellm-api-base"
                               value={litellmAPIBase}
                               onChange={(e) => setLiteLLMAPIBase(e.target.value)}
                               placeholder="Usar LITELLM_URL"
                             />
                           </Field>
                           <Field>
-                            <FieldLabel htmlFor="litellm-fallbacks">Fallbacks</FieldLabel>
+                            <FieldLabel>Fallbacks</FieldLabel>
                             <LiteLLMModelMultiSelect
-                              id="litellm-fallbacks"
                               value={litellmFallbacks}
                               onChange={setLiteLLMFallbacks}
                               models={litellmModels}
@@ -810,10 +794,9 @@ export function NewTenant() {
                             />
                             <FieldDescription>Selecione na ordem de tentativa.</FieldDescription>
                           </Field>
-                          <Field className="md:col-span-2">
-                            <FieldLabel htmlFor="litellm-allowed">Modelos liberados na chave</FieldLabel>
+                          <Field className="sm:col-span-2">
+                            <FieldLabel>Modelos liberados na chave</FieldLabel>
                             <LiteLLMModelMultiSelect
-                              id="litellm-allowed"
                               value={litellmAllowedModels}
                               onChange={setLiteLLMAllowedModels}
                               models={litellmModels}
@@ -847,7 +830,12 @@ export function NewTenant() {
                         {duplicateTenant.url ? (
                           <>
                             {" · "}
-                            <a href={duplicateTenant.url} target="_blank" rel="noreferrer" className="underline hover:text-foreground">
+                            <a
+                              href={duplicateTenant.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline hover:text-foreground"
+                            >
                               {duplicateTenant.url}
                             </a>
                           </>
@@ -858,27 +846,40 @@ export function NewTenant() {
                 </Alert>
               ) : null}
 
-              <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-end">
-                <Button type="button" variant="outline" onClick={() => nav("/tenants")}>
-                  Cancelar
+              <div className="flex justify-between border-t pt-4">
+                <Button type="button" variant="outline" onClick={() => setStep(2)}>
+                  Voltar
                 </Button>
-                <Button type="submit" disabled={m.isPending || workspaces.length === 0}>
-                  {m.isPending ? <IconLoader2 data-icon="inline-start" className="animate-spin" /> : <IconSparkles data-icon="inline-start" />}
-                  {m.isPending ? "Preparando..." : "Criar cliente"}
+                <Button type="button" onClick={submit} disabled={m.isPending}>
+                  {m.isPending ? (
+                    <IconLoader2 data-icon="inline-start" className="animate-spin" />
+                  ) : (
+                    <IconSparkles data-icon="inline-start" />
+                  )}
+                  {m.isPending ? "Preparando..." : "Criar Tenant"}
                 </Button>
               </div>
-            </form>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      <Dialog open={!!result} onClose={closeResultDialog} title={dialogTitle} size="lg" closable={!isProvisioning}>
+      {/* ── Result dialog — unchanged logic ─────────────────────────────── */}
+      <Dialog
+        open={!!result}
+        onClose={closeResultDialog}
+        title={dialogTitle}
+        size="lg"
+        closable={!isProvisioning}
+      >
         {result ? (
           <div className="flex flex-col gap-4 text-sm">
             {result.warning || result.access_warning ? (
               <Alert className="border-chart-3/40 bg-chart-3/10">
                 <AlertTitle>Atenção</AlertTitle>
-                <AlertDescription>{result.access_warning ?? result.warning}</AlertDescription>
+                <AlertDescription>
+                  {result.access_warning ?? result.warning}
+                </AlertDescription>
               </Alert>
             ) : null}
 
@@ -890,16 +891,22 @@ export function NewTenant() {
                 </AlertTitle>
                 <AlertDescription>
                   <div>
-                    Validando o provisionamento e o subdomínio. O pacote de acesso será liberado automaticamente quando a área responder.
+                    Validando o provisionamento e o subdomínio. O pacote de acesso será liberado
+                    automaticamente quando a área responder.
                   </div>
-                  {readinessError ? <div className="mt-1 text-muted-foreground">{readinessError}</div> : null}
+                  {readinessError ? (
+                    <div className="mt-1 text-muted-foreground">{readinessError}</div>
+                  ) : null}
                 </AlertDescription>
               </Alert>
             ) : null}
+
             {hasError ? (
               <Alert className="border-destructive/40 bg-destructive/10">
                 <AlertTitle>Erro ao preparar a área</AlertTitle>
-                <AlertDescription>{readinessError ?? "Verifique os logs do servidor."}</AlertDescription>
+                <AlertDescription>
+                  {readinessError ?? "Verifique os logs do servidor."}
+                </AlertDescription>
               </Alert>
             ) : null}
 
@@ -914,13 +921,17 @@ export function NewTenant() {
             ) : canReleaseAccess && needsOwnerEmail ? (
               <Empty className="p-5">
                 <EmptyTitle>Pacote sem link de acesso</EmptyTitle>
-                <EmptyDescription>Use endereço, email e senha inicial abaixo como alternativa.</EmptyDescription>
+                <EmptyDescription>
+                  Use endereço, email e senha inicial abaixo como alternativa.
+                </EmptyDescription>
               </Empty>
             ) : null}
 
-            {canReleaseAccess ? <CopyableField label="Endereço da área" value={result.url} variant="tight" /> : null}
-            {canReleaseAccess && needsOwnerEmail && form.owner_email ? (
-              <CopyableField label="Email do responsável" value={form.owner_email} />
+            {canReleaseAccess ? (
+              <CopyableField label="Endereço da área" value={result.url} variant="tight" />
+            ) : null}
+            {canReleaseAccess && needsOwnerEmail && ownerEmail ? (
+              <CopyableField label="Email do responsável" value={ownerEmail} />
             ) : null}
             {canReleaseAccess && result.initial_password ? (
               <CopyableField
@@ -930,7 +941,11 @@ export function NewTenant() {
               />
             ) : null}
             {canReleaseAccess && result.magic_link && result.magic_link !== accessLink ? (
-              <CopyableField label="Link de acesso completo" value={result.magic_link} variant="tight" />
+              <CopyableField
+                label="Link de acesso completo"
+                value={result.magic_link}
+                variant="tight"
+              />
             ) : null}
             {canReleaseAccess && result.info ? (
               <Alert className="border-chart-2/30 bg-chart-2/10">
@@ -956,13 +971,32 @@ export function NewTenant() {
                 </Button>
               )}
               <Button onClick={markDelivered} disabled={!canReleaseAccess}>
-                {isProvisioning ? <IconLoader2 data-icon="inline-start" className="animate-spin" /> : null}
+                {isProvisioning ? (
+                  <IconLoader2 data-icon="inline-start" className="animate-spin" />
+                ) : null}
                 {isProvisioning ? "Preparando..." : "Abrir cliente no painel"}
               </Button>
             </div>
           </div>
         ) : null}
       </Dialog>
+    </div>
+  );
+}
+
+function SummaryRow({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="flex justify-between gap-4 border-b py-1.5 text-sm last:border-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={cn("text-right", accent && "font-medium text-primary")}>{value}</span>
     </div>
   );
 }

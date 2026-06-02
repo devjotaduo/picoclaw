@@ -104,9 +104,8 @@ export type CreateTenantInput = {
   monthly_budget_usd?: number;
   mem_limit_mb?: number;
   cpu_quota?: number;
-  // workspace_id is required: it selects the Workspace whose home/ subtree
-  // seeds the tenant volume and whose frontend-dist/ is bind-mounted.
-  workspace_id: string;
+  // workspace_id is optional: when absent the backend resolves via is_default_auto.
+  workspace_id?: string;
   // model_routing lets the SaaS admin decide whether the materialized tenant
   // uses LiteLLM virtual-key routing or shared Claude/Codex CLI auth, plus
   // the ordered fallback chain.
