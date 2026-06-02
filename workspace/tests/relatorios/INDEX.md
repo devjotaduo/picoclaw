@@ -4,6 +4,7 @@ Ordem cronológica decrescente. Atualizado por `gerar-relatorio-teste`.
 
 | Data | Alvo | Cenário | Nota | Status | Relatório |
 |---|---|---|---|---|---|
+| 2026-06-02 | fluxo Sofia pública — gaps e cron | auditoria de gaps: scripts, duplicados, placeholders, colisão empresa.md | 9.1 | Gap 1 (jobs Lia dup) corrigido; 3 gaps médio/baixo documentados | [2026-06-02-gaps-sofia-publica.md](2026-06-02-gaps-sofia-publica.md) |
 | 2026-06-02 | Rafael→Sofia→empresa.md | onboarding completo + smoke test pós-desbloqueio | 10.0 | 8/8 PASS; empresa.md preenchido; FAQ semeado; bloqueador removido | [2026-06-02-fluxo-04-rafael-sofia-onboarding.md](../simulacoes/2026-06-02-fluxo-04-rafael-sofia-onboarding.md) + [verificacao-pos-onboarding.md](2026-06-02-verificacao-pos-onboarding.md) |
 | 2026-06-02 | Clara + Marcos + Camila (3 fluxos) | triagem-vendas + suporte-critico + risco-juridico | 9.2 | 17/17 pontos críticos PASS; 2 melhorias | [2026-06-02-simulacoes-reais.md](2026-06-02-simulacoes-reais.md) |
 | 2026-06-02 | workspace inteiro (13 agentes) | audit-pos-melhore: catalog expansion + fixtures | 9.0 | catarina/pixel/doc/dev adicionados ao catalog; B1+B2 fixes; phantom IDs; footer | (inline — ver agent-catalog.md + RELATORIO-MELHORIAS.md) |
