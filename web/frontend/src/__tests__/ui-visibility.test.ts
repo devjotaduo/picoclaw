@@ -134,4 +134,40 @@ describe("ui visibility policy", () => {
       ),
     ).toBe(true)
   })
+
+  it("shows the right rail but hides onboarding and chat handoff panels from private tenant profiles", () => {
+    for (const profile of ["tenant", "test"] as const) {
+      expect(
+        isUIElementVisible(
+          DEFAULT_UI_VISIBILITY_POLICY,
+          profile,
+          "layout.onboarding_banner",
+        ),
+      ).toBe(false)
+      expect(
+        isUIElementVisible(
+          DEFAULT_UI_VISIBILITY_POLICY,
+          profile,
+          "layout.right_rail",
+        ),
+      ).toBe(true)
+      expect(
+        isUIElementVisible(
+          DEFAULT_UI_VISIBILITY_POLICY,
+          profile,
+          "chat.pending_handoffs_sidebar",
+        ),
+      ).toBe(false)
+    }
+  })
+
+  it("keeps memory visible for tenant owners", () => {
+    expect(
+      isUIElementVisible(
+        DEFAULT_UI_VISIBILITY_POLICY,
+        "tenant",
+        "sidebar.memory",
+      ),
+    ).toBe(true)
+  })
 })

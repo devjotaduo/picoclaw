@@ -321,6 +321,7 @@ interface SendChatMessageInput {
   content: string
   attachments?: ChatAttachment[]
   agentID?: string
+  showInChat?: boolean
 }
 
 interface SendAgentChatMessageInput {
@@ -332,6 +333,7 @@ export function sendChatMessage({
   content,
   attachments = [],
   agentID,
+  showInChat = true,
 }: SendChatMessageInput) {
   if (!wsRef || wsRef.readyState !== WebSocket.OPEN) {
     console.warn("WebSocket not connected")
@@ -357,17 +359,21 @@ export function sendChatMessage({
   const id = `msg-${++msgIdCounter}-${Date.now()}`
 
   updateChatStore((prev) => ({
-    messages: [
-      ...prev.messages,
-      {
-        id,
-        role: "user",
-        content: normalizedContent,
-        attachments:
-          normalizedAttachments.length > 0 ? normalizedAttachments : undefined,
-        timestamp: Date.now(),
-      },
-    ],
+    messages: showInChat
+      ? [
+          ...prev.messages,
+          {
+            id,
+            role: "user",
+            content: normalizedContent,
+            attachments:
+              normalizedAttachments.length > 0
+                ? normalizedAttachments
+                : undefined,
+            timestamp: Date.now(),
+          },
+        ]
+      : prev.messages,
     isTyping: true,
   }))
 

@@ -129,6 +129,18 @@ export type CreateTenantResponse = {
   info?: string;
 };
 
+export type TenantReadiness = {
+  tenant_id: string;
+  url: string;
+  status: TenantStatus;
+  ready: boolean;
+  subdomain_ready: boolean;
+  http_status?: number;
+  error?: string;
+  last_error?: string | null;
+  checked_at: string;
+};
+
 export type UsageSummary = {
   total_tokens: number;
   prompt_tokens: number;
@@ -168,6 +180,10 @@ export async function listTenantTypes(selectableOnly = true) {
 
 export async function getTenant(id: string) {
   return api<Tenant>(`/api/v1/tenants/${id}`);
+}
+
+export async function getTenantReadiness(id: string) {
+  return api<TenantReadiness>(`/api/v1/tenants/${encodeURIComponent(id)}/readiness`);
 }
 
 export async function createTenant(input: CreateTenantInput) {
@@ -399,7 +415,7 @@ export async function listTenantMagicLinks(id: string) {
 }
 
 export async function deleteTenant(id: string) {
-  return api<void>(`/api/v1/tenants/${id}`, { method: "DELETE" });
+  return api<void>(`/api/v1/tenants/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export async function rotatePassword(id: string) {

@@ -13,7 +13,7 @@ import {
 
 import {
   createTenant,
-  getTenant,
+  getTenantReadiness,
   listTenantTypes,
   markPasswordDelivered,
   type CreateTenantInput,
@@ -238,21 +238,27 @@ export function NewTenant() {
     },
   });
 
-  const statusQuery = useQuery({
-    queryKey: ["tenant-status", result?.tenant_id],
-    queryFn: () => getTenant(result!.tenant_id),
+  const readinessQuery = useQuery({
+    queryKey: ["tenant-readiness", result?.tenant_id],
+    queryFn: () => getTenantReadiness(result!.tenant_id),
     enabled: !!result,
     refetchInterval: (query) => {
-      const s = query.state.data?.status;
-      return s === "provisioning" || s === undefined ? 2000 : false;
+      const data = query.state.data;
+      if (!data) return 2000;
+      return !data.ready && data.status !== "error" ? 2000 : false;
     },
   });
 
   const card = cards.find((c) => c.id === tenantType) ?? cards[0];
   const needsOwnerEmail = tenantType !== "publico";
-  const tenantStatus = statusQuery.data?.status;
-  const isProvisioning = !tenantStatus || tenantStatus === "provisioning";
+  const tenantStatus = readinessQuery.data?.status;
   const hasError = tenantStatus === "error";
+  const canReleaseAccess = !!result && readinessQuery.data?.ready === true && !hasError;
+  const isProvisioning = !!result && !canReleaseAccess && !hasError;
+  const readinessError =
+    readinessQuery.data?.last_error ??
+    readinessQuery.data?.error ??
+    (readinessQuery.isError ? "Não foi possível verificar o subdomínio agora." : null);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((ws) => ws.id === form.workspace_id),
@@ -342,12 +348,18 @@ export function NewTenant() {
   };
 
   const markDelivered = async () => {
-    if (!result) return;
+    if (!result || !canReleaseAccess) return;
     await markPasswordDelivered(result.tenant_id);
     nav(`/tenants/${result.tenant_id}`);
   };
 
+  const closeResultDialog = () => {
+    if (isProvisioning) return;
+    setResult(null);
+  };
+
   const accessLink = result?.access_link ?? result?.short_magic_link ?? result?.magic_link;
+  const dialogTitle = hasError ? "Erro ao preparar cliente" : canReleaseAccess ? "Cliente pronto" : "Preparando cliente";
 
   return (
     <div className="flex min-h-full flex-col">
@@ -860,7 +872,7 @@ export function NewTenant() {
         </Card>
       </div>
 
-      <Dialog open={!!result} onClose={markDelivered} title="Cliente pronto" size="lg">
+      <Dialog open={!!result} onClose={closeResultDialog} title={dialogTitle} size="lg" closable={!isProvisioning}>
         {result ? (
           <div className="flex flex-col gap-4 text-sm">
             {result.warning || result.access_warning ? (
@@ -876,17 +888,22 @@ export function NewTenant() {
                   <IconLoader2 className="size-4 animate-spin" />
                   Área do cliente iniciando
                 </AlertTitle>
-                <AlertDescription>O acesso já foi gerado; aguarde a área ficar ativa antes de abrir.</AlertDescription>
+                <AlertDescription>
+                  <div>
+                    Validando o provisionamento e o subdomínio. O pacote de acesso será liberado automaticamente quando a área responder.
+                  </div>
+                  {readinessError ? <div className="mt-1 text-muted-foreground">{readinessError}</div> : null}
+                </AlertDescription>
               </Alert>
             ) : null}
             {hasError ? (
               <Alert className="border-destructive/40 bg-destructive/10">
                 <AlertTitle>Erro ao preparar a área</AlertTitle>
-                <AlertDescription>{statusQuery.data?.last_error ?? "Verifique os logs do servidor."}</AlertDescription>
+                <AlertDescription>{readinessError ?? "Verifique os logs do servidor."}</AlertDescription>
               </Alert>
             ) : null}
 
-            {accessLink ? (
+            {canReleaseAccess && accessLink ? (
               <CopyableField
                 label="Link de acesso recomendado"
                 value={accessLink}
@@ -894,44 +911,51 @@ export function NewTenant() {
                 variant="tight"
                 hint="Use este link para enviar ao responsável. O link curto é preferido quando disponível."
               />
-            ) : needsOwnerEmail ? (
+            ) : canReleaseAccess && needsOwnerEmail ? (
               <Empty className="p-5">
                 <EmptyTitle>Pacote sem link de acesso</EmptyTitle>
                 <EmptyDescription>Use endereço, email e senha inicial abaixo como alternativa.</EmptyDescription>
               </Empty>
             ) : null}
 
-            <CopyableField label="Endereço da área" value={result.url} variant="tight" />
-            {needsOwnerEmail && form.owner_email ? (
+            {canReleaseAccess ? <CopyableField label="Endereço da área" value={result.url} variant="tight" /> : null}
+            {canReleaseAccess && needsOwnerEmail && form.owner_email ? (
               <CopyableField label="Email do responsável" value={form.owner_email} />
             ) : null}
-            {result.initial_password ? (
+            {canReleaseAccess && result.initial_password ? (
               <CopyableField
                 label="Senha inicial"
                 value={result.initial_password}
                 warning="Guarde agora: a senha não será exibida novamente."
               />
             ) : null}
-            {result.magic_link && result.magic_link !== accessLink ? (
+            {canReleaseAccess && result.magic_link && result.magic_link !== accessLink ? (
               <CopyableField label="Link de acesso completo" value={result.magic_link} variant="tight" />
             ) : null}
-            {result.info ? (
+            {canReleaseAccess && result.info ? (
               <Alert className="border-chart-2/30 bg-chart-2/10">
                 <AlertDescription>{result.info}</AlertDescription>
               </Alert>
             ) : null}
 
             <div className="flex flex-col-reverse gap-2 border-t pt-3 sm:flex-row sm:justify-end">
-              <Button variant="ghost" onClick={() => setResult(null)}>
+              <Button variant="ghost" onClick={closeResultDialog} disabled={isProvisioning}>
                 Fechar
               </Button>
-              <Button variant="outline" asChild>
-                <a href={result.url} target="_blank" rel="noreferrer">
+              {canReleaseAccess ? (
+                <Button variant="outline" asChild>
+                  <a href={result.url} target="_blank" rel="noreferrer">
+                    Abrir área
+                    <IconExternalLink data-icon="inline-end" />
+                  </a>
+                </Button>
+              ) : (
+                <Button variant="outline" disabled>
                   Abrir área
                   <IconExternalLink data-icon="inline-end" />
-                </a>
-              </Button>
-              <Button onClick={markDelivered} disabled={isProvisioning}>
+                </Button>
+              )}
+              <Button onClick={markDelivered} disabled={!canReleaseAccess}>
                 {isProvisioning ? <IconLoader2 data-icon="inline-start" className="animate-spin" /> : null}
                 {isProvisioning ? "Preparando..." : "Abrir cliente no painel"}
               </Button>

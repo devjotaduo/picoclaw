@@ -509,7 +509,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // Quando ele está visível, não duplicamos esses blocos na sidebar — ela
   // foca em navegação + conversas + usuário. Em perfis sem rail, mantemos os
   // blocos legados como fallback.
-  const rightRailVisible = isVisible("layout.right_rail", true)
+  const rightRailVisible = isVisible("layout.right_rail", false)
 
   if (
     !showSidebarNavigation &&
