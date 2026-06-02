@@ -8,19 +8,77 @@ Fonte:
 Status: validada ou pendente
 Observação:
 
-## PENDENCIAS: FAQ base
+---
 
-Recomendado o dono semear 5–10 perguntas mais comuns do negócio para a
-atendente não precisar improvisar. Sem isso, toda primeira pergunta vai
-cair em "vou confirmar e te respondo".
+## FAQ validado — Clínica Renova Estética
 
-- Resposta padrão para "qual o horário de vocês?"
-- Resposta padrão para "vocês entregam onde?"
-- Resposta padrão para "qual o preço?" (ou política de não falar preço)
-- Resposta padrão para "como faço para comprar/agendar?"
-- Resposta padrão para "vocês aceitam qual forma de pagamento?"
+### Horário de funcionamento
 
-## Prazos e implementação
+Pergunta: Qual é o horário de atendimento de vocês?
+Resposta aprovada: Atendemos de segunda a sexta, das 8h às 19h, e aos sábados das 8h ao meio-dia. Domingo não atendemos.
+Fonte: empresa.md
+Status: validada
+
+---
+
+### Localização
+
+Pergunta: Onde fica a clínica?
+Resposta aprovada: Estamos no Itaim Bibi, em São Paulo. Me manda seu endereço que te passo como chegar, ou agende uma consulta e enviamos o endereço completo por mensagem.
+Fonte: empresa.md
+Status: validada
+
+---
+
+### Convênio
+
+Pergunta: Vocês aceitam convênio?
+Resposta aprovada: Não, a clínica trabalha somente com atendimento particular.
+Fonte: empresa.md
+Status: validada
+
+---
+
+### Formas de pagamento
+
+Pergunta: Quais formas de pagamento vocês aceitam?
+Resposta aprovada: Aceitamos cartão de crédito, débito e Pix. Não trabalhamos com dinheiro.
+Fonte: empresa.md
+Status: validada
+
+---
+
+### Preço
+
+Pergunta: Quanto custa o botox? / Qual o valor do preenchimento?
+Resposta aprovada: Os valores variam conforme avaliação. Posso agendar uma conversa com nossa equipe para te passar um orçamento preciso. Quando seria melhor pra você?
+Fonte: empresa.md (campo "Pode falar preço: não")
+Status: validada
+Observação: Nunca citar valor sem dado validado. Sempre encaminhar para agendamento de avaliação.
+
+---
+
+### Agendamento
+
+Pergunta: Como faço pra marcar uma consulta / procedimento?
+Resposta aprovada: É só me dizer qual tratamento você tem interesse e o período de preferência. Verifico a disponibilidade e confirmo por aqui mesmo.
+Fonte: empresa.md
+Status: validada
+
+---
+
+### Serviços disponíveis
+
+Pergunta: Quais procedimentos vocês fazem?
+Resposta aprovada: Fazemos botox, preenchimento labial e facial, limpeza de pele, peeling, laser, drenagem linfática e radiofrequência. Tem algum tratamento específico em que você tem interesse?
+Fonte: empresa.md
+Status: validada
+
+---
+
+## PENDENCIAS: FAQ a completar pelo dono
+
+- Prazos e implementação
 
 Pergunta: Quanto tempo leva para instalar / implementar?
 Resposta aprovada: PENDENTE — o dono deve preencher o prazo real aqui.

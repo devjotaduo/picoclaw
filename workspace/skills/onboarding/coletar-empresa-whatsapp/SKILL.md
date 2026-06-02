@@ -16,7 +16,7 @@ Ativar quando:
 
 ### 1. Abertura (só na primeira vez por sessão)
 
-> "Olá! 👋 Sou o Rafael, seu assistente de gestão. Para que nossos agentes (Clara, Marcos, Camila) possam atender seus clientes com qualidade, preciso de algumas informações sobre sua empresa. Vamos levar menos de 2 minutos! Pode começar?"
+> "Olá. Sou o Rafael, seu assistente de gestão. Para que nossos agentes possam atender seus clientes com qualidade, preciso de algumas informações sobre sua empresa. Vamos levar menos de 2 minutos. Pode começar?"
 
 ### 2. Perguntas em ordem (um por vez)
 
@@ -48,12 +48,12 @@ Pergunte na ordem abaixo, aguardando a resposta antes de avançar:
 
 Após cada resposta do dono:
 1. Atualize o campo correspondente em `memory/empresa.md` no formato: `Campo: valor`
-2. Confirme ao dono: "✓ Anotado!"
+2. Confirme ao dono: "Anotado."
 3. Avance para o próximo campo
 
 ### 5. Conclusão
 
-> "🎉 Pronto! Suas informações estão salvas. Os agentes Clara, Marcos e Camila agora podem atender seus clientes com segurança. Você pode atualizar qualquer informação a qualquer momento no painel de controle em Configurações > Empresa."
+> "Pronto. Suas informações estão salvas. Os agentes Clara, Marcos e Camila agora podem atender seus clientes com segurança. Você pode atualizar qualquer informação a qualquer momento no painel de controle em Configurações > Empresa."
 
 ## Comportamento de retomada
 
