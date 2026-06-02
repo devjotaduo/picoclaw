@@ -70,6 +70,14 @@ func ActivateRecommendedAgents(volumePath string) (RecommendedAgentsActivationRe
 	if err != nil {
 		return RecommendedAgentsActivationResult{}, err
 	}
+	return activateAgents(volumePath, recommended, source)
+}
+
+// activateAgents is the shared core: given a normalized list of agent ids and
+// the source label for the audit artifact, it toggles panel_enabled in
+// config.json and writes agent-activation.json. Empty ids is a fail-open no-op
+// that preserves the current config unchanged.
+func activateAgents(volumePath string, recommended []string, source string) (RecommendedAgentsActivationResult, error) {
 	if len(recommended) == 0 {
 		return RecommendedAgentsActivationResult{
 			FailOpenWhy: "no_recommended_agents",
