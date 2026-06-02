@@ -122,13 +122,14 @@ drop do arquivo, OU Sofia delega a escrita pro Rafael via `delegate`.
 Precisa de uma instrução explícita no `agents/sofia/AGENT.md` ("se você
 não for main, delegue o discovery_close pro Rafael").
 
-### Gap B — Catarina via WhatsApp institucional só existe no fluxo público→promovido (ALTO)
+### Gap B — Catarina via WhatsApp institucional só existe no fluxo público→promovido (ALTO) ✅ CORRIGIDO
 `enviar-whatsapp-jotaduo` só funciona em tenant público (o provisioner
 injeta as envs do sidecar só nesse caso). Se Rafael acionar Sofia num
 **cliente** e quiser deepening, a Catarina institucional **não tem canal**.
-**Correção:** definir o fallback — no cliente, ou (a) Catarina aprofunda
-pelo próprio WhatsApp do cliente, ou (b) deepening vira sessões no painel
-com Rafael. Hoje isso não está especificado.
+**Correção aplicada:** `agents/catarina/AGENT.md` agora tem detecção
+public-vs-client. Em tenant cliente (503 da skill), Catarina troca para
+deepening no painel, delegando as perguntas pro Rafael levar ao dono no
+canal interno — em vez de ficar inerte esperando pareamento.
 
 ### Gap C — Dois caminhos de onboarding competindo no cliente (MÉDIO)
 O `AGENT.md` raiz lista DUAS rotas: `onboarding/coletar-empresa-whatsapp`
@@ -139,12 +140,16 @@ rico). Não está dito qual usar quando.
 - discovery completo no painel → delega pra Sofia
 Documentar o critério no `AGENT.md` raiz (seção Encaminhamento).
 
-### Gap D — Colisão `discovery_close` × `empresa.md` preenchido manual (MÉDIO)
-Já reportado em `2026-06-02-gaps-sofia-publica.md`. Se Rafael já preencheu
-`empresa.md` e depois o discovery público fecha, o
-`bootstrap_empresa_md` **preserva** arquivo não-vazio (linha 160 do
-`run.py`) — então NÃO sobrescreve. Bom. Mas o `state.py discovery_close`
-em si ainda pode sobrescrever campos do state. Verificar se há merge.
+### Gap D — Colisão `discovery_close` × `empresa.md` preenchido manual (MÉDIO) ✅ CORRIGIDO
+Já reportado em `2026-06-02-gaps-sofia-publica.md`. **Confirmado real**:
+`write_discovery_close_outputs` (state.py:701) fazia `atomic_write_text`
+incondicional em `empresa.md` — sobrescrevia dado manual do dono sem aviso.
+(O `bootstrap_empresa_md` do cron preserva, mas o `state.py` em si não.)
+**Correção aplicada:** antes de sobrescrever, se o `empresa.md` existente
+estiver preenchido (≥3 campos reais), o state.py salva
+`empresa.md.pre-discovery.bak`. Dado manual nunca é perdido em silêncio;
+operador pode reconciliar. Templates vazios não geram backup. Testado nos
+dois casos.
 
 ---
 
@@ -170,11 +175,16 @@ automático/determinístico.
 
 ## Recomendação final
 
-**Adotar o desenho em camadas como está descrito**, e resolver os Gaps A
-e B (os dois ALTOS) antes de habilitar o fluxo Rafael→Sofia em tenants
-**cliente**. No fluxo **público** (que é o core de receita), o desenho já
-funciona ponta a ponta — falta só fechar o Gap A para o caso de
-re-onboarding dentro de um cliente já promovido.
+**Adotar o desenho em camadas como está descrito.** Os quatro gaps
+identificados na validação foram resolvidos:
+
+- **Gap A (ALTO)** ✅ — Sofia subagente delega o `discovery_close` pro Rafael.
+- **Gap B (ALTO)** ✅ — Catarina detecta cliente e faz deepening no painel.
+- **Gap C (MÉDIO)** ✅ — árvore de decisão de onboarding no `AGENT.md` raiz.
+- **Gap D (MÉDIO)** ✅ — backup anti-perda do `empresa.md` no state.py.
+
+No fluxo **público** (core de receita) o desenho funciona ponta a ponta.
+No fluxo **cliente**, os fallbacks agora estão especificados e ligados.
 
 Não unificar discovery e deepening na mesma sessão. A separação
 síncrono/assíncrono não é acidente — é o que respeita o tempo do dono e
