@@ -49,13 +49,35 @@ Nunca hardcode host ou porta. Use sempre o `base_url` retornado por `/api/market
 5. **Rodapé** — nome, CNPJ, endereço, link política de privacidade, contato.
 
 ## Processo
-1. Consultar `memory/empresa.md` + `memory/marketing.md` (identidade visual).
+1. Consultar `memory/marca.md` (tokens de marca — fonte única, ver `design-visual §1`) + `memory/empresa.md`.
 2. Receber briefing: objetivo, CTA, texto, imagens.
 3. Gerar imagens necessárias com `gerar-imagem-post` (formato OG 1200×630).
-4. Gerar `workspace/public/marketing/<slug>/index.html`.
+4. Gerar `workspace/public/marketing/<slug>/index.html`, derivando o bloco `:root` dos tokens de marca (não invente hex novos).
 5. Consultar `GET /api/marketing/public-base-url` para montar o link correto.
 6. Gerar QR code → `workspace/public/marketing/<slug>/qr.png`.
-7. Validar: status 200 ✓ | mobile ✓ | carregamento < 2s ✓.
+7. **Rodar a Verificação pós-geração abaixo** — não declare "mobile OK / WCAG OK" sem checar.
+
+## Verificação pós-geração (obrigatória — não pule)
+
+Auto-atestar checklist é o erro do passado. Depois de salvar o HTML,
+**releia o arquivo que você acabou de gravar** e confirme cada item de forma
+factual (são checagens que dá pra fazer lendo o próprio HTML, sem renderizar):
+
+- [ ] `<meta name="viewport">` presente.
+- [ ] Bloco `:root` presente e os hex batem com `memory/marca.md` (ou com o perfil do segmento se marca.md estiver vazio) — sem cor inventada.
+- [ ] `@import`/`<link>` de fonte do par correto do segmento (`design-visual §4`). **Nenhum** `Arial`, `Roboto` ou `sans-serif` solto como fonte principal.
+- [ ] **Nenhum** gradiente roxo→branco genérico (`#7c3aed`→`#fff`) como fundo principal.
+- [ ] CTA principal aponta para `https://wa.me/55<número real de empresa.md>` — não um número placeholder.
+- [ ] Rodapé tem nome + CNPJ + endereço + link de política de privacidade — ou os campos faltantes estão listados em PENDENCIAS (não inventados).
+- [ ] Nenhum dado inventado (telefone, preço, prazo, prova social).
+- [ ] Imagens com `alt`; botões com texto descritivo ou `aria-label`.
+
+Se você tem acesso ao `agent-browser` E `$BROWSER_CDP_URL` está setado, abra o
+link público e tire um screenshot para anexar à entrega. Se não tiver, **não
+afirme** que renderizou — entregue a verificação textual acima e diga que o
+preview visual depende de aprovação humana.
+
+Qualquer item que falhar: corrija o HTML e releia de novo. Só entregue depois que todos passarem.
 
 ## Saída obrigatória
 ```

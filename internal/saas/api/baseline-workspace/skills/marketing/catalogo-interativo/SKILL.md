@@ -30,6 +30,25 @@ Gera um arquivo HTML único, autocontido, com:
   - Exportar/Importar JSON
 - **Sincronização servidor**: salva em `workspace/public/marketing/catalog-data.json` via `PUT /api/marketing/catalog-data`; carrega desse JSON no início (localStorage como fallback offline)
 
+## Segurança do admin (LEIA — não é opcional)
+
+`catalog-data.json` é servido **publicamente** em
+`/public/marketing/catalog-data.json` — qualquer visitante pode lê-lo. Logo:
+
+- **O PIN NUNCA entra no JSON sincronizado.** Antes de fazer o `PUT`, remova a
+  chave `pin` (e qualquer `admin_pin`) do payload. O PIN mora **só no
+  `localStorage` do dispositivo do dono**. Se você gravar o PIN no JSON, ele
+  fica legível por todo mundo — o "gate" vira teatro.
+- **O `#admin` é gate cosmético, não autenticação.** Ele evita edição acidental
+  por um cliente curioso, mas não protege contra alguém determinado (todo o
+  código roda no browser). Trate-o como conveniência de UX.
+- **Nunca coloque dado sensível no catálogo**: custo interno, margem, telefone
+  pessoal, token, credencial. Só vai pro JSON o que pode ser público (nome,
+  descrição, preço de venda, WhatsApp comercial).
+- O backend também faz defesa em profundidade: o `PUT /api/marketing/catalog-data`
+  descarta chaves tipo `pin`/`admin_pin` antes de gravar. Mas a skill não pode
+  depender disso — remova no cliente também.
+
 ## Como usar esta skill
 
 1. Obter dados da empresa em `memory/empresa.md` e `memory/marca.md`
@@ -37,8 +56,9 @@ Gera um arquivo HTML único, autocontido, com:
 3. Gerar o HTML baseado no template abaixo, substituindo os dados de DEFAULT_DATA
 4. Salvar em `workspace/public/marketing/<slug-empresa>/index.html`
 5. Chamar `GET /api/marketing/public-base-url` para obter a base URL
-6. Retornar o link público: `<base_url>/public/marketing/<slug-empresa>/index.html`
-7. Informar: arquivo salvo, link público, PIN admin padrão (1234), instrução para trocar o PIN
+6. **Verificar** (ver `marketing/publicar-site-simples` → "Verificação pós-geração"): releia o HTML salvo e confirme tokens batendo com a marca, fontes corretas, sem dado inventado, e — específico do catálogo — que o `pin` **não** vai no payload sincronizado e que cada `wa.me` usa o WhatsApp real
+7. Retornar o link público: `<base_url>/public/marketing/<slug-empresa>/index.html`
+8. Informar: arquivo salvo, link público, PIN admin padrão (1234), instrução para trocar o PIN
 
 ## Paleta de design
 

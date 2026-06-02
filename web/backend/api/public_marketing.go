@@ -224,6 +224,15 @@ func (h *Handler) handlePutCatalogData(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing required key: produtos", http.StatusBadRequest)
 		return
 	}
+	// Defense in depth: catalog-data.json is served publicly, so never persist
+	// admin-gate secrets even if a client erroneously syncs them. The catalog
+	// skill is instructed to strip these client-side; this is the backstop.
+	sanitized := stripCatalogSecrets(payload)
+	body, err = json.Marshal(sanitized)
+	if err != nil {
+		http.Error(w, "failed to encode catalog data", http.StatusInternalServerError)
+		return
+	}
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		http.Error(w, fmt.Sprintf("failed to create publish dir: %v", err), http.StatusInternalServerError)
 		return
@@ -248,6 +257,46 @@ func (h *Handler) handlePutCatalogData(w http.ResponseWriter, r *http.Request) {
 		"path":       filepath.ToSlash(destPath),
 		"public_url": publicURL,
 	})
+}
+
+// stripCatalogSecrets removes admin-gate secrets from the catalog payload before
+// it is persisted to the publicly-served catalog-data.json. It drops pin-like
+// keys both at the top level and inside the "empresa" object so a misbehaving
+// client cannot leak the admin PIN to every visitor.
+func stripCatalogSecrets(payload map[string]json.RawMessage) map[string]json.RawMessage {
+	isSecret := func(k string) bool {
+		switch strings.ToLower(strings.TrimSpace(k)) {
+		case "pin", "admin_pin", "adminpin", "password", "senha":
+			return true
+		default:
+			return false
+		}
+	}
+	out := make(map[string]json.RawMessage, len(payload))
+	for k, v := range payload {
+		if isSecret(k) {
+			continue
+		}
+		out[k] = v
+	}
+	if raw, ok := out["empresa"]; ok {
+		var empresa map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &empresa); err == nil {
+			changed := false
+			for k := range empresa {
+				if isSecret(k) {
+					delete(empresa, k)
+					changed = true
+				}
+			}
+			if changed {
+				if reenc, err := json.Marshal(empresa); err == nil {
+					out["empresa"] = reenc
+				}
+			}
+		}
+	}
+	return out
 }
 
 func enrichMarketingProposal(agent config.AgentConfig, raw []byte) json.RawMessage {

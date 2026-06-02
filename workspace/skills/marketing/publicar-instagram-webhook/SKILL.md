@@ -15,6 +15,11 @@ env_required:
 
 # Skill: publicar-instagram-webhook
 
+> **Provedor de `marketing/publicar-instagram`.** Não invocar direto — Lia
+> sempre entra por `publicar-instagram`, que roteia pra cá quando o webhook
+> Make.com é o canal configurado. As regras universais (aprovação, sem claim,
+> registro pós-publicação) vêm de lá.
+
 Publica conteudo no Instagram usando **Make.com como intermediario** (webhook + conector oficial Instagram Business). Gratuito ate 1.000 operacoes/mes.
 
 > ATENCAO: So chamar esta skill apos aprovacao humana registrada.

@@ -39,6 +39,29 @@ sempre que qualquer outra skill de frontend vai gerar output visual.
 Se `memory/marca.md` tiver cores definidas, **elas sobrepõem** o perfil padrão do segmento.
 Se `memory/marca.md` estiver vazio ou inexistente, usar o perfil do segmento como padrão.
 
+### 1.1 Fonte única de tokens (anti-drift)
+
+O bloco de tokens da marca mora em **um lugar só**: a seção
+`## Tokens CSS (fonte única)` de `memory/marca.md`. Regras:
+
+- Toda página/arte deriva o `:root` **desses** valores — nunca digite hex
+  "de cabeça" nem copie de uma página antiga.
+- Se `memory/marca.md` ainda não tem a seção de tokens, na primeira geração
+  você a **cria** a partir do perfil do segmento (Seção 2) + o que houver de
+  cor/logo na marca, e pede validação do dono. A partir daí ela é a verdade.
+- Quando o dono mudar uma cor, ele muda em `memory/marca.md`. As páginas
+  geradas depois disso refletem; as antigas são regeradas sob demanda (não
+  existe atualização mágica de arquivos já publicados — avise isso ao Rafael
+  se uma troca de marca exigir regerar peças no ar).
+- A regra de "HTML autônomo (CSS inline)" continua valendo: os tokens são
+  **copiados inline** no `:root` de cada arquivo. A fonte única é a memória,
+  não um `.css` externo — assim a página continua portátil e o link público
+  não depende de um segundo request.
+
+Antes de gerar, confirme: "os hex que vou usar batem com a seção de tokens de
+`memory/marca.md`?" Se não baterem, ou você está com perfil errado ou a marca
+mudou — resolva antes de gerar.
+
 ---
 
 ## 2. Perfis de design por segmento

@@ -59,6 +59,7 @@ EXCLUDE_NAMES_EXACT = {
     "whatsapp",
     "state",
     "output",
+    "public",  # Lia's runtime marketing output (generate_image default output_dir); not seed content
     "logs",
     "cache",
     ".cache",

@@ -22,7 +22,22 @@ visibility: global
 | `memory/leads.md` | funil atual, leads parados |
 | `memory/clientes.md` | recorrentes, aniversários |
 | `memory/marketing.md` | histórico de campanhas, aprendizados |
+| `memory/marketing.md > historico_aprendizado` | **desempenho real medido** (via `marketing/medir-desempenho`) — o que funcionou e o que não |
 | `memory/faq.md` | dúvidas frequentes → vira tema de conteúdo |
+
+## Propor com base em evidência (não no escuro)
+
+**Antes de propor**, ler `historico_aprendizado` (alimentado por
+`marketing/medir-desempenho`). A sugestão deve:
+
+- priorizar formato / horário / tipo de post que **historicamente performaram**;
+- evitar repetir o que ficou `abaixo do esperado` — a menos que mude o ângulo, e
+  nesse caso dizer explicitamente o que mudou e por quê;
+- registrar no campo `[KPI]` o número-alvo concreto, pra que `medir-desempenho`
+  consiga depois classificar `acima | dentro | abaixo do esperado`;
+- se o histórico está vazio ou marca `sem_dados` repetido, incluir no
+  `[PRÓXIMO PASSO]` "instrumentar medição" (conectar Graph API ou Rafael
+  registrar números) — senão a Lia segue cega pra sempre.
 
 ## Estrutura da sugestão
 ```

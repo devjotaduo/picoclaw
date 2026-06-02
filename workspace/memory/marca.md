@@ -9,6 +9,27 @@ Tipografia:
 Estilo de fotografia / ilustração:
 Referências visuais (links):
 
+## Tokens CSS (fonte única)
+
+Preenchido na primeira geração visual (Lia deriva do perfil do segmento em
+`skills/marketing/design-visual` §2 + cores/logo acima) e validado pelo dono.
+Toda página/arte copia estes valores no `:root` — ninguém inventa hex novo.
+
+```
+--primary:
+--primary-dk:
+--bg:
+--bg-card:
+--accent:
+--text:
+--text-muted:
+--success:    #25D366
+--font-title:
+--font-body:
+```
+
+Status dos tokens: pendente (preencher na 1ª geração) | validado pelo dono
+
 ## Tom de voz na comunicação externa
 
 Personalidade:
