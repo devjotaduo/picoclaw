@@ -761,8 +761,9 @@ export function NewTenant() {
                             </div>
                           ) : null}
                           <Field>
-                            <FieldLabel>Modelo principal LiteLLM</FieldLabel>
+                            <FieldLabel htmlFor="litellm-model">Modelo principal LiteLLM</FieldLabel>
                             <LiteLLMModelSelect
+                              id="litellm-model"
                               value={litellmModelName}
                               onChange={(next) => {
                                 setLiteLLMModelName(next);
@@ -782,8 +783,9 @@ export function NewTenant() {
                             />
                           </Field>
                           <Field>
-                            <FieldLabel>Fallbacks</FieldLabel>
+                            <FieldLabel htmlFor="litellm-fallbacks">Fallbacks</FieldLabel>
                             <LiteLLMModelMultiSelect
+                              id="litellm-fallbacks"
                               value={litellmFallbacks}
                               onChange={setLiteLLMFallbacks}
                               models={litellmModels}
@@ -795,8 +797,9 @@ export function NewTenant() {
                             <FieldDescription>Selecione na ordem de tentativa.</FieldDescription>
                           </Field>
                           <Field className="sm:col-span-2">
-                            <FieldLabel>Modelos liberados na chave</FieldLabel>
+                            <FieldLabel htmlFor="litellm-allowed">Modelos liberados na chave</FieldLabel>
                             <LiteLLMModelMultiSelect
+                              id="litellm-allowed"
                               value={litellmAllowedModels}
                               onChange={setLiteLLMAllowedModels}
                               models={litellmModels}
