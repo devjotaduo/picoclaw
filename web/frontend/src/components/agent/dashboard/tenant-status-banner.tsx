@@ -154,10 +154,9 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
     !isPromoted &&
     state?.testing?.status !== "production"
   const baseMeta = PROFILE_META[profile] ?? PROFILE_META.tenant
-  const meta =
-    isTestMode
-      ? PROFILE_META.test
-      : profile === "tenant" && isPromoted
+  const meta = isTestMode
+    ? PROFILE_META.test
+    : profile === "tenant" && isPromoted
       ? {
           ...baseMeta,
           label: "Tenant promovido",
@@ -171,7 +170,7 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
             description:
               "A UI está liberada como tenant, mas a jornada ainda não marcou promoção.",
           }
-      : baseMeta
+        : baseMeta
   const tone = TONE_CLASSES[meta.tone]
 
   const handleFinishTest = () => {
@@ -250,7 +249,7 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
         </div>
 
         {readiness || isTestMode ? (
-          <div className="flex flex-wrap items-center gap-3 self-start md:self-center md:justify-end">
+          <div className="flex flex-wrap items-center gap-3 self-start md:justify-end md:self-center">
             {isTestMode ? (
               <Button
                 type="button"
@@ -275,26 +274,26 @@ export function TenantStatusBanner({ className }: TenantStatusBannerProps) {
             ) : null}
             {readiness ? (
               <>
-            <div className="text-right">
-              <div className="text-2xl leading-none font-bold">
-                {readiness.pct}%
-              </div>
-              <div className="text-xs opacity-70">
-                {readiness.filled}/{readiness.total} campos cadastrados
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              asChild
-              className="border-current/40"
-            >
-              <a href="/readiness">
-                Ver detalhes
-                <IconExternalLink className="ml-1 size-3" />
-              </a>
-            </Button>
+                <div className="text-right">
+                  <div className="text-2xl leading-none font-bold">
+                    {readiness.pct}%
+                  </div>
+                  <div className="text-xs opacity-70">
+                    {readiness.filled}/{readiness.total} campos cadastrados
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="border-current/40"
+                >
+                  <a href="/readiness">
+                    Ver detalhes
+                    <IconExternalLink className="ml-1 size-3" />
+                  </a>
+                </Button>
               </>
             ) : null}
           </div>

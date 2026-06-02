@@ -1,6 +1,11 @@
 import type { LauncherPolicyResponse } from "@/api/launcher-policy"
 
-export type UIVisibilityProfile = "admin" | "tenant" | "public" | "waiting" | "test"
+export type UIVisibilityProfile =
+  | "admin"
+  | "tenant"
+  | "public"
+  | "waiting"
+  | "test"
 
 // `waiting`: tela de espera pós-discovery. Sofia/Rafael chama
 // set_ui_profile("waiting") quando termina o discovery — cliente vê só

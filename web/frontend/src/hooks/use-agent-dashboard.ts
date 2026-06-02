@@ -18,9 +18,8 @@ import { normalizeAgentDashboardResponse } from "@/lib/agent-dashboard"
 const QUERY_KEY = ["agent-dashboard", "list"] as const
 const POLL_INTERVAL_MS = 30_000
 
-const EMPTY_RESPONSE: AgentDashboardResponse = normalizeAgentDashboardResponse(
-  undefined,
-)
+const EMPTY_RESPONSE: AgentDashboardResponse =
+  normalizeAgentDashboardResponse(undefined)
 
 export function useAgentDashboard() {
   const query = useQuery<AgentDashboardResponse>({

@@ -466,7 +466,7 @@ function RosterPreview({ roster }: { roster?: RosterEntry[] }) {
 
   return (
     <div className="flex flex-col gap-1.5 pt-1">
-      <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+      <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
         Agentes deste tipo
       </p>
       <div className="flex flex-col gap-1">
@@ -481,7 +481,7 @@ function RosterPreview({ roster }: { roster?: RosterEntry[] }) {
                   {entry.label}
                 </span>
                 {entry.locked ? (
-                  <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium leading-none">
+                  <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] leading-none font-medium">
                     fixo
                   </span>
                 ) : null}
